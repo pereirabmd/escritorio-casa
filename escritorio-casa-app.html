@@ -2,8 +2,8 @@
 <html lang="pt">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-<title>Escritório / Casa 2026</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover">
+<title>Escritório / Casa</title>
 <style>
   :root{
     --ink:#1c2430;
@@ -13,20 +13,26 @@
     --t-tint:#e3ecfe;
     --c-color:#e0762c;
     --c-tint:#fbe9d9;
+    --f-color:#2f8a52;
+    --f-tint:#dcefdd;
+    --a-color:#8e5fd1;
+    --a-tint:#ece3f8;
     --ok:#2f8a52;
     --bad:#c94b3f;
     --accent:#1c2430;
   }
   *{box-sizing:border-box;}
+  html{background:var(--paper);}
   body{
-    margin:0;
+    margin:0 auto;
+    max-width:480px;
     font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
     background:var(--paper);
     color:var(--ink);
-    padding-bottom:60px;
+    padding-bottom:calc(60px + env(safe-area-inset-bottom));
   }
   header{
-    padding:22px 18px 14px;
+    padding:calc(18px + env(safe-area-inset-top)) 18px 14px;
     border-bottom:1px solid var(--line);
     position:sticky;
     top:0;
@@ -51,10 +57,29 @@
     font-size:0.95rem;
     font-weight:600;
     cursor:pointer;
+    min-height:44px;
   }
   .btn-primary{background:var(--ink);color:var(--paper);}
   .btn-secondary{background:transparent;color:var(--ink);border:1px solid var(--line);}
   .btn-primary:disabled{opacity:0.5;cursor:default;}
+
+  #tabBar{
+    display:flex;
+    gap:8px;
+    padding:14px 18px 0;
+  }
+  .tabBtn{
+    flex:1;
+    background:#fff;
+    border:1px solid var(--line);
+    border-radius:10px;
+    padding:10px;
+    font-weight:600;
+    font-size:0.88rem;
+    color:#6b6558;
+    min-height:44px;
+  }
+  .tabBtn.active{background:var(--ink);color:var(--paper);border-color:var(--ink);}
 
   #totals{
     display:grid;
@@ -89,14 +114,41 @@
   }
 
   #legend{
-    display:flex;gap:14px;
+    display:flex;flex-wrap:wrap;gap:12px;
     padding:2px 18px 10px;
-    font-size:0.78rem;color:#6b6558;
+    font-size:0.76rem;color:#6b6558;
   }
   #legend span{display:inline-flex;align-items:center;gap:5px;}
   .dot{width:9px;height:9px;border-radius:50%;display:inline-block;}
   .dot.t{background:var(--t-color);}
   .dot.c{background:var(--c-color);}
+  .dot.f{background:var(--f-color);}
+  .dot.a{background:var(--a-color);}
+
+  #yearBanner{
+    margin:0 18px 10px;
+    background:#fff3d6;
+    border:1px solid #e8c974;
+    border-radius:10px;
+    padding:10px 12px;
+    font-size:0.82rem;
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:10px;
+    flex-wrap:wrap;
+  }
+  #yearBanner button{padding:8px 12px;font-size:0.82rem;min-height:36px;}
+
+  #feriasModeRow{
+    display:flex;
+    align-items:center;
+    gap:8px;
+    padding:0 18px 10px;
+    font-size:0.8rem;
+    color:#6b6558;
+  }
+  #feriasModeRow input{width:18px;height:18px;flex-shrink:0;}
 
   #calendar{
     padding:0 18px 20px;
@@ -131,11 +183,13 @@
   }
   .day:active{transform:scale(0.93);}
   .day.empty{visibility:hidden;cursor:default;}
-  .day.weekend{background:#efece4;}
+  .day.weekend{background:#efece4;cursor:default;}
   .day .num{font-weight:600;}
   .day .mark{font-size:0.68rem;font-weight:700;letter-spacing:.03em;margin-top:1px;}
   .day.T{background:var(--t-tint);border-color:var(--t-color);color:var(--t-color);}
   .day.C{background:var(--c-tint);border-color:var(--c-color);color:var(--c-color);}
+  .day.F{background:var(--f-tint);border-color:var(--f-color);color:var(--f-color);}
+  .day.A{background:var(--a-tint);border-color:var(--a-color);color:var(--a-color);}
   .day.today{box-shadow:0 0 0 2px var(--ink) inset;}
 
   #status{
@@ -152,7 +206,6 @@
     border-top:1px solid var(--line);
     margin-top:6px;
   }
-  .notasHeader{font-size:1.05rem;font-weight:700;}
   .notasSub{font-size:0.78rem;color:#6b6558;margin-top:2px;margin-bottom:14px;}
 
   .notaCard{
@@ -185,7 +238,7 @@
   }
   #notaForm input{
     font-family:inherit;
-    font-size:0.9rem;
+    font-size:16px;
     padding:10px 12px;
     border:1px solid var(--line);
     border-radius:10px;
@@ -205,8 +258,8 @@
 <body>
 
 <header>
-  <h1>Escritório / Casa</h1>
-  <div class="sub">2026 — dados na tua Google Sheet</div>
+  <h1>RTO</h1>
+  <div class="sub" id="yearSub">— dados na tua Google Sheet</div>
 </header>
 
 <div id="authArea">
@@ -216,65 +269,90 @@
 
 <div id="app" class="hidden">
 
-  <div id="totals">
-    <div class="stat t">
-      <div class="label">Dias no escritório</div>
-      <div class="value" id="statT">–</div>
-    </div>
-    <div class="stat c">
-      <div class="label">Dias em casa</div>
-      <div class="value" id="statC">–</div>
-    </div>
-    <div class="stat">
-      <div class="label">Quota pro-rata (120/ano)</div>
-      <div class="value" id="statQuota">–</div>
-    </div>
-    <div class="stat" id="statSaldoBox">
-      <div class="label">Saldo</div>
-      <div class="value" id="statSaldo">–</div>
-    </div>
+  <div id="tabBar">
+    <button id="tabBtnCal" class="tabBtn active">Calendário</button>
+    <button id="tabBtnNotas" class="tabBtn">Notas</button>
   </div>
 
-  <div id="monthNav">
-    <button id="prevMonth">‹</button>
-    <div id="monthLabel">Janeiro</div>
-    <button id="nextMonth">›</button>
-  </div>
+  <div id="tabCalendario">
 
-  <div id="legend">
-    <span><span class="dot t"></span> T · Escritório</span>
-    <span><span class="dot c"></span> C · Casa</span>
-  </div>
-
-  <div id="calendar">
-    <div class="weekhead">
-      <div>D</div><div>S</div><div>T</div><div>Q</div><div>Q</div><div>S</div><div>S</div>
-    </div>
-    <div class="grid" id="grid"></div>
-  </div>
-
-  <div id="notasSection">
-    <div class="notasHeader">Notas</div>
-    <div class="notasSub">Dias de exceção (astreinte, ar condicionado, férias…) — não contam para os totais</div>
-
-    <div id="notasList"></div>
-
-    <div id="notaForm">
-      <div class="notaRow2">
-        <input type="date" id="notaDataInicio" placeholder="Data início">
-        <input type="date" id="notaDataFim" placeholder="Data fim">
+    <div id="totals">
+      <div class="stat t">
+        <div class="label">Dias no escritório</div>
+        <div class="value" id="statT">–</div>
       </div>
-      <input type="text" id="notaCategoria" placeholder="Categoria (ex: Astreinte)">
-      <input type="text" id="notaDescricao" placeholder="Descrição">
-      <div id="notaFormBtns">
-        <button id="notaSaveBtn" class="btn-primary">Adicionar nota</button>
-        <button id="notaCancelBtn" class="btn-secondary hidden">Cancelar</button>
+      <div class="stat c">
+        <div class="label">Dias em casa</div>
+        <div class="value" id="statC">–</div>
+      </div>
+      <div class="stat">
+        <div class="label">Quota pro-rata (120/ano)</div>
+        <div class="value" id="statQuota">–</div>
+      </div>
+      <div class="stat" id="statSaldoBox">
+        <div class="label">Saldo</div>
+        <div class="value" id="statSaldo">–</div>
       </div>
     </div>
+
+    <div id="monthNav">
+      <button id="prevMonth">‹</button>
+      <div id="monthLabel">Janeiro</div>
+      <button id="nextMonth">›</button>
+    </div>
+
+    <div id="yearBanner" class="hidden"></div>
+
+    <label id="feriasModeRow">
+      <input type="checkbox" id="feriasModeToggle">
+      <span>Modo Férias — ao tocar num dia, marca só férias (não mexe no T/C)</span>
+    </label>
+
+    <div id="legend">
+      <span><span class="dot t"></span> T · Escritório</span>
+      <span><span class="dot c"></span> C · Casa</span>
+      <span><span class="dot f"></span> F · Férias</span>
+      <span><span class="dot a"></span> A · Astreinte</span>
+    </div>
+
+    <div id="calendar">
+      <div class="weekhead">
+        <div>D</div><div>S</div><div>T</div><div>Q</div><div>Q</div><div>S</div><div>S</div>
+      </div>
+      <div class="grid" id="grid"></div>
+    </div>
+
   </div>
 
-  <div id="exportSection">
-    <button id="exportBtn" class="btn-secondary" style="width:100%;">⬇ Exportar tudo para Excel (.xlsx)</button>
+  <div id="tabNotas" class="hidden">
+
+    <div id="notasSection">
+      <div class="notasSub">Fins de semana estão bloqueados no calendário. Férias e Astreinte pintam o dia automaticamente (F verde / A roxo) quando o dia não tem T/C.</div>
+
+      <div id="notasList"></div>
+
+      <div id="notaForm">
+        <div class="notaRow2">
+          <input type="date" id="notaDataInicio" placeholder="Data início">
+          <input type="date" id="notaDataFim" placeholder="Data fim">
+        </div>
+        <input type="text" id="notaCategoria" list="categoriaSugestoes" placeholder="Categoria (ex: Astreinte)">
+        <datalist id="categoriaSugestoes">
+          <option value="Férias">
+          <option value="Astreinte">
+        </datalist>
+        <input type="text" id="notaDescricao" placeholder="Descrição">
+        <div id="notaFormBtns">
+          <button id="notaSaveBtn" class="btn-primary">Adicionar nota</button>
+          <button id="notaCancelBtn" class="btn-secondary hidden">Cancelar</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="exportSection">
+      <button id="exportBtn" class="btn-secondary" style="width:100%;">⬇ Exportar tudo para Excel (.xlsx)</button>
+    </div>
+
   </div>
 
 </div>
@@ -288,7 +366,7 @@
 const CLIENT_ID = '108256538530-fgunbb52s7f3s9aurfpjtaf01v8fjbph.apps.googleusercontent.com';
 const SPREADSHEET_ID = '1ncHmV9XmgoG__mnx5kdMBeb39ZDBVnjaV5i-oJv5Uh8';
 const SHEET_NAME = 'Dados';
-const YEAR = 2026;
+let currentYear = new Date().getFullYear();
 /* ============================================================ */
 
 const SCOPES = 'https://www.googleapis.com/auth/spreadsheets';
@@ -298,8 +376,8 @@ let tokenClient;
 let accessToken = null;
 let dayData = {};      // { 'YYYY-MM-DD': 'T' | 'C' | '' }
 let rowIndex = {};      // { 'YYYY-MM-DD': rowNumber } (1-indexed sheet row)
+let feriasMode = false;
 let currentMonth = new Date().getMonth();
-if (new Date().getFullYear() !== YEAR) currentMonth = 0;
 
 const MESES = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
 
@@ -314,6 +392,9 @@ function isoDate(y,m,d){ return `${y}-${pad(m+1)}-${pad(d)}`; }
 
 /* ---------- Auth (Google Identity Services) ---------- */
 window.onload = () => {
+  document.title = `RTO ${currentYear}`;
+  document.getElementById('yearSub').textContent = `${currentYear} — dados na tua Google Sheet`;
+
   tokenClient = google.accounts.oauth2.initTokenClient({
     client_id: CLIENT_ID,
     scope: SCOPES,
@@ -329,7 +410,20 @@ window.onload = () => {
   document.getElementById('nextMonth').onclick = () => changeMonth(1);
   document.getElementById('notaSaveBtn').onclick = onNotaSave;
   document.getElementById('notaCancelBtn').onclick = cancelNotaEdit;
+  document.getElementById('tabBtnCal').onclick = () => showTab('cal');
+  document.getElementById('tabBtnNotas').onclick = () => showTab('notas');
+  document.getElementById('feriasModeToggle').onchange = (e) => {
+    feriasMode = e.target.checked;
+    renderMonth();
+  };
 };
+
+function showTab(tab){
+  document.getElementById('tabCalendario').classList.toggle('hidden', tab !== 'cal');
+  document.getElementById('tabNotas').classList.toggle('hidden', tab !== 'notas');
+  document.getElementById('tabBtnCal').classList.toggle('active', tab === 'cal');
+  document.getElementById('tabBtnNotas').classList.toggle('active', tab === 'notas');
+}
 
 async function onSignedIn(){
   document.getElementById('authArea').classList.add('hidden');
@@ -378,7 +472,7 @@ async function sheetsAppend(range, values){
 async function loadData(){
   setStatus('A carregar dados…');
   try{
-    const data = await sheetsGet(`${SHEET_NAME}!A2:B366`);
+    const data = await sheetsGet(`${SHEET_NAME}!A2:B4000`);
     const rows = data.values || [];
     dayData = {};
     rowIndex = {};
@@ -406,13 +500,13 @@ async function loadData(){
   }
 }
 
-/* ---------- Setup (first run): writes header + 365 date rows ---------- */
+/* ---------- Setup (first run): writes header + 365/366 date rows for currentYear ---------- */
 async function initializeSheet(){
   setStatus('A inicializar a folha…');
   try{
     const values = [['Data','Marca']];
-    let d = new Date(YEAR,0,1);
-    while (d.getFullYear() === YEAR){
+    let d = new Date(currentYear,0,1);
+    while (d.getFullYear() === currentYear){
       values.push([isoDate(d.getFullYear(), d.getMonth(), d.getDate()), '']);
       d.setDate(d.getDate()+1);
     }
@@ -424,14 +518,46 @@ async function initializeSheet(){
   }
 }
 
+/* ---------- Inicializar um ano seguinte (2027, 2028...) na mesma folha ---------- */
+async function initializeYear(year){
+  setStatus(`A inicializar ${year}…`);
+  try{
+    const values = [];
+    let d = new Date(year,0,1);
+    while (d.getFullYear() === year){
+      values.push([isoDate(d.getFullYear(), d.getMonth(), d.getDate()), '']);
+      d.setDate(d.getDate()+1);
+    }
+    await sheetsAppend(`${SHEET_NAME}!A:B`, values);
+    setStatus(`${year} inicializado.`);
+    await loadData();
+  }catch(err){
+    setStatus(err.message, true);
+  }
+}
+
+function checkYearInitialized(){
+  const banner = document.getElementById('yearBanner');
+  const jan1 = isoDate(currentYear, 0, 1);
+  if (!(jan1 in rowIndex)){
+    banner.classList.remove('hidden');
+    banner.innerHTML = `<span>${currentYear} ainda não está na folha.</span><button id="initYearBtn" class="btn-secondary">Inicializar ${currentYear}</button>`;
+    document.getElementById('initYearBtn').onclick = () => initializeYear(currentYear);
+  } else {
+    banner.classList.add('hidden');
+    banner.innerHTML = '';
+  }
+}
+
 /* ---------- Calendar rendering ---------- */
 function renderMonth(){
-  document.getElementById('monthLabel').textContent = `${MESES[currentMonth]} ${YEAR}`;
+  document.getElementById('monthLabel').textContent = `${MESES[currentMonth]} ${currentYear}`;
+  checkYearInitialized();
   const grid = document.getElementById('grid');
   grid.innerHTML = '';
 
-  const firstDay = new Date(YEAR, currentMonth, 1).getDay(); // 0=Dom
-  const daysInMonth = new Date(YEAR, currentMonth+1, 0).getDate();
+  const firstDay = new Date(currentYear, currentMonth, 1).getDay(); // 0=Dom
+  const daysInMonth = new Date(currentYear, currentMonth+1, 0).getDate();
   const todayStr = isoDate(new Date().getFullYear(), new Date().getMonth(), new Date().getDate());
 
   for (let i=0; i<firstDay; i++){
@@ -441,38 +567,48 @@ function renderMonth(){
   }
 
   for (let d=1; d<=daysInMonth; d++){
-    const dateStr = isoDate(YEAR, currentMonth, d);
+    const dateStr = isoDate(currentYear, currentMonth, d);
     const cell = document.createElement('div');
-    const dow = new Date(YEAR, currentMonth, d).getDay();
+    const dow = new Date(currentYear, currentMonth, d).getDay();
+    const isWeekend = (dow===0||dow===6);
     const mark = dayData[dateStr] || '';
-    cell.className = 'day' + (mark ? ' '+mark : '') + ((dow===0||dow===6) && !mark ? ' weekend' : '') + (dateStr===todayStr ? ' today' : '');
-    cell.innerHTML = `<div class="num">${d}</div><div class="mark">${mark}</div>`;
-    cell.onclick = () => cycleDay(dateStr, cell);
+    const noteLetter = !mark ? (noteMarks[dateStr] || '') : '';
+    const displayMark = mark || noteLetter;
+    cell.className = 'day' + (displayMark ? ' '+displayMark : '') + (isWeekend ? ' weekend' : '') + (dateStr===todayStr ? ' today' : '');
+    cell.innerHTML = `<div class="num">${d}</div><div class="mark">${displayMark}</div>`;
+    if (feriasMode){
+      cell.onclick = () => toggleFeriasDay(dateStr, cell);
+    } else if (!isWeekend){
+      cell.onclick = () => cycleDay(dateStr, cell);
+    }
     grid.appendChild(cell);
   }
 }
 
 function changeMonth(delta){
-  currentMonth = Math.min(11, Math.max(0, currentMonth + delta));
+  let m = currentMonth + delta;
+  if (m < 0){ m = 11; currentYear--; }
+  else if (m > 11){ m = 0; currentYear++; }
+  currentMonth = m;
   renderMonth();
+  updateTotals();
 }
 
-/* ---------- Tap to cycle: '' -> T -> C -> '' ---------- */
+/* ---------- Tap to cycle: '' -> T -> C -> '' (dias úteis apenas) ---------- */
 async function cycleDay(dateStr, cell){
   const current = dayData[dateStr] || '';
   const next = current === '' ? 'T' : current === 'T' ? 'C' : '';
 
   dayData[dateStr] = next;
-  const dow = new Date(dateStr).getUTCDay();
   const todayStr = isoDate(new Date().getFullYear(), new Date().getMonth(), new Date().getDate());
+  const displayMark = next || (noteMarks[dateStr] || '');
   const extra = [
-    next ? next : '',
-    (!next && (dow===0||dow===6)) ? 'weekend' : '',
+    displayMark ? displayMark : '',
     dateStr===todayStr ? 'today' : ''
   ].filter(Boolean).join(' ');
   cell.className = 'day ' + extra;
   const dayNum = parseInt(dateStr.slice(-2), 10);
-  cell.innerHTML = `<div class="num">${dayNum}</div><div class="mark">${next}</div>`;
+  cell.innerHTML = `<div class="num">${dayNum}</div><div class="mark">${displayMark}</div>`;
   updateTotals();
 
   const row = rowIndex[dateStr];
@@ -487,17 +623,115 @@ async function cycleDay(dateStr, cell){
   }
 }
 
-/* ---------- Totals + pro-rata ---------- */
+/* ---------- Modo Férias: tocar num dia marca/desmarca um dia de férias (não mexe em T/C) ---------- */
+function ptAddDays(pt, delta){
+  const d = parsePtDate(pt);
+  if (!d) return pt;
+  d.setDate(d.getDate() + delta);
+  const dd = String(d.getDate()).padStart(2,'0');
+  const mm = String(d.getMonth()+1).padStart(2,'0');
+  return `${dd}/${mm}/${d.getFullYear()}`;
+}
+function notaRange(row){ return `${NOTAS_SHEET}!A${row}:D${row}`; }
+
+async function toggleFeriasDay(dateStr, cell){
+  const pt = toPtDate(dateStr);
+  const d = parsePtDate(pt);
+
+  setStatus('A atualizar férias…');
+  try{
+    const covering = notasData.find(n => {
+      if (!normalizeCategoria(n.categoria).includes('feria')) return false;
+      const s = parsePtDate(n.dataInicio) || parsePtDate(n.dataFim);
+      const e = parsePtDate(n.dataFim) || s;
+      return s && e && d >= s && d <= e;
+    });
+
+    if (covering){
+      /* -------- remover este dia de uma nota existente (encolher / dividir / apagar) -------- */
+      const origStart = covering.dataInicio, origEnd = covering.dataFim;
+      const s = parsePtDate(origStart), e = parsePtDate(origEnd);
+
+      if (+s === +d && +e === +d){
+        await sheetsPut(notaRange(covering.row), [['','','','']]);
+        notasData = notasData.filter(x => x.row !== covering.row);
+      } else if (+d === +s){
+        const newStart = ptAddDays(origStart, 1);
+        await sheetsPut(notaRange(covering.row), [[newStart, origEnd, covering.categoria, covering.descricao]]);
+        covering.dataInicio = newStart;
+      } else if (+d === +e){
+        const newEnd = ptAddDays(origEnd, -1);
+        await sheetsPut(notaRange(covering.row), [[origStart, newEnd, covering.categoria, covering.descricao]]);
+        covering.dataFim = newEnd;
+      } else {
+        const leftEnd = ptAddDays(pt, -1);
+        const rightStart = ptAddDays(pt, 1);
+        await sheetsPut(notaRange(covering.row), [[origStart, leftEnd, covering.categoria, covering.descricao]]);
+        covering.dataFim = leftEnd;
+        const newRow = notasNextRow++;
+        await sheetsPut(notaRange(newRow), [[rightStart, origEnd, covering.categoria, covering.descricao]]);
+        notasData.push({ row:newRow, dataInicio:rightStart, dataFim:origEnd, categoria:covering.categoria, descricao:covering.descricao });
+      }
+    } else {
+      /* -------- adicionar este dia, juntando a notas de Férias adjacentes se existirem -------- */
+      const prevDay = ptAddDays(pt, -1);
+      const nextDay = ptAddDays(pt, 1);
+      const prevNote = notasData.find(n => normalizeCategoria(n.categoria).includes('feria') && n.dataFim === prevDay);
+      const nextNote = notasData.find(n => normalizeCategoria(n.categoria).includes('feria') && n.dataInicio === nextDay);
+
+      if (prevNote && nextNote){
+        const newEnd = nextNote.dataFim;
+        await sheetsPut(notaRange(prevNote.row), [[prevNote.dataInicio, newEnd, prevNote.categoria, prevNote.descricao]]);
+        await sheetsPut(notaRange(nextNote.row), [['','','','']]);
+        prevNote.dataFim = newEnd;
+        notasData = notasData.filter(x => x.row !== nextNote.row);
+      } else if (prevNote){
+        await sheetsPut(notaRange(prevNote.row), [[prevNote.dataInicio, pt, prevNote.categoria, prevNote.descricao]]);
+        prevNote.dataFim = pt;
+      } else if (nextNote){
+        await sheetsPut(notaRange(nextNote.row), [[pt, nextNote.dataFim, nextNote.categoria, nextNote.descricao]]);
+        nextNote.dataInicio = pt;
+      } else {
+        const row = notasNextRow++;
+        await sheetsPut(notaRange(row), [[pt, pt, 'Férias', '']]);
+        notasData.push({ row, dataInicio: pt, dataFim: pt, categoria: 'Férias', descricao: '' });
+      }
+
+      // um dia de férias deixa de ser um dia de trabalho
+      if (rowIndex[dateStr] && dayData[dateStr]){
+        await sheetsPut(`${SHEET_NAME}!B${rowIndex[dateStr]}`, [['']]);
+        dayData[dateStr] = '';
+      }
+    }
+    sortNotas();
+    computeNoteMarks();
+    renderNotes();
+    renderMonth();
+    updateTotals();
+    setStatus('');
+  }catch(err){
+    setStatus('Não gravou: ' + err.message, true);
+  }
+}
+
+/* ---------- Totals + pro-rata (relativo ao ano visível no calendário) ---------- */
 function updateTotals(){
   let countT = 0, countC = 0;
-  Object.values(dayData).forEach(v => { if (v==='T') countT++; else if (v==='C') countC++; });
+  Object.keys(dayData).forEach(date => {
+    if (parseInt(date.slice(0,4), 10) !== currentYear) return;
+    const v = dayData[date];
+    if (v === 'T') countT++; else if (v === 'C') countC++;
+  });
 
   const now = new Date();
-  const startYear = new Date(YEAR,0,1);
-  const endYear = new Date(YEAR,11,31);
-  const ref = now < startYear ? startYear : (now > endYear ? endYear : now);
-  const elapsedDays = Math.floor((ref - startYear)/86400000) + 1;
-  const quotaProRata = Math.round((QUOTA_ANUAL * elapsedDays / 365) * 10) / 10;
+  const startYear = new Date(currentYear,0,1);
+  const endYear = new Date(currentYear,11,31);
+  const daysInYear = Math.round((endYear - startYear) / 86400000) + 1;
+  let elapsedDays;
+  if (now < startYear) elapsedDays = 0;
+  else if (now > endYear) elapsedDays = daysInYear;
+  else elapsedDays = Math.floor((now - startYear)/86400000) + 1;
+  const quotaProRata = Math.round((QUOTA_ANUAL * elapsedDays / daysInYear) * 10) / 10;
   const saldo = Math.round((quotaProRata - countC) * 10) / 10;
 
   document.getElementById('statT').textContent = countT;
@@ -513,6 +747,7 @@ const NOTAS_SHEET = 'Notas';
 let notasData = [];      // [{ row, dataInicio, dataFim, categoria, descricao }]
 let notasNextRow = 2;
 let editingRow = null;   // row currently being edited, or null when adding new
+let noteMarks = {};      // { 'YYYY-MM-DD': 'F' | 'A' }, derived from Notas categories
 
 function toISODateForInput(v){
   // Accepts 'dd/mm/yyyy' or ISO strings or Sheets serial-like text; returns yyyy-mm-dd or ''
@@ -526,6 +761,43 @@ function toPtDate(iso){
   if (!iso) return '';
   const [y,m,d] = iso.split('-');
   return `${d}/${m}/${y}`;
+}
+function parsePtDate(v){
+  const m = (v||'').match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+  if (!m) return null;
+  return new Date(parseInt(m[3],10), parseInt(m[2],10)-1, parseInt(m[1],10));
+}
+function normalizeCategoria(s){
+  return (s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim();
+}
+function computeNoteMarks(){
+  noteMarks = {};
+  notasData.forEach(n => {
+    const cat = normalizeCategoria(n.categoria);
+    let letter = null;
+    if (cat.includes('feria')) letter = 'F';
+    else if (cat.includes('astr')) letter = 'A'; // cobre "astreinte" e "astrainte"
+    if (!letter) return;
+    const start = parsePtDate(n.dataInicio) || parsePtDate(n.dataFim);
+    if (!start) return;
+    const end = parsePtDate(n.dataFim) || start;
+    const d = new Date(start);
+    while (d <= end){
+      noteMarks[isoDate(d.getFullYear(), d.getMonth(), d.getDate())] = letter;
+      d.setDate(d.getDate() + 1);
+    }
+  });
+}
+
+function sortNotas(){
+  notasData.sort((a, b) => {
+    const da = parsePtDate(a.dataInicio) || parsePtDate(a.dataFim);
+    const db = parsePtDate(b.dataInicio) || parsePtDate(b.dataFim);
+    if (!da && !db) return 0;
+    if (!da) return 1;
+    if (!db) return -1;
+    return da - db;
+  });
 }
 
 async function loadNotes(){
@@ -543,7 +815,10 @@ async function loadNotes(){
       }
     });
     notasNextRow = rows.length + 2;
+    sortNotas();
+    computeNoteMarks();
     renderNotes();
+    renderMonth();
   }catch(err){
     document.getElementById('notasList').innerHTML =
       `<div class="notaEmpty">Não foi possível carregar as notas (${err.message}). Confirma que existe uma aba "Notas" com as colunas Data Início, Data Fim, Categoria, Descrição.</div>`;
@@ -554,12 +829,14 @@ function renderNotes(){
   const list = document.getElementById('notasList');
   if (notasData.length === 0){
     list.innerHTML = '<div class="notaEmpty">Ainda não há notas.</div>';
+    positionNotaForm();
     return;
   }
   list.innerHTML = '';
   notasData.forEach(n => {
     const card = document.createElement('div');
     card.className = 'notaCard';
+    card.dataset.row = n.row;
     const periodo = n.dataInicio && n.dataFim && n.dataInicio !== n.dataFim
       ? `${n.dataInicio} a ${n.dataFim}` : (n.dataInicio || n.dataFim || '');
     card.innerHTML = `
@@ -578,6 +855,16 @@ function renderNotes(){
     delBtn.onclick = () => deleteNota(n);
     list.appendChild(card);
   });
+  positionNotaForm();
+}
+
+function positionNotaForm(){
+  const formEl = document.getElementById('notaForm');
+  if (editingRow){
+    const card = document.querySelector(`.notaCard[data-row="${editingRow}"]`);
+    if (card){ card.insertAdjacentElement('afterend', formEl); return; }
+  }
+  document.getElementById('notasList').insertAdjacentElement('afterend', formEl);
 }
 
 function startNotaEdit(n){
@@ -588,6 +875,8 @@ function startNotaEdit(n){
   document.getElementById('notaDescricao').value = n.descricao;
   document.getElementById('notaSaveBtn').textContent = 'Guardar alterações';
   document.getElementById('notaCancelBtn').classList.remove('hidden');
+  positionNotaForm();
+  document.getElementById('notaForm').scrollIntoView({ behavior: 'smooth', block: 'center' });
 }
 
 function cancelNotaEdit(){
@@ -598,6 +887,7 @@ function cancelNotaEdit(){
   document.getElementById('notaDescricao').value = '';
   document.getElementById('notaSaveBtn').textContent = 'Adicionar nota';
   document.getElementById('notaCancelBtn').classList.add('hidden');
+  positionNotaForm();
 }
 
 async function onNotaSave(){
@@ -621,7 +911,10 @@ async function onNotaSave(){
       notasNextRow++;
     }
     cancelNotaEdit();
+    sortNotas();
+    computeNoteMarks();
     renderNotes();
+    renderMonth();
     setStatus('');
   }catch(err){
     setStatus('Não gravou a nota: ' + err.message, true);
@@ -634,7 +927,10 @@ async function deleteNota(n){
   try{
     await sheetsPut(`${NOTAS_SHEET}!A${n.row}:D${n.row}`, [['','','','']]);
     notasData = notasData.filter(x => x.row !== n.row);
+    if (editingRow === n.row) cancelNotaEdit();
+    computeNoteMarks();
     renderNotes();
+    renderMonth();
     setStatus('');
   }catch(err){
     setStatus('Não eliminou: ' + err.message, true);
