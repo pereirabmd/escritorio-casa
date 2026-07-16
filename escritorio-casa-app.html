@@ -195,6 +195,11 @@
   #notaForm input:focus{outline:2px solid var(--ink);outline-offset:1px;}
   #notaFormBtns{display:flex;gap:8px;}
   #notaFormBtns button{flex:1;}
+  .notaRow2{display:flex;gap:8px;}
+  .notaRow2 input{flex:1;min-width:0;}
+  #notaForm input[type="date"]{color:var(--ink);}
+
+  #exportSection{padding:6px 18px 24px;}
 </style>
 </head>
 <body>
@@ -255,13 +260,21 @@
     <div id="notasList"></div>
 
     <div id="notaForm">
-      <input type="text" id="notaDescricao" placeholder="Descrição (ex: Astreinte)">
-      <input type="text" id="notaDetalhe" placeholder="Detalhe (ex: 17/02/2026)">
+      <div class="notaRow2">
+        <input type="date" id="notaDataInicio" placeholder="Data início">
+        <input type="date" id="notaDataFim" placeholder="Data fim">
+      </div>
+      <input type="text" id="notaCategoria" placeholder="Categoria (ex: Astreinte)">
+      <input type="text" id="notaDescricao" placeholder="Descrição">
       <div id="notaFormBtns">
         <button id="notaSaveBtn" class="btn-primary">Adicionar nota</button>
         <button id="notaCancelBtn" class="btn-secondary hidden">Cancelar</button>
       </div>
     </div>
+  </div>
+
+  <div id="exportSection">
+    <button id="exportBtn" class="btn-secondary" style="width:100%;">⬇ Exportar tudo para Excel (.xlsx)</button>
   </div>
 
 </div>
@@ -495,29 +508,45 @@ function updateTotals(){
   box.className = 'stat ' + (saldo < 0 ? 'saldo-bad' : 'saldo-ok');
 }
 
-/* ---------- Notas ---------- */
+/* ---------- Notas (4 campos: Data Início | Data Fim | Categoria | Descrição) ---------- */
 const NOTAS_SHEET = 'Notas';
-let notasData = [];      // [{ row, descricao, detalhe }]
+let notasData = [];      // [{ row, dataInicio, dataFim, categoria, descricao }]
 let notasNextRow = 2;
 let editingRow = null;   // row currently being edited, or null when adding new
 
+function toISODateForInput(v){
+  // Accepts 'dd/mm/yyyy' or ISO strings or Sheets serial-like text; returns yyyy-mm-dd or ''
+  if (!v) return '';
+  const m = v.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+  if (m) return `${m[3]}-${m[2]}-${m[1]}`;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(v)) return v;
+  return '';
+}
+function toPtDate(iso){
+  if (!iso) return '';
+  const [y,m,d] = iso.split('-');
+  return `${d}/${m}/${y}`;
+}
+
 async function loadNotes(){
   try{
-    const data = await sheetsGet(`${NOTAS_SHEET}!A2:B1000`);
+    const data = await sheetsGet(`${NOTAS_SHEET}!A2:D1000`);
     const rows = data.values || [];
     notasData = [];
     rows.forEach((row, i) => {
-      const descricao = row[0] || '';
-      const detalhe = row[1] || '';
-      if (descricao || detalhe){
-        notasData.push({ row: i + 2, descricao, detalhe });
+      const dataInicio = row[0] || '';
+      const dataFim = row[1] || '';
+      const categoria = row[2] || '';
+      const descricao = row[3] || '';
+      if (dataInicio || dataFim || categoria || descricao){
+        notasData.push({ row: i + 2, dataInicio, dataFim, categoria, descricao });
       }
     });
     notasNextRow = rows.length + 2;
     renderNotes();
   }catch(err){
     document.getElementById('notasList').innerHTML =
-      `<div class="notaEmpty">Não foi possível carregar as notas (${err.message}). Confirma que existe uma aba "Notas" com as colunas Descrição e Detalhe.</div>`;
+      `<div class="notaEmpty">Não foi possível carregar as notas (${err.message}). Confirma que existe uma aba "Notas" com as colunas Data Início, Data Fim, Categoria, Descrição.</div>`;
   }
 }
 
@@ -531,6 +560,8 @@ function renderNotes(){
   notasData.forEach(n => {
     const card = document.createElement('div');
     card.className = 'notaCard';
+    const periodo = n.dataInicio && n.dataFim && n.dataInicio !== n.dataFim
+      ? `${n.dataInicio} a ${n.dataFim}` : (n.dataInicio || n.dataFim || '');
     card.innerHTML = `
       <div class="txt">
         <div class="desc"></div>
@@ -540,8 +571,8 @@ function renderNotes(){
         <button title="Editar">✎</button>
         <button title="Eliminar">🗑</button>
       </div>`;
-    card.querySelector('.desc').textContent = n.descricao;
-    card.querySelector('.det').textContent = n.detalhe;
+    card.querySelector('.desc').textContent = n.categoria || n.descricao || '(sem categoria)';
+    card.querySelector('.det').textContent = [periodo, n.categoria && n.descricao ? n.descricao : ''].filter(Boolean).join(' — ');
     const [editBtn, delBtn] = card.querySelectorAll('.actions button');
     editBtn.onclick = () => startNotaEdit(n);
     delBtn.onclick = () => deleteNota(n);
@@ -551,36 +582,42 @@ function renderNotes(){
 
 function startNotaEdit(n){
   editingRow = n.row;
+  document.getElementById('notaDataInicio').value = toISODateForInput(n.dataInicio);
+  document.getElementById('notaDataFim').value = toISODateForInput(n.dataFim);
+  document.getElementById('notaCategoria').value = n.categoria;
   document.getElementById('notaDescricao').value = n.descricao;
-  document.getElementById('notaDetalhe').value = n.detalhe;
   document.getElementById('notaSaveBtn').textContent = 'Guardar alterações';
   document.getElementById('notaCancelBtn').classList.remove('hidden');
-  document.getElementById('notaDescricao').focus();
 }
 
 function cancelNotaEdit(){
   editingRow = null;
+  document.getElementById('notaDataInicio').value = '';
+  document.getElementById('notaDataFim').value = '';
+  document.getElementById('notaCategoria').value = '';
   document.getElementById('notaDescricao').value = '';
-  document.getElementById('notaDetalhe').value = '';
   document.getElementById('notaSaveBtn').textContent = 'Adicionar nota';
   document.getElementById('notaCancelBtn').classList.add('hidden');
 }
 
 async function onNotaSave(){
+  const dataInicio = toPtDate(document.getElementById('notaDataInicio').value);
+  const dataFim = toPtDate(document.getElementById('notaDataFim').value);
+  const categoria = document.getElementById('notaCategoria').value.trim();
   const descricao = document.getElementById('notaDescricao').value.trim();
-  const detalhe = document.getElementById('notaDetalhe').value.trim();
-  if (!descricao && !detalhe) return;
+  if (!dataInicio && !dataFim && !categoria && !descricao) return;
 
+  const values = [[dataInicio, dataFim, categoria, descricao]];
   setStatus('A gravar nota…');
   try{
     if (editingRow){
-      await sheetsPut(`${NOTAS_SHEET}!A${editingRow}:B${editingRow}`, [[descricao, detalhe]]);
+      await sheetsPut(`${NOTAS_SHEET}!A${editingRow}:D${editingRow}`, values);
       const idx = notasData.findIndex(n => n.row === editingRow);
-      if (idx > -1) notasData[idx] = { row: editingRow, descricao, detalhe };
+      if (idx > -1) notasData[idx] = { row: editingRow, dataInicio, dataFim, categoria, descricao };
     } else {
       const row = notasNextRow;
-      await sheetsPut(`${NOTAS_SHEET}!A${row}:B${row}`, [[descricao, detalhe]]);
-      notasData.push({ row, descricao, detalhe });
+      await sheetsPut(`${NOTAS_SHEET}!A${row}:D${row}`, values);
+      notasData.push({ row, dataInicio, dataFim, categoria, descricao });
       notasNextRow++;
     }
     cancelNotaEdit();
@@ -592,10 +629,10 @@ async function onNotaSave(){
 }
 
 async function deleteNota(n){
-  if (!confirm(`Eliminar a nota "${n.descricao}"?`)) return;
+  if (!confirm(`Eliminar a nota "${n.categoria || n.descricao}"?`)) return;
   setStatus('A eliminar…');
   try{
-    await sheetsPut(`${NOTAS_SHEET}!A${n.row}:B${n.row}`, [['','']]);
+    await sheetsPut(`${NOTAS_SHEET}!A${n.row}:D${n.row}`, [['','','','']]);
     notasData = notasData.filter(x => x.row !== n.row);
     renderNotes();
     setStatus('');
@@ -604,8 +641,48 @@ async function deleteNota(n){
   }
 }
 
+/* ---------- Exportar tudo para .xlsx ---------- */
+function exportToExcel(){
+  const wb = XLSX.utils.book_new();
+
+  // Dados
+  const dadosRows = [['Data','Marca']];
+  Object.keys(dayData).sort().forEach(date => {
+    dadosRows.push([date, dayData[date] || '']);
+  });
+  const wsDados = XLSX.utils.aoa_to_sheet(dadosRows);
+  XLSX.utils.book_append_sheet(wb, wsDados, 'Dados');
+
+  // Notas
+  const notasRows = [['Data Início','Data Fim','Categoria','Descrição']];
+  notasData.forEach(n => notasRows.push([n.dataInicio, n.dataFim, n.categoria, n.descricao]));
+  const wsNotas = XLSX.utils.aoa_to_sheet(notasRows);
+  XLSX.utils.book_append_sheet(wb, wsNotas, 'Notas');
+
+  // Resumo
+  const countT = document.getElementById('statT').textContent;
+  const countC = document.getElementById('statC').textContent;
+  const quota = document.getElementById('statQuota').textContent;
+  const saldo = document.getElementById('statSaldo').textContent;
+  const resumoRows = [
+    ['Dias no escritório', countT],
+    ['Dias em casa', countC],
+    ['Quota anual homework', QUOTA_ANUAL],
+    ['Quota pro-rata até hoje', quota],
+    ['Saldo (quota - casa usados)', saldo],
+  ];
+  const wsResumo = XLSX.utils.aoa_to_sheet(resumoRows);
+  XLSX.utils.book_append_sheet(wb, wsResumo, 'Resumo');
+
+  const today = new Date().toISOString().slice(0,10);
+  XLSX.writeFile(wb, `Escritorio_Casa_${today}.xlsx`);
+}
+
+document.getElementById('exportBtn').addEventListener('click', exportToExcel);
+
 </script>
 
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 </body>
 </html>
