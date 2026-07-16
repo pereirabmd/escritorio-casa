@@ -146,6 +146,55 @@
   }
   #status.err{color:var(--bad);}
   .hidden{display:none !important;}
+
+  #notasSection{
+    padding:18px;
+    border-top:1px solid var(--line);
+    margin-top:6px;
+  }
+  .notasHeader{font-size:1.05rem;font-weight:700;}
+  .notasSub{font-size:0.78rem;color:#6b6558;margin-top:2px;margin-bottom:14px;}
+
+  .notaCard{
+    background:#fff;
+    border:1px solid var(--line);
+    border-radius:12px;
+    padding:12px 14px;
+    margin-bottom:8px;
+    display:flex;
+    align-items:flex-start;
+    justify-content:space-between;
+    gap:10px;
+  }
+  .notaCard .txt{flex:1;min-width:0;}
+  .notaCard .desc{font-weight:600;font-size:0.9rem;}
+  .notaCard .det{font-size:0.8rem;color:#6b6558;margin-top:2px;}
+  .notaCard .actions{display:flex;gap:6px;flex-shrink:0;}
+  .notaCard .actions button{
+    background:transparent;border:none;font-size:1rem;
+    padding:4px 6px;cursor:pointer;color:#a29c8c;
+  }
+  .notaCard .actions button:hover{color:var(--ink);}
+  .notaEmpty{font-size:0.85rem;color:#a29c8c;padding:6px 0 14px;}
+
+  #notaForm{
+    display:flex;
+    flex-direction:column;
+    gap:8px;
+    margin-top:10px;
+  }
+  #notaForm input{
+    font-family:inherit;
+    font-size:0.9rem;
+    padding:10px 12px;
+    border:1px solid var(--line);
+    border-radius:10px;
+    background:#fff;
+    color:var(--ink);
+  }
+  #notaForm input:focus{outline:2px solid var(--ink);outline-offset:1px;}
+  #notaFormBtns{display:flex;gap:8px;}
+  #notaFormBtns button{flex:1;}
 </style>
 </head>
 <body>
@@ -199,6 +248,22 @@
     <div class="grid" id="grid"></div>
   </div>
 
+  <div id="notasSection">
+    <div class="notasHeader">Notas</div>
+    <div class="notasSub">Dias de exceção (astreinte, ar condicionado, férias…) — não contam para os totais</div>
+
+    <div id="notasList"></div>
+
+    <div id="notaForm">
+      <input type="text" id="notaDescricao" placeholder="Descrição (ex: Astreinte)">
+      <input type="text" id="notaDetalhe" placeholder="Detalhe (ex: 17/02/2026)">
+      <div id="notaFormBtns">
+        <button id="notaSaveBtn" class="btn-primary">Adicionar nota</button>
+        <button id="notaCancelBtn" class="btn-secondary hidden">Cancelar</button>
+      </div>
+    </div>
+  </div>
+
 </div>
 
 <div id="status"></div>
@@ -249,12 +314,15 @@ window.onload = () => {
   document.getElementById('setupBtn').onclick = initializeSheet;
   document.getElementById('prevMonth').onclick = () => changeMonth(-1);
   document.getElementById('nextMonth').onclick = () => changeMonth(1);
+  document.getElementById('notaSaveBtn').onclick = onNotaSave;
+  document.getElementById('notaCancelBtn').onclick = cancelNotaEdit;
 };
 
 async function onSignedIn(){
   document.getElementById('authArea').classList.add('hidden');
   document.getElementById('app').classList.remove('hidden');
   await loadData();
+  await loadNotes();
 }
 
 /* ---------- Sheets API helpers ---------- */
@@ -426,6 +494,116 @@ function updateTotals(){
   const box = document.getElementById('statSaldoBox');
   box.className = 'stat ' + (saldo < 0 ? 'saldo-bad' : 'saldo-ok');
 }
+
+/* ---------- Notas ---------- */
+const NOTAS_SHEET = 'Notas';
+let notasData = [];      // [{ row, descricao, detalhe }]
+let notasNextRow = 2;
+let editingRow = null;   // row currently being edited, or null when adding new
+
+async function loadNotes(){
+  try{
+    const data = await sheetsGet(`${NOTAS_SHEET}!A2:B1000`);
+    const rows = data.values || [];
+    notasData = [];
+    rows.forEach((row, i) => {
+      const descricao = row[0] || '';
+      const detalhe = row[1] || '';
+      if (descricao || detalhe){
+        notasData.push({ row: i + 2, descricao, detalhe });
+      }
+    });
+    notasNextRow = rows.length + 2;
+    renderNotes();
+  }catch(err){
+    document.getElementById('notasList').innerHTML =
+      `<div class="notaEmpty">Não foi possível carregar as notas (${err.message}). Confirma que existe uma aba "Notas" com as colunas Descrição e Detalhe.</div>`;
+  }
+}
+
+function renderNotes(){
+  const list = document.getElementById('notasList');
+  if (notasData.length === 0){
+    list.innerHTML = '<div class="notaEmpty">Ainda não há notas.</div>';
+    return;
+  }
+  list.innerHTML = '';
+  notasData.forEach(n => {
+    const card = document.createElement('div');
+    card.className = 'notaCard';
+    card.innerHTML = `
+      <div class="txt">
+        <div class="desc"></div>
+        <div class="det"></div>
+      </div>
+      <div class="actions">
+        <button title="Editar">✎</button>
+        <button title="Eliminar">🗑</button>
+      </div>`;
+    card.querySelector('.desc').textContent = n.descricao;
+    card.querySelector('.det').textContent = n.detalhe;
+    const [editBtn, delBtn] = card.querySelectorAll('.actions button');
+    editBtn.onclick = () => startNotaEdit(n);
+    delBtn.onclick = () => deleteNota(n);
+    list.appendChild(card);
+  });
+}
+
+function startNotaEdit(n){
+  editingRow = n.row;
+  document.getElementById('notaDescricao').value = n.descricao;
+  document.getElementById('notaDetalhe').value = n.detalhe;
+  document.getElementById('notaSaveBtn').textContent = 'Guardar alterações';
+  document.getElementById('notaCancelBtn').classList.remove('hidden');
+  document.getElementById('notaDescricao').focus();
+}
+
+function cancelNotaEdit(){
+  editingRow = null;
+  document.getElementById('notaDescricao').value = '';
+  document.getElementById('notaDetalhe').value = '';
+  document.getElementById('notaSaveBtn').textContent = 'Adicionar nota';
+  document.getElementById('notaCancelBtn').classList.add('hidden');
+}
+
+async function onNotaSave(){
+  const descricao = document.getElementById('notaDescricao').value.trim();
+  const detalhe = document.getElementById('notaDetalhe').value.trim();
+  if (!descricao && !detalhe) return;
+
+  setStatus('A gravar nota…');
+  try{
+    if (editingRow){
+      await sheetsPut(`${NOTAS_SHEET}!A${editingRow}:B${editingRow}`, [[descricao, detalhe]]);
+      const idx = notasData.findIndex(n => n.row === editingRow);
+      if (idx > -1) notasData[idx] = { row: editingRow, descricao, detalhe };
+    } else {
+      const row = notasNextRow;
+      await sheetsPut(`${NOTAS_SHEET}!A${row}:B${row}`, [[descricao, detalhe]]);
+      notasData.push({ row, descricao, detalhe });
+      notasNextRow++;
+    }
+    cancelNotaEdit();
+    renderNotes();
+    setStatus('');
+  }catch(err){
+    setStatus('Não gravou a nota: ' + err.message, true);
+  }
+}
+
+async function deleteNota(n){
+  if (!confirm(`Eliminar a nota "${n.descricao}"?`)) return;
+  setStatus('A eliminar…');
+  try{
+    await sheetsPut(`${NOTAS_SHEET}!A${n.row}:B${n.row}`, [['','']]);
+    notasData = notasData.filter(x => x.row !== n.row);
+    renderNotes();
+    setStatus('');
+  }catch(err){
+    setStatus('Não eliminou: ' + err.message, true);
+  }
+}
+
 </script>
 
 <script src="https://accounts.google.com/gsi/client" async defer></script>
