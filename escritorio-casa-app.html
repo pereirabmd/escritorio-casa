@@ -453,7 +453,7 @@
 /* ============================================================
    CONFIGURAÇÃO — preenche estes 2 valores antes de usar
    ============================================================ */
-const APP_VERSION = 'v1.1.0 r1';
+const APP_VERSION = 'v1.1.1 r1';
 const CLIENT_ID = '108256538530-fgunbb52s7f3s9aurfpjtaf01v8fjbph.apps.googleusercontent.com';
 const SPREADSHEET_ID = '1u4QOqKMEOe8qq_kU_Cw5c8Vj4qQ0AHE5gXj9hPood9c';
 const SHEET_NAME = 'Dados';
@@ -760,8 +760,9 @@ function renderMonth(){
     const dow = cellDate.getDay();
     const isWeekend = (dow===0||dow===6);
     const diffDays = Math.round((cellDate - today) / 86400000);
+    const isPastDay = diffDays < 0;
     const tooFarInPast = diffDays < -7;
-    const blocked = isWeekend || tooFarInPast;
+    const blocked = isWeekend || (feriasMode ? isPastDay : tooFarInPast);
     const { markHTML, cls } = computeCellDisplay(dateStr);
     const hasInfo = dayHasInfo(dateStr);
     cell.className = 'day' + (cls ? ' '+cls : '') + (isWeekend ? ' weekend' : '')
