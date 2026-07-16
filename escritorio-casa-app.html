@@ -407,12 +407,13 @@
 
 <div id="status"></div>
 
-<footer id="appFooter">Bruno Pereira</footer>
+<footer id="appFooter">Bruno Pereira · <span id="footerVersion"></span></footer>
 
 <script>
 /* ============================================================
    CONFIGURAÇÃO — preenche estes 2 valores antes de usar
    ============================================================ */
+const APP_VERSION = 'v1.0.0 r1';
 const CLIENT_ID = '108256538530-fgunbb52s7f3s9aurfpjtaf01v8fjbph.apps.googleusercontent.com';
 const SPREADSHEET_ID = '1u4QOqKMEOe8qq_kU_Cw5c8Vj4qQ0AHE5gXj9hPood9c';
 const SHEET_NAME = 'Dados';
@@ -444,6 +445,8 @@ function isoDate(y,m,d){ return `${y}-${pad(m+1)}-${pad(d)}`; }
 window.onload = () => {
   document.title = `KLx RTO ${currentYear}`;
   document.getElementById('yearSub').textContent = `${currentYear} — dados na tua Google Sheet`;
+  document.getElementById('footerVersion').textContent = APP_VERSION;
+  console.log('KLx RTO app', APP_VERSION);
 
   tokenClient = google.accounts.oauth2.initTokenClient({
     client_id: CLIENT_ID,
