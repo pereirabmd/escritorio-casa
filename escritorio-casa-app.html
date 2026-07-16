@@ -186,6 +186,7 @@
   .day:active{transform:scale(0.93);}
   .day.empty{visibility:hidden;cursor:default;}
   .day.weekend{background:#efece4;cursor:default;}
+  .day.locked{opacity:0.4;cursor:default;}
   .day .num{font-weight:600;}
   .day .mark{font-size:0.68rem;font-weight:700;letter-spacing:.03em;margin-top:1px;}
   .day.T{background:var(--t-tint);border-color:var(--t-color);color:var(--t-color);}
@@ -265,8 +266,7 @@
 </header>
 
 <div id="authArea">
-  <div id="authChecking" class="sub" style="padding-bottom:10px;">A verificar sessão…</div>
-  <button id="signinBtn" class="btn-primary hidden">Iniciar sessão com a Google</button>
+  <button id="signinBtn" class="btn-primary">Iniciar sessão com a Google</button>
   <button id="setupBtn" class="btn-secondary hidden" style="margin-left:8px;">Inicializar folha (1ª vez)</button>
 </div>
 
@@ -402,17 +402,12 @@ window.onload = () => {
     client_id: CLIENT_ID,
     scope: SCOPES,
     callback: (resp) => {
-      if (resp.error){
-        // sessão silenciosa falhou (ou é a 1ª vez) — mostra o botão normal
-        document.getElementById('authChecking').classList.add('hidden');
-        document.getElementById('signinBtn').classList.remove('hidden');
-        return;
-      }
+      if (resp.error){ setStatus('Falha no login: ' + resp.error, true); return; }
       accessToken = resp.access_token;
       onSignedIn();
     }
   });
-  document.getElementById('signinBtn').onclick = () => tokenClient.requestAccessToken({ prompt: 'consent' });
+  document.getElementById('signinBtn').onclick = () => tokenClient.requestAccessToken();
   document.getElementById('setupBtn').onclick = initializeSheet;
   document.getElementById('prevMonth').onclick = () => changeMonth(-1);
   document.getElementById('nextMonth').onclick = () => changeMonth(1);
@@ -424,9 +419,6 @@ window.onload = () => {
     feriasMode = e.target.checked;
     renderMonth();
   };
-
-  // tenta reentrar em silêncio (sem mostrar o botão) se já houver sessão Google ativa
-  tokenClient.requestAccessToken({ prompt: '' });
 };
 
 function showTab(tab){
@@ -569,7 +561,11 @@ function renderMonth(){
 
   const firstDay = new Date(currentYear, currentMonth, 1).getDay(); // 0=Dom
   const daysInMonth = new Date(currentYear, currentMonth+1, 0).getDate();
-  const todayStr = isoDate(new Date().getFullYear(), new Date().getMonth(), new Date().getDate());
+  const today = new Date();
+  today.setHours(0,0,0,0);
+  const todayStr = isoDate(today.getFullYear(), today.getMonth(), today.getDate());
+  const futureLimit = new Date(today);
+  futureLimit.setDate(futureLimit.getDate() + 7);
 
   for (let i=0; i<firstDay; i++){
     const empty = document.createElement('div');
@@ -580,14 +576,19 @@ function renderMonth(){
   for (let d=1; d<=daysInMonth; d++){
     const dateStr = isoDate(currentYear, currentMonth, d);
     const cell = document.createElement('div');
-    const dow = new Date(currentYear, currentMonth, d).getDay();
+    const cellDate = new Date(currentYear, currentMonth, d);
+    const dow = cellDate.getDay();
     const isWeekend = (dow===0||dow===6);
+    const isPastDay = cellDate < today;
+    const isTooFarAhead = cellDate > futureLimit;
     const mark = dayData[dateStr] || '';
     const noteLetter = !mark ? (noteMarks[dateStr] || '') : '';
     const displayMark = mark || noteLetter;
-    cell.className = 'day' + (displayMark ? ' '+displayMark : '') + (isWeekend ? ' weekend' : '') + (dateStr===todayStr ? ' today' : '');
+    const blocked = isWeekend || isTooFarAhead || (feriasMode && isPastDay);
+    cell.className = 'day' + (displayMark ? ' '+displayMark : '') + (isWeekend ? ' weekend' : '')
+      + (dateStr===todayStr ? ' today' : '') + (blocked && !isWeekend ? ' locked' : '');
     cell.innerHTML = `<div class="num">${d}</div><div class="mark">${displayMark}</div>`;
-    if (!isWeekend){
+    if (!blocked){
       cell.onclick = feriasMode ? (() => toggleFeriasDay(dateStr, cell)) : (() => cycleDay(dateStr, cell));
     }
     grid.appendChild(cell);
