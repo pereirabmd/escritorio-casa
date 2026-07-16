@@ -239,6 +239,40 @@
     padding:20px 18px calc(10px + env(safe-area-inset-bottom));
   }
 
+  .day{position:relative;}
+  .day.hasInfo::after{
+    content:"";
+    position:absolute;
+    top:4px; right:4px;
+    width:6px; height:6px;
+    border-radius:50%;
+    background:var(--ink);
+    opacity:0.5;
+  }
+  .day.hasInfo.holiday::after, .day.hasInfo.A::after{ background:#fff; opacity:0.85; }
+
+  #dayInfoOverlay{
+    position:fixed; inset:0;
+    background:rgba(28,36,48,0.4);
+    z-index:20;
+  }
+  #dayInfoCard{
+    position:fixed;
+    left:0; right:0; bottom:0;
+    max-width:480px;
+    margin:0 auto;
+    background:#fff;
+    border-radius:16px 16px 0 0;
+    padding:18px 18px calc(18px + env(safe-area-inset-bottom));
+    z-index:21;
+    box-shadow:0 -4px 20px rgba(0,0,0,0.15);
+  }
+  .dayInfoDate{font-weight:700;font-size:1.05rem;margin-bottom:10px;}
+  .dayInfoLine{font-size:0.9rem;color:#3a3630;padding:6px 0;border-top:1px solid var(--line);}
+  .dayInfoLine:first-of-type{border-top:none;}
+  .dayInfoLine strong{color:var(--ink);}
+  #dayInfoClose{margin-top:14px;}
+
   #notasSection{
     padding:18px;
     border-top:1px solid var(--line);
@@ -407,13 +441,19 @@
 
 <div id="status"></div>
 
+<div id="dayInfoOverlay" class="hidden"></div>
+<div id="dayInfoCard" class="hidden">
+  <div id="dayInfoContent"></div>
+  <button id="dayInfoClose" class="btn-secondary" style="width:100%;">Fechar</button>
+</div>
+
 <footer id="appFooter">Bruno Pereira · <span id="footerVersion"></span></footer>
 
 <script>
 /* ============================================================
    CONFIGURAÇÃO — preenche estes 2 valores antes de usar
    ============================================================ */
-const APP_VERSION = 'v1.0.0 r1';
+const APP_VERSION = 'v1.1.0 r1';
 const CLIENT_ID = '108256538530-fgunbb52s7f3s9aurfpjtaf01v8fjbph.apps.googleusercontent.com';
 const SPREADSHEET_ID = '1u4QOqKMEOe8qq_kU_Cw5c8Vj4qQ0AHE5gXj9hPood9c';
 const SHEET_NAME = 'Dados';
@@ -462,6 +502,8 @@ window.onload = () => {
   document.getElementById('prevMonth').onclick = () => changeMonth(-1);
   document.getElementById('nextMonth').onclick = () => changeMonth(1);
   document.getElementById('todayBtn').onclick = () => goToToday();
+  document.getElementById('dayInfoClose').onclick = () => hideDayInfo();
+  document.getElementById('dayInfoOverlay').onclick = () => hideDayInfo();
   document.getElementById('notaSaveBtn').onclick = onNotaSave;
   document.getElementById('notaCancelBtn').onclick = cancelNotaEdit;
   document.getElementById('tabBtnCal').onclick = () => showTab('cal');
@@ -605,7 +647,7 @@ function checkYearInitialized(){
 
 /* ---------- Calendar rendering ---------- */
 /* ---------- Feriados nacionais PT + municipal de Lisboa ---------- */
-let holidaySet = new Set();
+let holidayNames = new Map(); // 'YYYY-MM-DD' -> nome do feriado
 let holidayYearCached = null;
 
 function computeEaster(year){
@@ -627,17 +669,22 @@ function computeHolidays(year){
   const goodFriday = new Date(easter); goodFriday.setDate(easter.getDate()-2);
   const corpusChristi = new Date(easter); corpusChristi.setDate(easter.getDate()+60);
   const fixed = [
-    [0,1],  [3,25], [4,1],  [5,10], [5,13], // 13 Jun = Santo António (Lisboa)
-    [7,15], [9,5],  [10,1], [11,1], [11,8], [11,25],
+    [0,1,'Ano Novo'], [3,25,'Dia da Liberdade'], [4,1,'Dia do Trabalhador'],
+    [5,10,'Dia de Portugal'], [5,13,'Santo António (Lisboa)'],
+    [7,15,'Assunção de Nossa Senhora'], [9,5,'Implantação da República'],
+    [10,1,'Todos os Santos'], [11,1,'Restauração da Independência'],
+    [11,8,'Imaculada Conceição'], [11,25,'Natal'],
   ];
-  const dates = fixed.map(([m,d]) => new Date(year,m,d));
-  dates.push(goodFriday, corpusChristi);
-  return new Set(dates.map(d => isoDate(d.getFullYear(), d.getMonth(), d.getDate())));
+  const map = new Map();
+  fixed.forEach(([m,d,name]) => map.set(isoDate(year,m,d), name));
+  map.set(isoDate(goodFriday.getFullYear(), goodFriday.getMonth(), goodFriday.getDate()), 'Sexta-feira Santa');
+  map.set(isoDate(corpusChristi.getFullYear(), corpusChristi.getMonth(), corpusChristi.getDate()), 'Corpo de Deus');
+  return map;
 }
 
 function ensureHolidays(year){
   if (holidayYearCached !== year){
-    holidaySet = computeHolidays(year);
+    holidayNames = computeHolidays(year);
     holidayYearCached = year;
   }
 }
@@ -645,7 +692,7 @@ function ensureHolidays(year){
 /* ---------- Composição visual de uma célula (reutilizada no render e nos toques) ---------- */
 function computeCellDisplay(dateStr){
   const mark = dayData[dateStr] || '';
-  const isHoliday = holidaySet.has(dateStr);
+  const isHoliday = holidayNames.has(dateStr);
   const noteLetter = !mark ? (noteMarks[dateStr] || '') : '';
   let markHTML = '', cls = '';
   if (mark){
@@ -658,6 +705,33 @@ function computeCellDisplay(dateStr){
     markHTML = noteLetter; cls = noteLetter;
   }
   return { markHTML, cls };
+}
+
+/* ---------- Notas/feriados que cobrem uma data (para a etiqueta de info) ---------- */
+function getDayInfoLines(dateStr){
+  const lines = [];
+  if (holidayNames.has(dateStr)){
+    lines.push({ label: 'Feriado', text: holidayNames.get(dateStr) });
+  }
+  const d = parsePtDate(toPtDate(dateStr));
+  notasData.forEach(n => {
+    const s = parsePtDate(n.dataInicio) || parsePtDate(n.dataFim);
+    const e = parsePtDate(n.dataFim) || s;
+    if (s && e && d >= s && d <= e){
+      lines.push({ label: n.categoria || 'Nota', text: n.descricao || '' });
+    }
+  });
+  return lines;
+}
+
+function dayHasInfo(dateStr){
+  if (holidayNames.has(dateStr)) return true;
+  const d = parsePtDate(toPtDate(dateStr));
+  return notasData.some(n => {
+    const s = parsePtDate(n.dataInicio) || parsePtDate(n.dataFim);
+    const e = parsePtDate(n.dataFim) || s;
+    return s && e && d >= s && d <= e;
+  });
 }
 
 function renderMonth(){
@@ -689,12 +763,15 @@ function renderMonth(){
     const tooFarInPast = diffDays < -7;
     const blocked = isWeekend || tooFarInPast;
     const { markHTML, cls } = computeCellDisplay(dateStr);
+    const hasInfo = dayHasInfo(dateStr);
     cell.className = 'day' + (cls ? ' '+cls : '') + (isWeekend ? ' weekend' : '')
-      + (dateStr===todayStr ? ' today' : '') + (blocked && !isWeekend ? ' locked' : '');
+      + (dateStr===todayStr ? ' today' : '') + (blocked && !isWeekend ? ' locked' : '')
+      + (hasInfo ? ' hasInfo' : '');
     cell.innerHTML = `<div class="num">${d}</div><div class="mark">${markHTML}</div>`;
     if (!blocked){
-      cell.onclick = feriasMode ? (() => toggleFeriasDay(dateStr, cell)) : (() => cycleDay(dateStr, cell));
+      cell.onclick = feriasMode ? (() => onDayTap(dateStr, cell, toggleFeriasDay)) : (() => onDayTap(dateStr, cell, cycleDay));
     }
+    attachLongPress(cell, dateStr);
     grid.appendChild(cell);
   }
 }
@@ -718,6 +795,58 @@ function goToToday(){
   renderNotes();
 }
 
+/* ---------- Toque longo -> etiqueta com feriados/astreinte/notas do dia ---------- */
+let suppressNextTap = false;
+
+function onDayTap(dateStr, cell, handler){
+  if (suppressNextTap){ suppressNextTap = false; return; }
+  handler(dateStr, cell);
+}
+
+function attachLongPress(cell, dateStr){
+  let timer = null;
+  let startX = 0, startY = 0;
+  const LONG_PRESS_MS = 550;
+  const MOVE_TOLERANCE = 10;
+
+  const clear = () => { if (timer){ clearTimeout(timer); timer = null; } };
+
+  cell.addEventListener('pointerdown', (e) => {
+    startX = e.clientX; startY = e.clientY;
+    clear();
+    timer = setTimeout(() => {
+      timer = null;
+      suppressNextTap = true;
+      showDayInfo(dateStr);
+    }, LONG_PRESS_MS);
+  });
+  cell.addEventListener('pointermove', (e) => {
+    if (timer && (Math.abs(e.clientX-startX) > MOVE_TOLERANCE || Math.abs(e.clientY-startY) > MOVE_TOLERANCE)){
+      clear();
+    }
+  });
+  cell.addEventListener('pointerup', clear);
+  cell.addEventListener('pointercancel', clear);
+  cell.addEventListener('pointerleave', clear);
+}
+
+function showDayInfo(dateStr){
+  const lines = getDayInfoLines(dateStr);
+  if (lines.length === 0) return;
+  const [y,m,dd] = dateStr.split('-');
+  const html = [`<div class="dayInfoDate">${dd}/${m}/${y}</div>`]
+    .concat(lines.map(l => `<div class="dayInfoLine"><strong>${l.label}</strong>${l.text ? ' — '+l.text : ''}</div>`))
+    .join('');
+  document.getElementById('dayInfoContent').innerHTML = html;
+  document.getElementById('dayInfoOverlay').classList.remove('hidden');
+  document.getElementById('dayInfoCard').classList.remove('hidden');
+}
+
+function hideDayInfo(){
+  document.getElementById('dayInfoOverlay').classList.add('hidden');
+  document.getElementById('dayInfoCard').classList.add('hidden');
+}
+
 /* ---------- Tap to cycle: '' -> T -> C -> '' (dias úteis apenas) ---------- */
 async function cycleDay(dateStr, cell){
   const current = dayData[dateStr] || '';
@@ -726,7 +855,8 @@ async function cycleDay(dateStr, cell){
   dayData[dateStr] = next;
   const todayStr = isoDate(new Date().getFullYear(), new Date().getMonth(), new Date().getDate());
   const { markHTML, cls } = computeCellDisplay(dateStr);
-  const extra = [cls, dateStr===todayStr ? 'today' : ''].filter(Boolean).join(' ');
+  const hasInfo = dayHasInfo(dateStr);
+  const extra = [cls, dateStr===todayStr ? 'today' : '', hasInfo ? 'hasInfo' : ''].filter(Boolean).join(' ');
   cell.className = 'day ' + extra;
   const dayNum = parseInt(dateStr.slice(-2), 10);
   cell.innerHTML = `<div class="num">${dayNum}</div><div class="mark">${markHTML}</div>`;
