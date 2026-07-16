@@ -683,8 +683,8 @@ function renderMonth(){
     const dow = cellDate.getDay();
     const isWeekend = (dow===0||dow===6);
     const diffDays = Math.round((cellDate - today) / 86400000);
-    const outsideWindow = Math.abs(diffDays) > 7;
-    const blocked = isWeekend || outsideWindow;
+    const tooFarInPast = diffDays < -7;
+    const blocked = isWeekend || tooFarInPast;
     const { markHTML, cls } = computeCellDisplay(dateStr);
     cell.className = 'day' + (cls ? ' '+cls : '') + (isWeekend ? ' weekend' : '')
       + (dateStr===todayStr ? ' today' : '') + (blocked && !isWeekend ? ' locked' : '');
