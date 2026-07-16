@@ -109,8 +109,10 @@
   #monthLabel{font-size:1.05rem;font-weight:700;}
   #monthNav button{
     background:#fff;border:1px solid var(--line);
-    width:38px;height:38px;border-radius:50%;
+    width:44px;height:44px;min-height:44px;border-radius:50%;
     font-size:1.1rem;line-height:1;padding:0;
+    display:flex;align-items:center;justify-content:center;
+    flex-shrink:0;
   }
 
   #legend{
@@ -263,7 +265,8 @@
 </header>
 
 <div id="authArea">
-  <button id="signinBtn" class="btn-primary">Iniciar sessão com a Google</button>
+  <div id="authChecking" class="sub" style="padding-bottom:10px;">A verificar sessão…</div>
+  <button id="signinBtn" class="btn-primary hidden">Iniciar sessão com a Google</button>
   <button id="setupBtn" class="btn-secondary hidden" style="margin-left:8px;">Inicializar folha (1ª vez)</button>
 </div>
 
@@ -322,6 +325,10 @@
       <div class="grid" id="grid"></div>
     </div>
 
+    <div id="exportSection">
+      <button id="exportBtn" class="btn-secondary" style="width:100%;">⬇ Exportar tudo para Excel (.xlsx)</button>
+    </div>
+
   </div>
 
   <div id="tabNotas" class="hidden">
@@ -347,10 +354,6 @@
           <button id="notaCancelBtn" class="btn-secondary hidden">Cancelar</button>
         </div>
       </div>
-    </div>
-
-    <div id="exportSection">
-      <button id="exportBtn" class="btn-secondary" style="width:100%;">⬇ Exportar tudo para Excel (.xlsx)</button>
     </div>
 
   </div>
@@ -399,12 +402,17 @@ window.onload = () => {
     client_id: CLIENT_ID,
     scope: SCOPES,
     callback: (resp) => {
-      if (resp.error){ setStatus('Falha no login: ' + resp.error, true); return; }
+      if (resp.error){
+        // sessão silenciosa falhou (ou é a 1ª vez) — mostra o botão normal
+        document.getElementById('authChecking').classList.add('hidden');
+        document.getElementById('signinBtn').classList.remove('hidden');
+        return;
+      }
       accessToken = resp.access_token;
       onSignedIn();
     }
   });
-  document.getElementById('signinBtn').onclick = () => tokenClient.requestAccessToken();
+  document.getElementById('signinBtn').onclick = () => tokenClient.requestAccessToken({ prompt: 'consent' });
   document.getElementById('setupBtn').onclick = initializeSheet;
   document.getElementById('prevMonth').onclick = () => changeMonth(-1);
   document.getElementById('nextMonth').onclick = () => changeMonth(1);
@@ -416,6 +424,9 @@ window.onload = () => {
     feriasMode = e.target.checked;
     renderMonth();
   };
+
+  // tenta reentrar em silêncio (sem mostrar o botão) se já houver sessão Google ativa
+  tokenClient.requestAccessToken({ prompt: '' });
 };
 
 function showTab(tab){
@@ -576,10 +587,8 @@ function renderMonth(){
     const displayMark = mark || noteLetter;
     cell.className = 'day' + (displayMark ? ' '+displayMark : '') + (isWeekend ? ' weekend' : '') + (dateStr===todayStr ? ' today' : '');
     cell.innerHTML = `<div class="num">${d}</div><div class="mark">${displayMark}</div>`;
-    if (feriasMode){
-      cell.onclick = () => toggleFeriasDay(dateStr, cell);
-    } else if (!isWeekend){
-      cell.onclick = () => cycleDay(dateStr, cell);
+    if (!isWeekend){
+      cell.onclick = feriasMode ? (() => toggleFeriasDay(dateStr, cell)) : (() => cycleDay(dateStr, cell));
     }
     grid.appendChild(cell);
   }
@@ -632,6 +641,22 @@ function ptAddDays(pt, delta){
   const mm = String(d.getMonth()+1).padStart(2,'0');
   return `${dd}/${mm}/${d.getFullYear()}`;
 }
+function prevBusinessDayPt(pt){
+  let d = parsePtDate(pt);
+  d.setDate(d.getDate() - 1);
+  while (d.getDay() === 0 || d.getDay() === 6) d.setDate(d.getDate() - 1);
+  const dd = String(d.getDate()).padStart(2,'0');
+  const mm = String(d.getMonth()+1).padStart(2,'0');
+  return `${dd}/${mm}/${d.getFullYear()}`;
+}
+function nextBusinessDayPt(pt){
+  let d = parsePtDate(pt);
+  d.setDate(d.getDate() + 1);
+  while (d.getDay() === 0 || d.getDay() === 6) d.setDate(d.getDate() + 1);
+  const dd = String(d.getDate()).padStart(2,'0');
+  const mm = String(d.getMonth()+1).padStart(2,'0');
+  return `${dd}/${mm}/${d.getFullYear()}`;
+}
 function notaRange(row){ return `${NOTAS_SHEET}!A${row}:D${row}`; }
 
 async function toggleFeriasDay(dateStr, cell){
@@ -674,8 +699,8 @@ async function toggleFeriasDay(dateStr, cell){
       }
     } else {
       /* -------- adicionar este dia, juntando a notas de Férias adjacentes se existirem -------- */
-      const prevDay = ptAddDays(pt, -1);
-      const nextDay = ptAddDays(pt, 1);
+      const prevDay = prevBusinessDayPt(pt);
+      const nextDay = nextBusinessDayPt(pt);
       const prevNote = notasData.find(n => normalizeCategoria(n.categoria).includes('feria') && n.dataFim === prevDay);
       const nextNote = notasData.find(n => normalizeCategoria(n.categoria).includes('feria') && n.dataInicio === nextDay);
 
@@ -783,7 +808,10 @@ function computeNoteMarks(){
     const end = parsePtDate(n.dataFim) || start;
     const d = new Date(start);
     while (d <= end){
-      noteMarks[isoDate(d.getFullYear(), d.getMonth(), d.getDate())] = letter;
+      const isWeekendDay = (d.getDay() === 0 || d.getDay() === 6);
+      if (!(letter === 'F' && isWeekendDay)){
+        noteMarks[isoDate(d.getFullYear(), d.getMonth(), d.getDate())] = letter;
+      }
       d.setDate(d.getDate() + 1);
     }
   });
