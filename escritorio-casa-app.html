@@ -300,6 +300,7 @@
     padding:4px 6px;cursor:pointer;color:#a29c8c;
   }
   .notaCard .actions button:hover{color:var(--ink);}
+  .notaLocked{font-size:0.95rem;opacity:0.5;padding:4px 6px;}
   .notaEmpty{font-size:0.85rem;color:#a29c8c;padding:6px 0 14px;}
 
   #notaForm{
@@ -453,7 +454,7 @@
 /* ============================================================
    CONFIGURAÇÃO — preenche estes 2 valores antes de usar
    ============================================================ */
-const APP_VERSION = 'v1.1.1 r1';
+const APP_VERSION = 'v1.1.3';
 const CLIENT_ID = '108256538530-fgunbb52s7f3s9aurfpjtaf01v8fjbph.apps.googleusercontent.com';
 const SPREADSHEET_ID = '1u4QOqKMEOe8qq_kU_Cw5c8Vj4qQ0AHE5gXj9hPood9c';
 const SHEET_NAME = 'Dados';
@@ -1133,6 +1134,7 @@ function renderNotes(){
     const card = document.createElement('div');
     card.className = 'notaCard';
     card.dataset.row = n.row;
+    const locked = isPastFeriasNote(n);
     const periodo = n.dataInicio && n.dataFim && n.dataInicio !== n.dataFim
       ? `${n.dataInicio} a ${n.dataFim}` : (n.dataInicio || n.dataFim || '');
     card.innerHTML = `
@@ -1141,14 +1143,17 @@ function renderNotes(){
         <div class="det"></div>
       </div>
       <div class="actions">
+        ${locked ? '<span class="notaLocked" title="Já terminou — não editável">🔒</span>' : `
         <button title="Editar">✎</button>
-        <button title="Eliminar">🗑</button>
+        <button title="Eliminar">🗑</button>`}
       </div>`;
     card.querySelector('.desc').textContent = n.categoria || n.descricao || '(sem categoria)';
     card.querySelector('.det').textContent = [periodo, n.categoria && n.descricao ? n.descricao : ''].filter(Boolean).join(' — ');
-    const [editBtn, delBtn] = card.querySelectorAll('.actions button');
-    editBtn.onclick = () => startNotaEdit(n);
-    delBtn.onclick = () => deleteNota(n);
+    if (!locked){
+      const [editBtn, delBtn] = card.querySelectorAll('.actions button');
+      editBtn.onclick = () => startNotaEdit(n);
+      delBtn.onclick = () => deleteNota(n);
+    }
     list.appendChild(card);
   });
   positionNotaForm();
@@ -1163,7 +1168,25 @@ function positionNotaForm(){
   document.getElementById('notasList').insertAdjacentElement('afterend', formEl);
 }
 
+function isDateBeforeToday(pt){
+  const d = parsePtDate(pt);
+  if (!d) return false;
+  const today = new Date(); today.setHours(0,0,0,0);
+  return d < today;
+}
+
+function isPastFeriasNote(n){
+  const cat = normalizeCategoria(n.categoria);
+  if (!(cat.includes('feria') || cat.includes('astr'))) return false;
+  const endPt = n.dataFim || n.dataInicio;
+  return isDateBeforeToday(endPt);
+}
+
 function startNotaEdit(n){
+  if (isPastFeriasNote(n)){
+    setStatus('Não é possível editar férias/astreinte que já terminaram.', true);
+    return;
+  }
   editingRow = n.row;
   document.getElementById('notaDataInicio').value = toISODateForInput(n.dataInicio);
   document.getElementById('notaDataFim').value = toISODateForInput(n.dataFim);
@@ -1193,6 +1216,12 @@ async function onNotaSave(){
   const descricao = document.getElementById('notaDescricao').value.trim();
   if (!dataInicio && !dataFim && !categoria && !descricao) return;
 
+  const catNorm = normalizeCategoria(categoria);
+  if ((catNorm.includes('feria') || catNorm.includes('astr')) && isDateBeforeToday(dataFim || dataInicio)){
+    setStatus('Não é possível registar/alterar férias ou astreinte numa data já passada.', true);
+    return;
+  }
+
   const values = [[dataInicio, dataFim, categoria, descricao]];
   setStatus('A gravar nota…');
   try{
@@ -1218,6 +1247,10 @@ async function onNotaSave(){
 }
 
 async function deleteNota(n){
+  if (isPastFeriasNote(n)){
+    setStatus('Não é possível eliminar férias/astreinte que já terminaram.', true);
+    return;
+  }
   if (!confirm(`Eliminar a nota "${n.categoria || n.descricao}"?`)) return;
   setStatus('A eliminar…');
   try{
