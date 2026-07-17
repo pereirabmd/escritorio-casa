@@ -376,7 +376,7 @@
         <div class="value" id="statSaldo">–</div>
       </div>
       <div class="stat wide" id="statSaldoCondBox">
-        <div class="label">Saldo (condicional) — RTO susp. não conta · Astreinte conta como escritório</div>
+        <div class="label">Saldo (condicional) — Astreinte = -1 dia em casa · RTO susp. não conta como casa</div>
         <div class="value" id="statSaldoCond">–</div>
       </div>
     </div>
@@ -463,7 +463,7 @@
 /* ============================================================
    CONFIGURAÇÃO — preenche estes 2 valores antes de usar
    ============================================================ */
-const APP_VERSION = 'v1.2.0';
+const APP_VERSION = 'v1.2.1';
 const CLIENT_ID = '108256538530-fgunbb52s7f3s9aurfpjtaf01v8fjbph.apps.googleusercontent.com';
 const SPREADSHEET_ID = '1u4QOqKMEOe8qq_kU_Cw5c8Vj4qQ0AHE5gXj9hPood9c';
 const SHEET_NAME = 'Dados';
@@ -1009,10 +1009,16 @@ function updateTotals(){
     const v = dayData[date];
     if (v === 'T') countT++; else if (v === 'C') countC++;
 
-    // versão condicional: RTO suspensão não conta para nada; Astreinte conta como escritório (não casa)
+    // versão condicional: durante RTO suspensão, dias em casa não contam
     if (rtoSuspensaoDatesSet.has(date)) return;
-    if (astreinteDatesSet.has(date)) return; // conta como escritório, não soma a "casa"
     if (v === 'C') countC_cond++;
+  });
+
+  // Astreinte: cada dia com astreinte vale menos um dia em casa (crédito), independente do que estiver marcado nesse dia
+  astreinteDatesSet.forEach(date => {
+    if (parseInt(date.slice(0,4), 10) !== currentYear) return;
+    if (rtoSuspensaoDatesSet.has(date)) return; // já excluído acima, evita dupla contagem
+    countC_cond -= 1;
   });
 
   const now = new Date();
