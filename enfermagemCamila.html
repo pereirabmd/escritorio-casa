@@ -290,7 +290,7 @@
     <path d="M6.2 11c0-2.3 2.6-4.1 5.8-4.1s5.8 1.8 5.8 4.1c0 1.9-1.4 3.5-3.4 4l1.9 1.3c.4.3.1.9-.3.9H7.9c-.4 0-.7-.6-.3-.9l1.9-1.3c-1.9-.5-3.3-2.1-3.3-4z" fill="none" stroke="#6b6558" stroke-width="1.3"/>
     <rect x="10.6" y="17.6" width="2.8" height="2" fill="#6b6558"/>
     <rect x="8.8" y="19.4" width="6.4" height="1.6" rx="0.6" fill="#6b6558"/>
-  </svg>Turnos · Beta 12</footer>
+  </svg>Turnos · Beta 13</footer>
 
 <script>
 /* ======================================================================
@@ -999,8 +999,10 @@ async function parseSNS24Imagem(file, dataReferencia){
 
     const dataStr = formatarDataYMD(anoAtual, mesAtual, diaNum);
 
-    // Procura todos os pares HH:MM - HH:MM dentro do bloco (cobre "/" com vários períodos)
-    const horaRegex = /(\d{1,2})[:.](\d{2})\s*-\s*(\d{1,2})[:.](\d{2})/g;
+    // Procura pares de horas dentro do bloco. Tolerante a variações comuns do
+    // OCR: ":" pode sair como "." ou até em falta; o traço pode sair como
+    // "-", "–", "—" ou até mal reconhecido como outro caractere entre espaços.
+    const horaRegex = /(\d{1,2})\s*[:.]?\s*(\d{2})\s*[-–—~]\s*(\d{1,2})\s*[:.]?\s*(\d{2})/g;
     let horaMatch;
     let encontrouTurno = false;
     while ((horaMatch = horaRegex.exec(bloco)) !== null){
@@ -1017,7 +1019,12 @@ async function parseSNS24Imagem(file, dataReferencia){
   });
 
   if (!turnos.length){
-    throw new Error('Não encontrei nenhum período de turno (formato HH:MM - HH:MM) na imagem. Confirma que a foto mostra os horários com clareza.');
+    console.log('Texto lido pelo OCR (para depuração):', texto);
+    const amostra = texto.trim().slice(0, 300).replace(/\s+/g, ' ');
+    throw new Error(
+      'Não encontrei nenhum período de turno (formato HH:MM - HH:MM) na imagem. ' +
+      'Texto lido pelo OCR (para perceberes o que falhou): "' + amostra + (texto.length > 300 ? '…' : '') + '"'
+    );
   }
 
   avisos.push('Leitura feita por OCR — confirma cuidadosamente cada linha antes de gravar.');
