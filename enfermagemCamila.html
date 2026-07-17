@@ -253,7 +253,7 @@
 
 </div>
 
-<footer id="appFooter">Turnos · Beta 3</footer>
+<footer id="appFooter">Turnos · Beta 5</footer>
 
 <script>
 /* ======================================================================
@@ -282,6 +282,24 @@ let accessToken = null;
 let turnosCache = [];      // [{ID, Entidade_ID, Data, Hora_Entrada, Hora_Saida, Duracao_h, Origem_Ficheiro, Notas, _row}]
 let sheetGidCache = {};    // { 'Turnos': 789012 }
 let previewTurnosPendentes = null;
+
+/* ---------- Datas: nunca usar toISOString() para datas de calendário —
+   isso converte para UTC e pode "recuar" um dia consoante o fuso horário
+   do browser (ex: Portugal em horário de verão, UTC+1). Estas funções
+   trabalham só com números, sem qualquer conversão de fuso. ---------- */
+function pad2(n){ return String(n).padStart(2, '0'); }
+function formatarDataYMD(y, m, d){ return `${y}-${pad2(m)}-${pad2(d)}`; }
+function hojeLocalStr(){
+  const d = new Date();
+  return formatarDataYMD(d.getFullYear(), d.getMonth() + 1, d.getDate());
+}
+function diaAnterior(y, m, d){
+  // m é 1-indexado. Usa Date.UTC para aritmética de calendário pura,
+  // e lê o resultado também em UTC — nunca mistura UTC com local.
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  dt.setUTCDate(dt.getUTCDate() - 1);
+  return { y: dt.getUTCFullYear(), m: dt.getUTCMonth() + 1, d: dt.getUTCDate() };
+}
 
 function setStatus(msg, isErr=false){
   const el = document.getElementById('status');
@@ -497,7 +515,7 @@ function turnosOrdenados(){
 
 function renderProximoTurno(){
   const agora = new Date();
-  const hojeStr = agora.toISOString().slice(0,10);
+  const hojeStr = hojeLocalStr();
   const futuros = turnosOrdenados().filter(t => t.Data >= hojeStr);
   if (!futuros.length){
     document.getElementById('nsEntity').textContent = '—';
@@ -513,7 +531,7 @@ function renderProximoTurno(){
 }
 
 function renderProximosTurnos(){
-  const hojeStr = new Date().toISOString().slice(0,10);
+  const hojeStr = hojeLocalStr();
   const futuros = turnosOrdenados().filter(t => t.Data >= hojeStr).slice(0, 8);
   const el = document.getElementById('upcomingList');
   el.innerHTML = futuros.length ? futuros.map(shiftCardHTML).join('') : '<div class="preview">Sem turnos futuros.</div>';
@@ -661,7 +679,7 @@ async function parseXlsx(file){
 }
 
 function normalizarData(v){
-  if (v instanceof Date) return v.toISOString().slice(0, 10);
+  if (v instanceof Date) return formatarDataYMD(v.getFullYear(), v.getMonth() + 1, v.getDate());
   if (typeof v === 'number'){
     const d = XLSX.SSF.parse_date_code(v);
     return `${d.y}-${String(d.m).padStart(2,'0')}-${String(d.d).padStart(2,'0')}`;
@@ -724,8 +742,8 @@ async function parseUCCOliveiraBairro(file, ano, mes){
       return;
     }
     if (codigo === 'N'){
-      const dAnterior = new Date(ano, mes - 1, dia - 1);
-      turnos.push({ data: dAnterior.toISOString().slice(0, 10), entrada: '20:00', saida: '08:00' });
+      const ant = diaAnterior(ano, mes, dia);
+      turnos.push({ data: formatarDataYMD(ant.y, ant.m, ant.d), entrada: '20:00', saida: '08:00' });
       return;
     }
     avisos.push(`Dia ${dia}: código "${codigo}" ainda não é interpretado (ignorado).`);
@@ -782,7 +800,7 @@ document.getElementById('previewBtn').addEventListener('click', async () => {
     }
 
     previewTurnosPendentes = { entidadeId, origemFicheiro: file.name, turnos };
-    mostrarPreview(turnos, avisos);
+    mostrarPreview(turnos, avisos, entidadeId);
     statusEl.textContent = `${turnos.length} turnos encontrados.`;
     statusEl.className = 'statusMsg ok';
   } catch (err) {
@@ -792,7 +810,13 @@ document.getElementById('previewBtn').addEventListener('click', async () => {
   }
 });
 
-function mostrarPreview(turnos, avisos){
+function turnosNoPeriodo(entidadeId, dataMin, dataMax){
+  return turnosCache.filter(t =>
+    t.Entidade_ID === entidadeId && t.Data >= dataMin && t.Data <= dataMax
+  );
+}
+
+function mostrarPreview(turnos, avisos, entidadeId){
   const tbody = document.querySelector('#previewTable tbody');
   tbody.innerHTML = turnos.map(t => `
     <tr>
@@ -816,20 +840,43 @@ function mostrarPreview(turnos, avisos){
       (avisos.length > 6 ? `<br>+ ${avisos.length - 6} avisos...` : '');
     area.insertBefore(warnEl, document.getElementById('confirmBtn'));
   }
+
+  let subEl = document.getElementById('previewSubstituicao');
+  if (subEl) subEl.remove();
+  const datas = turnos.map(t => t.data).sort();
+  const existentes = turnosNoPeriodo(entidadeId, datas[0], datas[datas.length - 1]);
+  if (existentes.length){
+    subEl = document.createElement('div');
+    subEl.id = 'previewSubstituicao';
+    subEl.className = 'warnBox';
+    subEl.textContent = `${existentes.length} turno(s) já existentes desta entidade entre ${datas[0]} e ${datas[datas.length-1]} serão substituídos por estes. Turnos de outras entidades não são afetados.`;
+    area.insertBefore(subEl, document.getElementById('confirmBtn'));
+  }
 }
 
 document.getElementById('confirmBtn').addEventListener('click', async () => {
   if (!previewTurnosPendentes) return;
+  const { entidadeId, origemFicheiro, turnos } = previewTurnosPendentes;
   const statusEl = document.getElementById('confirmStatus');
-  statusEl.textContent = 'A guardar...';
+  statusEl.textContent = 'A substituir turnos existentes...';
   statusEl.className = 'statusMsg';
   try {
-    const n = await gravarTurnos(
-      previewTurnosPendentes.entidadeId,
-      previewTurnosPendentes.origemFicheiro,
-      previewTurnosPendentes.turnos
-    );
-    statusEl.textContent = `${n} turnos guardados.`;
+    const datas = turnos.map(t => t.data).sort();
+    const existentes = turnosNoPeriodo(entidadeId, datas[0], datas[datas.length - 1]);
+
+    // Apagar de baixo para cima (linhas mais altas primeiro) para não
+    // desalinhar os números de linha dos que faltam apagar a seguir.
+    existentes.sort((a, b) => b._row - a._row);
+    for (const t of existentes){
+      await deleteSheetRow(SHEET_TURNOS, t._row);
+    }
+
+    statusEl.textContent = 'A guardar novos turnos...';
+    const n = await gravarTurnos(entidadeId, origemFicheiro, turnos);
+
+    statusEl.textContent = existentes.length
+      ? `${existentes.length} turno(s) substituído(s), ${n} guardado(s).`
+      : `${n} turnos guardados.`;
     statusEl.className = 'statusMsg ok';
     document.getElementById('previewArea').classList.add('hidden');
     document.getElementById('fileInput').value = '';
