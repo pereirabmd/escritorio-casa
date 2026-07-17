@@ -158,7 +158,7 @@
 
     <!-- VIEW: Início -->
     <div class="view active" id="view-inicio">
-      <div class="sectionTitle">Próximos turnos</div>
+      <div class="sectionTitle">Próximos 5 turnos</div>
       <div id="upcomingList"><div class="preview">A carregar...</div></div>
     </div>
 
@@ -253,7 +253,7 @@
 
 </div>
 
-<footer id="appFooter">Turnos · Beta 5</footer>
+<footer id="appFooter">Turnos · Beta 6</footer>
 
 <script>
 /* ======================================================================
@@ -532,9 +532,11 @@ function renderProximoTurno(){
 
 function renderProximosTurnos(){
   const hojeStr = hojeLocalStr();
-  const futuros = turnosOrdenados().filter(t => t.Data >= hojeStr).slice(0, 8);
+  const futuros = turnosOrdenados().filter(t => t.Data >= hojeStr).slice(0, 5);
   const el = document.getElementById('upcomingList');
-  el.innerHTML = futuros.length ? futuros.map(shiftCardHTML).join('') : '<div class="preview">Sem turnos futuros.</div>';
+  el.innerHTML = futuros.length
+    ? futuros.map(t => shiftCardHTML(t, false)).join('')
+    : '<div class="preview">Sem turnos futuros.</div>';
 }
 
 function renderTodosTurnos(){
