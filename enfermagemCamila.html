@@ -6,6 +6,7 @@
 <title>Turnos</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
 <style>
   :root{
     --ink:#1c2430;
@@ -100,6 +101,10 @@
     margin-bottom:8px;
   }
   .card.isNext{border-color:var(--brand);box-shadow:0 0 0 1px var(--brand);}
+  .overlapBadge{
+    display:inline-block;background:var(--bad);color:#fff;font-size:0.62rem;font-weight:700;
+    padding:2px 6px;border-radius:6px;margin-left:6px;vertical-align:middle;
+  }
 
   label.fieldLabel{font-size:0.8rem;color:var(--muted);display:block;margin-bottom:4px;}
   select, input[type=file], input[type=text], input[type=date], input[type=time]{
@@ -207,18 +212,14 @@
         <label class="fieldLabel" for="entitySelect">Entidade empregadora</label>
         <select id="entitySelect"></select>
 
-        <div id="ficheiroHintUCC" class="warnBox hidden">
-          Esta entidade usa o formato de horário em grelha (PDF). O ficheiro é lido automaticamente
-          e apenas a linha da <strong>Camila Diório</strong> é extraída, com os códigos F (folga),
-          M (08:00–20:00) e N (turno noturno: começa às 20:00 do dia anterior e termina às 08:00 no dia assinalado).
-          Outros códigos (MR, G, FE, FS, etc.) são ignorados por agora.
-        </div>
+        <div id="ficheiroHint" class="warnBox hidden"></div>
 
-        <label class="fieldLabel" for="fileInput" id="fileInputLabel">Ficheiro (.pdf ou .xlsx)</label>
-        <input type="file" id="fileInput" accept=".pdf,application/pdf,.xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel">
+        <label class="fieldLabel" for="fileInput" id="fileInputLabel">Ficheiro</label>
+        <input type="file" id="fileInput" accept=".pdf,application/pdf,.xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel,image/*">
         <button class="btn-primary" id="previewBtn">Pré-visualizar</button>
         <div id="fileStatus" class="statusMsg"></div>
       </div>
+      <div id="ocrProgress" class="preview hidden"></div>
 
       <!-- Modo manual (também usado para editar um turno existente) -->
       <div id="modeManual" class="hidden">
@@ -284,7 +285,7 @@
     <path d="M6.2 11c0-2.3 2.6-4.1 5.8-4.1s5.8 1.8 5.8 4.1c0 1.9-1.4 3.5-3.4 4l1.9 1.3c.4.3.1.9-.3.9H7.9c-.4 0-.7-.6-.3-.9l1.9-1.3c-1.9-.5-3.3-2.1-3.3-4z" fill="none" stroke="#6b6558" stroke-width="1.3"/>
     <rect x="10.6" y="17.6" width="2.8" height="2" fill="#6b6558"/>
     <rect x="8.8" y="19.4" width="6.4" height="1.6" rx="0.6" fill="#6b6558"/>
-  </svg>Turnos · Beta 9</footer>
+  </svg>Turnos · Beta 10</footer>
 
 <script>
 /* ======================================================================
@@ -303,7 +304,22 @@ const SCOPES = 'https://www.googleapis.com/auth/spreadsheets';
    o algoritmo usado para ler o ficheiro carregado. Para adicionar uma
    entidade nova é preciso adicionar aqui uma entrada + o parser dela. */
 const ENTIDADES = [
-  { id: 'UCC', nome: 'UCC Oliveira do Bairro', cor: '#2f6f8f', parser: 'pdf-ucc-oliveira-bairro' }
+  {
+    id: 'UCC', nome: 'UCC Oliveira do Bairro', cor: '#2f6f8f',
+    parser: 'pdf-ucc-oliveira-bairro',
+    info: 'Esta entidade usa o formato de horário em grelha (PDF). O ficheiro é lido automaticamente ' +
+      'e apenas a linha da <strong>Camila Diório</strong> é extraída, com os códigos F (folga), ' +
+      'M (08:00–20:00) e N (turno noturno: começa às 20:00 do dia anterior e termina às 08:00 no dia assinalado). ' +
+      'Outros códigos (MR, G, FE, FS, etc.) são ignorados por agora.'
+  },
+  {
+    id: 'SNS24', nome: 'SNS 24', cor: '#c9793f',
+    parser: 'img-sns24',
+    info: 'Esta entidade só disponibiliza o horário semanal por imagem (captura de ecrã da app). ' +
+      'Carrega uma foto/print do ecrã "Meu horário" — a leitura é feita por reconhecimento de texto (OCR), ' +
+      'que pode falhar ou enganar-se; confirma sempre a pré-visualização antes de gravar. ' +
+      'Dias com vários períodos (separados por "/") geram um turno por período.'
+  }
 ];
 
 const CORES = ["#2f6f8f", "#c9793f", "#5a8f5f", "#8e5fd1", "#c94b3f", "#2fa3a3"];
@@ -313,6 +329,7 @@ let accessToken = null;
 let turnosCache = [];      // [{ID, Entidade_ID, Data, Hora_Entrada, Hora_Saida, Duracao_h, Origem_Ficheiro, Notas, _row}]
 let sheetGidCache = {};    // { 'Turnos': 789012 }
 let previewTurnosPendentes = null;
+let overlapIds = new Set(); // IDs de turnos que se sobrepõem a outro turno
 
 /* ---------- Datas: nunca usar toISOString() para datas de calendário —
    isso converte para UTC e pode "recuar" um dia consoante o fuso horário
@@ -474,6 +491,7 @@ async function carregarTudo(){
     setStatus(err.message, true);
     return;
   }
+  calcularSobreposicoes();
   renderEntitySelects();
   renderEntidades();
   renderProximoTurno();
@@ -482,6 +500,30 @@ async function carregarTudo(){
   renderTodosTurnos();
   if (document.getElementById('view-escalas').classList.contains('active')){
     scrollParaTurnoAtual();
+  }
+}
+
+/* ---------- Sobreposições: dois turnos (de qualquer entidade) que
+   ocupam o mesmo intervalo de tempo, mesmo que a data indicada seja
+   diferente (ex: turno noturno que atravessa a meia-noite). ---------- */
+function turnoIntervalo(t){
+  const inicio = new Date(t.Data + 'T' + t.Hora_Entrada + ':00');
+  let fim = new Date(t.Data + 'T' + t.Hora_Saida + ':00');
+  if (fim <= inicio) fim = new Date(fim.getTime() + 24 * 60 * 60 * 1000);
+  return { inicio, fim };
+}
+
+function calcularSobreposicoes(){
+  overlapIds = new Set();
+  const lista = turnosCache.map(t => ({ t, iv: turnoIntervalo(t) }));
+  for (let i = 0; i < lista.length; i++){
+    for (let j = i + 1; j < lista.length; j++){
+      const a = lista[i], b = lista[j];
+      if (a.iv.inicio < b.iv.fim && b.iv.inicio < a.iv.fim){
+        overlapIds.add(a.t.ID);
+        overlapIds.add(b.t.ID);
+      }
+    }
   }
 }
 
@@ -505,15 +547,21 @@ function renderEntitySelects(){
   const opts = ENTIDADES.map(e => `<option value="${e.id}">${e.nome}</option>`).join('');
   document.getElementById('entitySelect').innerHTML = opts;
   document.getElementById('manualEntitySelect').innerHTML = opts;
-  toggleUCCHint();
+  atualizarHintFicheiro();
 }
 
-function toggleUCCHint(){
+function atualizarHintFicheiro(){
   const sel = document.getElementById('entitySelect');
-  const isUCC = parserEntidade(sel.value) === 'pdf-ucc-oliveira-bairro';
-  document.getElementById('ficheiroHintUCC').classList.toggle('hidden', !isUCC);
+  const e = ENTIDADES.find(x => x.id === sel.value);
+  const hintEl = document.getElementById('ficheiroHint');
+  if (e && e.info){
+    hintEl.innerHTML = e.info;
+    hintEl.classList.remove('hidden');
+  } else {
+    hintEl.classList.add('hidden');
+  }
 }
-document.getElementById('entitySelect').addEventListener('change', toggleUCCHint);
+document.getElementById('entitySelect').addEventListener('change', atualizarHintFicheiro);
 
 function renderEntidades(){
   const el = document.getElementById('entityListArea');
@@ -540,13 +588,14 @@ function shiftCardHTML(t, comAcoes, elId){
         <button type="button" class="btn-danger" data-remove-turno-id="${t.ID}">Remover</button>
       </div>` : '';
   const idAttr = elId ? ` id="${elId}"` : '';
+  const overlapBadge = overlapIds.has(t.ID) ? '<span class="overlapBadge">⚠ Sobreposição</span>' : '';
   return `
     <div class="card"${idAttr}>
       <div class="shiftRow">
         <div class="dot" style="background:${corEntidade(t.Entidade_ID)}"></div>
         <div class="shiftInfo">
           <div class="shiftDate">${dataFmt}</div>
-          <div class="shiftEntity">${nomeEntidade(t.Entidade_ID)}</div>
+          <div class="shiftEntity">${nomeEntidade(t.Entidade_ID)}${overlapBadge}</div>
           <div class="shiftTime">${t.Hora_Entrada} — ${t.Hora_Saida}</div>
         </div>
         <div class="shiftDuration">${t.Duracao_h}h</div>
@@ -823,6 +872,111 @@ async function parseUCCOliveiraBairro(file, ano, mes){
 }
 
 /* ======================================================================
+   PARSER FIXO — SNS 24 (screenshot semanal, leitura por OCR)
+
+   O ecrã "Meu horário" mostra uma grelha semanal: cada linha tem o dia
+   do mês + dia da semana, e (se houver turno) um ou mais períodos
+   "HH:MM - HH:MM" separados por "/". O cabeçalho verde indica o dia da
+   semana, dia do mês, mês e ano de referência (ex: "Sex, 17 Jul 26").
+
+   Como não há texto selecionável (é uma imagem), usa-se OCR (Tesseract.js)
+   no browser. O OCR pode errar — por isso a pré-visualização é sempre
+   mostrada antes de gravar, e os avisos assinalam blocos ambíguos.
+   ====================================================================== */
+const MESES_PT = ['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
+const DIAS_SEMANA_PT = /seg|ter|qua|qui|sex|s[aá]b|dom/i;
+
+async function parseSNS24Imagem(file){
+  const progEl = document.getElementById('ocrProgress');
+  progEl.classList.remove('hidden');
+  progEl.textContent = 'A ler a imagem (OCR)... isto pode demorar alguns segundos.';
+
+  let texto;
+  try {
+    const resultado = await Tesseract.recognize(file, 'por', {
+      logger: (m) => {
+        if (m.status === 'recognizing text'){
+          progEl.textContent = `A ler a imagem (OCR)... ${Math.round((m.progress || 0) * 100)}%`;
+        }
+      }
+    });
+    texto = resultado.data.text;
+  } finally {
+    progEl.classList.add('hidden');
+  }
+
+  // 1. Encontrar a data de referência no cabeçalho (ex: "Sex, 17 Jul 26")
+  const headerMatch = texto.match(/(\d{1,2})\s*[,.]?\s*([A-Za-zçÇãÃéÉ]{3,})\s*[’'`]?\s*(\d{2,4})/);
+  if (!headerMatch){
+    throw new Error('Não consegui identificar a data de referência no topo da imagem (ex: "Sex, 17 Jul 26"). Tenta uma foto mais nítida ou melhor enquadrada.');
+  }
+  const headerMesTxt = headerMatch[2].toLowerCase().slice(0, 3);
+  const headerMesIdx = MESES_PT.findIndex(m => headerMesTxt.startsWith(m) || m.startsWith(headerMesTxt));
+  if (headerMesIdx === -1){
+    throw new Error(`Não reconheci o mês "${headerMatch[2]}" no cabeçalho da imagem.`);
+  }
+  let headerAno = parseInt(headerMatch[3], 10);
+  if (headerAno < 100) headerAno += 2000;
+  const headerMes = headerMesIdx + 1; // 1-indexado
+
+  // 2. Dividir o texto em blocos, um por dia da semana encontrado.
+  //    Cada bloco = do número do dia até ao próximo número de dia (ou fim do texto).
+  const blocoRegex = /(\d{1,2})\s*\n?\s*(Seg|Ter|Qua|Qui|Sex|S[aá]b|Dom)/gi;
+  const marcadores = [...texto.matchAll(blocoRegex)];
+
+  if (marcadores.length < 3){
+    throw new Error(`Só identifiquei ${marcadores.length} dia(s) na imagem — esperava 7 (uma semana). Tenta uma foto mais nítida, bem enquadrada e sem reflexos.`);
+  }
+
+  const turnos = [];
+  const avisos = [];
+  let mesAtual = headerMes;
+  let anoAtual = headerAno;
+  let diaAnteriorProcessado = null;
+
+  marcadores.forEach((m, idx) => {
+    const diaNum = parseInt(m[1], 10);
+    if (diaNum < 1 || diaNum > 31) return; // ruído de OCR, ignora
+
+    // deteta viragem de mês: se o dia "voltou para trás" face ao anterior
+    if (diaAnteriorProcessado !== null && diaNum < diaAnteriorProcessado - 3){
+      mesAtual += 1;
+      if (mesAtual > 12){ mesAtual = 1; anoAtual += 1; }
+    }
+    diaAnteriorProcessado = diaNum;
+
+    const inicioBloco = m.index + m[0].length;
+    const fimBloco = idx + 1 < marcadores.length ? marcadores[idx + 1].index : texto.length;
+    const bloco = texto.slice(inicioBloco, fimBloco);
+
+    const dataStr = formatarDataYMD(anoAtual, mesAtual, diaNum);
+
+    // Procura todos os pares HH:MM - HH:MM dentro do bloco (cobre "/" com vários períodos)
+    const horaRegex = /(\d{1,2})[:.](\d{2})\s*-\s*(\d{1,2})[:.](\d{2})/g;
+    let horaMatch;
+    let encontrouTurno = false;
+    while ((horaMatch = horaRegex.exec(bloco)) !== null){
+      encontrouTurno = true;
+      const entrada = `${horaMatch[1].padStart(2,'0')}:${horaMatch[2]}`;
+      const saida = `${horaMatch[3].padStart(2,'0')}:${horaMatch[4]}`;
+      turnos.push({ data: dataStr, entrada, saida });
+    }
+
+    if (!encontrouTurno && DIAS_SEMANA_PT.test(bloco.slice(0, 15))){
+      // dia sem horário visível — assume-se sem turno nesse dia (não gera aviso,
+      // é o comportamento normal para dias de folga/remoto sem período definido)
+    }
+  });
+
+  if (!turnos.length){
+    throw new Error('Não encontrei nenhum período de turno (formato HH:MM - HH:MM) na imagem. Confirma que a foto mostra os horários com clareza.');
+  }
+
+  avisos.push('Leitura feita por OCR — confirma cuidadosamente cada linha antes de gravar.');
+  return { turnos, avisos };
+}
+
+/* ======================================================================
    FLUXO DE CARREGAMENTO (ficheiro) — pré-visualização + confirmação
    ====================================================================== */
 document.getElementById('previewBtn').addEventListener('click', async () => {
@@ -855,6 +1009,13 @@ document.getElementById('previewBtn').addEventListener('click', async () => {
       }
       const hoje = new Date();
       const resultado = await parseUCCOliveiraBairro(file, hoje.getFullYear(), hoje.getMonth() + 1);
+      turnos = resultado.turnos;
+      avisos = resultado.avisos;
+    } else if (parser === 'img-sns24'){
+      if (!/^image\//.test(file.type)){
+        throw new Error('Esta entidade usa uma imagem (foto/print do ecrã). O ficheiro escolhido não parece ser uma imagem.');
+      }
+      const resultado = await parseSNS24Imagem(file);
       turnos = resultado.turnos;
       avisos = resultado.avisos;
     } else if (parser === 'xlsx-generico'){
