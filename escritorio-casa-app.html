@@ -39,6 +39,7 @@
   body{
     margin:0 auto;
     max-width:480px;
+    min-height:100vh;
     font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
     background:var(--paper);
     color:var(--ink);
@@ -488,7 +489,7 @@
 /* ============================================================
    CONFIGURAÇÃO — preenche estes 2 valores antes de usar
    ============================================================ */
-const APP_VERSION = 'v1.4.2';
+const APP_VERSION = 'v1.5.0';
 const CLIENT_ID = '108256538530-fgunbb52s7f3s9aurfpjtaf01v8fjbph.apps.googleusercontent.com';
 const SPREADSHEET_ID = '1u4QOqKMEOe8qq_kU_Cw5c8Vj4qQ0AHE5gXj9hPood9c';
 const SHEET_NAME = 'Dados';
@@ -522,6 +523,7 @@ window.onload = () => {
   document.getElementById('yearSub').textContent = `${currentYear} — dados na tua Google Sheet`;
   document.getElementById('footerVersion').textContent = APP_VERSION;
   console.log('KLx RTO app', APP_VERSION);
+  attachSwipeTabs();
 
   tokenClient = google.accounts.oauth2.initTokenClient({
     client_id: CLIENT_ID,
@@ -549,11 +551,37 @@ window.onload = () => {
   };
 };
 
+let currentTab = 'cal';
+
 function showTab(tab){
+  currentTab = tab;
   document.getElementById('tabCalendario').classList.toggle('hidden', tab !== 'cal');
   document.getElementById('tabNotas').classList.toggle('hidden', tab !== 'notas');
   document.getElementById('tabBtnCal').classList.toggle('active', tab === 'cal');
   document.getElementById('tabBtnNotas').classList.toggle('active', tab === 'notas');
+}
+
+/* ---------- Deslizar para trocar de separador (Calendário <-> Notas) ---------- */
+function attachSwipeTabs(){
+  let startX = 0, startY = 0, tracking = false;
+
+  document.body.addEventListener('pointerdown', (e) => {
+    if (document.getElementById('app').classList.contains('hidden')) return;
+    startX = e.clientX; startY = e.clientY;
+    tracking = true;
+  });
+  document.body.addEventListener('pointerup', (e) => {
+    if (!tracking) return;
+    tracking = false;
+    const dx = e.clientX - startX;
+    const dy = e.clientY - startY;
+    const SWIPE_THRESHOLD = 60;
+    if (Math.abs(dx) > SWIPE_THRESHOLD && Math.abs(dx) > Math.abs(dy) * 1.5){
+      if (dx < 0 && currentTab === 'cal') showTab('notas');
+      else if (dx > 0 && currentTab === 'notas') showTab('cal');
+    }
+  });
+  document.body.addEventListener('pointercancel', () => { tracking = false; });
 }
 
 async function onSignedIn(){
