@@ -35,6 +35,10 @@
   h1{font-size:1.25rem;margin:0 0 2px;letter-spacing:-0.01em;}
   .sub{font-size:0.82rem;color:var(--muted);}
 
+  #authArea{padding:18px;}
+  #status{padding:0 18px;font-size:0.8rem;color:var(--muted);min-height:1.2em;}
+  #status.err{color:var(--bad);}
+
   #nextShift{
     margin:16px 18px 0; padding:16px; border-radius:14px;
     background:linear-gradient(135deg, var(--brand), var(--brand-light)); color:#fff;
@@ -112,7 +116,7 @@
     font-size:0.78rem;font-weight:600;color:var(--muted);cursor:pointer;text-align:center;
   }
   .toggleBtn.active{background:var(--brand);color:#fff;border-color:var(--brand);}
-  .hidden{display:none;}
+  .hidden{display:none !important;}
   .statusMsg{font-size:0.8rem;margin-top:8px;}
   .statusMsg.ok{color:var(--ok);}
   .statusMsg.bad{color:var(--bad);}
@@ -125,144 +129,232 @@
   <div class="sub">Gestão de escalas de enfermagem</div>
 </header>
 
-<div id="nextShift">
-  <div class="label">Próximo turno</div>
-  <div class="entity" id="nsEntity">—</div>
-  <div class="time" id="nsTime">—</div>
-  <div class="when" id="nsWhen">A carregar...</div>
+<div id="authArea">
+  <button id="signinBtn" class="btn-primary">Iniciar sessão com a Google</button>
 </div>
 
-<main>
+<div id="status"></div>
 
-  <!-- VIEW: Início -->
-  <div class="view active" id="view-inicio">
-    <div class="sectionTitle">Próximos turnos</div>
-    <div id="upcomingList"><div class="preview">A carregar...</div></div>
+<div id="app" class="hidden">
+
+  <div id="nextShift">
+    <div class="label">Próximo turno</div>
+    <div class="entity" id="nsEntity">—</div>
+    <div class="time" id="nsTime">—</div>
+    <div class="when" id="nsWhen">A carregar...</div>
   </div>
 
-  <!-- VIEW: Escalas -->
-  <div class="view" id="view-escalas">
-    <div class="sectionTitle">Todos os turnos</div>
-    <div id="allShiftsList"><div class="preview">A carregar...</div></div>
-  </div>
+  <main>
 
-  <!-- VIEW: Carregar -->
-  <div class="view" id="view-carregar">
-    <div class="sectionTitle">Adicionar turnos</div>
-
-    <div class="toggleGroup">
-      <div class="toggleBtn active" data-mode="ficheiro">Ficheiro</div>
-      <div class="toggleBtn" data-mode="manual">Manual</div>
+    <!-- VIEW: Início -->
+    <div class="view active" id="view-inicio">
+      <div class="sectionTitle">Próximos turnos</div>
+      <div id="upcomingList"><div class="preview">A carregar...</div></div>
     </div>
 
-    <!-- Modo ficheiro -->
-    <div id="modeFicheiro">
-      <label class="fieldLabel" for="entitySelect">Entidade empregadora</label>
-      <select id="entitySelect"></select>
+    <!-- VIEW: Escalas -->
+    <div class="view" id="view-escalas">
+      <div class="sectionTitle">Todos os turnos</div>
+      <div id="allShiftsList"><div class="preview">A carregar...</div></div>
+    </div>
 
-      <div id="ficheiroHintUCC" class="warnBox hidden">
-        Esta entidade usa o formato de horário em grelha (PDF). O ficheiro é lido automaticamente
-        e apenas a linha da <strong>Camila Diório</strong> é extraída, com os códigos F (folga),
-        M (08:00–20:00) e N (turno noturno: começa às 20:00 do dia anterior e termina às 08:00 no dia assinalado).
-        Outros códigos (MR, G, FE, FS, etc.) são ignorados por agora.
+    <!-- VIEW: Carregar -->
+    <div class="view" id="view-carregar">
+      <div class="sectionTitle">Adicionar turnos</div>
+
+      <div class="toggleGroup">
+        <div class="toggleBtn active" data-mode="ficheiro">Ficheiro</div>
+        <div class="toggleBtn" data-mode="manual">Manual</div>
       </div>
 
-      <label class="fieldLabel" for="fileInput" id="fileInputLabel">Ficheiro (.xlsx)</label>
-      <input type="file" id="fileInput" accept=".xlsx,.xls">
-      <button class="btn-primary" id="previewBtn">Pré-visualizar</button>
-      <div id="fileStatus" class="statusMsg"></div>
-    </div>
+      <!-- Modo ficheiro -->
+      <div id="modeFicheiro">
+        <label class="fieldLabel" for="entitySelect">Entidade empregadora</label>
+        <select id="entitySelect"></select>
 
-    <!-- Modo manual -->
-    <div id="modeManual" class="hidden">
-      <label class="fieldLabel" for="manualEntitySelect">Entidade empregadora</label>
-      <select id="manualEntitySelect"></select>
-
-      <label class="fieldLabel" for="manualDate">Data</label>
-      <input type="date" id="manualDate">
-
-      <div class="rowSplit">
-        <div>
-          <label class="fieldLabel" for="manualStart">Entrada</label>
-          <input type="time" id="manualStart">
+        <div id="ficheiroHintUCC" class="warnBox hidden">
+          Esta entidade usa o formato de horário em grelha (PDF). O ficheiro é lido automaticamente
+          e apenas a linha da <strong>Camila Diório</strong> é extraída, com os códigos F (folga),
+          M (08:00–20:00) e N (turno noturno: começa às 20:00 do dia anterior e termina às 08:00 no dia assinalado).
+          Outros códigos (MR, G, FE, FS, etc.) são ignorados por agora.
         </div>
-        <div>
-          <label class="fieldLabel" for="manualEnd">Saída</label>
-          <input type="time" id="manualEnd">
-        </div>
+
+        <label class="fieldLabel" for="fileInput" id="fileInputLabel">Ficheiro (.xlsx)</label>
+        <input type="file" id="fileInput" accept=".xlsx,.xls">
+        <button class="btn-primary" id="previewBtn">Pré-visualizar</button>
+        <div id="fileStatus" class="statusMsg"></div>
       </div>
 
-      <button class="btn-primary" id="manualAddBtn">Adicionar turno</button>
-      <div id="manualStatus" class="statusMsg"></div>
+      <!-- Modo manual -->
+      <div id="modeManual" class="hidden">
+        <label class="fieldLabel" for="manualEntitySelect">Entidade empregadora</label>
+        <select id="manualEntitySelect"></select>
+
+        <label class="fieldLabel" for="manualDate">Data</label>
+        <input type="date" id="manualDate">
+
+        <div class="rowSplit">
+          <div>
+            <label class="fieldLabel" for="manualStart">Entrada</label>
+            <input type="time" id="manualStart">
+          </div>
+          <div>
+            <label class="fieldLabel" for="manualEnd">Saída</label>
+            <input type="time" id="manualEnd">
+          </div>
+        </div>
+
+        <button class="btn-primary" id="manualAddBtn">Adicionar turno</button>
+        <div id="manualStatus" class="statusMsg"></div>
+      </div>
+
+      <!-- Pré-visualização comum (modo ficheiro) -->
+      <div id="previewArea" class="hidden">
+        <div class="sectionTitle">Pré-visualização</div>
+        <table class="previewTable" id="previewTable">
+          <thead><tr><th>Data</th><th>Entrada</th><th>Saída</th><th>Duração</th></tr></thead>
+          <tbody></tbody>
+        </table>
+        <button class="btn-primary" style="margin-top:12px;" id="confirmBtn">Confirmar e guardar</button>
+        <div id="confirmStatus" class="statusMsg"></div>
+      </div>
     </div>
 
-    <!-- Pré-visualização comum (modo ficheiro) -->
-    <div id="previewArea" class="hidden">
-      <div class="sectionTitle">Pré-visualização</div>
-      <table class="previewTable" id="previewTable">
-        <thead><tr><th>Data</th><th>Entrada</th><th>Saída</th><th>Duração</th></tr></thead>
-        <tbody></tbody>
-      </table>
-      <button class="btn-primary" style="margin-top:12px;" id="confirmBtn">Confirmar e guardar</button>
-      <div id="confirmStatus" class="statusMsg"></div>
+    <!-- VIEW: Entidades -->
+    <div class="view" id="view-entidades">
+      <div class="sectionTitle">Entidades empregadoras</div>
+      <div id="entityListArea"><div class="preview">A carregar...</div></div>
+
+      <div class="addEntityBox">
+        <input type="text" id="newEntityName" placeholder="Nova entidade...">
+        <button class="btn-secondary" id="addEntityBtn" style="width:auto;">Adicionar</button>
+      </div>
+      <div id="entityStatus" class="statusMsg"></div>
     </div>
+
+  </main>
+
+  <div id="tabBar">
+    <div class="tabBtn active" data-view="inicio">Início</div>
+    <div class="tabBtn" data-view="escalas">Escalas</div>
+    <div class="tabBtn" data-view="carregar">Carregar</div>
+    <div class="tabBtn" data-view="entidades">Entidades</div>
   </div>
 
-  <!-- VIEW: Entidades -->
-  <div class="view" id="view-entidades">
-    <div class="sectionTitle">Entidades empregadoras</div>
-    <div id="entityListArea"><div class="preview">A carregar...</div></div>
-
-    <div class="addEntityBox">
-      <input type="text" id="newEntityName" placeholder="Nova entidade...">
-      <button class="btn-secondary" id="addEntityBtn" style="width:auto;">Adicionar</button>
-    </div>
-    <div id="entityStatus" class="statusMsg"></div>
-  </div>
-
-</main>
-
-<div id="tabBar">
-  <div class="tabBtn active" data-view="inicio">Início</div>
-  <div class="tabBtn" data-view="escalas">Escalas</div>
-  <div class="tabBtn" data-view="carregar">Carregar</div>
-  <div class="tabBtn" data-view="entidades">Entidades</div>
 </div>
 
 <script>
 /* ======================================================================
-   CONFIGURAÇÃO
+   CONFIGURAÇÃO — mesmo CLIENT_ID e mesmo padrão de autenticação da app RTO
+   (Google Identity Services + Sheets API v4, sem Apps Script).
+   O CLIENT_ID já está autorizado para o domínio pereirabmd.github.io,
+   por isso não é preciso configurar nada de novo no Google Cloud.
    ====================================================================== */
-// URL da Google Apps Script Web App (Implementar > Nova implementação).
-// Substitui pelo URL gerado depois de implementares o Code.gs.
-const API_URL = "COLA_AQUI_O_URL_DA_TUA_APPS_SCRIPT_WEB_APP";
-
-// Referência da folha de cálculo usada como base de dados (Google Sheets).
-const SPREADSHEET_ID = "1LxvzDdKfCJkP7Zke5i_H6RNK6RYqfubSDyZtKvAwAQg";
+const CLIENT_ID = '108256538530-fgunbb52s7f3s9aurfpjtaf01v8fjbph.apps.googleusercontent.com';
+const SPREADSHEET_ID = '1LxvzDdKfCJkP7Zke5i_H6RNK6RYqfubSDyZtKvAwAQg';
+const SHEET_ENTIDADES = 'Entidades';
+const SHEET_TURNOS = 'Turnos';
+const SCOPES = 'https://www.googleapis.com/auth/spreadsheets';
 
 // Nome da entidade que usa o parser fixo de PDF (grelha de horário).
-const ENTIDADE_UCC = "UCC Oliveira do Bairro";
-const LINHA_ALVO = "CAMILA DIÓRIO"; // linha a extrair da grelha
+const ENTIDADE_UCC = 'UCC Oliveira do Bairro';
 
 const CORES = ["#2f6f8f", "#c9793f", "#5a8f5f", "#8e5fd1", "#c94b3f", "#2fa3a3"];
 
-let entidadesCache = [];
-let turnosCache = [];
-let previewTurnosPendentes = null; // { entidadeId, origemFicheiro, turnos: [...] }
+let tokenClient;
+let accessToken = null;
+let entidadesCache = [];   // [{ID, Nome, Cor, Ativa, _row}]
+let turnosCache = [];      // [{ID, Entidade_ID, Data, Hora_Entrada, Hora_Saida, Duracao_h, Origem_Ficheiro, Notas, _row}]
+let sheetGidCache = {};    // { 'Entidades': 123456, 'Turnos': 789012 }
+let previewTurnosPendentes = null;
 
-/* ======================================================================
-   API — pedidos à Apps Script Web App
-   ====================================================================== */
-async function apiGet(action) {
-  const res = await fetch(`${API_URL}?action=${action}`);
+function setStatus(msg, isErr=false){
+  const el = document.getElementById('status');
+  el.textContent = msg;
+  el.className = isErr ? 'err' : '';
+}
+
+/* ---------- Auth (Google Identity Services), mesmo padrão da app RTO ---------- */
+window.onload = () => {
+  tokenClient = google.accounts.oauth2.initTokenClient({
+    client_id: CLIENT_ID,
+    scope: SCOPES,
+    callback: (resp) => {
+      if (resp.error) { setStatus('Falha no login: ' + resp.error, true); return; }
+      accessToken = resp.access_token;
+      onSignedIn();
+    }
+  });
+  document.getElementById('signinBtn').onclick = () => tokenClient.requestAccessToken();
+};
+
+async function onSignedIn(){
+  document.getElementById('authArea').classList.add('hidden');
+  document.getElementById('app').classList.remove('hidden');
+  await carregarTudo();
+}
+
+/* ---------- Sheets API helpers (mesmo padrão da app RTO) ---------- */
+async function sheetsGet(range){
+  const url = `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/${encodeURIComponent(range)}`;
+  const res = await fetch(url, { headers: { Authorization: 'Bearer ' + accessToken } });
+  if (!res.ok) throw new Error('Erro a ler a folha (' + res.status + ')');
   return res.json();
 }
 
-async function apiPost(body) {
-  const res = await fetch(API_URL, {
-    method: "POST",
+async function sheetsPut(range, values){
+  const url = `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/${encodeURIComponent(range)}?valueInputOption=RAW`;
+  const res = await fetch(url, {
+    method: 'PUT',
+    headers: { Authorization: 'Bearer ' + accessToken, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ range, values })
+  });
+  if (!res.ok) throw new Error('Erro a gravar (' + res.status + ')');
+  return res.json();
+}
+
+async function sheetsAppend(range, values){
+  const url = `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/${encodeURIComponent(range)}:append?valueInputOption=RAW`;
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { Authorization: 'Bearer ' + accessToken, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ range, values })
+  });
+  if (!res.ok) throw new Error('Erro a adicionar (' + res.status + ')');
+  return res.json();
+}
+
+async function getSheetGid(title){
+  if (sheetGidCache[title] !== undefined) return sheetGidCache[title];
+  const url = `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}?fields=sheets.properties`;
+  const res = await fetch(url, { headers: { Authorization: 'Bearer ' + accessToken } });
+  if (!res.ok) throw new Error('Erro a obter metadados da folha (' + res.status + ')');
+  const data = await res.json();
+  (data.sheets || []).forEach(s => { sheetGidCache[s.properties.title] = s.properties.sheetId; });
+  return sheetGidCache[title];
+}
+
+async function deleteSheetRow(title, rowNumber1Indexed){
+  const gid = await getSheetGid(title);
+  const url = `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}:batchUpdate`;
+  const body = {
+    requests: [{
+      deleteDimension: {
+        range: {
+          sheetId: gid,
+          dimension: 'ROWS',
+          startIndex: rowNumber1Indexed - 1,
+          endIndex: rowNumber1Indexed
+        }
+      }
+    }]
+  };
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { Authorization: 'Bearer ' + accessToken, 'Content-Type': 'application/json' },
     body: JSON.stringify(body)
   });
+  if (!res.ok) throw new Error('Erro a remover linha (' + res.status + ')');
   return res.json();
 }
 
@@ -289,18 +381,31 @@ document.querySelectorAll('.toggleBtn').forEach(btn => {
 });
 
 /* ======================================================================
-   CARREGAR DADOS INICIAIS
+   CARREGAR DADOS (lê Entidades!A2:D e Turnos!A2:H)
    ====================================================================== */
-async function carregarTudo() {
+async function carregarTudo(){
+  setStatus('A carregar dados...');
   try {
-    const [entidades, turnos] = await Promise.all([
-      apiGet('getEntidades'),
-      apiGet('getTurnos')
+    const [entData, turData] = await Promise.all([
+      sheetsGet(`${SHEET_ENTIDADES}!A2:D1000`),
+      sheetsGet(`${SHEET_TURNOS}!A2:H5000`)
     ]);
-    entidadesCache = Array.isArray(entidades) ? entidades : [];
-    turnosCache = Array.isArray(turnos) ? turnos : [];
+
+    entidadesCache = (entData.values || [])
+      .map((r, i) => ({ ID: r[0], Nome: r[1], Cor: r[2], Ativa: r[3], _row: i + 2 }))
+      .filter(e => e.ID);
+
+    turnosCache = (turData.values || [])
+      .map((r, i) => ({
+        ID: r[0], Entidade_ID: r[1], Data: r[2], Hora_Entrada: r[3],
+        Hora_Saida: r[4], Duracao_h: r[5], Origem_Ficheiro: r[6], Notas: r[7], _row: i + 2
+      }))
+      .filter(t => t.ID);
+
+    setStatus('');
   } catch (err) {
-    console.error(err);
+    setStatus(err.message, true);
+    return;
   }
   renderEntitySelects();
   renderEntidades();
@@ -309,12 +414,11 @@ async function carregarTudo() {
   renderTodosTurnos();
 }
 
-function corEntidade(id) {
+function corEntidade(id){
   const idx = entidadesCache.findIndex(e => e.ID === id);
   return CORES[idx % CORES.length] || "#888888";
 }
-
-function nomeEntidade(id) {
+function nomeEntidade(id){
   const e = entidadesCache.find(e => e.ID === id);
   return e ? e.Nome : id;
 }
@@ -322,14 +426,14 @@ function nomeEntidade(id) {
 /* ======================================================================
    RENDER — Entidades (dropdowns + lista)
    ====================================================================== */
-function renderEntitySelects() {
+function renderEntitySelects(){
   const opts = entidadesCache.map(e => `<option value="${e.ID}">${e.Nome}</option>`).join('');
   document.getElementById('entitySelect').innerHTML = opts;
   document.getElementById('manualEntitySelect').innerHTML = opts;
   toggleUCCHint();
 }
 
-function toggleUCCHint() {
+function toggleUCCHint(){
   const sel = document.getElementById('entitySelect');
   const nome = nomeEntidade(sel.value);
   const isUCC = nome === ENTIDADE_UCC;
@@ -339,9 +443,9 @@ function toggleUCCHint() {
 }
 document.getElementById('entitySelect').addEventListener('change', toggleUCCHint);
 
-function renderEntidades() {
+function renderEntidades(){
   const el = document.getElementById('entityListArea');
-  if (!entidadesCache.length) {
+  if (!entidadesCache.length){
     el.innerHTML = '<div class="preview">Nenhuma entidade adicionada.</div>';
     return;
   }
@@ -360,13 +464,13 @@ document.getElementById('addEntityBtn').addEventListener('click', async () => {
   const input = document.getElementById('newEntityName');
   const nome = input.value.trim();
   if (!nome) return;
-  const cor = CORES[entidadesCache.length % CORES.length];
   const statusEl = document.getElementById('entityStatus');
   statusEl.textContent = 'A adicionar...';
   statusEl.className = 'statusMsg';
   try {
-    const r = await apiPost({ action: 'addEntidade', nome, cor });
-    if (r.error) throw new Error(r.error);
+    const proxId = 'E' + (Math.max(0, ...entidadesCache.map(e => parseInt((e.ID||'E0').replace('E',''),10) || 0)) + 1);
+    const cor = CORES[entidadesCache.length % CORES.length];
+    await sheetsAppend(`${SHEET_ENTIDADES}!A:D`, [[proxId, nome, cor, 'SIM']]);
     input.value = '';
     statusEl.textContent = 'Entidade adicionada.';
     statusEl.className = 'statusMsg ok';
@@ -377,11 +481,12 @@ document.getElementById('addEntityBtn').addEventListener('click', async () => {
   }
 });
 
-async function removerEntidade(id) {
+async function removerEntidade(id){
   if (!confirm('Remover esta entidade?')) return;
+  const entidade = entidadesCache.find(e => e.ID === id);
+  if (!entidade) return;
   try {
-    const r = await apiPost({ action: 'removeEntidade', id });
-    if (r.error) throw new Error(r.error);
+    await deleteSheetRow(SHEET_ENTIDADES, entidade._row);
     await carregarTudo();
   } catch (err) {
     alert('Erro: ' + err.message);
@@ -391,7 +496,7 @@ async function removerEntidade(id) {
 /* ======================================================================
    RENDER — Turnos (início / escalas)
    ====================================================================== */
-function shiftCardHTML(t) {
+function shiftCardHTML(t){
   const d = new Date(t.Data);
   const dataFmt = isNaN(d) ? t.Data : d.toLocaleDateString('pt-PT', { weekday: 'short', day: '2-digit', month: 'short' });
   return `
@@ -408,14 +513,15 @@ function shiftCardHTML(t) {
     </div>`;
 }
 
-function turnosOrdenados() {
+function turnosOrdenados(){
   return [...turnosCache].sort((a, b) => new Date(a.Data) - new Date(b.Data));
 }
 
-function renderProximoTurno() {
+function renderProximoTurno(){
   const agora = new Date();
-  const futuros = turnosOrdenados().filter(t => new Date(t.Data + 'T' + (t.Hora_Entrada || '00:00')) >= agora || t.Data === agora.toISOString().slice(0,10));
-  if (!futuros.length) {
+  const hojeStr = agora.toISOString().slice(0,10);
+  const futuros = turnosOrdenados().filter(t => t.Data >= hojeStr);
+  if (!futuros.length){
     document.getElementById('nsEntity').textContent = '—';
     document.getElementById('nsTime').textContent = '—';
     document.getElementById('nsWhen').textContent = 'Sem turnos agendados';
@@ -428,17 +534,41 @@ function renderProximoTurno() {
   document.getElementById('nsWhen').textContent = d.toLocaleDateString('pt-PT', { weekday: 'long', day: '2-digit', month: 'long' });
 }
 
-function renderProximosTurnos() {
-  const agora = new Date();
-  const futuros = turnosOrdenados().filter(t => new Date(t.Data) >= new Date(agora.toDateString())).slice(0, 8);
+function renderProximosTurnos(){
+  const hojeStr = new Date().toISOString().slice(0,10);
+  const futuros = turnosOrdenados().filter(t => t.Data >= hojeStr).slice(0, 8);
   const el = document.getElementById('upcomingList');
   el.innerHTML = futuros.length ? futuros.map(shiftCardHTML).join('') : '<div class="preview">Sem turnos futuros.</div>';
 }
 
-function renderTodosTurnos() {
+function renderTodosTurnos(){
   const el = document.getElementById('allShiftsList');
   const lista = turnosOrdenados();
   el.innerHTML = lista.length ? lista.map(shiftCardHTML).join('') : '<div class="preview">Ainda sem turnos carregados.</div>';
+}
+
+/* ======================================================================
+   ESCRITA — adicionar turnos (append em lote)
+   ====================================================================== */
+function calcDuracaoH(entrada, saida){
+  const [eh, em] = entrada.split(':').map(Number);
+  const [sh, sm] = saida.split(':').map(Number);
+  let mins = (sh * 60 + sm) - (eh * 60 + em);
+  if (mins < 0) mins += 24 * 60;
+  return Math.round((mins / 60) * 10) / 10;
+}
+
+async function gravarTurnos(entidadeId, origemFicheiro, turnos){
+  let proxNum = Math.max(0, ...turnosCache.map(t => parseInt((t.ID||'T0').replace('T',''),10) || 0));
+  const linhas = turnos.map(t => {
+    proxNum += 1;
+    return [
+      'T' + proxNum, entidadeId, t.data, t.entrada, t.saida,
+      calcDuracaoH(t.entrada, t.saida), origemFicheiro, t.notas || ''
+    ];
+  });
+  await sheetsAppend(`${SHEET_TURNOS}!A:H`, linhas);
+  return linhas.length;
 }
 
 /* ======================================================================
@@ -451,7 +581,7 @@ document.getElementById('manualAddBtn').addEventListener('click', async () => {
   const saida = document.getElementById('manualEnd').value;
   const statusEl = document.getElementById('manualStatus');
 
-  if (!entidadeId || !data || !entrada || !saida) {
+  if (!entidadeId || !data || !entrada || !saida){
     statusEl.textContent = 'Preenche todos os campos.';
     statusEl.className = 'statusMsg bad';
     return;
@@ -460,13 +590,7 @@ document.getElementById('manualAddBtn').addEventListener('click', async () => {
   statusEl.textContent = 'A guardar...';
   statusEl.className = 'statusMsg';
   try {
-    const r = await apiPost({
-      action: 'addTurnos',
-      entidadeId,
-      origemFicheiro: 'manual',
-      turnos: [{ data, entrada, saida }]
-    });
-    if (r.error) throw new Error(r.error);
+    await gravarTurnos(entidadeId, 'manual', [{ data, entrada, saida }]);
     statusEl.textContent = 'Turno adicionado.';
     statusEl.className = 'statusMsg ok';
     document.getElementById('manualDate').value = '';
@@ -483,7 +607,7 @@ document.getElementById('manualAddBtn').addEventListener('click', async () => {
    PARSER — xlsx genérico (colunas: Data, Entrada, Saida)
    Ajusta os nomes das colunas conforme o formato real de cada entidade.
    ====================================================================== */
-async function parseXlsx(file) {
+async function parseXlsx(file){
   const buf = await file.arrayBuffer();
   const wb = XLSX.read(buf, { type: 'array' });
   const sheet = wb.Sheets[wb.SheetNames[0]];
@@ -496,10 +620,9 @@ async function parseXlsx(file) {
   })).filter(t => t.data && t.entrada && t.saida);
 }
 
-function normalizarData(v) {
+function normalizarData(v){
   if (v instanceof Date) return v.toISOString().slice(0, 10);
-  if (typeof v === 'number') {
-    // número de série do Excel
+  if (typeof v === 'number'){
     const d = XLSX.SSF.parse_date_code(v);
     return `${d.y}-${String(d.m).padStart(2,'0')}-${String(d.d).padStart(2,'0')}`;
   }
@@ -516,48 +639,37 @@ function normalizarData(v) {
           Começa às 20:00 do dia anterior e termina às 08:00 nesse dia.
    - Qualquer outro código (MR, G, FE, FS, R, DD, DA, LM, BX, FR, "") é
      ignorado por agora — fica por implementar propositadamente.
-
-   Assume mês e ano conhecidos (o utilizador escolhe antes de carregar,
-   ou é inferido do nome do ficheiro / cabeçalho do PDF).
    ====================================================================== */
-async function parseUCCOliveiraBairro(file, ano, mes) {
+async function parseUCCOliveiraBairro(file, ano, mes){
   const buf = await file.arrayBuffer();
   const pdf = await pdfjsLib.getDocument({ data: buf }).promise;
   const page = await pdf.getPage(1);
   const content = await page.getTextContent();
 
-  // 1. Encontrar a linha "CAMILA DIÓRIO" (o texto pode vir dividido em vários itens)
   const items = content.items.map(it => ({
-    str: it.str.trim(),
-    x: it.transform[4],
-    y: it.transform[5]
+    str: it.str.trim(), x: it.transform[4], y: it.transform[5]
   })).filter(it => it.str !== '');
 
   const linhaLabel = items.find(it => it.str.toUpperCase().includes('CAMILA'));
-  if (!linhaLabel) {
-    throw new Error(`Não encontrei a linha "${LINHA_ALVO}" neste PDF. Verifica se é o ficheiro certo.`);
+  if (!linhaLabel){
+    throw new Error('Não encontrei a linha "CAMILA DIÓRIO" neste PDF. Verifica se é o ficheiro certo.');
   }
 
-  // 2. A linha de códigos está aproximadamente na mesma altura (y) do rótulo.
-  //    Tolerância vertical para apanhar só essa linha (não a linha das horas, que fica por baixo).
   const TOL_Y = 6;
   const candidatos = items.filter(it =>
-    Math.abs(it.y - linhaLabel.y) <= TOL_Y &&
-    it.x > linhaLabel.x + 20 // à direita do nome
+    Math.abs(it.y - linhaLabel.y) <= TOL_Y && it.x > linhaLabel.x + 20
   );
 
-  // 3. Filtrar só códigos (letras, até 3 caracteres) e ordenar por posição horizontal
   const codigosValidos = /^(F|M|N|MR|G|FE|FS|R|DD|DA|LM|BX|FR)$/i;
   const codigos = candidatos
     .filter(it => codigosValidos.test(it.str))
     .sort((a, b) => a.x - b.x)
     .map(it => it.str.toUpperCase());
 
-  if (codigos.length < 25) {
-    throw new Error(`Só encontrei ${codigos.length} códigos na linha da Camila Diório — esperava por volta de 31. O layout deste PDF pode ser diferente do habitual; confirma manualmente.`);
+  if (codigos.length < 25){
+    throw new Error(`Só encontrei ${codigos.length} códigos na linha da Camila Diório — esperava por volta de 31. Confirma manualmente o layout deste PDF.`);
   }
 
-  // 4. Construir os turnos a partir dos códigos (dia 1 = codigos[0], etc.)
   const turnos = [];
   const avisos = [];
   const diasNoMes = new Date(ano, mes, 0).getDate();
@@ -566,21 +678,16 @@ async function parseUCCOliveiraBairro(file, ano, mes) {
     const dia = idx + 1;
     const dataStr = `${ano}-${String(mes).padStart(2,'0')}-${String(dia).padStart(2,'0')}`;
 
-    if (codigo === 'F') {
-      return; // folga, sem turno
-    }
-    if (codigo === 'M') {
+    if (codigo === 'F') return;
+    if (codigo === 'M'){
       turnos.push({ data: dataStr, entrada: '08:00', saida: '20:00' });
       return;
     }
-    if (codigo === 'N') {
-      // Começa às 20:00 do dia anterior, termina às 08:00 neste dia.
+    if (codigo === 'N'){
       const dAnterior = new Date(ano, mes - 1, dia - 1);
-      const dataAnteriorStr = dAnterior.toISOString().slice(0, 10);
-      turnos.push({ data: dataAnteriorStr, entrada: '20:00', saida: '08:00' });
+      turnos.push({ data: dAnterior.toISOString().slice(0, 10), entrada: '20:00', saida: '08:00' });
       return;
     }
-    // Código não implementado — regista aviso, não gera turno.
     avisos.push(`Dia ${dia}: código "${codigo}" ainda não é interpretado (ignorado).`);
   });
 
@@ -597,7 +704,7 @@ document.getElementById('previewBtn').addEventListener('click', async () => {
   const fileInput = document.getElementById('fileInput');
   const statusEl = document.getElementById('fileStatus');
 
-  if (!fileInput.files.length) {
+  if (!fileInput.files.length){
     statusEl.textContent = 'Escolhe um ficheiro primeiro.';
     statusEl.className = 'statusMsg bad';
     return;
@@ -607,11 +714,9 @@ document.getElementById('previewBtn').addEventListener('click', async () => {
   statusEl.className = 'statusMsg';
 
   try {
-    let turnos = [];
-    let avisos = [];
+    let turnos = [], avisos = [];
 
-    if (entidadeNome === ENTIDADE_UCC) {
-      // Assume mês/ano atual; ajusta aqui se precisares de escolher manualmente.
+    if (entidadeNome === ENTIDADE_UCC){
       const hoje = new Date();
       const resultado = await parseUCCOliveiraBairro(file, hoje.getFullYear(), hoje.getMonth() + 1);
       turnos = resultado.turnos;
@@ -620,7 +725,7 @@ document.getElementById('previewBtn').addEventListener('click', async () => {
       turnos = await parseXlsx(file);
     }
 
-    if (!turnos.length) {
+    if (!turnos.length){
       statusEl.textContent = 'Não foram encontrados turnos neste ficheiro.';
       statusEl.className = 'statusMsg bad';
       return;
@@ -637,15 +742,7 @@ document.getElementById('previewBtn').addEventListener('click', async () => {
   }
 });
 
-function calcDuracaoH(entrada, saida) {
-  const [eh, em] = entrada.split(':').map(Number);
-  const [sh, sm] = saida.split(':').map(Number);
-  let mins = (sh * 60 + sm) - (eh * 60 + em);
-  if (mins < 0) mins += 24 * 60;
-  return Math.round((mins / 60) * 10) / 10;
-}
-
-function mostrarPreview(turnos, avisos) {
+function mostrarPreview(turnos, avisos){
   const tbody = document.querySelector('#previewTable tbody');
   tbody.innerHTML = turnos.map(t => `
     <tr>
@@ -661,13 +758,13 @@ function mostrarPreview(turnos, avisos) {
 
   let warnEl = document.getElementById('previewWarnings');
   if (warnEl) warnEl.remove();
-  if (avisos && avisos.length) {
+  if (avisos && avisos.length){
     warnEl = document.createElement('div');
     warnEl.id = 'previewWarnings';
     warnEl.className = 'warnBox';
     warnEl.innerHTML = avisos.slice(0, 6).map(a => `• ${a}`).join('<br>') +
       (avisos.length > 6 ? `<br>+ ${avisos.length - 6} avisos...` : '');
-    area.insertBefore(warnEl, area.querySelector('#confirmBtn'));
+    area.insertBefore(warnEl, document.getElementById('confirmBtn'));
   }
 }
 
@@ -677,9 +774,12 @@ document.getElementById('confirmBtn').addEventListener('click', async () => {
   statusEl.textContent = 'A guardar...';
   statusEl.className = 'statusMsg';
   try {
-    const r = await apiPost({ action: 'addTurnos', ...previewTurnosPendentes });
-    if (r.error) throw new Error(r.error);
-    statusEl.textContent = `${r.turnosAdicionados} turnos guardados.`;
+    const n = await gravarTurnos(
+      previewTurnosPendentes.entidadeId,
+      previewTurnosPendentes.origemFicheiro,
+      previewTurnosPendentes.turnos
+    );
+    statusEl.textContent = `${n} turnos guardados.`;
     statusEl.className = 'statusMsg ok';
     document.getElementById('previewArea').classList.add('hidden');
     document.getElementById('fileInput').value = '';
@@ -692,11 +792,11 @@ document.getElementById('confirmBtn').addEventListener('click', async () => {
 });
 
 /* ======================================================================
-   INIT
+   INIT — pdf.js worker
    ====================================================================== */
 pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
-carregarTudo();
 </script>
 
+<script src="https://accounts.google.com/gsi/client" async defer></script>
 </body>
 </html>
