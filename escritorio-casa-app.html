@@ -57,7 +57,7 @@
     font-size:0.82rem;
     color:#6b6558;
   }
-  #authArea{padding:18px;}
+  #authArea{padding:40px 18px;text-align:center;display:flex;flex-direction:column;align-items:center;gap:10px;}
   button{
     font-family:inherit;
     border:none;
@@ -364,7 +364,7 @@
 
 <div id="authArea">
   <button id="signinBtn" class="btn-primary">Iniciar sessão com a Google</button>
-  <button id="setupBtn" class="btn-secondary hidden" style="margin-left:8px;">Inicializar folha (1ª vez)</button>
+  <button id="setupBtn" class="btn-secondary hidden">Inicializar folha (1ª vez)</button>
 </div>
 
 <div id="app" class="hidden">
@@ -482,7 +482,7 @@
 /* ============================================================
    CONFIGURAÇÃO — preenche estes 2 valores antes de usar
    ============================================================ */
-const APP_VERSION = 'v1.3.0';
+const APP_VERSION = 'v1.3.1';
 const CLIENT_ID = '108256538530-fgunbb52s7f3s9aurfpjtaf01v8fjbph.apps.googleusercontent.com';
 const SPREADSHEET_ID = '1u4QOqKMEOe8qq_kU_Cw5c8Vj4qQ0AHE5gXj9hPood9c';
 const SHEET_NAME = 'Dados';
