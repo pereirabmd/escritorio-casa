@@ -39,6 +39,11 @@
   #status{padding:0 18px;font-size:0.8rem;color:var(--muted);min-height:1.2em;}
   #status.err{color:var(--bad);}
 
+  #appFooter{
+    text-align:center;font-size:0.72rem;color:var(--muted);
+    padding:18px 18px calc(80px + env(safe-area-inset-bottom));
+  }
+
   #nextShift{
     margin:16px 18px 0; padding:16px; border-radius:14px;
     background:linear-gradient(135deg, var(--brand), var(--brand-light)); color:#fff;
@@ -74,6 +79,14 @@
   .shiftEntity{font-weight:600;font-size:0.95rem;}
   .shiftTime{font-size:0.85rem;margin-top:2px;}
   .shiftDuration{font-size:0.72rem;color:var(--muted);}
+  .shiftActions{display:flex;gap:6px;margin-top:8px;justify-content:flex-end;}
+  .shiftActions button{padding:5px 10px;min-height:auto;font-size:0.72rem;font-weight:600;border-radius:6px;}
+  .btn-edit{background:transparent;color:var(--brand);border:1px solid var(--brand);}
+  .editingBanner{
+    background:var(--brand-tint,#e3eef2);border:1px solid var(--brand-light);border-radius:8px;
+    padding:8px 10px;font-size:0.78rem;margin-bottom:12px;display:flex;justify-content:space-between;align-items:center;
+  }
+  .editingBanner button{padding:4px 10px;min-height:auto;font-size:0.72rem;}
 
   .sectionTitle{font-size:0.9rem;font-weight:700;margin:18px 0 8px;}
   .sectionTitle:first-child{margin-top:0;}
@@ -96,9 +109,6 @@
     padding:10px 12px;border:1px solid var(--line);border-radius:10px;margin-bottom:8px;background:#fff;
   }
   .entityName{display:flex;align-items:center;gap:8px;font-weight:600;font-size:0.9rem;}
-
-  .addEntityBox{display:flex;gap:8px;margin-top:14px;}
-  .addEntityBox input[type=text]{flex:1;margin-bottom:0;}
 
   .rowSplit{display:flex;gap:8px;}
   .rowSplit > div{flex:1;}
@@ -179,14 +189,19 @@
           Outros códigos (MR, G, FE, FS, etc.) são ignorados por agora.
         </div>
 
-        <label class="fieldLabel" for="fileInput" id="fileInputLabel">Ficheiro (.xlsx)</label>
-        <input type="file" id="fileInput" accept=".xlsx,.xls">
+        <label class="fieldLabel" for="fileInput" id="fileInputLabel">Ficheiro (.pdf ou .xlsx)</label>
+        <input type="file" id="fileInput" accept=".pdf,application/pdf,.xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel">
         <button class="btn-primary" id="previewBtn">Pré-visualizar</button>
         <div id="fileStatus" class="statusMsg"></div>
       </div>
 
-      <!-- Modo manual -->
+      <!-- Modo manual (também usado para editar um turno existente) -->
       <div id="modeManual" class="hidden">
+        <div id="editingBanner" class="editingBanner hidden">
+          <span>A editar turno</span>
+          <button type="button" class="btn-secondary" id="cancelEditBtn" style="width:auto;">Cancelar</button>
+        </div>
+
         <label class="fieldLabel" for="manualEntitySelect">Entidade empregadora</label>
         <select id="manualEntitySelect"></select>
 
@@ -223,13 +238,8 @@
     <!-- VIEW: Entidades -->
     <div class="view" id="view-entidades">
       <div class="sectionTitle">Entidades empregadoras</div>
+      <div class="preview" style="margin-bottom:10px;">Por agora só a UCC Oliveira do Bairro está configurada. Adicionar/editar/remover entidades ainda não está disponível nesta versão.</div>
       <div id="entityListArea"><div class="preview">A carregar...</div></div>
-
-      <div class="addEntityBox">
-        <input type="text" id="newEntityName" placeholder="Nova entidade...">
-        <button class="btn-secondary" id="addEntityBtn" style="width:auto;">Adicionar</button>
-      </div>
-      <div id="entityStatus" class="statusMsg"></div>
     </div>
 
   </main>
@@ -242,6 +252,8 @@
   </div>
 
 </div>
+
+<footer id="appFooter">Turnos · Beta 2</footer>
 
 <script>
 /* ======================================================================
@@ -438,67 +450,33 @@ function toggleUCCHint(){
   const nome = nomeEntidade(sel.value);
   const isUCC = nome === ENTIDADE_UCC;
   document.getElementById('ficheiroHintUCC').classList.toggle('hidden', !isUCC);
-  document.getElementById('fileInput').accept = isUCC ? '.pdf' : '.xlsx,.xls';
-  document.getElementById('fileInputLabel').textContent = isUCC ? 'Ficheiro (.pdf)' : 'Ficheiro (.xlsx)';
 }
 document.getElementById('entitySelect').addEventListener('change', toggleUCCHint);
 
 function renderEntidades(){
   const el = document.getElementById('entityListArea');
   if (!entidadesCache.length){
-    el.innerHTML = '<div class="preview">Nenhuma entidade adicionada.</div>';
+    el.innerHTML = '<div class="preview">Nenhuma entidade configurada na folha.</div>';
     return;
   }
   el.innerHTML = entidadesCache.map(e => `
     <div class="entityRow">
       <div class="entityName"><span class="dot" style="background:${corEntidade(e.ID)}"></span> ${e.Nome}</div>
-      <button class="btn-danger" data-remove-id="${e.ID}">Remover</button>
     </div>
   `).join('');
-  el.querySelectorAll('[data-remove-id]').forEach(btn => {
-    btn.addEventListener('click', () => removerEntidade(btn.dataset.removeId));
-  });
-}
-
-document.getElementById('addEntityBtn').addEventListener('click', async () => {
-  const input = document.getElementById('newEntityName');
-  const nome = input.value.trim();
-  if (!nome) return;
-  const statusEl = document.getElementById('entityStatus');
-  statusEl.textContent = 'A adicionar...';
-  statusEl.className = 'statusMsg';
-  try {
-    const proxId = 'E' + (Math.max(0, ...entidadesCache.map(e => parseInt((e.ID||'E0').replace('E',''),10) || 0)) + 1);
-    const cor = CORES[entidadesCache.length % CORES.length];
-    await sheetsAppend(`${SHEET_ENTIDADES}!A:D`, [[proxId, nome, cor, 'SIM']]);
-    input.value = '';
-    statusEl.textContent = 'Entidade adicionada.';
-    statusEl.className = 'statusMsg ok';
-    await carregarTudo();
-  } catch (err) {
-    statusEl.textContent = 'Erro: ' + err.message;
-    statusEl.className = 'statusMsg bad';
-  }
-});
-
-async function removerEntidade(id){
-  if (!confirm('Remover esta entidade?')) return;
-  const entidade = entidadesCache.find(e => e.ID === id);
-  if (!entidade) return;
-  try {
-    await deleteSheetRow(SHEET_ENTIDADES, entidade._row);
-    await carregarTudo();
-  } catch (err) {
-    alert('Erro: ' + err.message);
-  }
 }
 
 /* ======================================================================
    RENDER — Turnos (início / escalas)
    ====================================================================== */
-function shiftCardHTML(t){
+function shiftCardHTML(t, comAcoes){
   const d = new Date(t.Data);
   const dataFmt = isNaN(d) ? t.Data : d.toLocaleDateString('pt-PT', { weekday: 'short', day: '2-digit', month: 'short' });
+  const acoes = comAcoes ? `
+      <div class="shiftActions">
+        <button type="button" class="btn-edit" data-edit-id="${t.ID}">Editar</button>
+        <button type="button" class="btn-danger" data-remove-turno-id="${t.ID}">Remover</button>
+      </div>` : '';
   return `
     <div class="card">
       <div class="shiftRow">
@@ -510,6 +488,7 @@ function shiftCardHTML(t){
         </div>
         <div class="shiftDuration">${t.Duracao_h}h</div>
       </div>
+      ${acoes}
     </div>`;
 }
 
@@ -544,7 +523,16 @@ function renderProximosTurnos(){
 function renderTodosTurnos(){
   const el = document.getElementById('allShiftsList');
   const lista = turnosOrdenados();
-  el.innerHTML = lista.length ? lista.map(shiftCardHTML).join('') : '<div class="preview">Ainda sem turnos carregados.</div>';
+  el.innerHTML = lista.length
+    ? lista.map(t => shiftCardHTML(t, true)).join('')
+    : '<div class="preview">Ainda sem turnos carregados.</div>';
+
+  el.querySelectorAll('[data-edit-id]').forEach(btn => {
+    btn.addEventListener('click', () => iniciarEdicaoTurno(btn.dataset.editId));
+  });
+  el.querySelectorAll('[data-remove-turno-id]').forEach(btn => {
+    btn.addEventListener('click', () => removerTurno(btn.dataset.removeTurnoId));
+  });
 }
 
 /* ======================================================================
@@ -572,8 +560,39 @@ async function gravarTurnos(entidadeId, origemFicheiro, turnos){
 }
 
 /* ======================================================================
-   MANUAL — adicionar turno único
+   MANUAL — adicionar turno único, ou guardar edição de um turno existente
    ====================================================================== */
+let turnoEditando = null; // { ID, _row, Origem_Ficheiro, Notas } | null
+
+function iniciarEdicaoTurno(turnoId){
+  const t = turnosCache.find(x => x.ID === turnoId);
+  if (!t) return;
+  turnoEditando = t;
+
+  document.getElementById('manualEntitySelect').value = t.Entidade_ID;
+  document.getElementById('manualDate').value = t.Data;
+  document.getElementById('manualStart').value = t.Hora_Entrada;
+  document.getElementById('manualEnd').value = t.Hora_Saida;
+  document.getElementById('manualAddBtn').textContent = 'Guardar alterações';
+  document.getElementById('editingBanner').classList.remove('hidden');
+
+  document.querySelectorAll('.toggleBtn').forEach(b => b.classList.toggle('active', b.dataset.mode === 'manual'));
+  document.getElementById('modeFicheiro').classList.add('hidden');
+  document.getElementById('modeManual').classList.remove('hidden');
+  document.querySelectorAll('.tabBtn').forEach(t => t.classList.toggle('active', t.dataset.view === 'carregar'));
+  document.querySelectorAll('.view').forEach(v => v.classList.toggle('active', v.id === 'view-carregar'));
+}
+
+function cancelarEdicaoTurno(){
+  turnoEditando = null;
+  document.getElementById('manualAddBtn').textContent = 'Adicionar turno';
+  document.getElementById('editingBanner').classList.add('hidden');
+  document.getElementById('manualDate').value = '';
+  document.getElementById('manualStart').value = '';
+  document.getElementById('manualEnd').value = '';
+}
+document.getElementById('cancelEditBtn').addEventListener('click', cancelarEdicaoTurno);
+
 document.getElementById('manualAddBtn').addEventListener('click', async () => {
   const entidadeId = document.getElementById('manualEntitySelect').value;
   const data = document.getElementById('manualDate').value;
@@ -590,18 +609,40 @@ document.getElementById('manualAddBtn').addEventListener('click', async () => {
   statusEl.textContent = 'A guardar...';
   statusEl.className = 'statusMsg';
   try {
-    await gravarTurnos(entidadeId, 'manual', [{ data, entrada, saida }]);
-    statusEl.textContent = 'Turno adicionado.';
+    if (turnoEditando){
+      const duracao = calcDuracaoH(entrada, saida);
+      await sheetsPut(`${SHEET_TURNOS}!A${turnoEditando._row}:H${turnoEditando._row}`, [[
+        turnoEditando.ID, entidadeId, data, entrada, saida, duracao,
+        turnoEditando.Origem_Ficheiro || 'manual', turnoEditando.Notas || ''
+      ]]);
+      statusEl.textContent = 'Turno atualizado.';
+      cancelarEdicaoTurno();
+    } else {
+      await gravarTurnos(entidadeId, 'manual', [{ data, entrada, saida }]);
+      statusEl.textContent = 'Turno adicionado.';
+      document.getElementById('manualDate').value = '';
+      document.getElementById('manualStart').value = '';
+      document.getElementById('manualEnd').value = '';
+    }
     statusEl.className = 'statusMsg ok';
-    document.getElementById('manualDate').value = '';
-    document.getElementById('manualStart').value = '';
-    document.getElementById('manualEnd').value = '';
     await carregarTudo();
   } catch (err) {
     statusEl.textContent = 'Erro: ' + err.message;
     statusEl.className = 'statusMsg bad';
   }
 });
+
+async function removerTurno(turnoId){
+  if (!confirm('Remover este turno?')) return;
+  const t = turnosCache.find(x => x.ID === turnoId);
+  if (!t) return;
+  try {
+    await deleteSheetRow(SHEET_TURNOS, t._row);
+    await carregarTudo();
+  } catch (err) {
+    alert('Erro: ' + err.message);
+  }
+}
 
 /* ======================================================================
    PARSER — xlsx genérico (colunas: Data, Entrada, Saida)
@@ -715,12 +756,15 @@ document.getElementById('previewBtn').addEventListener('click', async () => {
 
   try {
     let turnos = [], avisos = [];
+    const ehPdf = /\.pdf$/i.test(file.name);
 
-    if (entidadeNome === ENTIDADE_UCC){
+    if (entidadeNome === ENTIDADE_UCC && ehPdf){
       const hoje = new Date();
       const resultado = await parseUCCOliveiraBairro(file, hoje.getFullYear(), hoje.getMonth() + 1);
       turnos = resultado.turnos;
       avisos = resultado.avisos;
+    } else if (ehPdf){
+      throw new Error('Ainda não há um parser de PDF para esta entidade.');
     } else {
       turnos = await parseXlsx(file);
     }
