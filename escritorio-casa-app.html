@@ -463,7 +463,7 @@
 /* ============================================================
    CONFIGURAÇÃO — preenche estes 2 valores antes de usar
    ============================================================ */
-const APP_VERSION = 'v1.2.1';
+const APP_VERSION = 'v1.2.2';
 const CLIENT_ID = '108256538530-fgunbb52s7f3s9aurfpjtaf01v8fjbph.apps.googleusercontent.com';
 const SPREADSHEET_ID = '1u4QOqKMEOe8qq_kU_Cw5c8Vj4qQ0AHE5gXj9hPood9c';
 const SHEET_NAME = 'Dados';
@@ -1140,6 +1140,7 @@ async function loadNotes(){
     computeNoteMarks();
     renderNotes();
     renderMonth();
+    updateTotals();
   }catch(err){
     document.getElementById('notasList').innerHTML =
       `<div class="notaEmpty">Não foi possível carregar as notas (${err.message}). Confirma que existe uma aba "Notas" com as colunas Data Início, Data Fim, Categoria, Descrição.</div>`;
