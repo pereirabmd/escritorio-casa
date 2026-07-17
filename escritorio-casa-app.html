@@ -39,7 +39,6 @@
   body{
     margin:0 auto;
     max-width:480px;
-    min-height:100vh;
     font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
     background:var(--paper);
     color:var(--ink);
@@ -327,9 +326,11 @@
   .notaCard .actions button{
     background:transparent;border:none;font-size:1rem;
     padding:4px 6px;cursor:pointer;color:#a29c8c;
+    display:inline-flex;align-items:center;justify-content:center;
+    min-height:auto;
   }
   .notaCard .actions button:hover{color:var(--ink);}
-  .notaLocked{font-size:0.95rem;opacity:0.5;padding:4px 6px;}
+  .notaLocked{opacity:0.5;padding:4px 6px;display:inline-flex;align-items:center;color:#a29c8c;}
   .notaEmpty{font-size:0.85rem;color:#a29c8c;padding:6px 0 14px;}
 
   #notaForm{
@@ -489,7 +490,11 @@
 /* ============================================================
    CONFIGURAÇÃO — preenche estes 2 valores antes de usar
    ============================================================ */
-const APP_VERSION = 'v1.5.0';
+const APP_VERSION = 'v1.5.1';
+
+const ICON_EDIT = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>';
+const ICON_TRASH = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>';
+const ICON_LOCK = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>';
 const CLIENT_ID = '108256538530-fgunbb52s7f3s9aurfpjtaf01v8fjbph.apps.googleusercontent.com';
 const SPREADSHEET_ID = '1u4QOqKMEOe8qq_kU_Cw5c8Vj4qQ0AHE5gXj9hPood9c';
 const SHEET_NAME = 'Dados';
@@ -523,7 +528,6 @@ window.onload = () => {
   document.getElementById('yearSub').textContent = `${currentYear} — dados na tua Google Sheet`;
   document.getElementById('footerVersion').textContent = APP_VERSION;
   console.log('KLx RTO app', APP_VERSION);
-  attachSwipeTabs();
 
   tokenClient = google.accounts.oauth2.initTokenClient({
     client_id: CLIENT_ID,
@@ -559,29 +563,6 @@ function showTab(tab){
   document.getElementById('tabNotas').classList.toggle('hidden', tab !== 'notas');
   document.getElementById('tabBtnCal').classList.toggle('active', tab === 'cal');
   document.getElementById('tabBtnNotas').classList.toggle('active', tab === 'notas');
-}
-
-/* ---------- Deslizar para trocar de separador (Calendário <-> Notas) ---------- */
-function attachSwipeTabs(){
-  let startX = 0, startY = 0, tracking = false;
-
-  document.body.addEventListener('pointerdown', (e) => {
-    if (document.getElementById('app').classList.contains('hidden')) return;
-    startX = e.clientX; startY = e.clientY;
-    tracking = true;
-  });
-  document.body.addEventListener('pointerup', (e) => {
-    if (!tracking) return;
-    tracking = false;
-    const dx = e.clientX - startX;
-    const dy = e.clientY - startY;
-    const SWIPE_THRESHOLD = 60;
-    if (Math.abs(dx) > SWIPE_THRESHOLD && Math.abs(dx) > Math.abs(dy) * 1.5){
-      if (dx < 0 && currentTab === 'cal') showTab('notas');
-      else if (dx > 0 && currentTab === 'notas') showTab('cal');
-    }
-  });
-  document.body.addEventListener('pointercancel', () => { tracking = false; });
 }
 
 async function onSignedIn(){
@@ -1237,9 +1218,9 @@ function renderNotes(){
         <div class="det"></div>
       </div>
       <div class="actions">
-        ${locked ? '<span class="notaLocked" title="Já terminou — não editável">🔒</span>' : `
-        <button title="Editar">✎</button>
-        <button title="Eliminar">🗑</button>`}
+        ${locked ? `<span class="notaLocked" title="Já terminou — não editável">${ICON_LOCK}</span>` : `
+        <button title="Editar">${ICON_EDIT}</button>
+        <button title="Eliminar">${ICON_TRASH}</button>`}
       </div>`;
     card.querySelector('.desc').textContent = n.categoria || n.descricao || '(sem categoria)';
     card.querySelector('.det').textContent = [periodo, n.categoria && n.descricao ? n.descricao : ''].filter(Boolean).join(' — ');
