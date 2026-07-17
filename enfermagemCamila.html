@@ -253,7 +253,7 @@
 
 </div>
 
-<footer id="appFooter">Turnos · Beta 2</footer>
+<footer id="appFooter">Turnos · Beta 3</footer>
 
 <script>
 /* ======================================================================
@@ -264,20 +264,23 @@
    ====================================================================== */
 const CLIENT_ID = '108256538530-fgunbb52s7f3s9aurfpjtaf01v8fjbph.apps.googleusercontent.com';
 const SPREADSHEET_ID = '1LxvzDdKfCJkP7Zke5i_H6RNK6RYqfubSDyZtKvAwAQg';
-const SHEET_ENTIDADES = 'Entidades';
 const SHEET_TURNOS = 'Turnos';
 const SCOPES = 'https://www.googleapis.com/auth/spreadsheets';
 
-// Nome da entidade que usa o parser fixo de PDF (grelha de horário).
-const ENTIDADE_UCC = 'UCC Oliveira do Bairro';
+/* Entidades — fixas no código, não vêm da folha de cálculo.
+   Cada entidade tem sempre um "parser" associado: é isso que decide
+   o algoritmo usado para ler o ficheiro carregado. Para adicionar uma
+   entidade nova é preciso adicionar aqui uma entrada + o parser dela. */
+const ENTIDADES = [
+  { id: 'UCC', nome: 'UCC Oliveira do Bairro', cor: '#2f6f8f', parser: 'pdf-ucc-oliveira-bairro' }
+];
 
 const CORES = ["#2f6f8f", "#c9793f", "#5a8f5f", "#8e5fd1", "#c94b3f", "#2fa3a3"];
 
 let tokenClient;
 let accessToken = null;
-let entidadesCache = [];   // [{ID, Nome, Cor, Ativa, _row}]
 let turnosCache = [];      // [{ID, Entidade_ID, Data, Hora_Entrada, Hora_Saida, Duracao_h, Origem_Ficheiro, Notas, _row}]
-let sheetGidCache = {};    // { 'Entidades': 123456, 'Turnos': 789012 }
+let sheetGidCache = {};    // { 'Turnos': 789012 }
 let previewTurnosPendentes = null;
 
 function setStatus(msg, isErr=false){
@@ -393,19 +396,12 @@ document.querySelectorAll('.toggleBtn').forEach(btn => {
 });
 
 /* ======================================================================
-   CARREGAR DADOS (lê Entidades!A2:D e Turnos!A2:H)
+   CARREGAR DADOS (só Turnos!A2:H — as entidades são fixas no código)
    ====================================================================== */
 async function carregarTudo(){
   setStatus('A carregar dados...');
   try {
-    const [entData, turData] = await Promise.all([
-      sheetsGet(`${SHEET_ENTIDADES}!A2:D1000`),
-      sheetsGet(`${SHEET_TURNOS}!A2:H5000`)
-    ]);
-
-    entidadesCache = (entData.values || [])
-      .map((r, i) => ({ ID: r[0], Nome: r[1], Cor: r[2], Ativa: r[3], _row: i + 2 }))
-      .filter(e => e.ID);
+    const turData = await sheetsGet(`${SHEET_TURNOS}!A2:H5000`);
 
     turnosCache = (turData.values || [])
       .map((r, i) => ({
@@ -427,19 +423,23 @@ async function carregarTudo(){
 }
 
 function corEntidade(id){
-  const idx = entidadesCache.findIndex(e => e.ID === id);
-  return CORES[idx % CORES.length] || "#888888";
+  const idx = ENTIDADES.findIndex(e => e.id === id);
+  return idx >= 0 ? (ENTIDADES[idx].cor || CORES[idx % CORES.length]) : "#888888";
 }
 function nomeEntidade(id){
-  const e = entidadesCache.find(e => e.ID === id);
-  return e ? e.Nome : id;
+  const e = ENTIDADES.find(e => e.id === id);
+  return e ? e.nome : id;
+}
+function parserEntidade(id){
+  const e = ENTIDADES.find(e => e.id === id);
+  return e ? e.parser : null;
 }
 
 /* ======================================================================
-   RENDER — Entidades (dropdowns + lista)
+   RENDER — Entidades (dropdowns + lista) — lista fixa, ligada ao algoritmo
    ====================================================================== */
 function renderEntitySelects(){
-  const opts = entidadesCache.map(e => `<option value="${e.ID}">${e.Nome}</option>`).join('');
+  const opts = ENTIDADES.map(e => `<option value="${e.id}">${e.nome}</option>`).join('');
   document.getElementById('entitySelect').innerHTML = opts;
   document.getElementById('manualEntitySelect').innerHTML = opts;
   toggleUCCHint();
@@ -447,21 +447,20 @@ function renderEntitySelects(){
 
 function toggleUCCHint(){
   const sel = document.getElementById('entitySelect');
-  const nome = nomeEntidade(sel.value);
-  const isUCC = nome === ENTIDADE_UCC;
+  const isUCC = parserEntidade(sel.value) === 'pdf-ucc-oliveira-bairro';
   document.getElementById('ficheiroHintUCC').classList.toggle('hidden', !isUCC);
 }
 document.getElementById('entitySelect').addEventListener('change', toggleUCCHint);
 
 function renderEntidades(){
   const el = document.getElementById('entityListArea');
-  if (!entidadesCache.length){
-    el.innerHTML = '<div class="preview">Nenhuma entidade configurada na folha.</div>';
+  if (!ENTIDADES.length){
+    el.innerHTML = '<div class="preview">Nenhuma entidade configurada.</div>';
     return;
   }
-  el.innerHTML = entidadesCache.map(e => `
+  el.innerHTML = ENTIDADES.map(e => `
     <div class="entityRow">
-      <div class="entityName"><span class="dot" style="background:${corEntidade(e.ID)}"></span> ${e.Nome}</div>
+      <div class="entityName"><span class="dot" style="background:${e.cor}"></span> ${e.nome}</div>
     </div>
   `).join('');
 }
@@ -741,10 +740,15 @@ async function parseUCCOliveiraBairro(file, ano, mes){
 document.getElementById('previewBtn').addEventListener('click', async () => {
   const entitySelect = document.getElementById('entitySelect');
   const entidadeId = entitySelect.value;
-  const entidadeNome = nomeEntidade(entidadeId);
+  const parser = parserEntidade(entidadeId);
   const fileInput = document.getElementById('fileInput');
   const statusEl = document.getElementById('fileStatus');
 
+  if (!entidadeId){
+    statusEl.textContent = 'Escolhe uma entidade primeiro.';
+    statusEl.className = 'statusMsg bad';
+    return;
+  }
   if (!fileInput.files.length){
     statusEl.textContent = 'Escolhe um ficheiro primeiro.';
     statusEl.className = 'statusMsg bad';
@@ -756,17 +760,19 @@ document.getElementById('previewBtn').addEventListener('click', async () => {
 
   try {
     let turnos = [], avisos = [];
-    const ehPdf = /\.pdf$/i.test(file.name);
 
-    if (entidadeNome === ENTIDADE_UCC && ehPdf){
+    if (parser === 'pdf-ucc-oliveira-bairro'){
+      if (!/\.pdf$/i.test(file.name)){
+        throw new Error('Esta entidade usa ficheiros PDF. O ficheiro escolhido não parece ser um PDF.');
+      }
       const hoje = new Date();
       const resultado = await parseUCCOliveiraBairro(file, hoje.getFullYear(), hoje.getMonth() + 1);
       turnos = resultado.turnos;
       avisos = resultado.avisos;
-    } else if (ehPdf){
-      throw new Error('Ainda não há um parser de PDF para esta entidade.');
-    } else {
+    } else if (parser === 'xlsx-generico'){
       turnos = await parseXlsx(file);
+    } else {
+      throw new Error('Esta entidade ainda não tem um algoritmo de leitura configurado.');
     }
 
     if (!turnos.length){
