@@ -99,16 +99,34 @@
   .stat{
     background:#fff;
     border:1px solid var(--line);
-    border-radius:12px;
+    border-left:4px solid var(--line);
+    border-radius:10px;
     padding:12px 14px;
+    transition:border-color .15s ease, background .15s ease;
   }
   .stat .label{font-size:0.72rem;color:#6b6558;text-transform:uppercase;letter-spacing:.04em;}
   .stat .value{font-size:1.35rem;font-weight:700;margin-top:2px;}
+  .stat .sub2{font-size:0.72rem;color:#a29c8c;margin-top:2px;}
   .stat.wide{grid-column:1 / -1;}
   .stat.wide .label{text-transform:none;letter-spacing:normal;}
+
+  .stat.t{border-left-color:var(--t-color);}
   .stat.t .value{color:var(--t-color);}
+
+  /* Dias em casa: semáforo consoante % da quota anual usada */
+  .stat.c{border-left-color:var(--c-color);}
   .stat.c .value{color:var(--c-color);}
+  .stat.c.warn{border-left-color:#c98a1f;background:#fdf6e6;}
+  .stat.c.warn .value{color:#a8690f;}
+  .stat.c.over{border-left-color:var(--bad);background:var(--h-tint);}
+  .stat.c.over .value{color:var(--bad);}
+
+  /* Saldos: semáforo a 3 níveis */
+  .stat.saldo-ok{border-left-color:var(--ok);}
   .stat.saldo-ok .value{color:var(--ok);}
+  .stat.saldo-warn{border-left-color:#c98a1f;background:#fdf6e6;}
+  .stat.saldo-warn .value{color:#a8690f;}
+  .stat.saldo-bad{border-left-color:var(--bad);background:var(--h-tint);}
   .stat.saldo-bad .value{color:var(--bad);}
 
   #monthNav{
@@ -359,15 +377,16 @@
   <div id="tabCalendario">
 
     <div id="totals">
-      <div class="stat t">
+      <div class="stat t" id="statTBox">
         <div class="label">Dias no escritório</div>
         <div class="value" id="statT">–</div>
       </div>
-      <div class="stat c">
+      <div class="stat c" id="statCBox">
         <div class="label">Dias em casa</div>
         <div class="value" id="statC">–</div>
+        <div class="sub2" id="statCPct"></div>
       </div>
-      <div class="stat">
+      <div class="stat" id="statQuotaBox">
         <div class="label">Quota pro-rata (120/ano)</div>
         <div class="value" id="statQuota">–</div>
       </div>
@@ -463,7 +482,7 @@
 /* ============================================================
    CONFIGURAÇÃO — preenche estes 2 valores antes de usar
    ============================================================ */
-const APP_VERSION = 'v1.2.2';
+const APP_VERSION = 'v1.3.0';
 const CLIENT_ID = '108256538530-fgunbb52s7f3s9aurfpjtaf01v8fjbph.apps.googleusercontent.com';
 const SPREADSHEET_ID = '1u4QOqKMEOe8qq_kU_Cw5c8Vj4qQ0AHE5gXj9hPood9c';
 const SHEET_NAME = 'Dados';
@@ -1036,13 +1055,19 @@ function updateTotals(){
   document.getElementById('statT').textContent = countT;
   document.getElementById('statC').textContent = countC;
   document.getElementById('statQuota').textContent = quotaProRata;
+
+  const pct = Math.round((countC / QUOTA_ANUAL) * 100);
+  document.getElementById('statCPct').textContent = `${pct}% da quota anual`;
+  const cBox = document.getElementById('statCBox');
+  cBox.className = 'stat c ' + (countC >= QUOTA_ANUAL ? 'over' : countC >= QUOTA_ANUAL*0.7 ? 'warn' : '');
+
+  function saldoTier(v){ return v < 0 ? 'saldo-bad' : v <= 10 ? 'saldo-warn' : 'saldo-ok'; }
+
   document.getElementById('statSaldo').textContent = saldo;
-  const box = document.getElementById('statSaldoBox');
-  box.className = 'stat ' + (saldo < 0 ? 'saldo-bad' : 'saldo-ok');
+  document.getElementById('statSaldoBox').className = 'stat ' + saldoTier(saldo);
 
   document.getElementById('statSaldoCond').textContent = saldoCond;
-  const boxCond = document.getElementById('statSaldoCondBox');
-  boxCond.className = 'stat wide ' + (saldoCond < 0 ? 'saldo-bad' : 'saldo-ok');
+  document.getElementById('statSaldoCondBox').className = 'stat wide ' + saldoTier(saldoCond);
 }
 
 /* ---------- Notas (4 campos: Data Início | Data Fim | Categoria | Descrição) ---------- */
