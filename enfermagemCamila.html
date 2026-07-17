@@ -290,7 +290,7 @@
     <path d="M6.2 11c0-2.3 2.6-4.1 5.8-4.1s5.8 1.8 5.8 4.1c0 1.9-1.4 3.5-3.4 4l1.9 1.3c.4.3.1.9-.3.9H7.9c-.4 0-.7-.6-.3-.9l1.9-1.3c-1.9-.5-3.3-2.1-3.3-4z" fill="none" stroke="#6b6558" stroke-width="1.3"/>
     <rect x="10.6" y="17.6" width="2.8" height="2" fill="#6b6558"/>
     <rect x="8.8" y="19.4" width="6.4" height="1.6" rx="0.6" fill="#6b6558"/>
-  </svg>Turnos · Beta 13</footer>
+  </svg>Turnos · Beta 14</footer>
 
 <script>
 /* ======================================================================
@@ -891,8 +891,6 @@ async function parseUCCOliveiraBairro(file, ano, mes){
    no browser. O OCR pode errar — por isso a pré-visualização é sempre
    mostrada antes de gravar, e os avisos assinalam blocos ambíguos.
    ====================================================================== */
-const DIAS_SEMANA_PT = /seg|ter|qua|qui|sex|s[aá]b|dom/i;
-
 /* ---------- Otimizações de velocidade do OCR ----------
    1. A imagem é reduzida antes da análise — o tempo do OCR escala com o
       número de pixels, e um print de telemóvel (1080px+) é maior do que
@@ -934,6 +932,70 @@ async function reduzirImagemParaOcr(file, larguraMax){
   return new Promise(resolve => canvas.toBlob(resolve, 'image/png', 0.92));
 }
 
+/* ---------- Extração de horas tolerante a falhas comuns de OCR ----------
+   Observado em testes reais:
+   - "17:00-18:00"  → bem formado (caso normal)
+   - "08001600"     → ":" e "-" ambos desaparecem, sobra um bloco de dígitos
+   - "1800-0000"    → só o ":" desaparece, o "-" fica
+   As três variantes são tratadas, por esta ordem (cada uma "consome" o que
+   encontra, para a seguinte não voltar a interpretar o mesmo texto). ---------- */
+function digitosParaHora(d){
+  d = d.padStart(3, '0');
+  const min = d.slice(-2);
+  const hor = d.slice(0, -2).padStart(2, '0');
+  return `${hor}:${min}`;
+}
+
+function extrairPeriodos(bloco){
+  const periodos = [];
+  let texto = bloco;
+
+  // 1. Bem formado: HH:MM - HH:MM (":" pode sair como ".")
+  texto = texto.replace(/(\d{1,2})\s*[:.]\s*(\d{2})\s*[-–—~]\s*(\d{1,2})\s*[:.]\s*(\d{2})/g,
+    (full, h1, m1, h2, m2) => {
+      periodos.push({ entrada: `${h1.padStart(2,'0')}:${m1}`, saida: `${h2.padStart(2,'0')}:${m2}` });
+      return ' ';
+    });
+
+  // 2. Sem ":", com "-": dois blocos de 3-4 dígitos separados por traço
+  texto = texto.replace(/\b(\d{3,4})\s*[-–—~]\s*(\d{3,4})\b/g,
+    (full, a, b) => {
+      periodos.push({ entrada: digitosParaHora(a), saida: digitosParaHora(b) });
+      return ' ';
+    });
+
+  // 3. Sem ":" nem "-": bloco de 7-8 dígitos seguidos (ex: "08001600")
+  texto = texto.replace(/\b(\d{7,8})\b/g,
+    (full, d) => {
+      const meio = d.length - 4;
+      periodos.push({ entrada: digitosParaHora(d.slice(0, meio)), saida: digitosParaHora(d.slice(meio)) });
+      return ' ';
+    });
+
+  return periodos
+    .map(p => {
+      // "24:00" é uma notação comum para meia-noite (fim do dia) — trata-se
+      // como "00:00", que já funciona com a lógica de turno que atravessa
+      // a meia-noite (saida <= entrada = dia seguinte).
+      if (p.saida === '24:00') p.saida = '00:00';
+      if (p.entrada === '24:00') p.entrada = '00:00';
+      return p;
+    })
+    .filter(p => {
+      const [eh] = p.entrada.split(':').map(Number);
+      const [sh] = p.saida.split(':').map(Number);
+      return eh <= 23 && sh <= 23; // descarta lixo de OCR com horas impossíveis
+    });
+}
+
+function segundaFeiraDaSemana(data){
+  const d = new Date(data);
+  const dow = d.getDay(); // 0=Dom..6=Sáb
+  const diff = dow === 0 ? 6 : dow - 1;
+  d.setDate(d.getDate() - diff);
+  return d;
+}
+
 async function parseSNS24Imagem(file, dataReferencia){
   const progEl = document.getElementById('ocrProgress');
   progEl.classList.remove('hidden');
@@ -959,70 +1021,51 @@ async function parseSNS24Imagem(file, dataReferencia){
     ocrProgressCallback = null;
   }
 
-  // O cabeçalho verde ("Sex, 17 Jul 26") é texto branco sobre fundo verde —
-  // contraste que o OCR falha com frequência. Por isso o mês/ano de
-  // referência não vem do OCR: é indicado manualmente antes do carregamento
-  // (campo "Qualquer dia dentro da semana da imagem"). O OCR só precisa de
-  // ler a grelha (texto escuro sobre fundo claro), que é fiável.
-  const headerMes = dataReferencia.getMonth() + 1; // 1-indexado
-  const headerAno = dataReferencia.getFullYear();
+  // As datas NÃO vêm do número do dia (o OCR falha muitas vezes a lê-lo —
+  // os dias em cinzento-claro no ecrã original são especialmente propensos
+  // a falhar). Em vez disso: os rótulos "Seg/Ter/Qua/Qui/Sex/Sáb/Dom" leem-se
+  // de forma fiável, e sabemos que a semana é sempre 7 dias consecutivos a
+  // partir de segunda-feira — por isso a data de cada linha é calculada a
+  // partir da segunda-feira da semana do "dataReferencia" escolhido pelo
+  // utilizador, + a posição do rótulo na sequência (0=Seg, 1=Ter, ...).
+  const segunda = segundaFeiraDaSemana(dataReferencia);
 
-  // 2. Dividir o texto em blocos, um por dia da semana encontrado.
-  //    Cada bloco = do número do dia até ao próximo número de dia (ou fim do texto).
-  const blocoRegex = /(\d{1,2})\s*\n?\s*(Seg|Ter|Qua|Qui|Sex|S[aá]b|Dom)/gi;
-  const marcadores = [...texto.matchAll(blocoRegex)];
+  const marcadorRegex = /(Seg|Ter|Qua|Qui|Sex|S[aá]b|Dom)/gi;
+  const marcadores = [...texto.matchAll(marcadorRegex)];
 
   if (marcadores.length < 3){
-    throw new Error(`Só identifiquei ${marcadores.length} dia(s) na imagem — esperava 7 (uma semana). Tenta uma foto mais nítida, bem enquadrada e sem reflexos.`);
+    console.log('Texto lido pelo OCR (para depuração):', texto);
+    throw new Error(`Só identifiquei ${marcadores.length} dia(s) da semana na imagem — esperava 7. Texto lido: "${texto.trim().slice(0,200)}"`);
+  }
+  if (marcadores.length !== 7){
+    // segue em frente na mesma (melhor esforço), mas o aviso fica registado
   }
 
   const turnos = [];
   const avisos = [];
-  let mesAtual = headerMes;
-  let anoAtual = headerAno;
-  let diaAnteriorProcessado = null;
+  if (marcadores.length !== 7){
+    avisos.push(`Encontrei ${marcadores.length} dias da semana em vez de 7 — confirma se nenhum turno ficou de fora.`);
+  }
 
   marcadores.forEach((m, idx) => {
-    const diaNum = parseInt(m[1], 10);
-    if (diaNum < 1 || diaNum > 31) return; // ruído de OCR, ignora
+    // O bloco de cada dia (número + horas) vem ANTES do rótulo do dia da
+    // semana no texto lido (ex: "13 17:00-18:00 / 20:00-24:00 Seg ...").
+    const inicioBloco = idx === 0 ? 0 : marcadores[idx - 1].index + marcadores[idx - 1][0].length;
+    const bloco = texto.slice(inicioBloco, m.index);
 
-    // deteta viragem de mês: se o dia "voltou para trás" face ao anterior
-    if (diaAnteriorProcessado !== null && diaNum < diaAnteriorProcessado - 3){
-      mesAtual += 1;
-      if (mesAtual > 12){ mesAtual = 1; anoAtual += 1; }
-    }
-    diaAnteriorProcessado = diaNum;
+    const data = new Date(segunda);
+    data.setDate(segunda.getDate() + idx);
+    const dataStr = formatarDataYMD(data.getFullYear(), data.getMonth() + 1, data.getDate());
 
-    const inicioBloco = m.index + m[0].length;
-    const fimBloco = idx + 1 < marcadores.length ? marcadores[idx + 1].index : texto.length;
-    const bloco = texto.slice(inicioBloco, fimBloco);
-
-    const dataStr = formatarDataYMD(anoAtual, mesAtual, diaNum);
-
-    // Procura pares de horas dentro do bloco. Tolerante a variações comuns do
-    // OCR: ":" pode sair como "." ou até em falta; o traço pode sair como
-    // "-", "–", "—" ou até mal reconhecido como outro caractere entre espaços.
-    const horaRegex = /(\d{1,2})\s*[:.]?\s*(\d{2})\s*[-–—~]\s*(\d{1,2})\s*[:.]?\s*(\d{2})/g;
-    let horaMatch;
-    let encontrouTurno = false;
-    while ((horaMatch = horaRegex.exec(bloco)) !== null){
-      encontrouTurno = true;
-      const entrada = `${horaMatch[1].padStart(2,'0')}:${horaMatch[2]}`;
-      const saida = `${horaMatch[3].padStart(2,'0')}:${horaMatch[4]}`;
-      turnos.push({ data: dataStr, entrada, saida });
-    }
-
-    if (!encontrouTurno && DIAS_SEMANA_PT.test(bloco.slice(0, 15))){
-      // dia sem horário visível — assume-se sem turno nesse dia (não gera aviso,
-      // é o comportamento normal para dias de folga/remoto sem período definido)
-    }
+    const periodos = extrairPeriodos(bloco);
+    periodos.forEach(p => turnos.push({ data: dataStr, entrada: p.entrada, saida: p.saida }));
   });
 
   if (!turnos.length){
     console.log('Texto lido pelo OCR (para depuração):', texto);
     const amostra = texto.trim().slice(0, 300).replace(/\s+/g, ' ');
     throw new Error(
-      'Não encontrei nenhum período de turno (formato HH:MM - HH:MM) na imagem. ' +
+      'Não encontrei nenhum período de turno na imagem. ' +
       'Texto lido pelo OCR (para perceberes o que falhou): "' + amostra + (texto.length > 300 ? '…' : '') + '"'
     );
   }
