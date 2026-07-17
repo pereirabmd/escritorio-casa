@@ -214,6 +214,11 @@
 
         <div id="ficheiroHint" class="warnBox hidden"></div>
 
+        <div id="snsRefDateBox" class="hidden">
+          <label class="fieldLabel" for="snsRefDate">Qualquer dia dentro da semana da imagem</label>
+          <input type="date" id="snsRefDate">
+        </div>
+
         <label class="fieldLabel" for="fileInput" id="fileInputLabel">Ficheiro</label>
         <input type="file" id="fileInput" accept=".pdf,application/pdf,.xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel,image/*">
         <button class="btn-primary" id="previewBtn">Pré-visualizar</button>
@@ -285,7 +290,7 @@
     <path d="M6.2 11c0-2.3 2.6-4.1 5.8-4.1s5.8 1.8 5.8 4.1c0 1.9-1.4 3.5-3.4 4l1.9 1.3c.4.3.1.9-.3.9H7.9c-.4 0-.7-.6-.3-.9l1.9-1.3c-1.9-.5-3.3-2.1-3.3-4z" fill="none" stroke="#6b6558" stroke-width="1.3"/>
     <rect x="10.6" y="17.6" width="2.8" height="2" fill="#6b6558"/>
     <rect x="8.8" y="19.4" width="6.4" height="1.6" rx="0.6" fill="#6b6558"/>
-  </svg>Turnos · Beta 10</footer>
+  </svg>Turnos · Beta 12</footer>
 
 <script>
 /* ======================================================================
@@ -318,6 +323,8 @@ const ENTIDADES = [
     info: 'Esta entidade só disponibiliza o horário semanal por imagem (captura de ecrã da app). ' +
       'Carrega uma foto/print do ecrã "Meu horário" — a leitura é feita por reconhecimento de texto (OCR), ' +
       'que pode falhar ou enganar-se; confirma sempre a pré-visualização antes de gravar. ' +
+      'Como o cabeçalho verde da imagem tem pouco contraste para o OCR, indica também "qualquer dia ' +
+      'dentro da semana da imagem" no campo abaixo, para a app saber o mês/ano. ' +
       'Dias com vários períodos (separados por "/") geram um turno por período.'
   }
 ];
@@ -560,6 +567,7 @@ function atualizarHintFicheiro(){
   } else {
     hintEl.classList.add('hidden');
   }
+  document.getElementById('snsRefDateBox').classList.toggle('hidden', !(e && e.parser === 'img-sns24'));
 }
 document.getElementById('entitySelect').addEventListener('change', atualizarHintFicheiro);
 
@@ -883,41 +891,81 @@ async function parseUCCOliveiraBairro(file, ano, mes){
    no browser. O OCR pode errar — por isso a pré-visualização é sempre
    mostrada antes de gravar, e os avisos assinalam blocos ambíguos.
    ====================================================================== */
-const MESES_PT = ['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
 const DIAS_SEMANA_PT = /seg|ter|qua|qui|sex|s[aá]b|dom/i;
 
-async function parseSNS24Imagem(file){
+/* ---------- Otimizações de velocidade do OCR ----------
+   1. A imagem é reduzida antes da análise — o tempo do OCR escala com o
+      número de pixels, e um print de telemóvel (1080px+) é maior do que
+      precisamos para ler texto grande e estruturado como este.
+   2. Restringe-se o conjunto de caracteres possíveis (dígitos, letras
+      simples, ":", "-", "/") — menos ambiguidade para o modelo resolver.
+   3. O "worker" do Tesseract é criado uma única vez e reutilizado nos
+      carregamentos seguintes da mesma sessão — só o primeiro é lento
+      (download + arranque do modelo); os seguintes são bem mais rápidos. */
+let ocrWorker = null;
+let ocrWorkerPromise = null;
+let ocrProgressCallback = null;
+
+function getOcrWorker(){
+  if (!ocrWorkerPromise){
+    ocrWorkerPromise = (async () => {
+      const worker = await Tesseract.createWorker('eng', 1, {
+        logger: (m) => { if (ocrProgressCallback) ocrProgressCallback(m); }
+      });
+      await worker.setParameters({
+        tessedit_char_whitelist: '0123456789:-/.,ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzÁáÃãÉéÍíÓóÚúÂâÊêÔô '
+      });
+      ocrWorker = worker;
+      return worker;
+    })();
+  }
+  return ocrWorkerPromise;
+}
+
+async function reduzirImagemParaOcr(file, larguraMax){
+  const bitmap = await createImageBitmap(file);
+  const escala = Math.min(1, larguraMax / bitmap.width);
+  const w = Math.round(bitmap.width * escala);
+  const h = Math.round(bitmap.height * escala);
+  const canvas = document.createElement('canvas');
+  canvas.width = w;
+  canvas.height = h;
+  canvas.getContext('2d').drawImage(bitmap, 0, 0, w, h);
+  return new Promise(resolve => canvas.toBlob(resolve, 'image/png', 0.92));
+}
+
+async function parseSNS24Imagem(file, dataReferencia){
   const progEl = document.getElementById('ocrProgress');
   progEl.classList.remove('hidden');
-  progEl.textContent = 'A ler a imagem (OCR)... isto pode demorar alguns segundos.';
+  progEl.textContent = 'A preparar imagem...';
+
+  const imagemReduzida = await reduzirImagemParaOcr(file, 1100);
+
+  ocrProgressCallback = (m) => {
+    if (m.status === 'recognizing text'){
+      progEl.textContent = `A ler a imagem (OCR)... ${Math.round((m.progress || 0) * 100)}%`;
+    } else if (m.status){
+      progEl.textContent = `A preparar OCR (${m.status})...`;
+    }
+  };
 
   let texto;
   try {
-    const resultado = await Tesseract.recognize(file, 'por', {
-      logger: (m) => {
-        if (m.status === 'recognizing text'){
-          progEl.textContent = `A ler a imagem (OCR)... ${Math.round((m.progress || 0) * 100)}%`;
-        }
-      }
-    });
-    texto = resultado.data.text;
+    const worker = await getOcrWorker();
+    const { data } = await worker.recognize(imagemReduzida);
+    texto = data.text;
   } finally {
     progEl.classList.add('hidden');
+    ocrProgressCallback = null;
   }
 
-  // 1. Encontrar a data de referência no cabeçalho (ex: "Sex, 17 Jul 26")
-  const headerMatch = texto.match(/(\d{1,2})\s*[,.]?\s*([A-Za-zçÇãÃéÉ]{3,})\s*[’'`]?\s*(\d{2,4})/);
-  if (!headerMatch){
-    throw new Error('Não consegui identificar a data de referência no topo da imagem (ex: "Sex, 17 Jul 26"). Tenta uma foto mais nítida ou melhor enquadrada.');
-  }
-  const headerMesTxt = headerMatch[2].toLowerCase().slice(0, 3);
-  const headerMesIdx = MESES_PT.findIndex(m => headerMesTxt.startsWith(m) || m.startsWith(headerMesTxt));
-  if (headerMesIdx === -1){
-    throw new Error(`Não reconheci o mês "${headerMatch[2]}" no cabeçalho da imagem.`);
-  }
-  let headerAno = parseInt(headerMatch[3], 10);
-  if (headerAno < 100) headerAno += 2000;
-  const headerMes = headerMesIdx + 1; // 1-indexado
+  // O cabeçalho verde ("Sex, 17 Jul 26") é texto branco sobre fundo verde —
+  // contraste que o OCR falha com frequência. Por isso o mês/ano de
+  // referência não vem do OCR: é indicado manualmente antes do carregamento
+  // (campo "Qualquer dia dentro da semana da imagem"). O OCR só precisa de
+  // ler a grelha (texto escuro sobre fundo claro), que é fiável.
+  const headerMes = dataReferencia.getMonth() + 1; // 1-indexado
+  const headerAno = dataReferencia.getFullYear();
 
   // 2. Dividir o texto em blocos, um por dia da semana encontrado.
   //    Cada bloco = do número do dia até ao próximo número de dia (ou fim do texto).
@@ -1015,7 +1063,12 @@ document.getElementById('previewBtn').addEventListener('click', async () => {
       if (!/^image\//.test(file.type)){
         throw new Error('Esta entidade usa uma imagem (foto/print do ecrã). O ficheiro escolhido não parece ser uma imagem.');
       }
-      const resultado = await parseSNS24Imagem(file);
+      const refValor = document.getElementById('snsRefDate').value;
+      if (!refValor){
+        throw new Error('Indica primeiro "Qualquer dia dentro da semana da imagem" — é assim que a app sabe o mês/ano, já que o cabeçalho da imagem (texto branco sobre verde) não é fiável para o OCR.');
+      }
+      const dataReferencia = new Date(refValor + 'T12:00:00');
+      const resultado = await parseSNS24Imagem(file, dataReferencia);
       turnos = resultado.turnos;
       avisos = resultado.avisos;
     } else if (parser === 'xlsx-generico'){
