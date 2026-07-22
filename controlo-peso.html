@@ -187,6 +187,21 @@
     text-align:center;font-size:0.64rem;color:var(--text-dim);
     border-top:1px solid var(--line);
   }
+
+  #undoToast{
+    position:fixed;left:50%;bottom:calc(48px + env(safe-area-inset-bottom));
+    transform:translateX(-50%);
+    background:var(--panel2);border:1px solid var(--line);border-radius:11px;
+    padding:10px 12px 10px 16px;display:flex;align-items:center;gap:14px;
+    box-shadow:0 6px 20px rgba(0,0,0,.4);
+    width:calc(100% - 32px);max-width:448px;z-index:30;
+  }
+  #undoToast.hidden{display:none;}
+  #undoToastMsg{font-size:0.82rem;color:var(--text);flex:1;}
+  #undoToastBtn{background:none;border:none;color:var(--lime);font-weight:800;font-size:0.82rem;padding:4px 6px;min-height:auto;}
+
+  .lcd-record{font-size:0.68rem;color:var(--amber);margin-top:3px;font-weight:800;}
+  .min-tag{font-size:0.58rem;font-weight:800;color:#14181c;background:var(--amber);padding:1px 5px;border-radius:5px;letter-spacing:.03em;}
 </style>
 </head>
 <body>
@@ -223,6 +238,7 @@
           <span class="lcd-delta same" id="lcdDelta">—</span>
           <div class="lcd-when" id="lcdWhen"></div>
           <div class="lcd-streak" id="lcdStreak"></div>
+          <div class="lcd-record" id="lcdRecord"></div>
         </div>
       </div>
 
@@ -316,13 +332,18 @@
   </div>
 </div>
 
+<div id="undoToast" class="hidden">
+  <span id="undoToastMsg"></span>
+  <button id="undoToastBtn">Desfazer</button>
+</div>
+
 <footer>Bruno Pereira · <span id="footerVersion"></span></footer>
 
 <script>
 /* ============================================================
    CONFIGURAÇÃO
    ============================================================ */
-const APP_VERSION = 'Beta 7';
+const APP_VERSION = 'Beta 8';
 const CLIENT_ID = '108256538530-fgunbb52s7f3s9aurfpjtaf01v8fjbph.apps.googleusercontent.com';
 const SPREADSHEET_ID = '1UzEXtl7w6jMsk-c7Pkt3kq97AXL6XIiwTrjOYUaYFLs';
 const SHEET_REGISTOS = 'Registos';
@@ -382,6 +403,7 @@ window.onload = () => {
   document.getElementById('btnGuardarEdit').onclick = onGuardarEdit;
   document.getElementById('btnEliminar').onclick = onEliminarRegisto;
   document.getElementById('btnExportar').onclick = exportarXLSX;
+  document.getElementById('undoToastBtn').onclick = undoPendingDelete;
   document.getElementById('modalOverlay').onclick = (e) => { if (e.target.id === 'modalOverlay') closeModal(); };
 };
 
@@ -564,14 +586,20 @@ async function onRegistarNovo(){
 }
 
 /* ---------- Editar / eliminar registo ---------- */
+let editingReg = null;
+let pendingDelete = null; // { reg, timeoutId }
+
 function openModal(reg){
+  if (pendingDelete) commitPendingDelete();
   editingRow = reg.row;
+  editingReg = reg;
   document.getElementById('editPeso').value = reg.peso;
   document.getElementById('editNota').value = reg.nota;
   document.getElementById('modalOverlay').classList.remove('hidden');
 }
 function closeModal(){
   editingRow = null;
+  editingReg = null;
   document.getElementById('modalOverlay').classList.add('hidden');
 }
 async function onGuardarEdit(){
@@ -588,28 +616,60 @@ async function onGuardarEdit(){
     setStatus('Erro ao atualizar: ' + e.message, true);
   }
 }
-async function onEliminarRegisto(){
-  if (!confirm('Eliminar este registo?')) return;
-  try{
-    await sheetsPut(`${SHEET_REGISTOS}!A${editingRow}:C${editingRow}`, [['','','']]);
-    closeModal();
-    await loadRegistos();
-    setStatus('Registo eliminado.');
-    renderAll();
-  } catch(e){
-    setStatus('Erro ao eliminar: ' + e.message, true);
-  }
+function onEliminarRegisto(){
+  const reg = editingReg;
+  closeModal();
+  if (reg) iniciarEliminacao(reg);
 }
-async function eliminarRegistoDireto(reg){
-  if (!confirm(`Eliminar o registo de ${fmtDataCurta(reg.date)} (${reg.peso.toFixed(1)} kg)?`)) return;
+function eliminarRegistoDireto(reg){
+  iniciarEliminacao(reg);
+}
+
+// Eliminação otimista: some da lista já, e só grava a eliminação na folha
+// se a pessoa não carregar em "Desfazer" dentro de alguns segundos.
+function iniciarEliminacao(reg){
+  if (pendingDelete) commitPendingDelete();
+  const idx = registos.indexOf(reg);
+  if (idx === -1) return;
+  registos.splice(idx, 1);
+  renderAll();
+  pendingDelete = { reg, timeoutId: setTimeout(commitPendingDelete, 5000) };
+  showUndoToast(`Registo de ${fmtDataCurta(reg.date)} (${reg.peso.toFixed(1)} kg) eliminado.`);
+}
+
+function showUndoToast(msg){
+  document.getElementById('undoToastMsg').textContent = msg;
+  document.getElementById('undoToast').classList.remove('hidden');
+}
+function hideUndoToast(){
+  document.getElementById('undoToast').classList.add('hidden');
+}
+
+async function commitPendingDelete(){
+  if (!pendingDelete) return;
+  const { reg, timeoutId } = pendingDelete;
+  clearTimeout(timeoutId);
+  pendingDelete = null;
+  hideUndoToast();
   try{
     await sheetsPut(`${SHEET_REGISTOS}!A${reg.row}:C${reg.row}`, [['','','']]);
-    await loadRegistos();
-    setStatus('Registo eliminado.');
-    renderAll();
   } catch(e){
     setStatus('Erro ao eliminar: ' + e.message, true);
+    await loadRegistos();
+    renderAll();
   }
+}
+
+function undoPendingDelete(){
+  if (!pendingDelete) return;
+  clearTimeout(pendingDelete.timeoutId);
+  const { reg } = pendingDelete;
+  pendingDelete = null;
+  hideUndoToast();
+  registos.push(reg);
+  registos.sort((a,b) => a.date - b.date);
+  renderAll();
+  setStatus('Eliminação desfeita.');
 }
 
 /* ---------- Cálculos ---------- */
@@ -700,6 +760,14 @@ function renderLcd(){
   }
   const streak = calcStreak();
   document.getElementById('lcdStreak').textContent = streak >= 2 ? `🔥 ${streak} dias seguidos` : '';
+
+  const recordEl = document.getElementById('lcdRecord');
+  if (registos.length > 1){
+    const minGlobal = Math.min(...registos.map(r => r.peso));
+    recordEl.textContent = ultimo.peso <= minGlobal + 0.001 ? '🏆 Novo mínimo!' : '';
+  } else {
+    recordEl.textContent = '';
+  }
 }
 
 // dias consecutivos (calendário) com pelo menos um registo, a contar do registo mais recente
@@ -821,6 +889,7 @@ function renderRegistos(){
     return;
   }
   const desc = [...registos].sort((a,b) => b.date - a.date);
+  const minGlobal = Math.min(...registos.map(r => r.peso));
   desc.forEach((reg) => {
     const idxAsc = registos.indexOf(reg);
     const anterior = idxAsc > 0 ? registos[idxAsc - 1] : null;
@@ -832,11 +901,12 @@ function renderRegistos(){
       else deltaHtml = '<span class="regDelta same">=</span>';
     }
     const isMonday = reg.date.getDay() === 1;
+    const isMin = registos.length > 1 && reg.peso <= minGlobal + 0.001;
     const row = document.createElement('div');
     row.className = 'regRow' + (isMonday ? ' monday' : '');
     row.innerHTML = `
       <div class="regDate">
-        <div class="d1">${fmtDataCurta(reg.date)}${isMonday ? '<span class="seg-tag">SEG</span>' : ''}</div>
+        <div class="d1">${fmtDataCurta(reg.date)}${isMonday ? '<span class="seg-tag">SEG</span>' : ''}${isMin ? '<span class="min-tag">🏆 MÍN</span>' : ''}</div>
         <div class="d2">${pad(reg.date.getHours())}:${pad(reg.date.getMinutes())}${reg.nota ? ' · ' + escapeHtml(reg.nota) : ''}</div>
       </div>
       <div class="regPeso">${reg.peso.toFixed(1)}</div>
