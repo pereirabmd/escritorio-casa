@@ -46,7 +46,9 @@
     display:flex;
     flex-direction:column;
     overflow-y:auto;
+    overflow-x:hidden;
     overscroll-behavior-y:auto;
+    overscroll-behavior-x:none;
     font-family:var(--font-sans);
     background:var(--bg);
     color:var(--text);
@@ -54,10 +56,11 @@
   }
 
   #bgWatermark{
-    position:absolute;
+    position:fixed;
     bottom:-12%;
     right:-22%;
     width:125%;
+    max-width:600px;
     aspect-ratio:1/1;
     background-image:url('pesoicon512.png');
     background-size:contain;
@@ -391,7 +394,7 @@
 /* ============================================================
    CONFIGURAÇÃO
    ============================================================ */
-const APP_VERSION = 'Beta 13';
+const APP_VERSION = 'Beta 14';
 const CLIENT_ID = '108256538530-fgunbb52s7f3s9aurfpjtaf01v8fjbph.apps.googleusercontent.com';
 const SPREADSHEET_ID = '1UzEXtl7w6jMsk-c7Pkt3kq97AXL6XIiwTrjOYUaYFLs';
 const SHEET_REGISTOS = 'Registos';
