@@ -250,7 +250,9 @@
     padding:5px 16px calc(5px + env(safe-area-inset-bottom));
     text-align:center;font-size:0.64rem;color:var(--text-dim);
     border-top:1px solid var(--line);
+    display:flex;align-items:center;justify-content:center;gap:5px;
   }
+  .footer-logo{height:16px;width:auto;display:inline-block;vertical-align:middle;opacity:0.85;}
 
   #undoToast{
     position:fixed;left:50%;bottom:calc(48px + env(safe-area-inset-bottom));
@@ -412,13 +414,13 @@
   <button id="undoToastBtn">Desfazer</button>
 </div>
 
-<footer>Bruno Pereira · <span id="footerVersion"></span></footer>
+<footer><img class="footer-logo" src="data:image/png;base64,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" alt="BP" width="33" height="44"> Bruno Pereira · <span id="footerVersion"></span></footer>
 
 <script>
 /* ============================================================
    CONFIGURAÇÃO
    ============================================================ */
-const APP_VERSION = 'v1.4.0';
+const APP_VERSION = 'v1.5.0';
 const CLIENT_ID = '108256538530-fgunbb52s7f3s9aurfpjtaf01v8fjbph.apps.googleusercontent.com';
 const SPREADSHEET_ID = '1UzEXtl7w6jMsk-c7Pkt3kq97AXL6XIiwTrjOYUaYFLs';
 const SHEET_REGISTOS = 'Registos';
