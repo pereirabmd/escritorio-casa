@@ -119,8 +119,8 @@
   .hero-add{
     background:linear-gradient(135deg, var(--lime) 0%, var(--teal) 100%);
     border-radius:16px;
-    padding:12px 16px 13px;
-    margin-bottom:8px;
+    padding:14px 16px 16px;
+    margin-bottom:10px;
     box-shadow:0 6px 18px rgba(126,156,131,.3);
   }
   .hero-label{font-size:0.72rem;color:rgba(255,255,255,.9);text-transform:uppercase;letter-spacing:.05em;font-weight:800;margin-bottom:8px;}
@@ -137,7 +137,7 @@
   .hero-btn{width:100%;background:#fff;color:#3E5B43;font-weight:800;font-size:1.02rem;padding:14px;border-radius:11px;min-height:52px;}
   .hero-btn:active{transform:scale(0.98);}
 
-  #statusStrip{display:flex;align-items:center;gap:6px;flex-wrap:wrap;padding:1px 2px 6px;}
+  #statusStrip{display:flex;align-items:center;gap:6px;flex-wrap:wrap;padding:1px 2px 9px;}
   .cur-weight{font-size:0.85rem;color:var(--text);}
   .cur-weight b{font-family:var(--font-mono);font-size:1.05rem;margin-right:3px;}
   .cur-weight small{color:var(--text-dim);font-size:0.72rem;}
@@ -153,14 +153,14 @@
   .stat-strip-2 .stat-chip .val{font-size:1.15rem;}
   .stat-strip-2 .stat-chip .val-sub{font-size:0.62rem;color:var(--text-dim);font-weight:600;margin-top:1px;}
 
-  .stat-strip{display:flex;gap:6px;margin-bottom:8px;}
+  .stat-strip{display:flex;gap:6px;margin-bottom:10px;}
   .stat-chip{flex:1;background:var(--panel);border:1px solid var(--line);border-radius:11px;padding:8px 9px;min-width:0;}
   .stat-chip .lbl{font-size:0.6rem;color:var(--text-dim);text-transform:uppercase;letter-spacing:.03em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
   .stat-chip .val{font-family:var(--font-mono);font-size:1.05rem;font-weight:700;margin-top:1px;}
   .stat-chip .val.loss{color:var(--ok);}
   .stat-chip .val.gain{color:var(--danger);}
 
-  .progress-block{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:8px 14px;margin-bottom:8px;}
+  .progress-block{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:10px 14px;margin-bottom:10px;}
   .progress-head{display:flex;justify-content:space-between;font-size:0.7rem;color:var(--text-dim);text-transform:uppercase;letter-spacing:.04em;margin-bottom:7px;}
   .progress-head span:last-child{color:var(--text);font-weight:800;font-size:0.85rem;}
   .progress-track{background:var(--panel2);border-radius:999px;height:15px;overflow:hidden;border:1px solid var(--line);}
@@ -179,18 +179,25 @@
   .progress-foot{display:flex;justify-content:space-between;font-size:0.68rem;color:var(--text-dim);margin-top:5px;}
 
   .chip-row{display:flex;gap:8px;}
-  .chip{flex:1;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:8px 10px;min-width:0;}
+  .chip{flex:1;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:10px 12px;min-width:0;}
   .chip-label{font-size:0.65rem;color:var(--text-dim);text-transform:uppercase;letter-spacing:.04em;}
   .chip-value{font-family:var(--font-mono);font-size:1.3rem;font-weight:700;margin-top:2px;}
   .chip-value-sm{font-size:0.98rem;}
   .chip-unit{font-family:var(--font-sans);font-size:0.62em;font-weight:600;color:var(--text-dim);}
 
-  .gauge-card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:2px 14px 2px;margin-top:5px;text-align:center;}
-  .gauge-svg{width:100%;max-width:100px;height:auto;display:block;margin:0 auto;}
-  .gauge-needle{transform-box:fill-box;transform-origin:center;transform:rotate(-90deg);transition:transform 1.1s cubic-bezier(.34,1.4,.44,1);}
-  .gauge-readout{font-family:var(--font-mono);font-size:0.98rem;font-weight:700;color:var(--text);margin-top:-10px;}
-  .gauge-readout .gauge-unit{font-family:var(--font-sans);font-size:0.6em;font-weight:600;color:var(--text-dim);margin-left:3px;}
-  .gauge-foot{display:flex;justify-content:space-between;font-size:0.6rem;color:var(--text-dim);padding:0 8px;margin-top:0;}
+  .hint-btn{
+    background:none;border:none;padding:0 0 0 2px;margin:0;
+    color:var(--text-dim);opacity:0.65;font-size:0.85em;
+    min-height:auto;line-height:1;vertical-align:middle;cursor:pointer;
+  }
+  .hint-btn:active{opacity:1;color:var(--lime);}
+
+  #hintOverlay{position:fixed;inset:0;background:rgba(0,0,0,.45);display:flex;align-items:flex-end;z-index:25;}
+  #hintOverlay.hidden{display:none;}
+  #hintBox{background:var(--panel);border:1px solid var(--line);border-radius:16px 16px 0 0;padding:18px 18px calc(18px + env(safe-area-inset-bottom));width:100%;max-width:480px;margin:0 auto;}
+  #hintTitle{font-size:0.95rem;font-weight:800;color:var(--text);margin-bottom:6px;}
+  #hintText{font-size:0.85rem;color:var(--text-dim);line-height:1.5;margin-bottom:14px;}
+  #hintClose{width:100%;}
   .chip-sub{font-size:0.66rem;color:var(--text-dim);margin-top:2px;}
   .imc-badge{display:inline-block;padding:2px 8px;border-radius:999px;font-size:0.68rem;font-weight:800;margin-top:2px;}
 
@@ -309,49 +316,27 @@
       <div class="stat-strip stat-strip-2" id="statStrip"></div>
 
       <div class="progress-block" id="progressCard">
-        <div class="progress-head"><span>Objetivo</span><span id="progPctLabel">—</span></div>
+        <div class="progress-head"><span>Objetivo <button class="hint-btn" data-hint="objetivo">ⓘ</button></span><span id="progPctLabel">—</span></div>
         <div class="progress-track"><div class="progress-fill" id="progressFill"></div></div>
         <div class="progress-foot"><span id="progLeft"></span><span id="progRight"></span></div>
       </div>
 
       <div class="chip-row">
         <div class="chip">
-          <div class="chip-label">IMC</div>
+          <div class="chip-label">IMC <button class="hint-btn" data-hint="imc">ⓘ</button></div>
           <div class="chip-value" id="imcValue">—</div>
           <div id="imcClasse"></div>
         </div>
         <div class="chip">
-          <div class="chip-label">Gasto diário</div>
+          <div class="chip-label">Gasto diário <button class="hint-btn" data-hint="kcal">ⓘ</button></div>
           <div class="chip-value" id="kcalValue">—</div>
           <div class="chip-sub">TDEE estimado</div>
         </div>
         <div class="chip">
-          <div class="chip-label">Mín / Máx</div>
+          <div class="chip-label">Mín / Máx <button class="hint-btn" data-hint="minmax">ⓘ</button></div>
           <div class="chip-value chip-value-sm" id="minMaxValue">—</div>
           <div class="chip-sub">desde o início</div>
         </div>
-      </div>
-
-      <div class="gauge-card">
-        <svg viewBox="0 0 200 118" class="gauge-svg">
-          <defs>
-            <linearGradient id="gaugeGradient" x1="0%" y1="0%" x2="100%" y2="0%">
-              <stop offset="0%" stop-color="#C97B62"/>
-              <stop offset="35%" stop-color="#CE9A45"/>
-              <stop offset="65%" stop-color="#6F9C93"/>
-              <stop offset="100%" stop-color="#7E9C83"/>
-            </linearGradient>
-          </defs>
-          <path d="M 14 104 A 86 86 0 0 1 186 104" fill="none" stroke="var(--panel2)" stroke-width="16" stroke-linecap="round"/>
-          <path d="M 14 104 A 86 86 0 0 1 186 104" fill="none" stroke="url(#gaugeGradient)" stroke-width="16" stroke-linecap="round" stroke-dasharray="270" stroke-dashoffset="0" opacity="0.9"/>
-          <g id="gaugeNeedle" class="gauge-needle">
-            <line x1="100" y1="104" x2="100" y2="30" stroke="#3E3A32" stroke-width="3" stroke-linecap="round"/>
-          </g>
-          <circle cx="100" cy="104" r="6.5" fill="#3E3A32"/>
-          <circle cx="100" cy="104" r="2.5" fill="#FBF3E7"/>
-        </svg>
-        <div class="gauge-readout"><span id="gaugeWeight">—</span><span class="gauge-unit">kg</span></div>
-        <div class="gauge-foot"><span id="gaugeLeft"></span><span id="gaugeRight"></span></div>
       </div>
     </section>
 
@@ -414,6 +399,14 @@
   </div>
 </div>
 
+<div id="hintOverlay" class="hidden">
+  <div id="hintBox">
+    <div id="hintTitle"></div>
+    <div id="hintText"></div>
+    <button class="btn-lime" id="hintClose">Entendi</button>
+  </div>
+</div>
+
 <div id="undoToast" class="hidden">
   <span id="undoToastMsg"></span>
   <button id="undoToastBtn">Desfazer</button>
@@ -425,7 +418,7 @@
 /* ============================================================
    CONFIGURAÇÃO
    ============================================================ */
-const APP_VERSION = 'v1.3.0';
+const APP_VERSION = 'v1.4.0';
 const CLIENT_ID = '108256538530-fgunbb52s7f3s9aurfpjtaf01v8fjbph.apps.googleusercontent.com';
 const SPREADSHEET_ID = '1UzEXtl7w6jMsk-c7Pkt3kq97AXL6XIiwTrjOYUaYFLs';
 const SHEET_REGISTOS = 'Registos';
@@ -489,6 +482,12 @@ window.onload = () => {
   document.getElementById('btnEliminar').onclick = onEliminarRegisto;
   document.getElementById('btnExportar').onclick = exportarXLSX;
   document.getElementById('undoToastBtn').onclick = undoPendingDelete;
+  document.getElementById('hintClose').onclick = closeHint;
+  document.getElementById('hintOverlay').onclick = (e) => { if (e.target.id === 'hintOverlay') closeHint(); };
+  document.body.addEventListener('click', (e) => {
+    const btn = e.target.closest('.hint-btn');
+    if (btn) showHint(btn.dataset.hint);
+  });
   document.getElementById('modalOverlay').onclick = (e) => { if (e.target.id === 'modalOverlay') closeModal(); };
 };
 
@@ -689,6 +688,45 @@ async function onRegistarNovo(){
   }
 }
 
+/* ---------- Dicas explicativas ---------- */
+const HINTS = {
+  total: {
+    titulo: 'Total perdido',
+    texto: 'Diferença entre o teu primeiro registo e o mais recente. Um valor positivo significa que perdeste peso desde que começaste.'
+  },
+  ritmo: {
+    titulo: 'Ritmo semanal',
+    texto: 'Perda média por semana, calculada a partir da tendência dos últimos 30 dias (ou de todo o histórico, se ainda não tiveres 30 dias de registos). O valor pequeno por baixo é a mesma tendência, mas por dia.'
+  },
+  objetivo: {
+    titulo: 'Objetivo',
+    texto: 'Percentagem de progresso entre o teu primeiro peso registado e o peso alvo definido em Config. 100% significa que atingiste o objetivo.'
+  },
+  imc: {
+    titulo: 'IMC — Índice de Massa Corporal',
+    texto: 'Peso ÷ altura². É uma referência geral e rápida de calcular, mas não distingue massa muscular de gordura, nem tem em conta idade, sexo ou composição corporal — usa-o como indicação, não como diagnóstico.'
+  },
+  kcal: {
+    titulo: 'Gasto diário estimado (TDEE)',
+    texto: 'Taxa Metabólica Basal (fórmula de Mifflin-St Jeor, a partir do teu peso, altura, idade e sexo) multiplicada pelo nível de atividade definido em Config. É uma estimativa aproximada, não uma medição real — serve como referência para o balanço calórico.'
+  },
+  minmax: {
+    titulo: 'Mín / Máx',
+    texto: 'O peso mais baixo e o mais alto que já registaste desde que começaste a usar a app.'
+  },
+};
+
+function showHint(key){
+  const h = HINTS[key];
+  if (!h) return;
+  document.getElementById('hintTitle').textContent = h.titulo;
+  document.getElementById('hintText').textContent = h.texto;
+  document.getElementById('hintOverlay').classList.remove('hidden');
+}
+function closeHint(){
+  document.getElementById('hintOverlay').classList.add('hidden');
+}
+
 /* ---------- Editar / eliminar registo ---------- */
 let editingReg = null;
 let pendingDelete = null; // { reg, timeoutId }
@@ -827,7 +865,6 @@ function renderAll(){
   renderLcd();
   renderStatsStrip();
   renderProgress();
-  renderGauge();
   renderIMC();
   renderKcal();
   renderMinMax();
@@ -903,13 +940,13 @@ function renderStatsStrip(){
 
   const totalDiv = document.createElement('div');
   totalDiv.className = 'stat-chip';
-  totalDiv.innerHTML = `<div class="lbl">Total perdido</div><div class="val ${totalPerdido>=0?'loss':'gain'}" id="statTotalVal"></div>`;
+  totalDiv.innerHTML = `<div class="lbl">Total perdido <button class="hint-btn" data-hint="total">ⓘ</button></div><div class="val ${totalPerdido>=0?'loss':'gain'}" id="statTotalVal"></div>`;
   strip.appendChild(totalDiv);
   animateValues(document.getElementById('statTotalVal'), [totalPerdido], arr => `${arr[0].toFixed(1)} kg`);
 
   const ritmoDiv = document.createElement('div');
   ritmoDiv.className = 'stat-chip';
-  ritmoDiv.innerHTML = `<div class="lbl">Ritmo semanal</div><div class="val" id="statRitmoVal"></div><div class="val-sub" id="statRitmoSub"></div>`;
+  ritmoDiv.innerHTML = `<div class="lbl">Ritmo semanal <button class="hint-btn" data-hint="ritmo">ⓘ</button></div><div class="val" id="statRitmoVal"></div><div class="val-sub" id="statRitmoSub"></div>`;
   strip.appendChild(ritmoDiv);
   animateValues(document.getElementById('statRitmoVal'), [mediaSemanal ?? 0], arr =>
     mediaSemanal === null ? '—' : (mediaSemanal >= 0 ? '−' : '+') + Math.abs(arr[0]).toFixed(2) + ' kg'
@@ -967,34 +1004,6 @@ function renderProgress(){
   animateValues(document.getElementById('progPctLabel'), [pct], arr => arr[0].toFixed(0) + '%');
   document.getElementById('progLeft').textContent = pesoInicial.toFixed(1) + ' kg';
   document.getElementById('progRight').textContent = pesoAlvo.toFixed(1) + ' kg';
-}
-
-function renderGauge(){
-  const needle = document.getElementById('gaugeNeedle');
-  if (!needle) return;
-  const weightEl = document.getElementById('gaugeWeight');
-  const leftEl = document.getElementById('gaugeLeft');
-  const rightEl = document.getElementById('gaugeRight');
-  if (registos.length === 0){
-    weightEl.textContent = '—';
-    leftEl.textContent = '';
-    rightEl.textContent = '';
-    needle.style.transform = 'rotate(-90deg)';
-    return;
-  }
-  const pesoAtual = registos[registos.length-1].peso;
-  weightEl.textContent = pesoAtual.toFixed(1);
-  const pct = calcProgressPct();
-  if (pct === null){
-    leftEl.textContent = 'sem objetivo definido';
-    rightEl.textContent = '';
-    needle.style.transform = 'rotate(0deg)';
-    return;
-  }
-  leftEl.textContent = registos[0].peso.toFixed(1) + ' kg';
-  rightEl.textContent = config.pesoAlvo.toFixed(1) + ' kg';
-  const angle = (pct / 100) * 180 - 90;
-  needle.style.transform = `rotate(${angle}deg)`;
 }
 
 function renderIMC(){
