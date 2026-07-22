@@ -264,12 +264,13 @@
   </div>
 </div>
 
-<footer>Bruno Pereira · Beta 1</footer>
+<footer>Bruno Pereira · <span id="footerVersion"></span></footer>
 
 <script>
 /* ============================================================
    CONFIGURAÇÃO
    ============================================================ */
+const APP_VERSION = 'Beta 2';
 const CLIENT_ID = '108256538530-fgunbb52s7f3s9aurfpjtaf01v8fjbph.apps.googleusercontent.com';
 const SPREADSHEET_ID = '1UzEXtl7w6jMsk-c7Pkt3kq97AXL6XIiwTrjOYUaYFLs';
 const SHEET_REGISTOS = 'Registos';
@@ -294,6 +295,7 @@ function setStatus(msg, isErr=false){
 
 /* ---------- Auth ---------- */
 window.onload = () => {
+  document.getElementById('footerVersion').textContent = APP_VERSION;
   tokenClient = google.accounts.oauth2.initTokenClient({
     client_id: CLIENT_ID,
     scope: SCOPES,
@@ -407,7 +409,8 @@ async function loadConfig(){
     }
     config.sexo = v[2] ? String(v[2][0]) : '';
     config.pesoAlvo = v[3] && v[3][0] !== '' ? Number(v[3][0]) : null;
-    config.atividade = v[4] && v[4][0] !== '' ? Number(v[4][0]) : 1.2;
+    const atividadeRaw = v[4] && v[4][0] !== '' ? Number(v[4][0]) : 1.2;
+    config.atividade = normalizaAtividade(atividadeRaw);
   } catch(e){
     setStatus('Não foi possível ler a Config: ' + e.message, true);
   }
@@ -417,6 +420,18 @@ async function loadConfig(){
   document.getElementById('cfgSexo').value = config.sexo || '';
   document.getElementById('cfgPesoAlvo').value = config.pesoAlvo ?? '';
   document.getElementById('cfgAtividade').value = config.atividade;
+}
+
+// Aceita tanto o multiplicador decimal (1.2/1.375/1.55/1.725, o que a app grava)
+// como uma escala simples 1-4 (caso alguém preencha a folha manualmente).
+function normalizaAtividade(raw){
+  if (!raw || isNaN(raw)) return 1.2;
+  const escala = { 1: 1.2, 2: 1.375, 3: 1.55, 4: 1.725 };
+  if (Number.isInteger(raw) && escala[raw]) return escala[raw];
+  if (raw >= 1.2 && raw <= 1.725) return raw;
+  // valor fora do esperado: aproxima ao multiplicador válido mais próximo
+  const validos = [1.2, 1.375, 1.55, 1.725];
+  return validos.reduce((a,b) => Math.abs(b-raw) < Math.abs(a-raw) ? b : a, 1.2);
 }
 
 function isoDateOnly(d){
@@ -510,6 +525,18 @@ async function onGuardarEdit(){
     setStatus('Erro ao atualizar: ' + e.message, true);
   }
 }
+async function eliminarRegistoDireto(reg){
+  if (!confirm(`Eliminar o registo de ${fmtDataCurta(reg.date)} (${reg.peso.toFixed(1)} kg)?`)) return;
+  try{
+    await sheetsPut(`${SHEET_REGISTOS}!A${reg.row}:C${reg.row}`, [['','','']]);
+    await loadRegistos();
+    setStatus('Registo eliminado.');
+    renderAll();
+  } catch(e){
+    setStatus('Erro ao eliminar: ' + e.message, true);
+  }
+}
+
 async function onEliminarRegisto(){
   if (!confirm('Eliminar este registo?')) return;
   try{
@@ -571,12 +598,21 @@ function mediaPerdaPeriodo(dias){
 
 /* ---------- Render ---------- */
 function renderAll(){
+  prefillNovoPeso();
   renderStats();
   renderProgress();
   renderIMC();
   renderKcal();
   renderRegistos();
   if (currentTab === 'grafico') renderChart();
+}
+
+function prefillNovoPeso(){
+  const campo = document.getElementById('novoPeso');
+  // só pré-preenche se o campo estiver vazio, para não sobrescrever o que a pessoa está a escrever
+  if (campo && campo.value === '' && registos.length > 0){
+    campo.value = registos[registos.length - 1].peso;
+  }
 }
 
 function renderStats(){
@@ -586,18 +622,15 @@ function renderStats(){
     grid.innerHTML = '<div class="card" style="grid-column:1/-1;">Sem registos ainda. Adiciona o primeiro peso acima.</div>';
     return;
   }
+  // Média diária desde o início (tendência global), extrapolada para uma semana.
   const desdeInicio = mediaPerdaPeriodo(999999);
-  const ult30 = mediaPerdaPeriodo(30);
-  const ult7 = mediaPerdaPeriodo(7);
-  const mediaSemanal = ult7 !== null ? ult7 * 7 : null;
+  const mediaSemanal = desdeInicio !== null ? desdeInicio * 7 : null;
 
   const stats = [
     { label:'Peso atual', value: registos[registos.length-1].peso.toFixed(1) + ' kg', sub: fmtData(registos[registos.length-1].date) },
     { label:'Total perdido', value: (registos[0].peso - registos[registos.length-1].peso).toFixed(1) + ' kg', sub: 'desde ' + fmtDataCurta(registos[0].date), cls: (registos[0].peso - registos[registos.length-1].peso) >= 0 ? 'loss' : 'gain' },
     { label:'Média/dia desde início', value: fmtMedia(desdeInicio), sub:'kg por dia' },
-    { label:'Média/dia últimos 30d', value: fmtMedia(ult30), sub:'kg por dia' },
-    { label:'Média/dia últimos 7d', value: fmtMedia(ult7), sub:'kg por dia' },
-    { label:'Média semanal (7d)', value: fmtMedia(mediaSemanal), sub:'kg por semana' },
+    { label:'Média semanal', value: fmtMedia(mediaSemanal), sub:'kg por semana (tendência global)' },
   ];
   stats.forEach(s => {
     const div = document.createElement('div');
@@ -700,9 +733,11 @@ function renderRegistos(){
       <div class="regPeso">${reg.peso.toFixed(1)} kg</div>
       ${deltaHtml}
       <div class="regActions">
-        <button class="iconBtn" data-row="${reg.row}">✎</button>
+        <button class="iconBtn iconEdit" data-row="${reg.row}" title="Editar">✎</button>
+        <button class="iconBtn iconDel" data-row="${reg.row}" title="Eliminar">🗑</button>
       </div>`;
-    row.querySelector('.iconBtn').onclick = () => openModal(reg);
+    row.querySelector('.iconEdit').onclick = () => openModal(reg);
+    row.querySelector('.iconDel').onclick = () => eliminarRegistoDireto(reg);
     list.appendChild(row);
   });
 }
@@ -756,7 +791,7 @@ function renderChart(){
 }
 </script>
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.4/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.5.0/chart.umd.min.js"></script>
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 </body>
 </html>
