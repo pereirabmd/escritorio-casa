@@ -383,6 +383,7 @@
         </div>
       </div>
       <button class="btn-lime" id="btnGuardarConfig" style="width:100%;">Guardar configuração</button>
+      <button class="btn-ghost" id="btnTerminarSessao" style="width:100%;margin-top:8px;">Terminar sessão</button>
     </section>
 
   </div>
@@ -420,7 +421,7 @@
 /* ============================================================
    CONFIGURAÇÃO
    ============================================================ */
-const APP_VERSION = 'v1.5.3';
+const APP_VERSION = 'v1.6.0';
 const CLIENT_ID = '108256538530-fgunbb52s7f3s9aurfpjtaf01v8fjbph.apps.googleusercontent.com';
 const SPREADSHEET_ID = '1UzEXtl7w6jMsk-c7Pkt3kq97AXL6XIiwTrjOYUaYFLs';
 const SHEET_REGISTOS = 'Registos';
@@ -448,6 +449,32 @@ function setStatus(msg, isErr=false){
 }
 
 /* ---------- Auth ---------- */
+/* ---------- Sessão persistente ---------- */
+const TOKEN_KEY = 'peso_access_token';
+const TOKEN_EXPIRY_KEY = 'peso_token_expiry';
+
+function saveToken(token, expiresInSeconds){
+  try{
+    localStorage.setItem(TOKEN_KEY, token);
+    // margem de 2 min de segurança antes do expirar real
+    localStorage.setItem(TOKEN_EXPIRY_KEY, String(Date.now() + (expiresInSeconds || 3600) * 1000 - 120000));
+  } catch(e){}
+}
+function loadSavedToken(){
+  try{
+    const token = localStorage.getItem(TOKEN_KEY);
+    const expiry = Number(localStorage.getItem(TOKEN_EXPIRY_KEY) || 0);
+    if (token && expiry > Date.now()) return token;
+  } catch(e){}
+  return null;
+}
+function clearSavedToken(){
+  try{
+    localStorage.removeItem(TOKEN_KEY);
+    localStorage.removeItem(TOKEN_EXPIRY_KEY);
+  } catch(e){}
+}
+
 window.onload = () => {
   document.getElementById('footerVersion').textContent = APP_VERSION;
 
@@ -455,12 +482,20 @@ window.onload = () => {
     client_id: CLIENT_ID,
     scope: SCOPES,
     callback: (resp) => {
-      if (resp.error){ setStatus('Falha no login: ' + resp.error, true); return; }
+      if (resp.error){
+        // uma tentativa silenciosa que falhe não deve mostrar erro — só se for um clique manual
+        if (resp.error !== 'interaction_required' && resp.error !== 'access_denied'){
+          setStatus('Falha no login: ' + resp.error, true);
+        }
+        return;
+      }
       accessToken = resp.access_token;
+      saveToken(accessToken, resp.expires_in);
       onSignedIn();
     }
   });
   document.getElementById('signinBtn').onclick = () => tokenClient.requestAccessToken();
+  document.getElementById('btnTerminarSessao').onclick = onTerminarSessao;
 
   document.getElementById('tabBtnResumo').onclick = () => showTab('resumo');
   document.getElementById('tabBtnGrafico').onclick = () => showTab('grafico');
@@ -491,6 +526,19 @@ window.onload = () => {
     if (btn) showHint(btn.dataset.hint);
   });
   document.getElementById('modalOverlay').onclick = (e) => { if (e.target.id === 'modalOverlay') closeModal(); };
+
+  // ---- Tentar sessão persistente ----
+  const savedToken = loadSavedToken();
+  if (savedToken){
+    accessToken = savedToken;
+    onSignedIn();
+  } else {
+    // tentativa silenciosa: se a pessoa já tiver sessão Google ativa e tiver autorizado antes,
+    // isto entra sem mostrar nada; se precisar de interação, falha em silêncio e mostra o botão normal.
+    setTimeout(() => {
+      try{ tokenClient.requestAccessToken({ prompt: '' }); } catch(e){}
+    }, 150);
+  }
 };
 
 function showTab(tab){
@@ -535,6 +583,7 @@ function animateValues(el, targets, formatFn, duration = 900){
 async function sheetsGet(range){
   const url = `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/${encodeURIComponent(range)}?valueRenderOption=UNFORMATTED_VALUE`;
   const res = await fetch(url, { headers: { Authorization: 'Bearer ' + accessToken } });
+  if (res.status === 401){ onSessaoExpirada(); throw new Error('Sessão expirada'); }
   if (!res.ok) throw new Error('Erro a ler a folha (' + res.status + ')');
   return res.json();
 }
@@ -546,6 +595,7 @@ async function sheetsPut(range, values){
     headers: { Authorization: 'Bearer ' + accessToken, 'Content-Type': 'application/json' },
     body: JSON.stringify({ range, values })
   });
+  if (res.status === 401){ onSessaoExpirada(); throw new Error('Sessão expirada'); }
   if (!res.ok) throw new Error('Erro a gravar (' + res.status + ')');
   return res.json();
 }
@@ -557,8 +607,31 @@ async function sheetsAppend(range, values){
     headers: { Authorization: 'Bearer ' + accessToken, 'Content-Type': 'application/json' },
     body: JSON.stringify({ range, values })
   });
+  if (res.status === 401){ onSessaoExpirada(); throw new Error('Sessão expirada'); }
   if (!res.ok) throw new Error('Erro a adicionar (' + res.status + ')');
   return res.json();
+}
+
+// token rejeitado a meio do uso: limpa a sessão guardada e volta ao ecrã de login
+function onSessaoExpirada(){
+  clearSavedToken();
+  accessToken = null;
+  document.getElementById('app').classList.add('hidden');
+  document.getElementById('authArea').classList.remove('hidden');
+  setStatus('A sessão expirou. Inicia sessão novamente.', true);
+}
+
+function onTerminarSessao(){
+  if (!confirm('Terminar sessão? Vais precisar de voltar a autenticar-te da próxima vez.')) return;
+  const tokenParaRevogar = accessToken;
+  clearSavedToken();
+  accessToken = null;
+  if (tokenParaRevogar && window.google){
+    try{ google.accounts.oauth2.revoke(tokenParaRevogar, () => {}); } catch(e){}
+  }
+  document.getElementById('app').classList.add('hidden');
+  document.getElementById('authArea').classList.remove('hidden');
+  setStatus('');
 }
 
 /* ---------- Date helpers (serial <-> Date) ---------- */
