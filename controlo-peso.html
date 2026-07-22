@@ -45,7 +45,8 @@
     height:100dvh;
     display:flex;
     flex-direction:column;
-    overflow:hidden;
+    overflow-y:auto;
+    overscroll-behavior-y:auto;
     font-family:var(--font-sans);
     background:var(--bg);
     color:var(--text);
@@ -62,6 +63,15 @@
   header .brand{font-size:1.05rem;font-weight:800;letter-spacing:-0.01em;display:flex;align-items:center;gap:6px;}
   header .brand .ico{color:var(--lime);}
   header .sub{font-size:0.68rem;color:var(--text-dim);text-transform:uppercase;letter-spacing:.06em;}
+  .header-right{display:flex;align-items:center;gap:10px;}
+  .icon-refresh{
+    background:none;border:1px solid var(--line);color:var(--text-dim);
+    border-radius:8px;width:28px;height:28px;padding:0;font-size:1rem;
+    display:flex;align-items:center;justify-content:center;min-height:auto;line-height:1;
+  }
+  .icon-refresh:active{color:var(--lime);border-color:var(--lime);}
+  .icon-refresh.spinning{animation:spin .7s linear infinite;color:var(--lime);}
+  @keyframes spin{to{transform:rotate(360deg);}}
 
   #authArea{flex:1;padding:24px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;text-align:center;}
   #authArea p{color:var(--text-dim);font-size:0.9rem;margin:0;}
@@ -208,7 +218,10 @@
 
 <header>
   <div class="brand"><span class="ico">⚖</span> Peso</div>
-  <div class="sub" id="headerSub">controlo diário</div>
+  <div class="header-right">
+    <span class="sub" id="headerSub">controlo diário</span>
+    <button id="btnRefresh" class="icon-refresh" title="Atualizar dados">⟳</button>
+  </div>
 </header>
 
 <div id="authArea">
@@ -343,7 +356,7 @@
 /* ============================================================
    CONFIGURAÇÃO
    ============================================================ */
-const APP_VERSION = 'Beta 8';
+const APP_VERSION = 'Beta 9';
 const CLIENT_ID = '108256538530-fgunbb52s7f3s9aurfpjtaf01v8fjbph.apps.googleusercontent.com';
 const SPREADSHEET_ID = '1UzEXtl7w6jMsk-c7Pkt3kq97AXL6XIiwTrjOYUaYFLs';
 const SHEET_REGISTOS = 'Registos';
@@ -404,6 +417,7 @@ window.onload = () => {
   document.getElementById('btnEliminar').onclick = onEliminarRegisto;
   document.getElementById('btnExportar').onclick = exportarXLSX;
   document.getElementById('undoToastBtn').onclick = undoPendingDelete;
+  document.getElementById('btnRefresh').onclick = refreshData;
   document.getElementById('modalOverlay').onclick = (e) => { if (e.target.id === 'modalOverlay') closeModal(); };
 };
 
@@ -424,6 +438,24 @@ async function onSignedIn(){
   await loadRegistos();
   setStatus('');
   renderAll();
+}
+
+async function refreshData(){
+  if (!accessToken) return;
+  if (pendingDelete) await commitPendingDelete();
+  const btn = document.getElementById('btnRefresh');
+  if (btn) btn.classList.add('spinning');
+  setStatus('A atualizar...');
+  try{
+    await loadConfig();
+    await loadRegistos();
+    setStatus('Atualizado.');
+    renderAll();
+  } catch(e){
+    setStatus('Erro ao atualizar: ' + e.message, true);
+  } finally {
+    if (btn) btn.classList.remove('spinning');
+  }
 }
 
 /* ---------- Sheets API helpers ---------- */
