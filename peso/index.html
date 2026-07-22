@@ -396,7 +396,7 @@
 /* ============================================================
    CONFIGURAÇÃO
    ============================================================ */
-const APP_VERSION = 'v1.1.0';
+const APP_VERSION = 'v1.2.0';
 const CLIENT_ID = '108256538530-fgunbb52s7f3s9aurfpjtaf01v8fjbph.apps.googleusercontent.com';
 const SPREADSHEET_ID = '1UzEXtl7w6jMsk-c7Pkt3kq97AXL6XIiwTrjOYUaYFLs';
 const SHEET_REGISTOS = 'Registos';
@@ -469,7 +469,7 @@ function showTab(tab){
     document.getElementById('tab' + t.charAt(0).toUpperCase() + t.slice(1)).classList.toggle('hidden', t !== tab);
     document.getElementById('tabBtn' + t.charAt(0).toUpperCase() + t.slice(1)).classList.toggle('active', t === tab);
   });
-  if (tab === 'grafico') renderChart();
+  if (tab === 'grafico') renderChart(true);
 }
 
 async function onSignedIn(){
@@ -1068,7 +1068,7 @@ function renderForecast(){
   el.innerHTML = `Ao ritmo atual (~${(ritmo*7).toFixed(2)} kg/sem): objetivo previsto para <b>${fmtDataCurta(dataPrevista)}</b>`;
 }
 
-function renderChart(){
+function renderChart(entrando = false){
   renderForecast();
   const ctx = document.getElementById('weightChart');
   if (!ctx || registos.length === 0) return;
@@ -1092,8 +1092,6 @@ function renderChart(){
   const datasFiltradas = new Set(filtrado.map(r => r.date.getTime()));
   const mediasFiltradas = mediasCompletas.filter(m => datasFiltradas.has(m.date.getTime())).map(m => m.media);
 
-  if (weightChart) weightChart.destroy();
-
   const canvasCtx = ctx.getContext('2d');
   const alturaCanvas = ctx.clientHeight || 280;
   const gradienteArea = canvasCtx.createLinearGradient(0, 0, 0, alturaCanvas);
@@ -1104,6 +1102,30 @@ function renderChart(){
   const gradienteLinha = canvasCtx.createLinearGradient(0, 0, ctx.clientWidth || 300, 0);
   gradienteLinha.addColorStop(0, '#B4703F');
   gradienteLinha.addColorStop(1, '#7E9C83');
+
+  // ---- Já existe gráfico e não é uma entrada na aba: só atualizar dados, com transição suave ----
+  if (weightChart && !entrando){
+    weightChart.data.labels = labels;
+    weightChart.data.datasets[0].data = dados;
+    weightChart.data.datasets[0].borderColor = gradienteLinha;
+    weightChart.data.datasets[0].backgroundColor = gradienteArea;
+    weightChart.data.datasets[1].data = mediasFiltradas;
+    weightChart.options.animation = { duration: 550, easing: 'easeOutQuart' };
+    weightChart.update();
+    return;
+  }
+
+  // ---- Entrada na aba (ou primeira vez): recriar com desenho progressivo, ponto a ponto ----
+  if (weightChart) weightChart.destroy();
+
+  const duracaoTotal = 1100;
+  const atrasoPorPonto = dados.length ? duracaoTotal / dados.length : 0;
+  const previousY = (context) => {
+    if (context.index === 0) return context.chart.scales.y.getPixelForValue(context.dataset.data[0]);
+    const meta = context.chart.getDatasetMeta(context.datasetIndex);
+    const anterior = meta.data[context.index - 1];
+    return anterior ? anterior.getProps(['y'], true).y : context.chart.scales.y.getPixelForValue(context.dataset.data[0]);
+  };
 
   weightChart = new Chart(ctx, {
     type: 'line',
@@ -1139,7 +1161,26 @@ function renderChart(){
     options: {
       responsive: true,
       maintainAspectRatio: false,
-      animation: { duration: 700, easing: 'easeOutQuart' },
+      animation: {
+        x: {
+          type: 'number', easing: 'linear', duration: atrasoPorPonto,
+          from: NaN,
+          delay(context){
+            if (context.type !== 'data' || context.xStarted) return 0;
+            context.xStarted = true;
+            return context.index * atrasoPorPonto;
+          }
+        },
+        y: {
+          type: 'number', easing: 'linear', duration: atrasoPorPonto,
+          from: previousY,
+          delay(context){
+            if (context.type !== 'data' || context.yStarted) return 0;
+            context.yStarted = true;
+            return context.index * atrasoPorPonto;
+          }
+        }
+      },
       plugins: { legend: { display: false } },
       scales: {
         x: { ticks: { maxTicksLimit: 6, font: { size: 9 }, color: '#948A78' }, grid: { color: '#E5D8C2' } },
