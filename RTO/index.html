@@ -533,7 +533,7 @@
 /* ============================================================
    CONFIGURAÇÃO — preenche estes 2 valores antes de usar
    ============================================================ */
-const APP_VERSION = 'v2.1.0';
+const APP_VERSION = 'v2.1.1';
 
 const ICON_EDIT = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>';
 const ICON_TRASH = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>';
@@ -1092,13 +1092,14 @@ async function toggleFeriasDay(dateStr, cell){
 function animateValue(elId, newVal){
   const el = document.getElementById(elId);
   const prev = parseFloat(el.textContent);
-  const from = isNaN(prev) ? newVal : prev;
+  const isFirstLoad = isNaN(prev);
+  const from = isFirstLoad ? 0 : prev;
   if (from === newVal){ el.textContent = newVal; return; }
   const decimals = (String(newVal).split('.')[1] || '').length;
-  const duration = 400;
+  const duration = isFirstLoad ? 700 : 400;
   const start = performance.now();
   const box = el.closest('.stat');
-  if (box) box.classList.add('bump');
+  if (box && !isFirstLoad) box.classList.add('bump');
   function step(now){
     const t = Math.min(1, (now - start) / duration);
     const eased = 1 - Math.pow(1 - t, 3);
