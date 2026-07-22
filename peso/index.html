@@ -396,7 +396,7 @@
 /* ============================================================
    CONFIGURAÇÃO
    ============================================================ */
-const APP_VERSION = 'Beta 16';
+const APP_VERSION = 'v1.1.0';
 const CLIENT_ID = '108256538530-fgunbb52s7f3s9aurfpjtaf01v8fjbph.apps.googleusercontent.com';
 const SPREADSHEET_ID = '1UzEXtl7w6jMsk-c7Pkt3kq97AXL6XIiwTrjOYUaYFLs';
 const SHEET_REGISTOS = 'Registos';
@@ -479,7 +479,26 @@ async function onSignedIn(){
   await loadConfig();
   await loadRegistos();
   setStatus('');
+  animateNumbersNow = true;
   renderAll();
+  animateNumbersNow = false;
+}
+
+/* ---------- Animação de contagem dos números (só no carregamento inicial) ---------- */
+let animateNumbersNow = false;
+function animateValues(el, targets, formatFn, duration = 900){
+  if (!el) return;
+  if (!animateNumbersNow){ el.innerHTML = formatFn(targets); return; }
+  const start = performance.now();
+  function tick(now){
+    const t = Math.min((now - start) / duration, 1);
+    const eased = 1 - Math.pow(1 - t, 3); // easeOutCubic
+    const current = targets.map(v => v * eased);
+    el.innerHTML = formatFn(current);
+    if (t < 1) requestAnimationFrame(tick);
+    else el.innerHTML = formatFn(targets);
+  }
+  requestAnimationFrame(tick);
 }
 
 /* ---------- Sheets API helpers ---------- */
@@ -803,7 +822,7 @@ function renderLcd(){
   }
   const ultimo = registos[registos.length - 1];
   const anterior = registos.length > 1 ? registos[registos.length - 2] : null;
-  document.getElementById('lcdPeso').textContent = ultimo.peso.toFixed(1);
+  animateValues(document.getElementById('lcdPeso'), [ultimo.peso], arr => arr[0].toFixed(1));
   const deltaEl = document.getElementById('lcdDelta');
   if (anterior){
     const diff = ultimo.peso - anterior.peso;
@@ -854,13 +873,20 @@ function renderStatsStrip(){
 
   const totalDiv = document.createElement('div');
   totalDiv.className = 'stat-chip';
-  totalDiv.innerHTML = `<div class="lbl">Total perdido</div><div class="val ${totalPerdido>=0?'loss':'gain'}">${totalPerdido.toFixed(1)} kg</div>`;
+  totalDiv.innerHTML = `<div class="lbl">Total perdido</div><div class="val ${totalPerdido>=0?'loss':'gain'}" id="statTotalVal"></div>`;
   strip.appendChild(totalDiv);
+  animateValues(document.getElementById('statTotalVal'), [totalPerdido], arr => `${arr[0].toFixed(1)} kg`);
 
   const ritmoDiv = document.createElement('div');
   ritmoDiv.className = 'stat-chip';
-  ritmoDiv.innerHTML = `<div class="lbl">Ritmo semanal</div><div class="val">${fmtMedia(mediaSemanal)} kg</div><div class="val-sub">${fmtMedia(desdeInicio)} kg/dia</div>`;
+  ritmoDiv.innerHTML = `<div class="lbl">Ritmo semanal</div><div class="val" id="statRitmoVal"></div><div class="val-sub" id="statRitmoSub"></div>`;
   strip.appendChild(ritmoDiv);
+  animateValues(document.getElementById('statRitmoVal'), [mediaSemanal ?? 0], arr =>
+    mediaSemanal === null ? '—' : (mediaSemanal >= 0 ? '−' : '+') + Math.abs(arr[0]).toFixed(2) + ' kg'
+  );
+  animateValues(document.getElementById('statRitmoSub'), [desdeInicio ?? 0], arr =>
+    desdeInicio === null ? '—' : (desdeInicio >= 0 ? '−' : '+') + Math.abs(arr[0]).toFixed(2) + ' kg/dia'
+  );
 }
 
 function renderMinMax(){
@@ -870,7 +896,7 @@ function renderMinMax(){
   const pesos = registos.map(r => r.peso);
   const min = Math.min(...pesos);
   const max = Math.max(...pesos);
-  el.innerHTML = `${min.toFixed(1)} / ${max.toFixed(1)} <span class="chip-unit">kg</span>`;
+  animateValues(el, [min, max], arr => `${arr[0].toFixed(1)} / ${arr[1].toFixed(1)} <span class="chip-unit">kg</span>`);
 }
 
 function fmtMedia(v){
@@ -902,7 +928,7 @@ function renderProgress(){
   }
   pct = Math.max(0, Math.min(100, pct));
   document.getElementById('progressFill').style.width = pct + '%';
-  document.getElementById('progPctLabel').textContent = pct.toFixed(0) + '%';
+  animateValues(document.getElementById('progPctLabel'), [pct], arr => arr[0].toFixed(0) + '%');
   document.getElementById('progLeft').textContent = pesoInicial.toFixed(1) + ' kg';
   document.getElementById('progRight').textContent = pesoAlvo.toFixed(1) + ' kg';
 }
@@ -916,7 +942,7 @@ function renderIMC(){
   const pesoAtual = registos[registos.length-1].peso;
   const imc = calcIMC(pesoAtual, config.altura);
   const cls = classificaIMC(imc);
-  document.getElementById('imcValue').textContent = imc.toFixed(1);
+  animateValues(document.getElementById('imcValue'), [imc], arr => arr[0].toFixed(1));
   document.getElementById('imcClasse').innerHTML = `<span class="imc-badge" style="color:${cls.cor};background:${cls.bg};">${cls.texto}</span>`;
 }
 
@@ -933,7 +959,7 @@ function renderKcal(){
     return;
   }
   const tdee = tmb * (config.atividade || 1.2);
-  document.getElementById('kcalValue').innerHTML = `${Math.round(tdee)} <span class="chip-unit">kcal</span>`;
+  animateValues(document.getElementById('kcalValue'), [tdee], arr => `${Math.round(arr[0])} <span class="chip-unit">kcal</span>`);
 }
 
 function renderRegistos(){
