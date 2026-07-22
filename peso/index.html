@@ -86,7 +86,7 @@
   header .brand .ico{color:var(--lime);}
   header .sub{font-size:0.68rem;color:var(--text-dim);text-transform:uppercase;letter-spacing:.06em;}
 
-  #authArea{flex:1;padding:24px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;text-align:center;}
+  #authArea{flex:0 0 auto;padding:56px 24px 24px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;text-align:center;}
   #authArea p{color:var(--text-dim);font-size:0.9rem;margin:0;}
 
   button{font-family:inherit;border:none;border-radius:10px;cursor:pointer;font-weight:700;}
@@ -183,6 +183,7 @@
   .chip-label{font-size:0.65rem;color:var(--text-dim);text-transform:uppercase;letter-spacing:.04em;}
   .chip-value{font-family:var(--font-mono);font-size:1.3rem;font-weight:700;margin-top:2px;}
   .chip-value-sm{font-size:0.98rem;}
+  .chip-unit{font-family:var(--font-sans);font-size:0.62em;font-weight:600;color:var(--text-dim);}
   .chip-sub{font-size:0.66rem;color:var(--text-dim);margin-top:2px;}
   .imc-badge{display:inline-block;padding:2px 8px;border-radius:999px;font-size:0.68rem;font-weight:800;margin-top:2px;}
 
@@ -231,6 +232,7 @@
 
   footer{
     flex:0 0 auto;
+    margin-top:auto;
     padding:5px 16px calc(5px + env(safe-area-inset-bottom));
     text-align:center;font-size:0.64rem;color:var(--text-dim);
     border-top:1px solid var(--line);
@@ -394,7 +396,7 @@
 /* ============================================================
    CONFIGURAÇÃO
    ============================================================ */
-const APP_VERSION = 'Beta 14';
+const APP_VERSION = 'Beta 15';
 const CLIENT_ID = '108256538530-fgunbb52s7f3s9aurfpjtaf01v8fjbph.apps.googleusercontent.com';
 const SPREADSHEET_ID = '1UzEXtl7w6jMsk-c7Pkt3kq97AXL6XIiwTrjOYUaYFLs';
 const SHEET_REGISTOS = 'Registos';
@@ -868,7 +870,7 @@ function renderMinMax(){
   const pesos = registos.map(r => r.peso);
   const min = Math.min(...pesos);
   const max = Math.max(...pesos);
-  el.textContent = `${min.toFixed(1)} / ${max.toFixed(1)}`;
+  el.innerHTML = `${min.toFixed(1)} / ${max.toFixed(1)} <span class="chip-unit">kg</span>`;
 }
 
 function fmtMedia(v){
@@ -931,7 +933,7 @@ function renderKcal(){
     return;
   }
   const tdee = tmb * (config.atividade || 1.2);
-  document.getElementById('kcalValue').textContent = Math.round(tdee);
+  document.getElementById('kcalValue').innerHTML = `${Math.round(tdee)} <span class="chip-unit">kcal</span>`;
 }
 
 function renderRegistos(){
