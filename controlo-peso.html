@@ -105,6 +105,11 @@
   .lcd-delta.up{color:var(--danger);background:var(--danger-tint);}
   .lcd-delta.same{color:var(--text-dim);background:var(--panel2);}
   .lcd-when{font-size:0.65rem;color:var(--text-dim);margin-top:4px;}
+  .lcd-streak{font-size:0.68rem;color:var(--amber);margin-top:3px;font-weight:700;}
+
+  .stat-strip-2 .stat-chip{padding:9px 10px;}
+  .stat-strip-2 .stat-chip .val{font-size:1.15rem;}
+  .stat-strip-2 .stat-chip .val-sub{font-size:0.62rem;color:var(--text-dim);font-weight:600;margin-top:1px;}
 
   .quickadd{display:flex;gap:6px;margin-bottom:10px;}
   .quickadd input#novoPeso{width:70px;flex:0 0 70px;text-align:center;}
@@ -129,6 +134,7 @@
   .chip{flex:1;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:10px 12px;min-width:0;}
   .chip-label{font-size:0.65rem;color:var(--text-dim);text-transform:uppercase;letter-spacing:.04em;}
   .chip-value{font-family:var(--font-mono);font-size:1.3rem;font-weight:700;margin-top:2px;}
+  .chip-value-sm{font-size:0.98rem;}
   .chip-sub{font-size:0.66rem;color:var(--text-dim);margin-top:2px;}
   .imc-badge{display:inline-block;padding:2px 8px;border-radius:999px;font-size:0.68rem;font-weight:800;margin-top:2px;}
 
@@ -136,10 +142,15 @@
   #periodBar{flex:0 0 auto;display:flex;gap:5px;margin-bottom:8px;}
   .periodBtn{flex:1;background:var(--panel);border:1px solid var(--line);color:var(--text-dim);border-radius:8px;padding:7px 2px;font-size:0.68rem;font-weight:700;min-height:32px;}
   .periodBtn.active{background:var(--panel2);color:var(--teal);border-color:var(--teal);}
+  #forecastBar{flex:0 0 auto;font-size:0.72rem;color:var(--text-dim);background:var(--panel);border:1px solid var(--line);border-radius:9px;padding:6px 10px;margin-bottom:8px;}
+  #forecastBar b{color:var(--teal);font-weight:800;}
   .chart-wrap{flex:1;min-height:0;position:relative;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:10px;}
   .chart-wrap canvas{width:100% !important;height:100% !important;}
 
   /* ---------- Registos ---------- */
+  #regHeader{flex:0 0 auto;display:flex;align-items:center;justify-content:space-between;padding:0 2px 8px;}
+  #regCount{font-size:0.72rem;color:var(--text-dim);}
+  .btn-export{padding:6px 12px;font-size:0.72rem;min-height:30px;}
   .reg-list{flex:1;min-height:0;overflow-y:auto;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:2px 12px;}
   .regRow{display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--line);position:relative;}
   .regRow:last-child{border-bottom:none;}
@@ -211,6 +222,7 @@
         <div class="lcd-side">
           <span class="lcd-delta same" id="lcdDelta">—</span>
           <div class="lcd-when" id="lcdWhen"></div>
+          <div class="lcd-streak" id="lcdStreak"></div>
         </div>
       </div>
 
@@ -220,7 +232,7 @@
         <button id="btnRegistar" class="btn-lime">＋</button>
       </div>
 
-      <div class="stat-strip" id="statStrip"></div>
+      <div class="stat-strip stat-strip-2" id="statStrip"></div>
 
       <div class="progress-block" id="progressCard">
         <div class="progress-head"><span>Objetivo</span><span id="progPctLabel">—</span></div>
@@ -239,6 +251,11 @@
           <div class="chip-value" id="kcalValue">—</div>
           <div class="chip-sub">TDEE estimado</div>
         </div>
+        <div class="chip">
+          <div class="chip-label">Mín / Máx</div>
+          <div class="chip-value chip-value-sm" id="minMaxValue">—</div>
+          <div class="chip-sub">desde o início</div>
+        </div>
       </div>
     </section>
 
@@ -250,11 +267,16 @@
         <button class="periodBtn" data-period="month">Mês</button>
         <button class="periodBtn" data-period="week">Semana</button>
       </div>
+      <div id="forecastBar"></div>
       <div class="chart-wrap"><canvas id="weightChart"></canvas></div>
     </section>
 
     <!-- ===== REGISTOS ===== -->
     <section id="tabRegistos" class="tabPanel flex-col hidden">
+      <div id="regHeader">
+        <span id="regCount"></span>
+        <button class="btn-ghost btn-export" id="btnExportar">⬇ Excel</button>
+      </div>
       <div class="reg-list" id="registosList"></div>
     </section>
 
@@ -269,10 +291,9 @@
         </div>
         <div class="field full"><label>Nível de atividade</label>
           <select id="cfgAtividade">
-            <option value="1.2">Sedentário</option>
-            <option value="1.375">Leve (1-3x/sem)</option>
-            <option value="1.55">Moderado (3-5x/sem)</option>
-            <option value="1.725">Intenso (6-7x/sem)</option>
+            <option value="1.2">Pouco ativo</option>
+            <option value="1.45">Moderadamente ativo</option>
+            <option value="1.7">Muito ativo</option>
           </select>
         </div>
       </div>
@@ -301,7 +322,7 @@
 /* ============================================================
    CONFIGURAÇÃO
    ============================================================ */
-const APP_VERSION = 'Beta 3';
+const APP_VERSION = 'Beta 7';
 const CLIENT_ID = '108256538530-fgunbb52s7f3s9aurfpjtaf01v8fjbph.apps.googleusercontent.com';
 const SPREADSHEET_ID = '1UzEXtl7w6jMsk-c7Pkt3kq97AXL6XIiwTrjOYUaYFLs';
 const SHEET_REGISTOS = 'Registos';
@@ -360,6 +381,7 @@ window.onload = () => {
   document.getElementById('btnCancelarEdit').onclick = closeModal;
   document.getElementById('btnGuardarEdit').onclick = onGuardarEdit;
   document.getElementById('btnEliminar').onclick = onEliminarRegisto;
+  document.getElementById('btnExportar').onclick = exportarXLSX;
   document.getElementById('modalOverlay').onclick = (e) => { if (e.target.id === 'modalOverlay') closeModal(); };
 };
 
@@ -424,14 +446,17 @@ function serialToDate(v){
   return null;
 }
 
-/* ---------- Nível de atividade: aceita escala 1-4 ou multiplicador decimal ---------- */
+/* ---------- Nível de atividade: aceita escala 1-4 antiga ou multiplicador decimal ---------- */
 function normalizaAtividade(raw){
   if (!raw || isNaN(raw)) return 1.2;
-  const escala = { 1: 1.2, 2: 1.375, 3: 1.55, 4: 1.725 };
+  const escala = { 1: 1.2, 2: 1.45, 3: 1.7, 4: 1.7 };
   if (Number.isInteger(raw) && escala[raw]) return escala[raw];
-  if (raw >= 1.2 && raw <= 1.725) return raw;
-  const validos = [1.2, 1.375, 1.55, 1.725];
-  return validos.reduce((a,b) => Math.abs(b-raw) < Math.abs(a-raw) ? b : a, 1.2);
+  if (raw >= 1.2 && raw <= 1.725) {
+    // aproxima ao valor válido mais próximo da nova escala (também cobre valores antigos: 1.375/1.55/1.725)
+    const validos = [1.2, 1.45, 1.7];
+    return validos.reduce((a,b) => Math.abs(b-raw) < Math.abs(a-raw) ? b : a, 1.2);
+  }
+  return 1.2;
 }
 
 /* ---------- Load Config ---------- */
@@ -513,6 +538,15 @@ async function onRegistarNovo(){
   if (!pesoStr || isNaN(peso) || peso <= 0){
     setStatus('Introduz um peso válido.', true);
     return;
+  }
+  const LIMITE_AVISO = 5; // kg
+  if (registos.length > 0){
+    const ultimoPeso = registos[registos.length - 1].peso;
+    const diff = Math.abs(peso - ultimoPeso);
+    if (diff > LIMITE_AVISO){
+      const ok = confirm(`Este peso (${peso} kg) difere ${diff.toFixed(1)} kg do último registo (${ultimoPeso} kg). Confirmas que está correto?`);
+      if (!ok) return;
+    }
   }
   const now = new Date();
   const dataStr = now.getFullYear()+'-'+pad(now.getMonth()+1)+'-'+pad(now.getDate())+' '+pad(now.getHours())+':'+pad(now.getMinutes())+':00';
@@ -631,6 +665,7 @@ function renderAll(){
   renderProgress();
   renderIMC();
   renderKcal();
+  renderMinMax();
   renderRegistos();
   if (currentTab === 'grafico') renderChart();
 }
@@ -647,6 +682,7 @@ function renderLcd(){
     document.getElementById('lcdPeso').textContent = '—';
     document.getElementById('lcdDelta').textContent = '—';
     document.getElementById('lcdWhen').textContent = 'sem registos';
+    document.getElementById('lcdStreak').textContent = '';
     return;
   }
   const ultimo = registos[registos.length - 1];
@@ -662,6 +698,22 @@ function renderLcd(){
   } else {
     deltaEl.textContent = 'início'; deltaEl.className = 'lcd-delta same';
   }
+  const streak = calcStreak();
+  document.getElementById('lcdStreak').textContent = streak >= 2 ? `🔥 ${streak} dias seguidos` : '';
+}
+
+// dias consecutivos (calendário) com pelo menos um registo, a contar do registo mais recente
+function calcStreak(){
+  if (registos.length === 0) return 0;
+  const dias = [...new Set(registos.map(r => isoDateOnly(r.date)))].sort().reverse();
+  let streak = 1;
+  let prev = new Date(dias[0]);
+  for (let i = 1; i < dias.length; i++){
+    const cur = new Date(dias[i]);
+    const diffDias = Math.round((prev - cur) / 86400000);
+    if (diffDias === 1){ streak++; prev = cur; } else break;
+  }
+  return streak;
 }
 
 function renderStatsStrip(){
@@ -675,17 +727,25 @@ function renderStatsStrip(){
   const mediaSemanal = desdeInicio !== null ? desdeInicio * 7 : null;
   const totalPerdido = registos[0].peso - registos[registos.length-1].peso;
 
-  const chips = [
-    { label:'Total perdido', value: totalPerdido.toFixed(1) + ' kg', cls: totalPerdido >= 0 ? 'loss' : 'gain' },
-    { label:'Média/dia', value: fmtMedia(desdeInicio) },
-    { label:'Média/semana', value: fmtMedia(mediaSemanal) },
-  ];
-  chips.forEach(c => {
-    const div = document.createElement('div');
-    div.className = 'stat-chip';
-    div.innerHTML = `<div class="lbl">${c.label}</div><div class="val ${c.cls||''}">${c.value}</div>`;
-    strip.appendChild(div);
-  });
+  const totalDiv = document.createElement('div');
+  totalDiv.className = 'stat-chip';
+  totalDiv.innerHTML = `<div class="lbl">Total perdido</div><div class="val ${totalPerdido>=0?'loss':'gain'}">${totalPerdido.toFixed(1)} kg</div>`;
+  strip.appendChild(totalDiv);
+
+  const ritmoDiv = document.createElement('div');
+  ritmoDiv.className = 'stat-chip';
+  ritmoDiv.innerHTML = `<div class="lbl">Ritmo semanal</div><div class="val">${fmtMedia(mediaSemanal)} kg</div><div class="val-sub">${fmtMedia(desdeInicio)} kg/dia</div>`;
+  strip.appendChild(ritmoDiv);
+}
+
+function renderMinMax(){
+  const el = document.getElementById('minMaxValue');
+  if (!el) return;
+  if (registos.length === 0){ el.textContent = '—'; return; }
+  const pesos = registos.map(r => r.peso);
+  const min = Math.min(...pesos);
+  const max = Math.max(...pesos);
+  el.textContent = `${min.toFixed(1)} / ${max.toFixed(1)}`;
 }
 
 function fmtMedia(v){
@@ -753,7 +813,9 @@ function renderKcal(){
 
 function renderRegistos(){
   const list = document.getElementById('registosList');
+  const countEl = document.getElementById('regCount');
   list.innerHTML = '';
+  if (countEl) countEl.textContent = registos.length + (registos.length === 1 ? ' registo' : ' registos');
   if (registos.length === 0){
     list.innerHTML = '<div style="padding:12px 0;color:var(--text-dim);">Sem registos.</div>';
     return;
@@ -793,7 +855,68 @@ function escapeHtml(s){
   return s.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 }
 
+/* ---------- Exportar para Excel ---------- */
+function exportarXLSX(){
+  if (typeof XLSX === 'undefined'){
+    setStatus('Biblioteca de exportação ainda não carregou. Tenta novamente em instantes.', true);
+    return;
+  }
+  if (registos.length === 0){
+    setStatus('Não há registos para exportar.', true);
+    return;
+  }
+  const linhas = registos.map(r => ({
+    Data: fmtData(r.date),
+    'Peso (kg)': r.peso,
+    Nota: r.nota
+  }));
+  const ws = XLSX.utils.json_to_sheet(linhas);
+  ws['!cols'] = [{ wch: 18 }, { wch: 10 }, { wch: 30 }];
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Registos');
+  const nomeFicheiro = `peso-export-${isoDateOnly(new Date())}.xlsx`;
+  XLSX.writeFile(wb, nomeFicheiro);
+  setStatus('Ficheiro exportado: ' + nomeFicheiro);
+}
+
+// média móvel de 7 dias (janela de calendário, não apenas últimos N registos) — suaviza o ruído diário
+function movingAverageSeries(dados, windowDays = 7){
+  return dados.map((r) => {
+    const inicioJanela = new Date(r.date.getTime() - (windowDays - 1) * 86400000);
+    const naJanela = dados.filter(x => x.date >= inicioJanela && x.date <= r.date);
+    const media = naJanela.reduce((s, x) => s + x.peso, 0) / naJanela.length;
+    return { date: r.date, media };
+  });
+}
+
+function renderForecast(){
+  const el = document.getElementById('forecastBar');
+  if (!el) return;
+  if (registos.length < 2){
+    el.textContent = 'Regista mais alguns pesos para veres uma previsão.';
+    return;
+  }
+  if (!config.pesoAlvo){
+    el.textContent = 'Define o peso alvo em Config para veres uma previsão de data.';
+    return;
+  }
+  const pesoAtual = registos[registos.length - 1].peso;
+  if (pesoAtual <= config.pesoAlvo){
+    el.innerHTML = '🎉 <b>Objetivo já atingido!</b>';
+    return;
+  }
+  const ritmo = mediaPerdaPeriodo(30) ?? mediaPerdaPeriodo(999999);
+  if (ritmo === null || ritmo <= 0.001){
+    el.textContent = 'Sem tendência de perda clara nos últimos registos — sem previsão de data.';
+    return;
+  }
+  const diasRestantes = Math.ceil((pesoAtual - config.pesoAlvo) / ritmo);
+  const dataPrevista = new Date(registos[registos.length - 1].date.getTime() + diasRestantes * 86400000);
+  el.innerHTML = `Ao ritmo atual (~${(ritmo*7).toFixed(2)} kg/sem): objetivo previsto para <b>${fmtDataCurta(dataPrevista)}</b>`;
+}
+
 function renderChart(){
+  renderForecast();
   const ctx = document.getElementById('weightChart');
   if (!ctx || registos.length === 0) return;
   let filtrado = registos;
@@ -811,21 +934,41 @@ function renderChart(){
   const labels = filtrado.map(r => fmtDataCurta(r.date));
   const dados = filtrado.map(r => r.peso);
 
+  // média móvel calculada sobre TODO o histórico (janelas corretas), depois recortada ao período visível
+  const mediasCompletas = movingAverageSeries(registos);
+  const datasFiltradas = new Set(filtrado.map(r => r.date.getTime()));
+  const mediasFiltradas = mediasCompletas.filter(m => datasFiltradas.has(m.date.getTime())).map(m => m.media);
+
   if (weightChart) weightChart.destroy();
   weightChart = new Chart(ctx, {
     type: 'line',
     data: {
       labels,
-      datasets: [{
-        label: 'Peso (kg)',
-        data: dados,
-        borderColor: '#baff29',
-        backgroundColor: 'rgba(186,255,41,0.08)',
-        tension: 0.25,
-        pointRadius: 2,
-        pointBackgroundColor: '#baff29',
-        fill: true,
-      }]
+      datasets: [
+        {
+          label: 'Peso (kg)',
+          data: dados,
+          borderColor: '#baff29',
+          backgroundColor: 'rgba(186,255,41,0.08)',
+          tension: 0.25,
+          pointRadius: 2,
+          pointBackgroundColor: '#baff29',
+          fill: true,
+          order: 2,
+        },
+        {
+          label: 'Média 7 dias',
+          data: mediasFiltradas,
+          borderColor: '#2dd4bf',
+          backgroundColor: 'transparent',
+          borderWidth: 2,
+          borderDash: [4, 3],
+          tension: 0.3,
+          pointRadius: 0,
+          fill: false,
+          order: 1,
+        }
+      ]
     },
     options: {
       responsive: true,
@@ -841,6 +984,7 @@ function renderChart(){
 </script>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.5.0/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 </body>
 </html>
