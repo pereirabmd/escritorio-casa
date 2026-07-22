@@ -113,28 +113,42 @@
   .hidden{display:none !important;}
 
   /* ---------- Resumo ---------- */
-  .lcd-panel{
-    background:var(--panel);border:1px solid var(--line);border-radius:14px;
-    padding:12px 16px;display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;
+  .hero-add{
+    background:linear-gradient(135deg, var(--lime) 0%, var(--teal) 100%);
+    border-radius:16px;
+    padding:14px 16px 16px;
+    margin-bottom:10px;
+    box-shadow:0 6px 18px rgba(126,156,131,.3);
   }
-  .lcd-main .lcd-value{font-family:var(--font-mono);font-size:clamp(2rem,9vw,2.6rem);color:var(--lime);text-shadow:0 0 14px var(--lime-glow);letter-spacing:1px;line-height:1;}
-  .lcd-main .lcd-unit{font-size:0.72rem;color:var(--text-dim);margin-top:2px;}
-  .lcd-side{text-align:right;}
-  .lcd-delta{font-size:0.85rem;font-weight:800;padding:3px 8px;border-radius:999px;display:inline-block;}
-  .lcd-delta.down{color:var(--ok);background:var(--ok-tint);}
-  .lcd-delta.up{color:var(--danger);background:var(--danger-tint);}
-  .lcd-delta.same{color:var(--text-dim);background:var(--panel2);}
-  .lcd-when{font-size:0.65rem;color:var(--text-dim);margin-top:4px;}
-  .lcd-streak{font-size:0.68rem;color:var(--amber);margin-top:3px;font-weight:700;}
+  .hero-label{font-size:0.72rem;color:rgba(255,255,255,.9);text-transform:uppercase;letter-spacing:.05em;font-weight:800;margin-bottom:8px;}
+  .hero-input-row{display:flex;align-items:baseline;gap:8px;margin-bottom:9px;}
+  .hero-input-row input#novoPeso{
+    background:rgba(255,255,255,.95);border:none;border-radius:10px;
+    font-family:var(--font-mono);font-size:2.1rem;font-weight:700;color:var(--text);
+    padding:6px 12px;width:165px;text-align:right;
+  }
+  .hero-input-row input#novoPeso:focus{outline:2px solid rgba(255,255,255,.8);}
+  .hero-unit{font-size:1.15rem;font-weight:800;color:#fff;}
+  .hero-nota{background:rgba(255,255,255,.5);border:none;color:var(--text);margin-bottom:10px;}
+  .hero-nota::placeholder{color:rgba(62,58,50,.6);}
+  .hero-btn{width:100%;background:#fff;color:#3E5B43;font-weight:800;font-size:1.02rem;padding:14px;border-radius:11px;min-height:52px;}
+  .hero-btn:active{transform:scale(0.98);}
+
+  #statusStrip{display:flex;align-items:center;gap:6px;flex-wrap:wrap;padding:1px 2px 9px;}
+  .cur-weight{font-size:0.85rem;color:var(--text);}
+  .cur-weight b{font-family:var(--font-mono);font-size:1.05rem;margin-right:3px;}
+  .cur-weight small{color:var(--text-dim);font-size:0.72rem;}
+  .mini-badge{font-size:0.72rem;font-weight:800;padding:2px 8px;border-radius:999px;}
+  .mini-badge.same{color:var(--text-dim);background:var(--panel2);}
+  .mini-badge.down{color:var(--ok);background:var(--ok-tint);}
+  .mini-badge.up{color:var(--danger);background:var(--danger-tint);}
+  .mini-badge.streak{color:var(--amber);background:var(--amber-tint);}
+  .mini-badge.record{color:#3E5B43;background:var(--ok-tint);}
+  .mini-badge:empty{display:none;}
 
   .stat-strip-2 .stat-chip{padding:9px 10px;}
   .stat-strip-2 .stat-chip .val{font-size:1.15rem;}
   .stat-strip-2 .stat-chip .val-sub{font-size:0.62rem;color:var(--text-dim);font-weight:600;margin-top:1px;}
-
-  .quickadd{display:flex;gap:6px;margin-bottom:10px;}
-  .quickadd input#novoPeso{width:70px;flex:0 0 70px;text-align:center;}
-  .quickadd input#novaNota{flex:1;min-width:0;}
-  .quickadd .btn-lime{flex:0 0 auto;padding:9px 16px;min-height:auto;font-size:1.1rem;line-height:1;}
 
   .stat-strip{display:flex;gap:6px;margin-bottom:10px;}
   .stat-chip{flex:1;background:var(--panel);border:1px solid var(--line);border-radius:11px;padding:8px 9px;min-width:0;}
@@ -144,10 +158,21 @@
   .stat-chip .val.gain{color:var(--danger);}
 
   .progress-block{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:10px 14px;margin-bottom:10px;}
-  .progress-head{display:flex;justify-content:space-between;font-size:0.7rem;color:var(--text-dim);text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px;}
-  .progress-head span:last-child{color:var(--lime);font-weight:800;}
-  .progress-track{background:var(--panel2);border-radius:999px;height:10px;overflow:hidden;border:1px solid var(--line);}
-  .progress-fill{background:linear-gradient(90deg,var(--teal),var(--lime));height:100%;width:0%;transition:width .3s ease;}
+  .progress-head{display:flex;justify-content:space-between;font-size:0.7rem;color:var(--text-dim);text-transform:uppercase;letter-spacing:.04em;margin-bottom:7px;}
+  .progress-head span:last-child{color:var(--text);font-weight:800;font-size:0.85rem;}
+  .progress-track{background:var(--panel2);border-radius:999px;height:15px;overflow:hidden;border:1px solid var(--line);}
+  .progress-fill{
+    height:100%;width:0%;border-radius:999px;
+    background:linear-gradient(90deg,#C97B62,var(--amber),var(--teal),var(--lime));
+    background-size:300% 100%;
+    transition:width .6s cubic-bezier(.4,0,.2,1);
+    animation:progressFlow 6s ease infinite;
+  }
+  @keyframes progressFlow{
+    0%{background-position:0% 50%;}
+    50%{background-position:100% 50%;}
+    100%{background-position:0% 50%;}
+  }
   .progress-foot{display:flex;justify-content:space-between;font-size:0.68rem;color:var(--text-dim);margin-top:5px;}
 
   .chip-row{display:flex;gap:8px;}
@@ -251,23 +276,22 @@
 
     <!-- ===== RESUMO ===== -->
     <section id="tabResumo" class="tabPanel">
-      <div class="lcd-panel">
-        <div class="lcd-main">
-          <div class="lcd-value" id="lcdPeso">—</div>
-          <div class="lcd-unit">peso atual (kg)</div>
+
+      <div class="hero-add">
+        <div class="hero-label">Registar peso de hoje</div>
+        <div class="hero-input-row">
+          <input type="number" step="0.1" id="novoPeso" placeholder="0.0" inputmode="decimal">
+          <span class="hero-unit">kg</span>
         </div>
-        <div class="lcd-side">
-          <span class="lcd-delta same" id="lcdDelta">—</span>
-          <div class="lcd-when" id="lcdWhen"></div>
-          <div class="lcd-streak" id="lcdStreak"></div>
-          <div class="lcd-record" id="lcdRecord"></div>
-        </div>
+        <input type="text" id="novaNota" class="hero-nota" placeholder="nota (opcional)">
+        <button id="btnRegistar" class="hero-btn">Registar peso</button>
       </div>
 
-      <div class="quickadd">
-        <input type="number" step="0.1" id="novoPeso" placeholder="kg">
-        <input type="text" id="novaNota" placeholder="nota (opcional)">
-        <button id="btnRegistar" class="btn-lime">＋</button>
+      <div id="statusStrip">
+        <span class="cur-weight"><b id="lcdPeso">—</b><small>kg atual</small></span>
+        <span class="mini-badge same" id="lcdDelta">—</span>
+        <span class="mini-badge streak" id="lcdStreak"></span>
+        <span class="mini-badge record" id="lcdRecord"></span>
       </div>
 
       <div class="stat-strip stat-strip-2" id="statStrip"></div>
@@ -367,7 +391,7 @@
 /* ============================================================
    CONFIGURAÇÃO
    ============================================================ */
-const APP_VERSION = 'Beta 12';
+const APP_VERSION = 'Beta 13';
 const CLIENT_ID = '108256538530-fgunbb52s7f3s9aurfpjtaf01v8fjbph.apps.googleusercontent.com';
 const SPREADSHEET_ID = '1UzEXtl7w6jMsk-c7Pkt3kq97AXL6XIiwTrjOYUaYFLs';
 const SHEET_REGISTOS = 'Registos';
@@ -768,33 +792,34 @@ function renderLcd(){
   if (registos.length === 0){
     document.getElementById('lcdPeso').textContent = '—';
     document.getElementById('lcdDelta').textContent = '—';
-    document.getElementById('lcdWhen').textContent = 'sem registos';
     document.getElementById('lcdStreak').textContent = '';
+    document.getElementById('lcdRecord').textContent = '';
     return;
   }
   const ultimo = registos[registos.length - 1];
   const anterior = registos.length > 1 ? registos[registos.length - 2] : null;
   document.getElementById('lcdPeso').textContent = ultimo.peso.toFixed(1);
-  document.getElementById('lcdWhen').textContent = fmtData(ultimo.date);
   const deltaEl = document.getElementById('lcdDelta');
   if (anterior){
     const diff = ultimo.peso - anterior.peso;
-    if (diff > 0.001){ deltaEl.textContent = '▲ ' + diff.toFixed(1); deltaEl.className = 'lcd-delta up'; }
-    else if (diff < -0.001){ deltaEl.textContent = '▼ ' + Math.abs(diff).toFixed(1); deltaEl.className = 'lcd-delta down'; }
-    else { deltaEl.textContent = '='; deltaEl.className = 'lcd-delta same'; }
+    if (diff > 0.001){ deltaEl.textContent = '▲ ' + diff.toFixed(1); deltaEl.className = 'mini-badge up'; }
+    else if (diff < -0.001){ deltaEl.textContent = '▼ ' + Math.abs(diff).toFixed(1); deltaEl.className = 'mini-badge down'; }
+    else { deltaEl.textContent = '='; deltaEl.className = 'mini-badge same'; }
   } else {
-    deltaEl.textContent = 'início'; deltaEl.className = 'lcd-delta same';
+    deltaEl.textContent = 'início'; deltaEl.className = 'mini-badge same';
   }
   const streak = calcStreak();
-  document.getElementById('lcdStreak').textContent = streak >= 2 ? `🔥 ${streak} dias seguidos` : '';
+  document.getElementById('lcdStreak').textContent = streak >= 2 ? `🔥 ${streak} dias` : '';
+  document.getElementById('lcdStreak').className = 'mini-badge streak';
 
   const recordEl = document.getElementById('lcdRecord');
   if (registos.length > 1){
     const minGlobal = Math.min(...registos.map(r => r.peso));
-    recordEl.textContent = ultimo.peso <= minGlobal + 0.001 ? '🏆 Novo mínimo!' : '';
+    recordEl.textContent = ultimo.peso <= minGlobal + 0.001 ? '🏆 mínimo' : '';
   } else {
     recordEl.textContent = '';
   }
+  recordEl.className = 'mini-badge record';
 }
 
 // dias consecutivos (calendário) com pelo menos um registo, a contar do registo mais recente
@@ -1037,6 +1062,18 @@ function renderChart(){
   const mediasFiltradas = mediasCompletas.filter(m => datasFiltradas.has(m.date.getTime())).map(m => m.media);
 
   if (weightChart) weightChart.destroy();
+
+  const canvasCtx = ctx.getContext('2d');
+  const alturaCanvas = ctx.clientHeight || 280;
+  const gradienteArea = canvasCtx.createLinearGradient(0, 0, 0, alturaCanvas);
+  gradienteArea.addColorStop(0, 'rgba(126,156,131,0.45)');
+  gradienteArea.addColorStop(0.6, 'rgba(126,156,131,0.12)');
+  gradienteArea.addColorStop(1, 'rgba(126,156,131,0.0)');
+
+  const gradienteLinha = canvasCtx.createLinearGradient(0, 0, ctx.clientWidth || 300, 0);
+  gradienteLinha.addColorStop(0, '#B4703F');
+  gradienteLinha.addColorStop(1, '#7E9C83');
+
   weightChart = new Chart(ctx, {
     type: 'line',
     data: {
@@ -1045,8 +1082,9 @@ function renderChart(){
         {
           label: 'Peso (kg)',
           data: dados,
-          borderColor: '#7E9C83',
-          backgroundColor: 'rgba(126,156,131,0.12)',
+          borderColor: gradienteLinha,
+          backgroundColor: gradienteArea,
+          borderWidth: 2.5,
           tension: 0.25,
           pointRadius: 2,
           pointBackgroundColor: '#7E9C83',
@@ -1070,6 +1108,7 @@ function renderChart(){
     options: {
       responsive: true,
       maintainAspectRatio: false,
+      animation: { duration: 700, easing: 'easeOutQuart' },
       plugins: { legend: { display: false } },
       scales: {
         x: { ticks: { maxTicksLimit: 6, font: { size: 9 }, color: '#948A78' }, grid: { color: '#E5D8C2' } },
