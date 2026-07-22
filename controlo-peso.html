@@ -3,263 +3,294 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover">
-<title>Controlo de Peso</title>
-<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%231f8fbf'/%3E%3Ctext x='32' y='42' font-size='30' text-anchor='middle' fill='white' font-family='Arial'%3E⚖%3C/text%3E%3C/svg%3E">
-<link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%231f8fbf'/%3E%3Ctext x='32' y='42' font-size='30' text-anchor='middle' fill='white' font-family='Arial'%3E⚖%3C/text%3E%3C/svg%3E">
-<link rel="manifest" href="data:application/json;base64,ewogICJuYW1lIjogIkNvbnRyb2xvIGRlIFBlc28iLAogICJzaG9ydF9uYW1lIjogIlBlc28iLAogICJzdGFydF91cmwiOiAiY29udHJvbG8tcGVzby5odG1sIiwKICAic2NvcGUiOiAiLiIsCiAgImRpc3BsYXkiOiAic3RhbmRhbG9uZSIsCiAgImJhY2tncm91bmRfY29sb3IiOiAiI2Y2ZjRlZiIsCiAgInRoZW1lX2NvbG9yIjogIiMxZjhmYmYiLAogICJpY29ucyI6IFsKICAgIHsKICAgICAgInNyYyI6ICJwZXNvaWNvbjE5Mi5wbmciLAogICAgICAic2l6ZXMiOiAiMTkyeDE5MiIsCiAgICAgICJ0eXBlIjogImltYWdlL3BuZyIKICAgIH0sCiAgICB7CiAgICAgICJzcmMiOiAicGVzb2ljb241MTIucG5nIiwKICAgICAgInNpemVzIjogIjUxMng1MTIiLAogICAgICAidHlwZSI6ICJpbWFnZS9wbmciCiAgICB9CiAgXQp9">
-<meta name="theme-color" content="#1f8fbf">
+<title>Peso — Controlo diário</title>
+<link rel="icon" type="image/png" href="pesoicon192.png">
+<link rel="apple-touch-icon" href="pesoicon192.png">
+<link rel="manifest" href="data:application/json;base64,ewogICJuYW1lIjogIkNvbnRyb2xvIGRlIFBlc28iLAogICJzaG9ydF9uYW1lIjogIlBlc28iLAogICJzdGFydF91cmwiOiAiY29udHJvbG8tcGVzby5odG1sIiwKICAic2NvcGUiOiAiLiIsCiAgImRpc3BsYXkiOiAic3RhbmRhbG9uZSIsCiAgImJhY2tncm91bmRfY29sb3IiOiAiIzE0MTgxYyIsCiAgInRoZW1lX2NvbG9yIjogIiMxNDE4MWMiLAogICJpY29ucyI6IFsKICAgIHsKICAgICAgInNyYyI6ICJwZXNvaWNvbjE5Mi5wbmciLAogICAgICAic2l6ZXMiOiAiMTkyeDE5MiIsCiAgICAgICJ0eXBlIjogImltYWdlL3BuZyIKICAgIH0sCiAgICB7CiAgICAgICJzcmMiOiAicGVzb2ljb241MTIucG5nIiwKICAgICAgInNpemVzIjogIjUxMng1MTIiLAogICAgICAidHlwZSI6ICJpbWFnZS9wbmciCiAgICB9CiAgXQp9">
+<meta name="theme-color" content="#14181c">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Peso">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
   :root{
-    --ink:#1c2430;
-    --paper:#f6f4ef;
-    --line:#dcd7cc;
-    --brand:#1f8fbf;
-    --brand-light:#3ab8e6;
-    --brand-tint:#e2f4fb;
-    --ok:#2f8a52;
-    --ok-tint:#dcefdd;
-    --bad:#c94b3f;
-    --bad-tint:#fbdedb;
-    --warn:#c98a1f;
-    --warn-tint:#fdf6e6;
+    --bg:#14181c;
+    --panel:#1c2126;
+    --panel2:#232a31;
+    --line:#323a42;
+    --text:#eef1f0;
+    --text-dim:#8b949c;
+    --lime:#baff29;
+    --lime-ink:#122006;
+    --lime-glow:rgba(186,255,41,.25);
+    --teal:#2dd4bf;
+    --amber:#f5b942;
+    --amber-tint:rgba(245,185,66,.14);
+    --danger:#ff6b6b;
+    --danger-tint:rgba(255,107,107,.14);
+    --ok:#6fdc8c;
+    --ok-tint:rgba(111,220,140,.14);
+    --font-mono:'Share Tech Mono', monospace;
+    --font-sans:'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
   }
   *{box-sizing:border-box;}
-  html{background:var(--paper);}
+  html,body{height:100%;}
   body{
     margin:0 auto;
     max-width:480px;
-    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
-    background:var(--paper);
-    color:var(--ink);
-    padding-bottom:calc(60px + env(safe-area-inset-bottom));
+    height:100vh;
+    height:100dvh;
+    display:flex;
+    flex-direction:column;
+    overflow:hidden;
+    font-family:var(--font-sans);
+    background:var(--bg);
+    color:var(--text);
   }
+
   header{
-    padding:calc(18px + env(safe-area-inset-top)) 18px 14px;
-    border-bottom:2px solid var(--brand-light);
-    position:sticky;
-    top:0;
-    background:var(--paper);
-    z-index:5;
+    flex:0 0 auto;
+    padding:calc(10px + env(safe-area-inset-top)) 16px 8px;
+    display:flex;
+    align-items:baseline;
+    justify-content:space-between;
+    border-bottom:1px solid var(--line);
   }
-  h1{font-size:1.5rem;font-weight:800;color:var(--brand);margin:0;letter-spacing:-0.01em;}
-  .sub{font-size:0.82rem;color:#6b6558;}
-  #authArea{padding:40px 18px;text-align:center;display:flex;flex-direction:column;align-items:center;gap:10px;}
-  button{font-family:inherit;border:none;border-radius:10px;padding:11px 18px;font-size:0.95rem;font-weight:600;cursor:pointer;min-height:44px;}
-  .btn-primary{background:var(--brand);color:#fff;}
-  .btn-secondary{background:transparent;color:var(--ink);border:1px solid var(--line);}
-  .btn-danger{background:var(--bad);color:#fff;}
-  .btn-primary:disabled{opacity:0.5;cursor:default;}
+  header .brand{font-size:1.05rem;font-weight:800;letter-spacing:-0.01em;display:flex;align-items:center;gap:6px;}
+  header .brand .ico{color:var(--lime);}
+  header .sub{font-size:0.68rem;color:var(--text-dim);text-transform:uppercase;letter-spacing:.06em;}
+
+  #authArea{flex:1;padding:24px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;text-align:center;}
+  #authArea p{color:var(--text-dim);font-size:0.9rem;margin:0;}
+
+  button{font-family:inherit;border:none;border-radius:10px;cursor:pointer;font-weight:700;}
+  .btn-lime{background:var(--lime);color:var(--lime-ink);padding:11px 20px;font-size:0.95rem;min-height:44px;}
+  .btn-ghost{background:transparent;color:var(--text);border:1px solid var(--line);padding:10px 16px;font-size:0.88rem;min-height:40px;}
+  .btn-danger{background:var(--danger);color:#2a0a0a;padding:10px 16px;font-size:0.88rem;min-height:40px;}
+
   input,select{
-    font-family:inherit;border:1px solid var(--line);border-radius:8px;
-    padding:10px 12px;font-size:0.95rem;background:#fff;color:var(--ink);width:100%;
+    font-family:inherit;border:1px solid var(--line);border-radius:9px;
+    padding:9px 11px;font-size:0.92rem;background:var(--panel2);color:var(--text);width:100%;
   }
-  label{font-size:0.78rem;color:#6b6558;font-weight:600;display:block;margin-bottom:4px;}
-  .field{margin-bottom:12px;}
+  input::placeholder{color:var(--text-dim);}
+  label{font-size:0.68rem;color:var(--text-dim);font-weight:700;text-transform:uppercase;letter-spacing:.04em;display:block;margin-bottom:4px;}
 
-  #tabBar{display:flex;gap:6px;padding:14px 18px 0;}
-  .tabBtn{flex:1;background:#fff;border:1px solid var(--line);border-radius:10px;padding:9px 4px;font-weight:600;font-size:0.76rem;color:#6b6558;min-height:44px;}
-  .tabBtn.active{background:var(--brand);color:#fff;border-color:var(--brand);}
+  #app{flex:1;display:flex;flex-direction:column;min-height:0;}
+
+  #tabBar{flex:0 0 auto;display:flex;gap:6px;padding:8px 12px;}
+  .tabBtn{flex:1;background:var(--panel);border:1px solid var(--line);color:var(--text-dim);border-radius:9px;padding:8px 2px;font-size:0.72rem;font-weight:700;min-height:38px;}
+  .tabBtn.active{background:var(--panel2);color:var(--lime);border-color:var(--lime);}
+
+  #statusBar{flex:0 0 auto;font-size:0.74rem;color:var(--danger);padding:0 16px;min-height:0;}
+  #statusBar.hasmsg{padding-bottom:4px;}
+
+  #tabContent{flex:1;min-height:0;}
+  .tabPanel{height:100%;overflow-y:auto;padding:6px 14px 14px;}
+  .tabPanel.flex-col{display:flex;flex-direction:column;overflow:hidden;padding:6px 14px 10px;}
   .hidden{display:none !important;}
-  .tabPanel{padding:14px 18px 24px;}
 
-  .card{background:#fff;border:1px solid var(--line);border-radius:12px;padding:14px 16px;margin-bottom:12px;}
-  .card h3{margin:0 0 10px;font-size:0.95rem;color:var(--ink);}
+  /* ---------- Resumo ---------- */
+  .lcd-panel{
+    background:var(--panel);border:1px solid var(--line);border-radius:14px;
+    padding:12px 16px;display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;
+  }
+  .lcd-main .lcd-value{font-family:var(--font-mono);font-size:clamp(2rem,9vw,2.6rem);color:var(--lime);text-shadow:0 0 14px var(--lime-glow);letter-spacing:1px;line-height:1;}
+  .lcd-main .lcd-unit{font-size:0.72rem;color:var(--text-dim);margin-top:2px;}
+  .lcd-side{text-align:right;}
+  .lcd-delta{font-size:0.85rem;font-weight:800;padding:3px 8px;border-radius:999px;display:inline-block;}
+  .lcd-delta.down{color:var(--ok);background:var(--ok-tint);}
+  .lcd-delta.up{color:var(--danger);background:var(--danger-tint);}
+  .lcd-delta.same{color:var(--text-dim);background:var(--panel2);}
+  .lcd-when{font-size:0.65rem;color:var(--text-dim);margin-top:4px;}
 
-  #statsGrid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:12px;}
-  .stat{background:#fff;border:1px solid var(--line);border-left:4px solid var(--brand);border-radius:10px;padding:12px 14px;}
-  .stat .label{font-size:0.7rem;color:#6b6558;text-transform:uppercase;letter-spacing:.04em;}
-  .stat .value{font-size:1.3rem;font-weight:700;margin-top:2px;}
-  .stat .sub2{font-size:0.7rem;color:#a29c8c;margin-top:2px;}
-  .stat.loss{border-left-color:var(--ok);}
-  .stat.loss .value{color:var(--ok);}
-  .stat.gain{border-left-color:var(--bad);}
-  .stat.gain .value{color:var(--bad);}
+  .quickadd{display:flex;gap:6px;margin-bottom:10px;}
+  .quickadd input#novoPeso{width:70px;flex:0 0 70px;text-align:center;}
+  .quickadd input#novaNota{flex:1;min-width:0;}
+  .quickadd .btn-lime{flex:0 0 auto;padding:9px 16px;min-height:auto;font-size:1.1rem;line-height:1;}
 
-  #progressWrap{margin:6px 0 4px;}
-  #progressBarBg{background:#eee7d8;border-radius:999px;height:16px;overflow:hidden;border:1px solid var(--line);}
-  #progressBarFill{background:linear-gradient(90deg,var(--brand),var(--ok));height:100%;width:0%;transition:width .3s ease;}
-  #progressLabels{display:flex;justify-content:space-between;font-size:0.72rem;color:#6b6558;margin-top:4px;}
+  .stat-strip{display:flex;gap:6px;margin-bottom:10px;}
+  .stat-chip{flex:1;background:var(--panel);border:1px solid var(--line);border-radius:11px;padding:8px 9px;min-width:0;}
+  .stat-chip .lbl{font-size:0.6rem;color:var(--text-dim);text-transform:uppercase;letter-spacing:.03em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .stat-chip .val{font-family:var(--font-mono);font-size:1.05rem;font-weight:700;margin-top:1px;}
+  .stat-chip .val.loss{color:var(--ok);}
+  .stat-chip .val.gain{color:var(--danger);}
 
-  .imcBadge{display:inline-block;padding:3px 10px;border-radius:999px;font-size:0.78rem;font-weight:700;}
+  .progress-block{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:10px 14px;margin-bottom:10px;}
+  .progress-head{display:flex;justify-content:space-between;font-size:0.7rem;color:var(--text-dim);text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px;}
+  .progress-head span:last-child{color:var(--lime);font-weight:800;}
+  .progress-track{background:var(--panel2);border-radius:999px;height:10px;overflow:hidden;border:1px solid var(--line);}
+  .progress-fill{background:linear-gradient(90deg,var(--teal),var(--lime));height:100%;width:0%;transition:width .3s ease;}
+  .progress-foot{display:flex;justify-content:space-between;font-size:0.68rem;color:var(--text-dim);margin-top:5px;}
 
-  #periodBar{display:flex;gap:6px;margin-bottom:12px;}
-  .periodBtn{flex:1;background:#fff;border:1px solid var(--line);border-radius:8px;padding:8px 4px;font-size:0.76rem;font-weight:600;color:#6b6558;min-height:36px;}
-  .periodBtn.active{background:var(--brand);color:#fff;border-color:var(--brand);}
-  #chartWrap{background:#fff;border:1px solid var(--line);border-radius:12px;padding:10px;}
+  .chip-row{display:flex;gap:8px;}
+  .chip{flex:1;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:10px 12px;min-width:0;}
+  .chip-label{font-size:0.65rem;color:var(--text-dim);text-transform:uppercase;letter-spacing:.04em;}
+  .chip-value{font-family:var(--font-mono);font-size:1.3rem;font-weight:700;margin-top:2px;}
+  .chip-sub{font-size:0.66rem;color:var(--text-dim);margin-top:2px;}
+  .imc-badge{display:inline-block;padding:2px 8px;border-radius:999px;font-size:0.68rem;font-weight:800;margin-top:2px;}
 
-  .regRow{display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--line);}
+  /* ---------- Gráfico ---------- */
+  #periodBar{flex:0 0 auto;display:flex;gap:5px;margin-bottom:8px;}
+  .periodBtn{flex:1;background:var(--panel);border:1px solid var(--line);color:var(--text-dim);border-radius:8px;padding:7px 2px;font-size:0.68rem;font-weight:700;min-height:32px;}
+  .periodBtn.active{background:var(--panel2);color:var(--teal);border-color:var(--teal);}
+  .chart-wrap{flex:1;min-height:0;position:relative;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:10px;}
+  .chart-wrap canvas{width:100% !important;height:100% !important;}
+
+  /* ---------- Registos ---------- */
+  .reg-list{flex:1;min-height:0;overflow-y:auto;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:2px 12px;}
+  .regRow{display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--line);position:relative;}
   .regRow:last-child{border-bottom:none;}
-  .regDate{flex:1;}
-  .regDate .d1{font-weight:600;font-size:0.9rem;}
-  .regDate .d2{font-size:0.72rem;color:#a29c8c;}
-  .regPeso{font-weight:700;font-size:1rem;min-width:64px;text-align:right;}
-  .regDelta{font-size:0.75rem;font-weight:700;min-width:52px;text-align:right;}
-  .regDelta.up{color:var(--bad);}
+  .regRow.monday{background:var(--amber-tint);margin:0 -12px;padding:8px 12px;border-left:3px solid var(--amber);border-bottom:1px solid transparent;}
+  .regDate{flex:1;min-width:0;}
+  .regDate .d1{font-weight:700;font-size:0.86rem;display:flex;align-items:center;gap:6px;}
+  .seg-tag{font-size:0.58rem;font-weight:800;color:var(--amber);background:rgba(245,185,66,.18);padding:1px 5px;border-radius:5px;letter-spacing:.03em;}
+  .regDate .d2{font-size:0.68rem;color:var(--text-dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .regPeso{font-family:var(--font-mono);font-weight:700;font-size:0.95rem;min-width:58px;text-align:right;}
+  .regDelta{font-size:0.68rem;font-weight:800;min-width:46px;text-align:right;}
+  .regDelta.up{color:var(--danger);}
   .regDelta.down{color:var(--ok);}
-  .regDelta.same{color:#a29c8c;}
-  .regActions{display:flex;gap:6px;}
-  .iconBtn{background:none;border:none;padding:6px;min-height:auto;cursor:pointer;color:#6b6558;}
-  .iconBtn:hover{color:var(--brand);}
+  .regDelta.same{color:var(--text-dim);}
+  .regActions{display:flex;gap:2px;}
+  .iconBtn{background:none;border:none;padding:5px;min-height:auto;font-size:0.95rem;cursor:pointer;color:var(--text-dim);}
+  .iconBtn:hover{color:var(--lime);}
 
-  #modalOverlay{position:fixed;inset:0;background:rgba(0,0,0,.4);display:flex;align-items:flex-end;z-index:20;}
+  /* ---------- Config ---------- */
+  .cfg-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px 10px;margin-bottom:12px;}
+  .cfg-grid .field.full{grid-column:1/-1;}
+
+  /* ---------- Modal ---------- */
+  #modalOverlay{position:fixed;inset:0;background:rgba(0,0,0,.55);display:flex;align-items:flex-end;z-index:20;}
   #modalOverlay.hidden{display:none;}
-  #modalBox{background:#fff;border-radius:16px 16px 0 0;padding:20px 18px calc(20px + env(safe-area-inset-bottom));width:100%;max-width:480px;margin:0 auto;}
-  #modalBox h3{margin-top:0;}
-  #modalBtns{display:flex;gap:10px;margin-top:14px;}
+  #modalBox{background:var(--panel);border:1px solid var(--line);border-radius:16px 16px 0 0;padding:18px 16px calc(18px + env(safe-area-inset-bottom));width:100%;max-width:480px;margin:0 auto;}
+  #modalBox h3{margin:0 0 12px;font-size:1rem;color:var(--text);}
+  #modalBox .field{margin-bottom:10px;}
+  #modalBtns{display:flex;gap:8px;margin-top:12px;}
   #modalBtns button{flex:1;}
 
   footer{
-    position:fixed;bottom:0;left:0;right:0;
-    max-width:480px;margin:0 auto;
-    background:var(--paper);border-top:1px solid var(--line);
-    padding:8px 18px calc(8px + env(safe-area-inset-bottom));
-    text-align:center;font-size:0.72rem;color:#a29c8c;
+    flex:0 0 auto;
+    padding:5px 16px calc(5px + env(safe-area-inset-bottom));
+    text-align:center;font-size:0.64rem;color:var(--text-dim);
+    border-top:1px solid var(--line);
   }
-  #status{font-size:0.8rem;padding:0 18px;color:var(--bad);min-height:1.2em;}
 </style>
 </head>
 <body>
 
 <header>
-  <h1>Controlo de Peso</h1>
-  <div class="sub" id="headerSub">Regista, acompanha, atinge o objetivo.</div>
+  <div class="brand"><span class="ico">⚖</span> Peso</div>
+  <div class="sub" id="headerSub">controlo diário</div>
 </header>
 
 <div id="authArea">
   <p>Inicia sessão para aceder aos teus registos.</p>
-  <button id="signinBtn" class="btn-primary">Iniciar sessão com Google</button>
+  <button id="signinBtn" class="btn-lime">Iniciar sessão com Google</button>
 </div>
 
 <div id="app" class="hidden">
-  <div id="status"></div>
-
   <div id="tabBar">
     <button class="tabBtn active" id="tabBtnResumo">Resumo</button>
     <button class="tabBtn" id="tabBtnGrafico">Gráfico</button>
     <button class="tabBtn" id="tabBtnRegistos">Registos</button>
     <button class="tabBtn" id="tabBtnConfig">Config</button>
   </div>
+  <div id="statusBar"></div>
 
-  <!-- ===== TAB RESUMO ===== -->
-  <div id="tabResumo" class="tabPanel">
+  <div id="tabContent">
 
-    <div class="card">
-      <h3>Novo registo</h3>
-      <div class="field">
-        <label>Peso (kg)</label>
-        <input type="number" step="0.1" id="novoPeso" placeholder="ex: 109.8">
-      </div>
-      <div class="field">
-        <label>Nota (opcional)</label>
-        <input type="text" id="novaNota" placeholder="ex: jejum, pós-treino...">
-      </div>
-      <button class="btn-primary" id="btnRegistar" style="width:100%;">Registar peso de hoje</button>
-    </div>
-
-    <div id="statsGrid"></div>
-
-    <div class="card" id="progressCard">
-      <h3>Progresso até ao objetivo</h3>
-      <div id="progressWrap">
-        <div id="progressBarBg"><div id="progressBarFill"></div></div>
-        <div id="progressLabels">
-          <span id="progLeft"></span>
-          <span id="progPct"></span>
-          <span id="progRight"></span>
+    <!-- ===== RESUMO ===== -->
+    <section id="tabResumo" class="tabPanel">
+      <div class="lcd-panel">
+        <div class="lcd-main">
+          <div class="lcd-value" id="lcdPeso">—</div>
+          <div class="lcd-unit">peso atual (kg)</div>
+        </div>
+        <div class="lcd-side">
+          <span class="lcd-delta same" id="lcdDelta">—</span>
+          <div class="lcd-when" id="lcdWhen"></div>
         </div>
       </div>
-    </div>
 
-    <div class="card" id="imcCard">
-      <h3>IMC</h3>
-      <div id="imcValue" style="font-size:1.6rem;font-weight:800;"></div>
-      <div id="imcClasse"></div>
-    </div>
+      <div class="quickadd">
+        <input type="number" step="0.1" id="novoPeso" placeholder="kg">
+        <input type="text" id="novaNota" placeholder="nota (opcional)">
+        <button id="btnRegistar" class="btn-lime">＋</button>
+      </div>
 
-    <div class="card" id="kcalCard">
-      <h3>Estimativa de gasto calórico diário</h3>
-      <div id="kcalValue" style="font-size:1.6rem;font-weight:800;"></div>
-      <div class="sub2" style="font-size:0.78rem;color:#6b6558;">TMB (Mifflin-St Jeor) × nível de atividade</div>
-    </div>
+      <div class="stat-strip" id="statStrip"></div>
+
+      <div class="progress-block" id="progressCard">
+        <div class="progress-head"><span>Objetivo</span><span id="progPctLabel">—</span></div>
+        <div class="progress-track"><div class="progress-fill" id="progressFill"></div></div>
+        <div class="progress-foot"><span id="progLeft"></span><span id="progRight"></span></div>
+      </div>
+
+      <div class="chip-row">
+        <div class="chip">
+          <div class="chip-label">IMC</div>
+          <div class="chip-value" id="imcValue">—</div>
+          <div id="imcClasse"></div>
+        </div>
+        <div class="chip">
+          <div class="chip-label">Gasto diário</div>
+          <div class="chip-value" id="kcalValue">—</div>
+          <div class="chip-sub">TDEE estimado</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== GRÁFICO ===== -->
+    <section id="tabGrafico" class="tabPanel flex-col hidden">
+      <div id="periodBar">
+        <button class="periodBtn active" data-period="all">Sempre</button>
+        <button class="periodBtn" data-period="year">Ano</button>
+        <button class="periodBtn" data-period="month">Mês</button>
+        <button class="periodBtn" data-period="week">Semana</button>
+      </div>
+      <div class="chart-wrap"><canvas id="weightChart"></canvas></div>
+    </section>
+
+    <!-- ===== REGISTOS ===== -->
+    <section id="tabRegistos" class="tabPanel flex-col hidden">
+      <div class="reg-list" id="registosList"></div>
+    </section>
+
+    <!-- ===== CONFIG ===== -->
+    <section id="tabConfig" class="tabPanel hidden">
+      <div class="cfg-grid">
+        <div class="field"><label>Altura (cm)</label><input type="number" id="cfgAltura" placeholder="178"></div>
+        <div class="field"><label>Peso alvo (kg)</label><input type="number" step="0.1" id="cfgPesoAlvo" placeholder="90"></div>
+        <div class="field"><label>Nascimento</label><input type="date" id="cfgNascimento"></div>
+        <div class="field"><label>Sexo</label>
+          <select id="cfgSexo"><option value="">—</option><option value="M">M</option><option value="F">F</option></select>
+        </div>
+        <div class="field full"><label>Nível de atividade</label>
+          <select id="cfgAtividade">
+            <option value="1.2">Sedentário</option>
+            <option value="1.375">Leve (1-3x/sem)</option>
+            <option value="1.55">Moderado (3-5x/sem)</option>
+            <option value="1.725">Intenso (6-7x/sem)</option>
+          </select>
+        </div>
+      </div>
+      <button class="btn-lime" id="btnGuardarConfig" style="width:100%;">Guardar configuração</button>
+    </section>
 
   </div>
-
-  <!-- ===== TAB GRÁFICO ===== -->
-  <div id="tabGrafico" class="tabPanel hidden">
-    <div id="periodBar">
-      <button class="periodBtn active" data-period="all">Sempre</button>
-      <button class="periodBtn" data-period="year">Último ano</button>
-      <button class="periodBtn" data-period="month">Último mês</button>
-      <button class="periodBtn" data-period="week">Última semana</button>
-    </div>
-    <div id="chartWrap">
-      <canvas id="weightChart" height="260"></canvas>
-    </div>
-  </div>
-
-  <!-- ===== TAB REGISTOS ===== -->
-  <div id="tabRegistos" class="tabPanel hidden">
-    <div class="card" id="registosList" style="padding:6px 16px;"></div>
-  </div>
-
-  <!-- ===== TAB CONFIG ===== -->
-  <div id="tabConfig" class="tabPanel hidden">
-    <div class="card">
-      <h3>Dados pessoais</h3>
-      <div class="field">
-        <label>Altura (cm)</label>
-        <input type="number" id="cfgAltura" placeholder="ex: 178">
-      </div>
-      <div class="field">
-        <label>Data de nascimento</label>
-        <input type="date" id="cfgNascimento">
-      </div>
-      <div class="field">
-        <label>Sexo</label>
-        <select id="cfgSexo">
-          <option value="">—</option>
-          <option value="M">Masculino</option>
-          <option value="F">Feminino</option>
-        </select>
-      </div>
-      <div class="field">
-        <label>Peso alvo (kg)</label>
-        <input type="number" step="0.1" id="cfgPesoAlvo" placeholder="ex: 90">
-      </div>
-      <div class="field">
-        <label>Nível de atividade</label>
-        <select id="cfgAtividade">
-          <option value="1.2">Sedentário</option>
-          <option value="1.375">Leve (1-3x/semana)</option>
-          <option value="1.55">Moderado (3-5x/semana)</option>
-          <option value="1.725">Intenso (6-7x/semana)</option>
-        </select>
-      </div>
-      <button class="btn-primary" id="btnGuardarConfig" style="width:100%;">Guardar configuração</button>
-    </div>
-  </div>
-
 </div>
 
 <div id="modalOverlay" class="hidden">
   <div id="modalBox">
     <h3>Editar registo</h3>
-    <div class="field">
-      <label>Peso (kg)</label>
-      <input type="number" step="0.1" id="editPeso">
-    </div>
-    <div class="field">
-      <label>Nota</label>
-      <input type="text" id="editNota">
-    </div>
+    <div class="field"><label>Peso (kg)</label><input type="number" step="0.1" id="editPeso"></div>
+    <div class="field"><label>Nota</label><input type="text" id="editNota"></div>
     <div id="modalBtns">
       <button class="btn-danger" id="btnEliminar">Eliminar</button>
-      <button class="btn-secondary" id="btnCancelarEdit">Cancelar</button>
-      <button class="btn-primary" id="btnGuardarEdit">Guardar</button>
+      <button class="btn-ghost" id="btnCancelarEdit">Cancelar</button>
+      <button class="btn-lime" id="btnGuardarEdit">Guardar</button>
     </div>
   </div>
 </div>
@@ -270,7 +301,7 @@
 /* ============================================================
    CONFIGURAÇÃO
    ============================================================ */
-const APP_VERSION = 'Beta 2';
+const APP_VERSION = 'Beta 3';
 const CLIENT_ID = '108256538530-fgunbb52s7f3s9aurfpjtaf01v8fjbph.apps.googleusercontent.com';
 const SPREADSHEET_ID = '1UzEXtl7w6jMsk-c7Pkt3kq97AXL6XIiwTrjOYUaYFLs';
 const SHEET_REGISTOS = 'Registos';
@@ -288,14 +319,16 @@ let weightChart = null;
 let editingRow = null;
 
 function setStatus(msg, isErr=false){
-  const el = document.getElementById('status');
+  const el = document.getElementById('statusBar');
   el.textContent = msg;
-  el.style.color = isErr ? 'var(--bad)' : '#6b6558';
+  el.classList.toggle('hasmsg', !!msg);
+  el.style.color = isErr ? 'var(--danger)' : 'var(--text-dim)';
 }
 
 /* ---------- Auth ---------- */
 window.onload = () => {
   document.getElementById('footerVersion').textContent = APP_VERSION;
+
   tokenClient = google.accounts.oauth2.initTokenClient({
     client_id: CLIENT_ID,
     scope: SCOPES,
@@ -382,7 +415,6 @@ async function sheetsAppend(range, values){
 /* ---------- Date helpers (serial <-> Date) ---------- */
 function serialToDate(v){
   if (typeof v === 'number') {
-    // Google Sheets epoch: 1899-12-30
     return new Date(Date.UTC(1899, 11, 30) + Math.round(v * 86400000));
   }
   if (typeof v === 'string' && v.trim() !== '') {
@@ -390,6 +422,16 @@ function serialToDate(v){
     if (!isNaN(d.getTime())) return d;
   }
   return null;
+}
+
+/* ---------- Nível de atividade: aceita escala 1-4 ou multiplicador decimal ---------- */
+function normalizaAtividade(raw){
+  if (!raw || isNaN(raw)) return 1.2;
+  const escala = { 1: 1.2, 2: 1.375, 3: 1.55, 4: 1.725 };
+  if (Number.isInteger(raw) && escala[raw]) return escala[raw];
+  if (raw >= 1.2 && raw <= 1.725) return raw;
+  const validos = [1.2, 1.375, 1.55, 1.725];
+  return validos.reduce((a,b) => Math.abs(b-raw) < Math.abs(a-raw) ? b : a, 1.2);
 }
 
 /* ---------- Load Config ---------- */
@@ -414,24 +456,11 @@ async function loadConfig(){
   } catch(e){
     setStatus('Não foi possível ler a Config: ' + e.message, true);
   }
-  // Preencher formulário
   document.getElementById('cfgAltura').value = config.altura ?? '';
   document.getElementById('cfgNascimento').value = config.nascimento ? isoDateOnly(config.nascimento) : '';
   document.getElementById('cfgSexo').value = config.sexo || '';
   document.getElementById('cfgPesoAlvo').value = config.pesoAlvo ?? '';
   document.getElementById('cfgAtividade').value = config.atividade;
-}
-
-// Aceita tanto o multiplicador decimal (1.2/1.375/1.55/1.725, o que a app grava)
-// como uma escala simples 1-4 (caso alguém preencha a folha manualmente).
-function normalizaAtividade(raw){
-  if (!raw || isNaN(raw)) return 1.2;
-  const escala = { 1: 1.2, 2: 1.375, 3: 1.55, 4: 1.725 };
-  if (Number.isInteger(raw) && escala[raw]) return escala[raw];
-  if (raw >= 1.2 && raw <= 1.725) return raw;
-  // valor fora do esperado: aproxima ao multiplicador válido mais próximo
-  const validos = [1.2, 1.375, 1.55, 1.725];
-  return validos.reduce((a,b) => Math.abs(b-raw) < Math.abs(a-raw) ? b : a, 1.2);
 }
 
 function isoDateOnly(d){
@@ -525,10 +554,11 @@ async function onGuardarEdit(){
     setStatus('Erro ao atualizar: ' + e.message, true);
   }
 }
-async function eliminarRegistoDireto(reg){
-  if (!confirm(`Eliminar o registo de ${fmtDataCurta(reg.date)} (${reg.peso.toFixed(1)} kg)?`)) return;
+async function onEliminarRegisto(){
+  if (!confirm('Eliminar este registo?')) return;
   try{
-    await sheetsPut(`${SHEET_REGISTOS}!A${reg.row}:C${reg.row}`, [['','','']]);
+    await sheetsPut(`${SHEET_REGISTOS}!A${editingRow}:C${editingRow}`, [['','','']]);
+    closeModal();
     await loadRegistos();
     setStatus('Registo eliminado.');
     renderAll();
@@ -536,12 +566,10 @@ async function eliminarRegistoDireto(reg){
     setStatus('Erro ao eliminar: ' + e.message, true);
   }
 }
-
-async function onEliminarRegisto(){
-  if (!confirm('Eliminar este registo?')) return;
+async function eliminarRegistoDireto(reg){
+  if (!confirm(`Eliminar o registo de ${fmtDataCurta(reg.date)} (${reg.peso.toFixed(1)} kg)?`)) return;
   try{
-    await sheetsPut(`${SHEET_REGISTOS}!A${editingRow}:C${editingRow}`, [['','','']]);
-    closeModal();
+    await sheetsPut(`${SHEET_REGISTOS}!A${reg.row}:C${reg.row}`, [['','','']]);
     await loadRegistos();
     setStatus('Registo eliminado.');
     renderAll();
@@ -567,13 +595,13 @@ function calcIMC(peso, alturaCm){
 }
 
 function classificaIMC(imc){
-  if (imc === null) return { texto:'—', cor:'#6b6558', bg:'#eee' };
-  if (imc < 18.5) return { texto:'Abaixo do peso', cor:'#a8690f', bg:'var(--warn-tint)' };
+  if (imc === null) return { texto:'—', cor:'var(--text-dim)', bg:'transparent' };
+  if (imc < 18.5) return { texto:'Abaixo do peso', cor:'var(--amber)', bg:'var(--amber-tint)' };
   if (imc < 25)   return { texto:'Peso normal', cor:'var(--ok)', bg:'var(--ok-tint)' };
-  if (imc < 30)   return { texto:'Excesso de peso', cor:'#a8690f', bg:'var(--warn-tint)' };
-  if (imc < 35)   return { texto:'Obesidade grau I', cor:'var(--bad)', bg:'var(--bad-tint)' };
-  if (imc < 40)   return { texto:'Obesidade grau II', cor:'var(--bad)', bg:'var(--bad-tint)' };
-  return { texto:'Obesidade grau III', cor:'var(--bad)', bg:'var(--bad-tint)' };
+  if (imc < 30)   return { texto:'Excesso de peso', cor:'var(--amber)', bg:'var(--amber-tint)' };
+  if (imc < 35)   return { texto:'Obesidade grau I', cor:'var(--danger)', bg:'var(--danger-tint)' };
+  if (imc < 40)   return { texto:'Obesidade grau II', cor:'var(--danger)', bg:'var(--danger-tint)' };
+  return { texto:'Obesidade grau III', cor:'var(--danger)', bg:'var(--danger-tint)' };
 }
 
 function calcTMB(peso, alturaCm, idade, sexo){
@@ -582,7 +610,6 @@ function calcTMB(peso, alturaCm, idade, sexo){
   return sexo === 'M' ? base + 5 : base - 161;
 }
 
-// média de perda (kg/dia) entre a primeira e a última medição de um período
 function mediaPerdaPeriodo(dias){
   if (registos.length < 2) return null;
   const agora = registos[registos.length - 1].date;
@@ -593,13 +620,14 @@ function mediaPerdaPeriodo(dias){
   const ultimo = noPeriodo[noPeriodo.length - 1];
   const diasDecorridos = (ultimo.date - primeiro.date) / 86400000;
   if (diasDecorridos <= 0) return null;
-  return (primeiro.peso - ultimo.peso) / diasDecorridos; // positivo = a perder
+  return (primeiro.peso - ultimo.peso) / diasDecorridos;
 }
 
 /* ---------- Render ---------- */
 function renderAll(){
   prefillNovoPeso();
-  renderStats();
+  renderLcd();
+  renderStatsStrip();
   renderProgress();
   renderIMC();
   renderKcal();
@@ -609,43 +637,62 @@ function renderAll(){
 
 function prefillNovoPeso(){
   const campo = document.getElementById('novoPeso');
-  // só pré-preenche se o campo estiver vazio, para não sobrescrever o que a pessoa está a escrever
   if (campo && campo.value === '' && registos.length > 0){
     campo.value = registos[registos.length - 1].peso;
   }
 }
 
-function renderStats(){
-  const grid = document.getElementById('statsGrid');
-  grid.innerHTML = '';
+function renderLcd(){
   if (registos.length === 0){
-    grid.innerHTML = '<div class="card" style="grid-column:1/-1;">Sem registos ainda. Adiciona o primeiro peso acima.</div>';
+    document.getElementById('lcdPeso').textContent = '—';
+    document.getElementById('lcdDelta').textContent = '—';
+    document.getElementById('lcdWhen').textContent = 'sem registos';
     return;
   }
-  // Média diária desde o início (tendência global), extrapolada para uma semana.
+  const ultimo = registos[registos.length - 1];
+  const anterior = registos.length > 1 ? registos[registos.length - 2] : null;
+  document.getElementById('lcdPeso').textContent = ultimo.peso.toFixed(1);
+  document.getElementById('lcdWhen').textContent = fmtData(ultimo.date);
+  const deltaEl = document.getElementById('lcdDelta');
+  if (anterior){
+    const diff = ultimo.peso - anterior.peso;
+    if (diff > 0.001){ deltaEl.textContent = '▲ ' + diff.toFixed(1); deltaEl.className = 'lcd-delta up'; }
+    else if (diff < -0.001){ deltaEl.textContent = '▼ ' + Math.abs(diff).toFixed(1); deltaEl.className = 'lcd-delta down'; }
+    else { deltaEl.textContent = '='; deltaEl.className = 'lcd-delta same'; }
+  } else {
+    deltaEl.textContent = 'início'; deltaEl.className = 'lcd-delta same';
+  }
+}
+
+function renderStatsStrip(){
+  const strip = document.getElementById('statStrip');
+  strip.innerHTML = '';
+  if (registos.length === 0){
+    strip.innerHTML = '<div class="stat-chip"><div class="lbl">Sem registos ainda</div></div>';
+    return;
+  }
   const desdeInicio = mediaPerdaPeriodo(999999);
   const mediaSemanal = desdeInicio !== null ? desdeInicio * 7 : null;
+  const totalPerdido = registos[0].peso - registos[registos.length-1].peso;
 
-  const stats = [
-    { label:'Peso atual', value: registos[registos.length-1].peso.toFixed(1) + ' kg', sub: fmtData(registos[registos.length-1].date) },
-    { label:'Total perdido', value: (registos[0].peso - registos[registos.length-1].peso).toFixed(1) + ' kg', sub: 'desde ' + fmtDataCurta(registos[0].date), cls: (registos[0].peso - registos[registos.length-1].peso) >= 0 ? 'loss' : 'gain' },
-    { label:'Média/dia desde início', value: fmtMedia(desdeInicio), sub:'kg por dia' },
-    { label:'Média semanal', value: fmtMedia(mediaSemanal), sub:'kg por semana (tendência global)' },
+  const chips = [
+    { label:'Total perdido', value: totalPerdido.toFixed(1) + ' kg', cls: totalPerdido >= 0 ? 'loss' : 'gain' },
+    { label:'Média/dia', value: fmtMedia(desdeInicio) },
+    { label:'Média/semana', value: fmtMedia(mediaSemanal) },
   ];
-  stats.forEach(s => {
+  chips.forEach(c => {
     const div = document.createElement('div');
-    div.className = 'stat' + (s.cls ? ' ' + s.cls : '');
-    div.innerHTML = `<div class="label">${s.label}</div><div class="value">${s.value}</div><div class="sub2">${s.sub||''}</div>`;
-    grid.appendChild(div);
+    div.className = 'stat-chip';
+    div.innerHTML = `<div class="lbl">${c.label}</div><div class="val ${c.cls||''}">${c.value}</div>`;
+    strip.appendChild(div);
   });
 }
 
 function fmtMedia(v){
   if (v === null) return '—';
   const sinal = v >= 0 ? '−' : '+';
-  return sinal + Math.abs(v).toFixed(3);
+  return sinal + Math.abs(v).toFixed(2);
 }
-
 function fmtData(d){
   return d.toLocaleDateString('pt-PT') + ' ' + pad(d.getHours())+':'+pad(d.getMinutes());
 }
@@ -654,9 +701,11 @@ function fmtDataCurta(d){
 }
 
 function renderProgress(){
-  const card = document.getElementById('progressCard');
   if (registos.length === 0 || !config.pesoAlvo){
-    card.querySelector('#progressWrap').innerHTML = '<div class="sub2" style="font-size:0.85rem;color:#6b6558;">Define o peso alvo em Configurações.</div>';
+    document.getElementById('progPctLabel').textContent = '—';
+    document.getElementById('progLeft').textContent = 'Define o peso alvo em Config';
+    document.getElementById('progRight').textContent = '';
+    document.getElementById('progressFill').style.width = '0%';
     return;
   }
   const pesoInicial = registos[0].peso;
@@ -667,26 +716,23 @@ function renderProgress(){
     pct = ((pesoInicial - pesoAtual) / (pesoInicial - pesoAlvo)) * 100;
   }
   pct = Math.max(0, Math.min(100, pct));
-  document.getElementById('progressWrap').innerHTML = `
-    <div id="progressBarBg"><div id="progressBarFill" style="width:${pct}%;"></div></div>
-    <div id="progressLabels">
-      <span>${pesoInicial.toFixed(1)} kg</span>
-      <span>${pct.toFixed(0)}%</span>
-      <span>${pesoAlvo.toFixed(1)} kg</span>
-    </div>`;
+  document.getElementById('progressFill').style.width = pct + '%';
+  document.getElementById('progPctLabel').textContent = pct.toFixed(0) + '%';
+  document.getElementById('progLeft').textContent = pesoInicial.toFixed(1) + ' kg';
+  document.getElementById('progRight').textContent = pesoAlvo.toFixed(1) + ' kg';
 }
 
 function renderIMC(){
   if (registos.length === 0 || !config.altura){
     document.getElementById('imcValue').textContent = '—';
-    document.getElementById('imcClasse').innerHTML = '<span class="sub2" style="font-size:0.8rem;color:#6b6558;">Define a altura em Configurações.</span>';
+    document.getElementById('imcClasse').innerHTML = '';
     return;
   }
   const pesoAtual = registos[registos.length-1].peso;
   const imc = calcIMC(pesoAtual, config.altura);
   const cls = classificaIMC(imc);
   document.getElementById('imcValue').textContent = imc.toFixed(1);
-  document.getElementById('imcClasse').innerHTML = `<span class="imcBadge" style="color:${cls.cor};background:${cls.bg};">${cls.texto}</span>`;
+  document.getElementById('imcClasse').innerHTML = `<span class="imc-badge" style="color:${cls.cor};background:${cls.bg};">${cls.texto}</span>`;
 }
 
 function renderKcal(){
@@ -702,14 +748,14 @@ function renderKcal(){
     return;
   }
   const tdee = tmb * (config.atividade || 1.2);
-  document.getElementById('kcalValue').textContent = Math.round(tdee) + ' kcal';
+  document.getElementById('kcalValue').textContent = Math.round(tdee);
 }
 
 function renderRegistos(){
   const list = document.getElementById('registosList');
   list.innerHTML = '';
   if (registos.length === 0){
-    list.innerHTML = '<div style="padding:10px 0;">Sem registos.</div>';
+    list.innerHTML = '<div style="padding:12px 0;color:var(--text-dim);">Sem registos.</div>';
     return;
   }
   const desc = [...registos].sort((a,b) => b.date - a.date);
@@ -719,22 +765,23 @@ function renderRegistos(){
     let deltaHtml = '<span class="regDelta same">—</span>';
     if (anterior){
       const diff = reg.peso - anterior.peso;
-      if (diff > 0.001) deltaHtml = `<span class="regDelta up">▲ ${diff.toFixed(1)}</span>`;
-      else if (diff < -0.001) deltaHtml = `<span class="regDelta down">▼ ${Math.abs(diff).toFixed(1)}</span>`;
+      if (diff > 0.001) deltaHtml = `<span class="regDelta up">▲${diff.toFixed(1)}</span>`;
+      else if (diff < -0.001) deltaHtml = `<span class="regDelta down">▼${Math.abs(diff).toFixed(1)}</span>`;
       else deltaHtml = '<span class="regDelta same">=</span>';
     }
+    const isMonday = reg.date.getDay() === 1;
     const row = document.createElement('div');
-    row.className = 'regRow';
+    row.className = 'regRow' + (isMonday ? ' monday' : '');
     row.innerHTML = `
       <div class="regDate">
-        <div class="d1">${fmtDataCurta(reg.date)}</div>
+        <div class="d1">${fmtDataCurta(reg.date)}${isMonday ? '<span class="seg-tag">SEG</span>' : ''}</div>
         <div class="d2">${pad(reg.date.getHours())}:${pad(reg.date.getMinutes())}${reg.nota ? ' · ' + escapeHtml(reg.nota) : ''}</div>
       </div>
-      <div class="regPeso">${reg.peso.toFixed(1)} kg</div>
+      <div class="regPeso">${reg.peso.toFixed(1)}</div>
       ${deltaHtml}
       <div class="regActions">
-        <button class="iconBtn iconEdit" data-row="${reg.row}" title="Editar">✎</button>
-        <button class="iconBtn iconDel" data-row="${reg.row}" title="Eliminar">🗑</button>
+        <button class="iconBtn iconEdit" title="Editar">✎</button>
+        <button class="iconBtn iconDel" title="Eliminar">🗑</button>
       </div>`;
     row.querySelector('.iconEdit').onclick = () => openModal(reg);
     row.querySelector('.iconDel').onclick = () => eliminarRegistoDireto(reg);
@@ -772,19 +819,21 @@ function renderChart(){
       datasets: [{
         label: 'Peso (kg)',
         data: dados,
-        borderColor: '#1f8fbf',
-        backgroundColor: 'rgba(31,143,191,0.1)',
+        borderColor: '#baff29',
+        backgroundColor: 'rgba(186,255,41,0.08)',
         tension: 0.25,
         pointRadius: 2,
+        pointBackgroundColor: '#baff29',
         fill: true,
       }]
     },
     options: {
       responsive: true,
+      maintainAspectRatio: false,
       plugins: { legend: { display: false } },
       scales: {
-        x: { ticks: { maxTicksLimit: 6, font: { size: 10 } } },
-        y: { ticks: { font: { size: 10 } } }
+        x: { ticks: { maxTicksLimit: 6, font: { size: 9 }, color: '#8b949c' }, grid: { color: '#323a42' } },
+        y: { ticks: { font: { size: 9 }, color: '#8b949c' }, grid: { color: '#323a42' } }
       }
     }
   });
