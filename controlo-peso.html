@@ -63,15 +63,6 @@
   header .brand{font-size:1.05rem;font-weight:800;letter-spacing:-0.01em;display:flex;align-items:center;gap:6px;}
   header .brand .ico{color:var(--lime);}
   header .sub{font-size:0.68rem;color:var(--text-dim);text-transform:uppercase;letter-spacing:.06em;}
-  .header-right{display:flex;align-items:center;gap:10px;}
-  .icon-refresh{
-    background:none;border:1px solid var(--line);color:var(--text-dim);
-    border-radius:8px;width:28px;height:28px;padding:0;font-size:1rem;
-    display:flex;align-items:center;justify-content:center;min-height:auto;line-height:1;
-  }
-  .icon-refresh:active{color:var(--lime);border-color:var(--lime);}
-  .icon-refresh.spinning{animation:spin .7s linear infinite;color:var(--lime);}
-  @keyframes spin{to{transform:rotate(360deg);}}
 
   #authArea{flex:1;padding:24px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;text-align:center;}
   #authArea p{color:var(--text-dim);font-size:0.9rem;margin:0;}
@@ -160,7 +151,7 @@
   /* ---------- Registos ---------- */
   #regHeader{flex:0 0 auto;display:flex;align-items:center;justify-content:space-between;padding:0 2px 8px;}
   #regCount{font-size:0.72rem;color:var(--text-dim);}
-  .btn-export{padding:6px 12px;font-size:0.72rem;min-height:30px;}
+  .btn-export{padding:6px 12px;font-size:0.72rem;min-height:30px;display:inline-flex;align-items:center;}
   .reg-list{flex:1;min-height:0;overflow-y:auto;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:2px 12px;}
   .regRow{display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--line);position:relative;}
   .regRow:last-child{border-bottom:none;}
@@ -175,7 +166,7 @@
   .regDelta.down{color:var(--ok);}
   .regDelta.same{color:var(--text-dim);}
   .regActions{display:flex;gap:2px;}
-  .iconBtn{background:none;border:none;padding:5px;min-height:auto;font-size:0.95rem;cursor:pointer;color:var(--text-dim);}
+  .iconBtn{background:none;border:none;padding:5px;min-height:auto;cursor:pointer;color:var(--text-dim);display:flex;align-items:center;justify-content:center;}
   .iconBtn:hover{color:var(--lime);}
 
   /* ---------- Config ---------- */
@@ -218,10 +209,7 @@
 
 <header>
   <div class="brand"><span class="ico">⚖</span> Peso</div>
-  <div class="header-right">
-    <span class="sub" id="headerSub">controlo diário</span>
-    <button id="btnRefresh" class="icon-refresh" title="Atualizar dados">⟳</button>
-  </div>
+  <div class="sub" id="headerSub">controlo diário</div>
 </header>
 
 <div id="authArea">
@@ -304,7 +292,9 @@
     <section id="tabRegistos" class="tabPanel flex-col hidden">
       <div id="regHeader">
         <span id="regCount"></span>
-        <button class="btn-ghost btn-export" id="btnExportar">⬇ Excel</button>
+        <button class="btn-ghost btn-export" id="btnExportar">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:4px;"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M4 21h16"/></svg>Excel
+        </button>
       </div>
       <div class="reg-list" id="registosList"></div>
     </section>
@@ -356,12 +346,15 @@
 /* ============================================================
    CONFIGURAÇÃO
    ============================================================ */
-const APP_VERSION = 'Beta 9';
+const APP_VERSION = 'Beta 10';
 const CLIENT_ID = '108256538530-fgunbb52s7f3s9aurfpjtaf01v8fjbph.apps.googleusercontent.com';
 const SPREADSHEET_ID = '1UzEXtl7w6jMsk-c7Pkt3kq97AXL6XIiwTrjOYUaYFLs';
 const SHEET_REGISTOS = 'Registos';
 const SHEET_CONFIG = 'Config';
 const SCOPES = 'https://www.googleapis.com/auth/spreadsheets';
+
+const ICON_EDIT = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>';
+const ICON_TRASH = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>';
 /* ============================================================ */
 
 let tokenClient;
@@ -417,7 +410,6 @@ window.onload = () => {
   document.getElementById('btnEliminar').onclick = onEliminarRegisto;
   document.getElementById('btnExportar').onclick = exportarXLSX;
   document.getElementById('undoToastBtn').onclick = undoPendingDelete;
-  document.getElementById('btnRefresh').onclick = refreshData;
   document.getElementById('modalOverlay').onclick = (e) => { if (e.target.id === 'modalOverlay') closeModal(); };
 };
 
@@ -438,24 +430,6 @@ async function onSignedIn(){
   await loadRegistos();
   setStatus('');
   renderAll();
-}
-
-async function refreshData(){
-  if (!accessToken) return;
-  if (pendingDelete) await commitPendingDelete();
-  const btn = document.getElementById('btnRefresh');
-  if (btn) btn.classList.add('spinning');
-  setStatus('A atualizar...');
-  try{
-    await loadConfig();
-    await loadRegistos();
-    setStatus('Atualizado.');
-    renderAll();
-  } catch(e){
-    setStatus('Erro ao atualizar: ' + e.message, true);
-  } finally {
-    if (btn) btn.classList.remove('spinning');
-  }
 }
 
 /* ---------- Sheets API helpers ---------- */
@@ -944,8 +918,8 @@ function renderRegistos(){
       <div class="regPeso">${reg.peso.toFixed(1)}</div>
       ${deltaHtml}
       <div class="regActions">
-        <button class="iconBtn iconEdit" title="Editar">✎</button>
-        <button class="iconBtn iconDel" title="Eliminar">🗑</button>
+        <button class="iconBtn iconEdit" title="Editar">${ICON_EDIT}</button>
+        <button class="iconBtn iconDel" title="Eliminar">${ICON_TRASH}</button>
       </div>`;
     row.querySelector('.iconEdit').onclick = () => openModal(reg);
     row.querySelector('.iconDel').onclick = () => eliminarRegistoDireto(reg);
