@@ -214,8 +214,76 @@
         <span class="icon">⚫</span>
         <div class="info"><h3>Damas</h3><p>Contra um adversário local (minimax), sem depender da internet.</p></div>
       </div>
+      <div class="game-opt" id="pick-classic">
+        <span class="icon">📜</span>
+        <div class="info"><h3>Xadrez Clássico</h3><p>Partidas históricas, finais famosos e puzzles de xeque-mate.</p></div>
+      </div>
     </div>
-    <div class="bp-footer"><span class="mono">BP</span> Jogos de Tabuleiro v2.0.0</div>
+    <div class="bp-footer"><span class="mono">BP</span> Jogos de Tabuleiro v3.0.0</div>
+  </div>
+
+  <!-- ============ CLÁSSICO · HUB ============ -->
+  <div id="classic-hub-screen" class="setup-wrap hidden">
+    <div class="brandmark"><span class="knight">📜</span><span class="word">Xadrez Clássico</span></div>
+    <div class="subtitle">Aprende com a história do jogo</div>
+    <div class="game-options">
+      <div class="game-opt" id="pick-pgn-list">
+        <span class="icon">📖</span>
+        <div class="info"><h3>Partidas Históricas</h3><p>Revê jogo a jogo três das partidas mais famosas de sempre.</p></div>
+      </div>
+      <div class="game-opt" id="pick-endgames-list">
+        <span class="icon">🏁</span>
+        <div class="info"><h3>Finais Famosos</h3><p>Pratica técnicas clássicas de final de jogo contra o Stockfish.</p></div>
+      </div>
+      <div class="game-opt" id="pick-puzzles-list">
+        <span class="icon">🧩</span>
+        <div class="info"><h3>Xeque-mate em X</h3><p>Encontra o xeque-mate forçado a partir da posição dada.</p></div>
+      </div>
+    </div>
+    <button class="back-btn" id="classic-hub-back" style="margin-top:18px;">‹ Voltar ao menu</button>
+  </div>
+
+  <!-- ============ PARTIDAS HISTÓRICAS · LISTA ============ -->
+  <div id="pgn-list-screen" class="setup-wrap hidden">
+    <div class="brandmark"><span class="knight">📖</span><span class="word">Partidas Históricas</span></div>
+    <div class="subtitle">Toca numa partida para a reveres jogada a jogada</div>
+    <div class="game-options" id="pgn-list-container"></div>
+    <button class="back-btn" id="pgn-list-back" style="margin-top:18px;">‹ Voltar</button>
+  </div>
+
+  <!-- ============ PARTIDAS HISTÓRICAS · LEITOR ============ -->
+  <div id="pgn-viewer-screen" class="game-wrap hidden">
+    <div class="topbar">
+      <button class="back-btn" id="pgn-viewer-back">‹ Partidas</button>
+      <div class="status-pill"><span id="pgn-move-counter">0 / 0</span></div>
+    </div>
+    <div class="panel" style="margin-top:0; margin-bottom:14px;">
+      <h3 style="margin:0 0 4px; font-size:14px; color:var(--slate-2);" id="pgn-title"></h3>
+      <p style="margin:0; font-size:12px; color:var(--slate); opacity:0.7;" id="pgn-subtitle"></p>
+    </div>
+    <div class="board-wrap"><div class="board-grid" id="pgn-board"></div></div>
+    <div class="history-panel"><h3>Jogadas</h3><div class="move-list" id="pgn-move-list"></div></div>
+    <div class="controls-row">
+      <button class="btn-secondary" id="pgn-prev-btn">‹ Anterior</button>
+      <button class="btn-secondary" id="pgn-play-btn">▶ Auto</button>
+      <button class="btn-secondary" id="pgn-next-btn">Seguinte ›</button>
+    </div>
+  </div>
+
+  <!-- ============ FINAIS FAMOSOS · LISTA ============ -->
+  <div id="endgames-list-screen" class="setup-wrap hidden">
+    <div class="brandmark"><span class="knight">🏁</span><span class="word">Finais Famosos</span></div>
+    <div class="subtitle">Escolhe uma técnica clássica para praticar contra o Stockfish</div>
+    <div class="game-options" id="endgames-list-container"></div>
+    <button class="back-btn" id="endgames-list-back" style="margin-top:18px;">‹ Voltar</button>
+  </div>
+
+  <!-- ============ PUZZLES · LISTA ============ -->
+  <div id="puzzles-list-screen" class="setup-wrap hidden">
+    <div class="brandmark"><span class="knight">🧩</span><span class="word">Xeque-mate em X</span></div>
+    <div class="subtitle">Encontra o lance que dá xeque-mate</div>
+    <div class="game-options" id="puzzles-list-container"></div>
+    <button class="back-btn" id="puzzles-list-back" style="margin-top:18px;">‹ Voltar</button>
   </div>
 
   <!-- ============ XADREZ · SETUP ============ -->
@@ -250,6 +318,12 @@
     <div class="topbar">
       <button class="back-btn" id="chess-back-btn">‹ Menu</button>
       <div class="status-pill"><span class="dot-turn" id="chess-dot-turn"></span><span id="chess-status-text">A jogar</span></div>
+    </div>
+    <div class="panel hidden" id="chess-info-banner">
+      <h3 style="margin:0 0 4px; font-size:14px; color:var(--slate-2); text-transform:none; letter-spacing:0;" id="chess-info-title"></h3>
+      <p style="margin:0; font-size:12px; color:var(--slate); opacity:0.75; line-height:1.5;" id="chess-info-desc"></p>
+      <button class="btn-secondary hidden" id="chess-reveal-btn" style="margin-top:10px; width:100%;">Ver solução</button>
+      <p class="hidden" id="chess-solution-text" style="margin:8px 0 0; font-family:'DM Mono',monospace; font-size:13px; color:var(--sage-dark);"></p>
     </div>
     <div class="board-wrap"><div class="board-grid" id="chess-board"></div></div>
     <div class="panel">
@@ -333,15 +407,25 @@
 
 let currentGame = null; // 'chess' | 'checkers' — usado pelo modal partilhado
 
+const ALL_SCREENS = ['hub-screen','chess-setup-screen','chess-game-screen','checkers-setup-screen','checkers-game-screen',
+  'classic-hub-screen','pgn-list-screen','pgn-viewer-screen','endgames-list-screen','puzzles-list-screen'];
 function showScreen(id){
-  ['hub-screen','chess-setup-screen','chess-game-screen','checkers-setup-screen','checkers-game-screen']
-    .forEach(s=>document.getElementById(s).classList.toggle('hidden', s!==id));
+  ALL_SCREENS.forEach(s=>document.getElementById(s).classList.toggle('hidden', s!==id));
 }
 
 document.getElementById('pick-chess').addEventListener('click', ()=>{ showScreen('chess-setup-screen'); });
 document.getElementById('pick-checkers').addEventListener('click', ()=>{ showScreen('checkers-setup-screen'); });
+document.getElementById('pick-classic').addEventListener('click', ()=>{ showScreen('classic-hub-screen'); });
 document.getElementById('chess-setup-back').addEventListener('click', ()=>showScreen('hub-screen'));
 document.getElementById('checkers-setup-back').addEventListener('click', ()=>showScreen('hub-screen'));
+document.getElementById('classic-hub-back').addEventListener('click', ()=>showScreen('hub-screen'));
+document.getElementById('pick-pgn-list').addEventListener('click', ()=>{ showScreen('pgn-list-screen'); });
+document.getElementById('pick-endgames-list').addEventListener('click', ()=>{ showScreen('endgames-list-screen'); });
+document.getElementById('pick-puzzles-list').addEventListener('click', ()=>{ showScreen('puzzles-list-screen'); });
+document.getElementById('pgn-list-back').addEventListener('click', ()=>showScreen('classic-hub-screen'));
+document.getElementById('endgames-list-back').addEventListener('click', ()=>showScreen('classic-hub-screen'));
+document.getElementById('puzzles-list-back').addEventListener('click', ()=>showScreen('classic-hub-screen'));
+document.getElementById('pgn-viewer-back').addEventListener('click', ()=>{ pgnStopAuto(); showScreen('pgn-list-screen'); });
 
 const resultModal = document.getElementById('result-modal');
 document.getElementById('modal-menu-btn').addEventListener('click', ()=>{
@@ -373,6 +457,10 @@ let chessSelectedSquare = null;
 let chessLegalTargets = [];
 let chessLastMove = null;
 let chessBoardFlipped = false;
+let chessMode = 'play';           // 'play' | 'practice' | 'puzzle'
+let chessReturnScreen = 'hub-screen';
+let chessStartFen = null;         // FEN usado para reiniciar em practice/puzzle
+let chessActivePuzzle = null;     // {title, description, solutionText}
 
 const PIECE_GLYPH = {
   w:{p:'♙',n:'♘',b:'♗',r:'♖',q:'♕',k:'♔'},
@@ -491,6 +579,9 @@ chessStartBtn.addEventListener('click', ()=>{
   chessBoardFlipped = (chessPlayerColor === 'b');
   chessGame = new Chess();
   chessSelectedSquare = null; chessLegalTargets = []; chessLastMove = null;
+  chessMode = 'play'; chessReturnScreen = 'hub-screen'; chessActivePuzzle = null;
+  document.getElementById('chess-info-banner').classList.add('hidden');
+  document.getElementById('chess-undo-btn').classList.remove('hidden');
   currentGame = 'chess';
   stockfish.postMessage('setoption name Skill Level value ' + chessSkillLevel);
   stockfish.postMessage('ucinewgame');
@@ -498,8 +589,11 @@ chessStartBtn.addEventListener('click', ()=>{
   chessRenderBoard(); chessRenderMoveList(); chessRenderCaptured(); chessUpdateStatus();
   if (chessGame.turn() !== chessPlayerColor) requestEngineMove();
 });
-document.getElementById('chess-back-btn').addEventListener('click', ()=>showScreen('hub-screen'));
-document.getElementById('chess-newgame-btn').addEventListener('click', chessStartNewGameSameSettings);
+document.getElementById('chess-back-btn').addEventListener('click', ()=>showScreen(chessReturnScreen));
+document.getElementById('chess-newgame-btn').addEventListener('click', ()=>{
+  if (chessMode === 'play') chessStartNewGameSameSettings();
+  else chessRestartCurrentPosition();
+});
 function chessStartNewGameSameSettings(){
   chessGame = new Chess();
   chessSelectedSquare = null; chessLegalTargets = []; chessLastMove = null;
@@ -510,12 +604,70 @@ function chessStartNewGameSameSettings(){
   if (chessGame.turn() !== chessPlayerColor) requestEngineMove();
 }
 document.getElementById('chess-undo-btn').addEventListener('click', ()=>{
+  if (chessMode !== 'play') return;
   if (chessEngineThinking) return;
   if (chessGame.history().length === 0) return;
   chessGame.undo();
   if (chessGame.turn() !== chessPlayerColor && chessGame.history().length > 0) chessGame.undo();
   chessSelectedSquare = null; chessLegalTargets = []; chessLastMove = null;
   chessRenderBoard(); chessRenderMoveList(); chessRenderCaptured(); chessUpdateStatus();
+});
+
+/* ---------- Practice (finais famosos) e Puzzle (xeque-mate em X) ---------- */
+function chessStartPractice(fen, title, desc, returnScreen){
+  if (!chessEngineReady) return;
+  chessGame = new Chess(fen);
+  chessStartFen = fen;
+  chessPlayerColor = chessGame.turn();
+  chessBoardFlipped = (chessPlayerColor === 'b');
+  chessSelectedSquare = null; chessLegalTargets = []; chessLastMove = null;
+  chessMode = 'practice'; chessReturnScreen = returnScreen; chessActivePuzzle = null;
+  currentGame = 'chess';
+  document.getElementById('chess-undo-btn').classList.remove('hidden');
+  const banner = document.getElementById('chess-info-banner');
+  banner.classList.remove('hidden');
+  document.getElementById('chess-info-title').textContent = title;
+  document.getElementById('chess-info-desc').textContent = desc;
+  document.getElementById('chess-reveal-btn').classList.add('hidden');
+  document.getElementById('chess-solution-text').classList.add('hidden');
+  stockfish.postMessage('setoption name Skill Level value ' + chessSkillLevel);
+  stockfish.postMessage('ucinewgame');
+  showScreen('chess-game-screen');
+  chessRenderBoard(); chessRenderMoveList(); chessRenderCaptured(); chessUpdateStatus();
+  if (chessGame.turn() !== chessPlayerColor) requestEngineMove();
+}
+function chessStartPuzzle(puzzle, returnScreen){
+  chessGame = new Chess(puzzle.fen);
+  chessStartFen = puzzle.fen;
+  chessPlayerColor = chessGame.turn();
+  chessBoardFlipped = (chessPlayerColor === 'b');
+  chessSelectedSquare = null; chessLegalTargets = []; chessLastMove = null;
+  chessMode = 'puzzle'; chessReturnScreen = returnScreen; chessActivePuzzle = puzzle;
+  currentGame = 'chess';
+  document.getElementById('chess-undo-btn').classList.add('hidden');
+  const banner = document.getElementById('chess-info-banner');
+  banner.classList.remove('hidden');
+  document.getElementById('chess-info-title').textContent = puzzle.title;
+  document.getElementById('chess-info-desc').textContent = puzzle.description;
+  const revealBtn = document.getElementById('chess-reveal-btn');
+  revealBtn.classList.remove('hidden');
+  document.getElementById('chess-solution-text').classList.add('hidden');
+  showScreen('chess-game-screen');
+  chessRenderBoard(); chessRenderMoveList(); chessRenderCaptured(); chessUpdateStatus();
+}
+function chessRestartCurrentPosition(){
+  if (!chessStartFen) return;
+  if (chessMode === 'puzzle'){ chessStartPuzzle(chessActivePuzzle, chessReturnScreen); return; }
+  if (chessMode === 'practice'){
+    const title = document.getElementById('chess-info-title').textContent;
+    const desc = document.getElementById('chess-info-desc').textContent;
+    chessStartPractice(chessStartFen, title, desc, chessReturnScreen);
+  }
+}
+document.getElementById('chess-reveal-btn').addEventListener('click', ()=>{
+  if (!chessActivePuzzle) return;
+  document.getElementById('chess-solution-text').textContent = 'Solução: ' + chessActivePuzzle.solutionText;
+  document.getElementById('chess-solution-text').classList.remove('hidden');
 });
 
 function chessSquaresGrid(flipped){
@@ -582,6 +734,15 @@ function chessOnSquareClick(sq){
       if (move){
         chessLastMove = {from:move.from, to:move.to};
         chessRenderBoard(); chessRenderMoveList(); chessRenderCaptured();
+        if (chessMode === 'puzzle'){
+          if (chessGame.in_checkmate()){
+            showResultModal('🏆', 'Puzzle resolvido!', chessActivePuzzle.title + ' — encontraste o xeque-mate.');
+          } else {
+            chessStatusTextEl.textContent = 'Ainda não é xeque-mate — a repor a posição…';
+            setTimeout(()=>{ chessGame.undo(); chessLastMove=null; chessRenderBoard(); chessUpdateStatus(); }, 900);
+          }
+          return;
+        }
         if (!chessCheckGameOver()){ chessUpdateStatus(); requestEngineMove(); }
       }
       return;
@@ -646,6 +807,171 @@ function chessCheckGameOver(){
   else if (chessGame.in_draw()){ title='Empate'; desc='Regra dos 50 lances sem captura ou movimento de peão.'; }
   showResultModal(glyph, title, desc);
   return true;
+}
+
+/* =========================================================
+   XADREZ CLÁSSICO — Partidas Históricas, Finais Famosos, Puzzles
+   Jogadas de partidas históricas verificadas (não protegidas por
+   direitos de autor — são factos/registos de jogo, não texto
+   criativo). Posições de finais são padrões didáticos genéricos.
+   Puzzles de xeque-mate foram construídos e verificados à mão.
+   ========================================================= */
+const HISTORIC_GAMES = [
+  {
+    title: 'O Jogo Imortal',
+    subtitle: 'Anderssen vs. Kieseritzky, Londres, 1851',
+    moves: 'e4 e5 f4 exf4 Bc4 Qh4+ Kf1 b5 Bxb5 Nf6 Nf3 Qh6 d3 Nh5 Nh4 Qg5 Nf5 c6 g4 Nf6 Rg1 cxb5 h4 Qg6 h5 Qg5 Qf3 Ng8 Bxf4 Qf6 Nc3 Bc5 Nd5 Qxb2 Bd6 Bxg1 e5 Qxa1+ Ke2 Na6 Nxg7+ Kd8 Qf6+ Nxf6 Be7#'
+  },
+  {
+    title: 'Uma Noite na Ópera',
+    subtitle: 'Morphy vs. Duque de Brunswick & Conde Isouard, Paris, 1858',
+    moves: 'e4 e5 Nf3 d6 d4 Bg4 dxe5 Bxf3 Qxf3 dxe5 Bc4 Nf6 Qb3 Qe7 Nc3 c6 Bg5 b5 Nxb5 cxb5 Bxb5+ Nbd7 O-O-O Rd8 Rxd7 Rxd7 Rd1 Qe6 Bxd7+ Nxd7 Qb8+ Nxb8 Rd8#'
+  },
+  {
+    title: 'O Jogo do Século',
+    subtitle: 'Byrne vs. Fischer (13 anos), Nova Iorque, 1956',
+    moves: 'Nf3 Nf6 c4 g6 Nc3 Bg7 d4 O-O Bf4 d5 Qb3 dxc4 Qxc4 c6 e4 Nbd7 Rd1 Nb6 Qc5 Bg4 Bg5 Na4 Qa3 Nxc3 bxc3 Nxe4 Bxe7 Qb6 Bc4 Nxc3 Bc5 Rfe8+ Kf1 Be6 Bxb6 Bxc4+ Kg1 Ne2+ Kf1 Nxd4+ Kg1 Ne2+ Kf1 Nc3+ Kg1 axb6 Qb4 Ra4 Qxb6 Nxd1 h3 Rxa2 Kh2 Nxf2 Re1 Rxe1 Qd8+ Bf8 Nxe1 Bd5 Nf3 Ne4 Qb8 b5 h4 h5 Ne5 Kg7 Kg1 Bc5+ Kf1 Ng3+ Ke1 Bb4+ Kd1 Bb3+ Kc1 Ne2+ Kb1 Nc3+ Kc1 Rc2#'
+  }
+];
+const FAMOUS_ENDGAMES = [
+  {
+    title: 'Posição de Lucena',
+    fen: '4K3/4P3/6k1/8/1R6/8/r7/8 w - - 0 1',
+    desc: 'Torre e peão contra torre, com o peão na 7ª fila e o rei a bloquear a sua própria promoção. A técnica ganhadora chama-se "construir a ponte": leva a torre à 4ª fila para depois abrigar o rei dos xeques laterais. Jogas com as Brancas.'
+  },
+  {
+    title: 'Posição de Philidor',
+    fen: '4k3/8/r7/3KP3/8/8/8/7R w - - 0 1',
+    desc: 'A técnica defensiva clássica de torre e peão: com a torre na 6ª fila, o defensor espera sem progredir. Só quando o peão avança à 6ª fila é que a torre recua para dar xeques pela retaguarda, garantindo o empate. Jogas com as Brancas (lado atacante) para tentar quebrar a defesa do Stockfish.'
+  },
+  {
+    title: 'Estudo de Réti (1921)',
+    fen: '7K/8/k1P5/7p/8/8/8/8 w - - 0 1',
+    desc: 'Um dos estudos mais célebres da história: à primeira vista o rei branco está longe demais tanto para travar o peão preto como para apoiar o seu próprio. A solução usa um percurso diagonal do rei que ameaça as duas coisas ao mesmo tempo. Brancas jogam e empatam.'
+  }
+];
+const MATE_PUZZLES = [
+  {
+    title: 'Xeque-mate em 1',
+    fen: '6k1/5ppp/8/8/8/8/8/4R1K1 w - - 0 1',
+    description: 'O rei preto está preso atrás dos seus próprios peões. Encontra o xeque-mate em uma jogada.',
+    solutionText: 'Re8#'
+  },
+  {
+    title: 'Xeque-mate em 1 (Fool\'s Mate)',
+    fen: 'rnbqkbnr/pppp1ppp/8/4p3/6P1/5P2/PPPPP2P/RNBQKBNR b KQkq - 0 2',
+    description: 'A abertura mais fraca possível das Brancas (1.f3 e depois 2.g4) abre uma diagonal fatal. Jogas com as Pretas — encontra o xeque-mate mais rápido da história do xadrez.',
+    solutionText: 'Qh4#'
+  }
+];
+
+function renderListCards(containerId, items, onPick){
+  const container = document.getElementById(containerId);
+  container.innerHTML = '';
+  items.forEach((item, idx)=>{
+    const card = document.createElement('div');
+    card.className = 'game-opt';
+    card.innerHTML = `<span class="icon">${item.icon || '♟️'}</span><div class="info"><h3>${item.title}</h3><p>${item.subtitle || item.description || item.desc || ''}</p></div>`;
+    card.addEventListener('click', ()=>onPick(idx));
+    container.appendChild(card);
+  });
+}
+renderListCards('pgn-list-container', HISTORIC_GAMES, (idx)=>pgnOpenGame(idx));
+renderListCards('endgames-list-container', FAMOUS_ENDGAMES, (idx)=>{
+  const eg = FAMOUS_ENDGAMES[idx];
+  chessStartPractice(eg.fen, eg.title, eg.desc, 'endgames-list-screen');
+});
+renderListCards('puzzles-list-container', MATE_PUZZLES, (idx)=>{
+  chessStartPuzzle(MATE_PUZZLES[idx], 'puzzles-list-screen');
+});
+
+/* ---------- Leitor de PGN (partidas históricas) ---------- */
+let pgnGame = null;
+let pgnMoves = [];
+let pgnIndex = 0;      // número de jogadas (meios-lances) já aplicadas
+let pgnAutoTimer = null;
+const pgnBoardEl = document.getElementById('pgn-board');
+
+function pgnOpenGame(idx){
+  const g = HISTORIC_GAMES[idx];
+  pgnMoves = g.moves.split(' ');
+  pgnGame = new Chess();
+  pgnIndex = 0;
+  document.getElementById('pgn-title').textContent = g.title;
+  document.getElementById('pgn-subtitle').textContent = g.subtitle;
+  showScreen('pgn-viewer-screen');
+  pgnRenderAll();
+}
+function pgnGoTo(index){
+  pgnStopAuto();
+  pgnGame = new Chess();
+  for (let i=0;i<index;i++) pgnGame.move(pgnMoves[i]);
+  pgnIndex = index;
+  pgnRenderAll();
+}
+function pgnRenderAll(){
+  pgnRenderBoard();
+  pgnRenderMoveList();
+  document.getElementById('pgn-move-counter').textContent = pgnIndex + ' / ' + pgnMoves.length;
+}
+function pgnRenderBoard(){
+  pgnBoardEl.innerHTML = '';
+  const grid = chessSquaresGrid(false);
+  const lastMoveObj = pgnIndex > 0 ? pgnGame.history({verbose:true}).slice(-1)[0] : null;
+  grid.forEach(sq=>{
+    const file = sq[0]; const rank = parseInt(sq[1],10);
+    const fileIdx = 'abcdefgh'.indexOf(file);
+    const isLight = (fileIdx + rank) % 2 !== 0;
+    const div = document.createElement('div');
+    div.className = 'sq ' + (isLight ? 'light' : 'dark');
+    if (lastMoveObj && (lastMoveObj.from === sq || lastMoveObj.to === sq)) div.classList.add('last-move');
+    const piece = pgnGame.get(sq);
+    if (piece){
+      const span = document.createElement('span');
+      span.className = 'piece ' + (piece.color === 'w' ? 'white' : 'black');
+      span.textContent = PIECE_GLYPH[piece.color][piece.type];
+      div.appendChild(span);
+    }
+    pgnBoardEl.appendChild(div);
+  });
+}
+function pgnRenderMoveList(){
+  const el = document.getElementById('pgn-move-list');
+  el.innerHTML = '';
+  for (let i=0;i<pgnMoves.length;i+=2){
+    const num = (i/2)+1;
+    const numEl = document.createElement('span'); numEl.className='mv-num'; numEl.textContent=num+'.';
+    const wEl = document.createElement('span'); wEl.textContent = pgnMoves[i] || '';
+    const bEl = document.createElement('span'); bEl.textContent = pgnMoves[i+1] || '';
+    if (i === pgnIndex - 1) wEl.style.color = 'var(--sage-dark)', wEl.style.fontWeight='700';
+    if (i+1 === pgnIndex - 1) bEl.style.color = 'var(--sage-dark)', bEl.style.fontWeight='700';
+    el.appendChild(numEl); el.appendChild(wEl); el.appendChild(bEl);
+  }
+}
+document.getElementById('pgn-next-btn').addEventListener('click', ()=>{
+  if (pgnIndex >= pgnMoves.length) return;
+  pgnGame.move(pgnMoves[pgnIndex]);
+  pgnIndex++;
+  pgnRenderAll();
+});
+document.getElementById('pgn-prev-btn').addEventListener('click', ()=>{
+  if (pgnIndex <= 0) return;
+  pgnGoTo(pgnIndex - 1);
+});
+document.getElementById('pgn-play-btn').addEventListener('click', ()=>{
+  const btn = document.getElementById('pgn-play-btn');
+  if (pgnAutoTimer){ pgnStopAuto(); return; }
+  btn.textContent = '⏸ Pausa';
+  pgnAutoTimer = setInterval(()=>{
+    if (pgnIndex >= pgnMoves.length){ pgnStopAuto(); return; }
+    pgnGame.move(pgnMoves[pgnIndex]);
+    pgnIndex++;
+    pgnRenderAll();
+  }, 1200);
+});
+function pgnStopAuto(){
+  if (pgnAutoTimer){ clearInterval(pgnAutoTimer); pgnAutoTimer = null; }
+  document.getElementById('pgn-play-btn').textContent = '▶ Auto';
 }
 
 /* =========================================================
