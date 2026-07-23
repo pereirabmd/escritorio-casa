@@ -551,21 +551,48 @@ levelSlider.addEventListener('input', ()=>{
 });
 
 // ---------- Stockfish engine (Web Worker, protocolo UCI) ----------
-function initEngine(){
-  try{
-    stockfish = new Worker('https://cdn.jsdelivr.net/npm/stockfish.js@10.0.2/stockfish.js');
-  }catch(err){
-    engineStatusEl.textContent = 'Não foi possível carregar o Stockfish. Verifica a ligação à internet.';
-    return;
+// Nota: não é possível fazer `new Worker(urlDeOutroDominio)` diretamente — os
+// browsers bloqueiam a criação de Workers a partir de scripts cross-origin.
+// Por isso vamos buscar o ficheiro via fetch() (permitido, o CDN tem CORS
+// aberto) e criar o Worker a partir de um Blob local.
+const STOCKFISH_CDN_URLS = [
+  'https://cdn.jsdelivr.net/npm/stockfish.js@10.0.2/stockfish.js',
+  'https://cdnjs.cloudflare.com/ajax/libs/stockfish.js/10.0.2/stockfish.js',
+  'https://unpkg.com/stockfish.js@10.0.2/stockfish.js'
+];
+
+async function initEngine(){
+  let lastError = null;
+  for (const url of STOCKFISH_CDN_URLS){
+    try{
+      const response = await fetch(url);
+      if (!response.ok) throw new Error('HTTP ' + response.status + ' em ' + url);
+      const code = await response.text();
+      const blob = new Blob([code], {type:'application/javascript'});
+      const blobUrl = URL.createObjectURL(blob);
+      stockfish = new Worker(blobUrl);
+      attachEngineHandlers();
+      stockfish.postMessage('uci');
+      return; // sucesso, não tentar os outros CDNs
+    }catch(err){
+      lastError = err;
+      console.warn('Falhou a carregar Stockfish de', url, err);
+    }
   }
+  // todos os CDNs falharam
+  engineStatusEl.textContent = 'Não foi possível carregar o Stockfish (' + (lastError ? lastError.message : 'erro desconhecido') + ').';
+  console.error(lastError);
+}
+
+function attachEngineHandlers(){
   stockfish.onmessage = (e)=>{
     const line = typeof e.data === 'string' ? e.data : (e.data && e.data.data) || '';
     handleEngineLine(line);
   };
-  stockfish.onerror = ()=>{
+  stockfish.onerror = (err)=>{
     engineStatusEl.textContent = 'Erro no motor Stockfish. Recarrega a página.';
+    console.error('Worker error:', err);
   };
-  stockfish.postMessage('uci');
 }
 
 function handleEngineLine(line){
