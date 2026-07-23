@@ -168,14 +168,22 @@
     padding:16px 18px 6px;
   }
   #monthLabel{font-size:1.05rem;font-weight:700;flex:1;text-align:center;}
-  #todayBtn{padding:8px 14px;font-size:0.8rem;min-height:36px;flex-shrink:0;}
-  #monthNav button{
-    background:#fff;border:1px solid var(--line);
+  .navBtn{
+    background:var(--brand-tint);border:1px solid var(--brand-light);
+    color:var(--brand);
     width:44px;height:44px;min-height:44px;border-radius:50%;
-    font-size:1.1rem;line-height:1;padding:0;
+    font-size:1.2rem;line-height:1;padding:0;
     display:flex;align-items:center;justify-content:center;
     flex-shrink:0;
   }
+  .navBtn:active{background:var(--brand-light);color:#fff;}
+  #todayBtn{
+    background:var(--brand);color:#fff;
+    border:none;border-radius:999px;
+    padding:0 16px;font-size:0.82rem;font-weight:700;
+    min-height:36px;flex-shrink:0;
+  }
+  #todayBtn:active{background:var(--ink);}
 
   #legend{
     display:flex;flex-wrap:wrap;justify-content:center;text-align:center;gap:12px;
@@ -464,10 +472,10 @@
     </div>
 
     <div id="monthNav">
-      <button id="prevMonth">‹</button>
+      <button id="prevMonth" class="navBtn">‹</button>
       <div id="monthLabel">Janeiro</div>
-      <button id="nextMonth">›</button>
-      <button id="todayBtn" class="btn-secondary" title="Ir para hoje">Hoje</button>
+      <button id="nextMonth" class="navBtn">›</button>
+      <button id="todayBtn" title="Ir para hoje">Hoje</button>
     </div>
 
     <div id="yearBanner" class="hidden"></div>
@@ -539,7 +547,7 @@
 /* ============================================================
    CONFIGURAÇÃO — preenche estes 2 valores antes de usar
    ============================================================ */
-const APP_VERSION = 'v2.3.0';
+const APP_VERSION = 'v2.4.0';
 
 const ICON_EDIT = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>';
 const ICON_TRASH = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>';
