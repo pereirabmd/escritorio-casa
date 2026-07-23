@@ -6,8 +6,8 @@
 <title>Peso — Controlo diário</title>
 <link rel="icon" type="image/png" href="pesoicon192.png">
 <link rel="apple-touch-icon" href="pesoicon192.png">
-<link rel="manifest" href="data:application/json;base64,eyJuYW1lIjogIkNvbnRyb2xvIGRlIFBlc28iLCAic2hvcnRfbmFtZSI6ICJQZXNvIiwgInN0YXJ0X3VybCI6ICIuLyIsICJzY29wZSI6ICIuLyIsICJkaXNwbGF5IjogInN0YW5kYWxvbmUiLCAiYmFja2dyb3VuZF9jb2xvciI6ICIjRkJGM0U3IiwgInRoZW1lX2NvbG9yIjogIiNGQkYzRTciLCAiaWNvbnMiOiBbeyJzcmMiOiAicGVzb2ljb24xOTIucG5nIiwgInNpemVzIjogIjE5MngxOTIiLCAidHlwZSI6ICJpbWFnZS9wbmcifSwgeyJzcmMiOiAicGVzb2ljb241MTIucG5nIiwgInNpemVzIjogIjUxMng1MTIiLCAidHlwZSI6ICJpbWFnZS9wbmcifV19">
-<meta name="theme-color" content="#FBF3E7">
+<link rel="manifest" href="data:application/json;base64,eyJuYW1lIjogIkNvbnRyb2xvIGRlIFBlc28iLCAic2hvcnRfbmFtZSI6ICJQZXNvIiwgInN0YXJ0X3VybCI6ICIuLyIsICJzY29wZSI6ICIuLyIsICJkaXNwbGF5IjogInN0YW5kYWxvbmUiLCAiYmFja2dyb3VuZF9jb2xvciI6ICIjRkFGQkY4IiwgInRoZW1lX2NvbG9yIjogIiNGQUZCRjgiLCAiaWNvbnMiOiBbeyJzcmMiOiAicGVzb2ljb24xOTIucG5nIiwgInNpemVzIjogIjE5MngxOTIiLCAidHlwZSI6ICJpbWFnZS9wbmcifSwgeyJzcmMiOiAicGVzb2ljb241MTIucG5nIiwgInNpemVzIjogIjUxMng1MTIiLCAidHlwZSI6ICJpbWFnZS9wbmcifV19">
+<meta name="theme-color" content="#FAFBF8">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
@@ -17,22 +17,23 @@
 <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
   :root{
-    --bg:#FBF3E7;
+    --bg:#FAFBF8;
     --panel:#FFFFFF;
-    --panel2:#F1E6D2;
-    --line:#E5D8C2;
-    --text:#3E3A32;
-    --text-dim:#948A78;
-    --lime:#7E9C83;
+    --panel2:#EEF4F0;
+    --line:#DCE7E0;
+    --text:#556066;
+    --text-dim:#8B979C;
+    --lime:#4F8D74;
     --lime-ink:#FFFFFF;
-    --lime-glow:rgba(126,156,131,.22);
-    --teal:#6F9C93;
-    --amber:#CE9A45;
-    --amber-tint:rgba(206,154,69,.15);
-    --danger:#C1604A;
-    --danger-tint:rgba(193,96,74,.13);
-    --ok:#6E9573;
-    --ok-tint:rgba(110,149,115,.15);
+    --lime-glow:rgba(79,141,116,.22);
+    --teal:#6FAF8F;
+    --mint:#A8D5BA;
+    --amber:#D69E4D;
+    --amber-tint:rgba(214,158,77,.15);
+    --danger:#D97A66;
+    --danger-tint:rgba(217,122,102,.14);
+    --ok:#4F8D74;
+    --ok-tint:rgba(79,141,116,.14);
     --font-mono:'DM Mono', monospace;
     --font-sans:'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
   }
@@ -166,7 +167,7 @@
   .progress-track{background:var(--panel2);border-radius:999px;height:15px;overflow:hidden;border:1px solid var(--line);}
   .progress-fill{
     height:100%;width:0%;border-radius:999px;
-    background:linear-gradient(90deg,#C97B62,var(--amber),var(--teal),var(--lime));
+    background:linear-gradient(90deg,var(--mint),var(--teal),var(--lime));
     background-size:300% 100%;
     transition:width .6s cubic-bezier(.4,0,.2,1);
     animation:progressFlow 6s ease infinite;
@@ -267,7 +268,7 @@
   #undoToastBtn{background:none;border:none;color:var(--lime);font-weight:800;font-size:0.82rem;padding:4px 6px;min-height:auto;}
 
   .lcd-record{font-size:0.68rem;color:var(--amber);margin-top:3px;font-weight:800;}
-  .min-tag{font-size:0.58rem;font-weight:800;color:#3E3A32;background:var(--amber);padding:1px 5px;border-radius:5px;letter-spacing:.03em;}
+  .min-tag{font-size:0.58rem;font-weight:800;color:#556066;background:var(--amber);padding:1px 5px;border-radius:5px;letter-spacing:.03em;}
 </style>
 </head>
 <body>
@@ -421,7 +422,7 @@
 /* ============================================================
    CONFIGURAÇÃO
    ============================================================ */
-const APP_VERSION = 'v1.6.0';
+const APP_VERSION = 'v1.7.0';
 const CLIENT_ID = '108256538530-fgunbb52s7f3s9aurfpjtaf01v8fjbph.apps.googleusercontent.com';
 const SPREADSHEET_ID = '1UzEXtl7w6jMsk-c7Pkt3kq97AXL6XIiwTrjOYUaYFLs';
 const SHEET_REGISTOS = 'Registos';
@@ -1166,15 +1167,64 @@ function exportarXLSX(){
     setStatus('Não há registos para exportar.', true);
     return;
   }
-  const linhas = registos.map(r => ({
+  const wb = XLSX.utils.book_new();
+
+  // ---- Folha Registos ----
+  const linhasRegistos = registos.map(r => ({
     Data: fmtData(r.date),
     'Peso (kg)': r.peso,
     Nota: r.nota
   }));
-  const ws = XLSX.utils.json_to_sheet(linhas);
-  ws['!cols'] = [{ wch: 18 }, { wch: 10 }, { wch: 30 }];
-  const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, 'Registos');
+  const wsRegistos = XLSX.utils.json_to_sheet(linhasRegistos);
+  wsRegistos['!cols'] = [{ wch: 18 }, { wch: 10 }, { wch: 30 }];
+  XLSX.utils.book_append_sheet(wb, wsRegistos, 'Registos');
+
+  // ---- Folha Config ----
+  const atividadeLabels = { 1.2: 'Pouco ativo', 1.45: 'Moderadamente ativo', 1.7: 'Muito ativo' };
+  const linhasConfig = [
+    { Campo: 'Altura (cm)', Valor: config.altura ?? '—' },
+    { Campo: 'Data de nascimento', Valor: config.nascimento ? isoDateOnly(config.nascimento) : '—' },
+    { Campo: 'Sexo', Valor: config.sexo || '—' },
+    { Campo: 'Peso alvo (kg)', Valor: config.pesoAlvo ?? '—' },
+    { Campo: 'Nível de atividade', Valor: atividadeLabels[config.atividade] || config.atividade || '—' },
+  ];
+  const wsConfig = XLSX.utils.json_to_sheet(linhasConfig);
+  wsConfig['!cols'] = [{ wch: 22 }, { wch: 22 }];
+  XLSX.utils.book_append_sheet(wb, wsConfig, 'Config');
+
+  // ---- Folha Resumo (estado calculado no momento da exportação) ----
+  const pesoAtual = registos[registos.length - 1].peso;
+  const pesoInicial = registos[0].peso;
+  const totalPerdido = pesoInicial - pesoAtual;
+  const desdeInicio = mediaPerdaPeriodo(999999);
+  const mediaSemanal = desdeInicio !== null ? desdeInicio * 7 : null;
+  const pesos = registos.map(r => r.peso);
+  const pctObjetivo = calcProgressPct();
+  const imc = config.altura ? calcIMC(pesoAtual, config.altura) : null;
+  const imcClasse = imc !== null ? classificaIMC(imc).texto : '—';
+  const idade = config.nascimento ? idadeAnos(config.nascimento) : null;
+  const tmb = (config.altura && idade !== null && config.sexo) ? calcTMB(pesoAtual, config.altura, idade, config.sexo) : null;
+  const tdee = tmb !== null ? Math.round(tmb * (config.atividade || 1.2)) : null;
+
+  const linhasResumo = [
+    { Métrica: 'Data de exportação', Valor: fmtData(new Date()) },
+    { Métrica: 'Peso inicial (kg)', Valor: pesoInicial.toFixed(1) },
+    { Métrica: 'Peso atual (kg)', Valor: pesoAtual.toFixed(1) },
+    { Métrica: 'Total perdido (kg)', Valor: totalPerdido.toFixed(1) },
+    { Métrica: 'Mínimo registado (kg)', Valor: Math.min(...pesos).toFixed(1) },
+    { Métrica: 'Máximo registado (kg)', Valor: Math.max(...pesos).toFixed(1) },
+    { Métrica: 'Ritmo médio (kg/dia)', Valor: desdeInicio !== null ? desdeInicio.toFixed(3) : '—' },
+    { Métrica: 'Ritmo médio (kg/semana)', Valor: mediaSemanal !== null ? mediaSemanal.toFixed(2) : '—' },
+    { Métrica: 'Progresso até ao objetivo (%)', Valor: pctObjetivo !== null ? pctObjetivo.toFixed(0) : '—' },
+    { Métrica: 'IMC', Valor: imc !== null ? imc.toFixed(1) : '—' },
+    { Métrica: 'Classificação IMC', Valor: imcClasse },
+    { Métrica: 'Gasto diário estimado (kcal)', Valor: tdee !== null ? tdee : '—' },
+    { Métrica: 'Total de registos', Valor: registos.length },
+  ];
+  const wsResumo = XLSX.utils.json_to_sheet(linhasResumo);
+  wsResumo['!cols'] = [{ wch: 30 }, { wch: 20 }];
+  XLSX.utils.book_append_sheet(wb, wsResumo, 'Resumo');
+
   const nomeFicheiro = `peso-export-${isoDateOnly(new Date())}.xlsx`;
   XLSX.writeFile(wb, nomeFicheiro);
   setStatus('Ficheiro exportado: ' + nomeFicheiro);
@@ -1243,13 +1293,13 @@ function renderChart(entrando = false){
   const canvasCtx = ctx.getContext('2d');
   const alturaCanvas = ctx.clientHeight || 280;
   const gradienteArea = canvasCtx.createLinearGradient(0, 0, 0, alturaCanvas);
-  gradienteArea.addColorStop(0, 'rgba(126,156,131,0.45)');
-  gradienteArea.addColorStop(0.6, 'rgba(126,156,131,0.12)');
-  gradienteArea.addColorStop(1, 'rgba(126,156,131,0.0)');
+  gradienteArea.addColorStop(0, 'rgba(79,141,116,0.40)');
+  gradienteArea.addColorStop(0.6, 'rgba(79,141,116,0.10)');
+  gradienteArea.addColorStop(1, 'rgba(79,141,116,0.0)');
 
   const gradienteLinha = canvasCtx.createLinearGradient(0, 0, ctx.clientWidth || 300, 0);
-  gradienteLinha.addColorStop(0, '#B4703F');
-  gradienteLinha.addColorStop(1, '#7E9C83');
+  gradienteLinha.addColorStop(0, '#6FAF8F');
+  gradienteLinha.addColorStop(1, '#4F8D74');
 
   // ---- Já existe gráfico e não é uma entrada na aba: só atualizar dados, com transição suave ----
   if (weightChart && !entrando){
@@ -1288,14 +1338,14 @@ function renderChart(entrando = false){
           borderWidth: 2.5,
           tension: 0.25,
           pointRadius: 2,
-          pointBackgroundColor: '#7E9C83',
+          pointBackgroundColor: '#4F8D74',
           fill: true,
           order: 2,
         },
         {
           label: 'Média 7 dias',
           data: mediasFiltradas,
-          borderColor: '#B4703F',
+          borderColor: '#D69E4D',
           backgroundColor: 'transparent',
           borderWidth: 2,
           borderDash: [4, 3],
@@ -1331,8 +1381,8 @@ function renderChart(entrando = false){
       },
       plugins: { legend: { display: false } },
       scales: {
-        x: { ticks: { maxTicksLimit: 6, font: { size: 9 }, color: '#948A78' }, grid: { color: '#E5D8C2' } },
-        y: { ticks: { font: { size: 9 }, color: '#948A78' }, grid: { color: '#E5D8C2' } }
+        x: { ticks: { maxTicksLimit: 6, font: { size: 9 }, color: '#8B979C' }, grid: { color: '#DCE7E0' } },
+        y: { ticks: { font: { size: 9 }, color: '#8B979C' }, grid: { color: '#DCE7E0' } }
       }
     }
   });
