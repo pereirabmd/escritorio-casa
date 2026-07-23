@@ -1,0 +1,918 @@
+<!DOCTYPE html>
+<html lang="pt-PT">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#7E9C83">
+<title>Xadrez · BP</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --cream:#FBF3E7;
+    --cream-2:#F3ECDF;
+    --sage:#7E9C83;
+    --sage-dark:#5C7469;
+    --teal:#6F9C93;
+    --slate:#33424A;
+    --slate-2:#2E3A3F;
+    --gold:#C9A268;
+    --danger:#C1594A;
+    --line: rgba(51,66,74,0.12);
+    --shadow: 0 10px 30px rgba(51,66,74,0.12);
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  html,body{
+    margin:0; padding:0; height:100%;
+    background:var(--cream);
+    color:var(--slate-2);
+    font-family:'Inter',sans-serif;
+    overflow-y:auto; overflow-x:hidden;
+    min-height:100svh;
+  }
+  #app{
+    min-height:100svh;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    padding:24px 16px 48px;
+  }
+  .hidden{display:none !important;}
+
+  /* ---------- shared ---------- */
+  .brandmark{
+    display:flex; align-items:center; gap:10px;
+    margin-bottom:6px;
+    color:var(--slate);
+  }
+  .brandmark .knight{
+    font-size:28px; line-height:1;
+    color:var(--sage-dark);
+  }
+  .brandmark .word{
+    font-family:'Inter',sans-serif;
+    font-weight:800;
+    font-size:22px;
+    letter-spacing:0.5px;
+  }
+  .subtitle{
+    font-size:13px;
+    color:var(--slate);
+    opacity:0.65;
+    margin-bottom:28px;
+    letter-spacing:0.3px;
+    text-align:center;
+  }
+  .bp-footer{
+    margin-top:32px;
+    display:flex; align-items:center; justify-content:center;
+    gap:8px;
+    opacity:0.55;
+    font-family:'DM Mono',monospace;
+    font-size:11px;
+    letter-spacing:1px;
+  }
+  .bp-footer .mono{
+    width:20px;height:20px;border-radius:50%;
+    background:var(--slate);
+    color:var(--cream);
+    display:flex;align-items:center;justify-content:center;
+    font-size:9px; font-weight:700;
+  }
+
+  /* ---------- SETUP SCREEN ---------- */
+  #setup-screen{
+    width:100%; max-width:420px;
+    display:flex; flex-direction:column; align-items:center;
+  }
+  .card{
+    width:100%;
+    background:#fff;
+    border-radius:20px;
+    box-shadow:var(--shadow);
+    padding:24px;
+    margin-bottom:16px;
+  }
+  .card h2{
+    font-size:14px;
+    text-transform:uppercase;
+    letter-spacing:1.2px;
+    color:var(--sage-dark);
+    margin:0 0 14px;
+    font-weight:700;
+  }
+  .color-options{
+    display:grid;
+    grid-template-columns:1fr 1fr 1fr;
+    gap:10px;
+  }
+  .color-opt{
+    border:2px solid var(--line);
+    border-radius:14px;
+    background:var(--cream-2);
+    padding:14px 8px;
+    display:flex; flex-direction:column; align-items:center; gap:6px;
+    cursor:pointer;
+    transition:border-color .15s, transform .15s, background .15s;
+    user-select:none;
+  }
+  .color-opt:active{transform:scale(0.96);}
+  .color-opt .glyph{font-size:34px; line-height:1;}
+  .color-opt.white .glyph{color:#FBF3E7; -webkit-text-stroke:1.5px var(--slate);}
+  .color-opt.black .glyph{color:var(--slate); -webkit-text-stroke:1.5px var(--slate);}
+  .color-opt.random .glyph{
+    background:linear-gradient(135deg, #FBF3E7 50%, var(--slate) 50%);
+    -webkit-background-clip:text; background-clip:text; color:transparent;
+    -webkit-text-stroke:1.5px var(--slate);
+  }
+  .color-opt span.label{font-size:12px; font-weight:600; color:var(--slate);}
+  .color-opt.selected{
+    border-color:var(--sage);
+    background:#fff;
+    box-shadow:0 0 0 3px rgba(126,156,131,0.18);
+  }
+
+  .level-row{
+    display:flex; align-items:center; justify-content:space-between;
+    margin-bottom:6px;
+  }
+  .level-value{
+    font-family:'DM Mono',monospace;
+    font-size:22px; font-weight:500;
+    color:var(--sage-dark);
+  }
+  .level-name{
+    font-size:12px; font-weight:600;
+    color:var(--slate); opacity:0.7;
+  }
+  input[type=range]{
+    width:100%;
+    -webkit-appearance:none;
+    height:6px;
+    border-radius:3px;
+    background:var(--cream-2);
+    outline:none;
+    margin:10px 0 4px;
+  }
+  input[type=range]::-webkit-slider-thumb{
+    -webkit-appearance:none;
+    width:24px; height:24px; border-radius:50%;
+    background:var(--sage);
+    border:3px solid #fff;
+    box-shadow:0 2px 8px rgba(51,66,74,0.3);
+    cursor:pointer;
+  }
+  input[type=range]::-moz-range-thumb{
+    width:24px; height:24px; border-radius:50%;
+    background:var(--sage); border:3px solid #fff;
+    box-shadow:0 2px 8px rgba(51,66,74,0.3); cursor:pointer;
+  }
+  .level-scale{
+    display:flex; justify-content:space-between;
+    font-size:10px; color:var(--slate); opacity:0.45;
+    font-family:'DM Mono',monospace;
+  }
+  .level-hint{
+    margin-top:12px;
+    font-size:12px;
+    line-height:1.5;
+    color:var(--slate);
+    opacity:0.7;
+  }
+
+  .btn-primary{
+    width:100%;
+    background:var(--slate);
+    color:var(--cream);
+    border:none;
+    border-radius:14px;
+    padding:16px;
+    font-family:'Inter',sans-serif;
+    font-weight:700;
+    font-size:15px;
+    letter-spacing:0.3px;
+    cursor:pointer;
+    transition:background .15s, transform .15s;
+    box-shadow:var(--shadow);
+  }
+  .btn-primary:active{transform:scale(0.98);}
+  .btn-primary:disabled{opacity:0.5; cursor:default;}
+  .btn-primary.loading{background:var(--sage-dark);}
+
+  .engine-status{
+    text-align:center;
+    font-size:12px;
+    color:var(--slate);
+    opacity:0.6;
+    margin-top:10px;
+    font-family:'DM Mono',monospace;
+  }
+  .dot{
+    display:inline-block; width:7px; height:7px; border-radius:50%;
+    background:var(--sage);
+    margin-right:6px;
+    animation:pulse 1.4s ease-in-out infinite;
+  }
+  @keyframes pulse{
+    0%,100%{opacity:0.3; transform:scale(0.85);}
+    50%{opacity:1; transform:scale(1.15);}
+  }
+
+  /* ---------- GAME SCREEN ---------- */
+  #game-screen{
+    width:100%; max-width:520px;
+    display:flex; flex-direction:column; align-items:center;
+  }
+  .topbar{
+    width:100%;
+    display:flex; align-items:center; justify-content:space-between;
+    margin-bottom:14px;
+  }
+  .back-btn{
+    background:none; border:none;
+    color:var(--slate); opacity:0.6;
+    font-size:13px; font-weight:600;
+    cursor:pointer;
+    display:flex; align-items:center; gap:4px;
+    padding:6px 0;
+  }
+  .status-pill{
+    font-family:'DM Mono',monospace;
+    font-size:12px;
+    background:#fff;
+    border-radius:20px;
+    padding:7px 14px;
+    box-shadow:var(--shadow);
+    display:flex; align-items:center; gap:8px;
+  }
+  .status-pill .dot-turn{
+    width:9px;height:9px;border-radius:50%;
+  }
+
+  .board-wrap{
+    width:100%;
+    aspect-ratio:1/1;
+    border-radius:14px;
+    overflow:hidden;
+    box-shadow:var(--shadow);
+    border:6px solid var(--slate);
+    position:relative;
+  }
+  #board{
+    width:100%; height:100%;
+    display:grid;
+    grid-template-columns:repeat(8,1fr);
+    grid-template-rows:repeat(8,1fr);
+  }
+  .sq{
+    position:relative;
+    display:flex; align-items:center; justify-content:center;
+    font-size:min(9vw,38px);
+    cursor:pointer;
+    user-select:none;
+  }
+  .sq.light{background:var(--cream-2);}
+  .sq.dark{background:var(--sage-dark);}
+  .sq.selected{box-shadow:inset 0 0 0 3px var(--gold);}
+  .sq.last-move{background-image:linear-gradient(rgba(201,162,104,0.35),rgba(201,162,104,0.35));}
+  .sq.in-check{background-image:linear-gradient(rgba(193,89,74,0.55),rgba(193,89,74,0.55));}
+  .sq .move-dot{
+    position:absolute;
+    width:26%; height:26%;
+    border-radius:50%;
+    background:rgba(51,66,74,0.28);
+    pointer-events:none;
+  }
+  .sq .move-dot.capture{
+    width:100%; height:100%; border-radius:0;
+    background:transparent;
+    box-shadow:inset 0 0 0 4px rgba(193,89,74,0.55);
+  }
+  .piece{position:relative; line-height:1; pointer-events:none; transition:transform .1s;}
+  .piece.white{color:#FBF3E7; -webkit-text-stroke:1.3px var(--slate-2);}
+  .piece.black{color:var(--slate-2); -webkit-text-stroke:1.3px var(--slate-2);}
+  .coord{
+    position:absolute;
+    font-family:'DM Mono',monospace;
+    font-size:9px;
+    opacity:0.45;
+    pointer-events:none;
+  }
+  .coord.file{bottom:2px; right:4px;}
+  .coord.rank{top:2px; left:4px;}
+  .sq.light .coord{color:var(--sage-dark);}
+  .sq.dark .coord{color:var(--cream-2);}
+
+  .panel{
+    width:100%;
+    background:#fff;
+    border-radius:16px;
+    box-shadow:var(--shadow);
+    margin-top:16px;
+    padding:14px 16px;
+  }
+  .captured-row{
+    display:flex; align-items:center; justify-content:space-between;
+    font-size:11px;
+    color:var(--slate);
+    opacity:0.75;
+    margin-bottom:4px;
+  }
+  .captured-row:last-child{margin-bottom:0;}
+  .captured-pieces{
+    font-size:16px;
+    letter-spacing:1px;
+  }
+  .history-panel{
+    width:100%;
+    background:#fff;
+    border-radius:16px;
+    box-shadow:var(--shadow);
+    margin-top:12px;
+    padding:14px 16px;
+    max-height:150px;
+    overflow-y:auto;
+  }
+  .history-panel h3{
+    margin:0 0 8px;
+    font-size:11px;
+    text-transform:uppercase;
+    letter-spacing:1px;
+    color:var(--sage-dark);
+    font-weight:700;
+  }
+  .move-list{
+    font-family:'DM Mono',monospace;
+    font-size:13px;
+    display:grid;
+    grid-template-columns:24px 1fr 1fr;
+    row-gap:4px;
+    column-gap:8px;
+    color:var(--slate-2);
+  }
+  .move-list .mv-num{opacity:0.4;}
+
+  .controls-row{
+    width:100%;
+    display:flex; gap:10px;
+    margin-top:14px;
+  }
+  .btn-secondary{
+    flex:1;
+    background:#fff;
+    color:var(--slate);
+    border:2px solid var(--line);
+    border-radius:12px;
+    padding:12px;
+    font-family:'Inter',sans-serif;
+    font-weight:600;
+    font-size:13px;
+    cursor:pointer;
+    transition:transform .15s, border-color .15s;
+  }
+  .btn-secondary:active{transform:scale(0.97);}
+  .btn-secondary:disabled{opacity:0.4;}
+
+  /* ---------- MODAL ---------- */
+  .modal-overlay{
+    position:fixed; inset:0;
+    background:rgba(46,58,63,0.55);
+    display:flex; align-items:center; justify-content:center;
+    z-index:50;
+    padding:24px;
+  }
+  .modal{
+    background:#fff;
+    border-radius:20px;
+    padding:28px 24px;
+    max-width:340px;
+    width:100%;
+    text-align:center;
+    box-shadow:0 20px 50px rgba(0,0,0,0.25);
+  }
+  .modal .result-glyph{font-size:44px; margin-bottom:8px;}
+  .modal h2{margin:0 0 6px; font-size:19px; color:var(--slate-2);}
+  .modal p{margin:0 0 20px; font-size:13px; color:var(--slate); opacity:0.75;}
+  .modal-actions{display:flex; gap:10px;}
+</style>
+</head>
+<body>
+<div id="app">
+
+  <!-- ============ SETUP SCREEN ============ -->
+  <div id="setup-screen">
+    <div class="brandmark"><span class="knight">♞</span><span class="word">Xadrez</span></div>
+    <div class="subtitle">Joga contra o Stockfish, diretamente no browser</div>
+
+    <div class="card">
+      <h2>Escolhe a tua cor</h2>
+      <div class="color-options">
+        <div class="color-opt white" data-color="w">
+          <span class="glyph">♔</span>
+          <span class="label">Brancas</span>
+        </div>
+        <div class="color-opt random selected" data-color="random">
+          <span class="glyph">♟</span>
+          <span class="label">Aleatório</span>
+        </div>
+        <div class="color-opt black" data-color="b">
+          <span class="glyph">♚</span>
+          <span class="label">Pretas</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Nível de dificuldade</h2>
+      <div class="level-row">
+        <span class="level-value" id="level-value">10</span>
+        <span class="level-name" id="level-name">Intermédio</span>
+      </div>
+      <input type="range" id="level-slider" min="0" max="20" value="10" step="1">
+      <div class="level-scale"><span>0</span><span>20</span></div>
+      <div class="level-hint">Controla o "Skill Level" e a profundidade de procura do Stockfish.js. Níveis baixos jogam de forma deliberadamente mais fraca; níveis altos jogam quase ao nível de um motor completo (podem demorar mais por jogada).</div>
+    </div>
+
+    <button class="btn-primary" id="start-btn">Começar Jogo</button>
+    <div class="engine-status" id="engine-status"><span class="dot"></span>A carregar motor Stockfish…</div>
+
+    <div class="bp-footer"><span class="mono">BP</span> Xadrez v1.0.0</div>
+  </div>
+
+  <!-- ============ GAME SCREEN ============ -->
+  <div id="game-screen" class="hidden">
+    <div class="topbar">
+      <button class="back-btn" id="back-btn">‹ Menu</button>
+      <div class="status-pill"><span class="dot-turn" id="dot-turn"></span><span id="status-text">A jogar</span></div>
+    </div>
+
+    <div class="board-wrap"><div id="board"></div></div>
+
+    <div class="panel">
+      <div class="captured-row">
+        <span>Capturadas pelas Brancas</span>
+        <span class="captured-pieces" id="captured-by-white"></span>
+      </div>
+      <div class="captured-row">
+        <span>Capturadas pelas Pretas</span>
+        <span class="captured-pieces" id="captured-by-black"></span>
+      </div>
+    </div>
+
+    <div class="history-panel">
+      <h3>Histórico de Jogadas</h3>
+      <div class="move-list" id="move-list"></div>
+    </div>
+
+    <div class="controls-row">
+      <button class="btn-secondary" id="undo-btn">↺ Desfazer</button>
+      <button class="btn-secondary" id="new-game-btn">Novo Jogo</button>
+    </div>
+  </div>
+
+</div>
+
+<!-- Result modal -->
+<div class="modal-overlay hidden" id="result-modal">
+  <div class="modal">
+    <div class="result-glyph" id="result-glyph">🏆</div>
+    <h2 id="result-title">Xeque-mate</h2>
+    <p id="result-desc">As Brancas venceram.</p>
+    <div class="modal-actions">
+      <button class="btn-secondary" id="modal-menu-btn">Menu</button>
+      <button class="btn-primary" id="modal-newgame-btn" style="padding:12px;">Jogar de novo</button>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js"></script>
+<script>
+/* =========================================================
+   XADREZ — v1.0.0
+   Single-file PWA. chess.js (regras) + Stockfish.js (motor, via Web Worker/UCI).
+   Arquitetura alinhada com o resto da suite escritorio-casa (BP).
+   ========================================================= */
+
+// ---------- Estado ----------
+let game = new Chess();
+let stockfish = null;
+let engineReady = false;
+let engineThinking = false;
+let playerColor = 'w';       // 'w' ou 'b' — cor escolhida pelo jogador
+let skillLevel = 10;         // 0-20
+let selectedSquare = null;
+let legalTargetsForSelected = [];
+let lastMove = null;         // {from, to}
+let boardFlipped = false;
+
+const PIECE_GLYPH = {
+  w:{p:'♙',n:'♘',b:'♗',r:'♖',q:'♕',k:'♔'},
+  b:{p:'♟',n:'♞',b:'♝',r:'♜',q:'♛',k:'♚'}
+};
+const LEVEL_NAMES = [
+  [0,'Iniciante'],[4,'Casual'],[8,'Amador'],[12,'Intermédio'],
+  [16,'Avançado'],[19,'Mestre']
+];
+
+// ---------- DOM refs ----------
+const setupScreen = document.getElementById('setup-screen');
+const gameScreen = document.getElementById('game-screen');
+const boardEl = document.getElementById('board');
+const startBtn = document.getElementById('start-btn');
+const engineStatusEl = document.getElementById('engine-status');
+const levelSlider = document.getElementById('level-slider');
+const levelValueEl = document.getElementById('level-value');
+const levelNameEl = document.getElementById('level-name');
+const statusTextEl = document.getElementById('status-text');
+const dotTurnEl = document.getElementById('dot-turn');
+const moveListEl = document.getElementById('move-list');
+const capturedWhiteEl = document.getElementById('captured-by-white');
+const capturedBlackEl = document.getElementById('captured-by-black');
+const resultModal = document.getElementById('result-modal');
+
+// ---------- Setup screen interactions ----------
+document.querySelectorAll('.color-opt').forEach(opt=>{
+  opt.addEventListener('click', ()=>{
+    document.querySelectorAll('.color-opt').forEach(o=>o.classList.remove('selected'));
+    opt.classList.add('selected');
+  });
+});
+
+function levelNameFor(v){
+  let name = LEVEL_NAMES[0][1];
+  for (const [threshold, label] of LEVEL_NAMES){ if (v>=threshold) name = label; }
+  return name;
+}
+levelSlider.addEventListener('input', ()=>{
+  skillLevel = parseInt(levelSlider.value,10);
+  levelValueEl.textContent = skillLevel;
+  levelNameEl.textContent = levelNameFor(skillLevel);
+});
+
+// ---------- Stockfish engine (Web Worker, protocolo UCI) ----------
+function initEngine(){
+  try{
+    stockfish = new Worker('https://cdn.jsdelivr.net/npm/stockfish.js@10.0.2/stockfish.js');
+  }catch(err){
+    engineStatusEl.textContent = 'Não foi possível carregar o Stockfish. Verifica a ligação à internet.';
+    return;
+  }
+  stockfish.onmessage = (e)=>{
+    const line = typeof e.data === 'string' ? e.data : (e.data && e.data.data) || '';
+    handleEngineLine(line);
+  };
+  stockfish.onerror = ()=>{
+    engineStatusEl.textContent = 'Erro no motor Stockfish. Recarrega a página.';
+  };
+  stockfish.postMessage('uci');
+}
+
+function handleEngineLine(line){
+  if (line.indexOf('uciok') === 0){
+    stockfish.postMessage('isready');
+  } else if (line.indexOf('readyok') === 0){
+    engineReady = true;
+    engineStatusEl.innerHTML = '<span class="dot" style="background:#7E9C83;"></span>Motor pronto';
+    startBtn.disabled = false;
+    startBtn.classList.remove('loading');
+  } else if (line.indexOf('bestmove') === 0){
+    const parts = line.split(' ');
+    const uciMove = parts[1];
+    engineThinking = false;
+    if (uciMove && uciMove !== '(none)'){
+      applyEngineMove(uciMove);
+    }
+  }
+}
+
+function mapDepthMoveTime(level){
+  // profundidade de procura ligada ao nível escolhido; limite de tempo evita bloqueios em telemóvel
+  const depth = Math.max(1, Math.min(20, level + 1));
+  const movetime = Math.min(15000, 400 + depth * 700);
+  return {depth, movetime};
+}
+
+function requestEngineMove(){
+  if (!engineReady || engineThinking) return;
+  engineThinking = true;
+  updateStatus();
+  const {depth, movetime} = mapDepthMoveTime(skillLevel);
+  stockfish.postMessage('position fen ' + game.fen());
+  stockfish.postMessage(`go depth ${depth} movetime ${movetime}`);
+}
+
+function applyEngineMove(uciMove){
+  const from = uciMove.slice(0,2);
+  const to = uciMove.slice(2,4);
+  const promotion = uciMove.length > 4 ? uciMove[4] : 'q';
+  const move = game.move({from, to, promotion});
+  if (move){
+    lastMove = {from, to};
+    renderBoard();
+    renderMoveList();
+    renderCaptured();
+    checkGameOver();
+    updateStatus();
+  }
+}
+
+// ---------- Início de jogo ----------
+startBtn.addEventListener('click', ()=>{
+  if (!engineReady) return;
+  const chosen = document.querySelector('.color-opt.selected').dataset.color;
+  playerColor = chosen === 'random' ? (Math.random() < 0.5 ? 'w' : 'b') : chosen;
+  boardFlipped = (playerColor === 'b');
+
+  game = new Chess();
+  selectedSquare = null;
+  legalTargetsForSelected = [];
+  lastMove = null;
+
+  stockfish.postMessage('setoption name Skill Level value ' + skillLevel);
+  stockfish.postMessage('ucinewgame');
+
+  setupScreen.classList.add('hidden');
+  gameScreen.classList.remove('hidden');
+
+  renderBoard();
+  renderMoveList();
+  renderCaptured();
+  updateStatus();
+
+  if (game.turn() !== playerColor){
+    requestEngineMove();
+  }
+});
+
+document.getElementById('back-btn').addEventListener('click', backToMenu);
+document.getElementById('modal-menu-btn').addEventListener('click', ()=>{
+  resultModal.classList.add('hidden');
+  backToMenu();
+});
+function backToMenu(){
+  gameScreen.classList.add('hidden');
+  resultModal.classList.add('hidden');
+  setupScreen.classList.remove('hidden');
+}
+
+document.getElementById('new-game-btn').addEventListener('click', startNewGameSameSettings);
+document.getElementById('modal-newgame-btn').addEventListener('click', ()=>{
+  resultModal.classList.add('hidden');
+  startNewGameSameSettings();
+});
+function startNewGameSameSettings(){
+  game = new Chess();
+  selectedSquare = null;
+  legalTargetsForSelected = [];
+  lastMove = null;
+  stockfish.postMessage('ucinewgame');
+  renderBoard();
+  renderMoveList();
+  renderCaptured();
+  updateStatus();
+  if (game.turn() !== playerColor){
+    requestEngineMove();
+  }
+}
+
+document.getElementById('undo-btn').addEventListener('click', ()=>{
+  if (engineThinking) return;
+  // desfaz a última jogada do motor e a última jogada do jogador (2 semi-jogadas)
+  const history = game.history();
+  if (history.length === 0) return;
+  game.undo();
+  if (game.turn() !== playerColor && game.history().length > 0){
+    game.undo();
+  }
+  selectedSquare = null;
+  legalTargetsForSelected = [];
+  lastMove = null;
+  renderBoard();
+  renderMoveList();
+  renderCaptured();
+  updateStatus();
+});
+
+// ---------- Renderização do tabuleiro ----------
+function squaresGrid(flipped){
+  const files = ['a','b','c','d','e','f','g','h'];
+  const ranksTopToBottom = flipped ? [1,2,3,4,5,6,7,8] : [8,7,6,5,4,3,2,1];
+  const filesLeftToRight = flipped ? [...files].reverse() : files;
+  const grid = [];
+  for (const rank of ranksTopToBottom){
+    for (const file of filesLeftToRight){
+      grid.push(file + rank);
+    }
+  }
+  return grid;
+}
+
+function renderBoard(){
+  boardEl.innerHTML = '';
+  const grid = squaresGrid(boardFlipped);
+  const inCheck = game.in_check();
+  const kingSquareInCheck = inCheck ? findKingSquare(game.turn()) : null;
+
+  grid.forEach((sq, idx)=>{
+    const file = sq[0];
+    const rank = parseInt(sq[1],10);
+    const fileIdx = 'abcdefgh'.indexOf(file);
+    const isLight = (fileIdx + rank) % 2 === 0 ? false : true; // a1 dark
+    const div = document.createElement('div');
+    div.className = 'sq ' + (isLight ? 'light' : 'dark');
+    div.dataset.square = sq;
+
+    if (selectedSquare === sq) div.classList.add('selected');
+    if (lastMove && (lastMove.from === sq || lastMove.to === sq)) div.classList.add('last-move');
+    if (kingSquareInCheck === sq) div.classList.add('in-check');
+
+    const piece = game.get(sq);
+    if (piece){
+      const span = document.createElement('span');
+      span.className = 'piece ' + (piece.color === 'w' ? 'white' : 'black');
+      span.textContent = PIECE_GLYPH[piece.color][piece.type];
+      div.appendChild(span);
+    }
+
+    if (legalTargetsForSelected.includes(sq)){
+      const dot = document.createElement('div');
+      dot.className = 'move-dot' + (piece ? ' capture' : '');
+      div.appendChild(dot);
+    }
+
+    // coordenadas apenas na borda
+    const grid8 = boardFlipped;
+    if (rank === (grid8 ? 8 : 1)){
+      const c = document.createElement('span');
+      c.className = 'coord file';
+      c.textContent = file;
+      div.appendChild(c);
+    }
+    if (file === (grid8 ? 'h' : 'a')){
+      const c = document.createElement('span');
+      c.className = 'coord rank';
+      c.textContent = rank;
+      div.appendChild(c);
+    }
+
+    div.addEventListener('click', ()=>onSquareClick(sq));
+    boardEl.appendChild(div);
+  });
+}
+
+function findKingSquare(color){
+  const files = 'abcdefgh';
+  for (let r=1;r<=8;r++){
+    for (let f=0;f<8;f++){
+      const sq = files[f]+r;
+      const p = game.get(sq);
+      if (p && p.type === 'k' && p.color === color) return sq;
+    }
+  }
+  return null;
+}
+
+// ---------- Interação ----------
+function onSquareClick(sq){
+  if (engineThinking) return;
+  if (game.turn() !== playerColor) return;
+  if (game.game_over()) return;
+
+  const piece = game.get(sq);
+
+  if (selectedSquare){
+    if (legalTargetsForSelected.includes(sq)){
+      const move = game.move({from:selectedSquare, to:sq, promotion:'q'});
+      selectedSquare = null;
+      legalTargetsForSelected = [];
+      if (move){
+        lastMove = {from:move.from, to:move.to};
+        renderBoard();
+        renderMoveList();
+        renderCaptured();
+        updateStatus();
+        if (!checkGameOver()){
+          requestEngineMove();
+        }
+      }
+      return;
+    }
+    if (piece && piece.color === playerColor){
+      selectSquare(sq);
+      return;
+    }
+    selectedSquare = null;
+    legalTargetsForSelected = [];
+    renderBoard();
+    return;
+  }
+
+  if (piece && piece.color === playerColor){
+    selectSquare(sq);
+  }
+}
+
+function selectSquare(sq){
+  selectedSquare = sq;
+  const moves = game.moves({square:sq, verbose:true});
+  legalTargetsForSelected = moves.map(m=>m.to);
+  renderBoard();
+}
+
+// ---------- Histórico e capturadas ----------
+function renderMoveList(){
+  const history = game.history();
+  moveListEl.innerHTML = '';
+  for (let i=0;i<history.length;i+=2){
+    const num = (i/2)+1;
+    const white = history[i] || '';
+    const black = history[i+1] || '';
+    const numEl = document.createElement('span');
+    numEl.className = 'mv-num';
+    numEl.textContent = num + '.';
+    const wEl = document.createElement('span');
+    wEl.textContent = white;
+    const bEl = document.createElement('span');
+    bEl.textContent = black;
+    moveListEl.appendChild(numEl);
+    moveListEl.appendChild(wEl);
+    moveListEl.appendChild(bEl);
+  }
+  const historyPanel = moveListEl.parentElement;
+  historyPanel.scrollTop = historyPanel.scrollHeight;
+}
+
+function renderCaptured(){
+  const history = game.history({verbose:true});
+  const capturedByWhite = []; // peças pretas capturadas
+  const capturedByBlack = []; // peças brancas capturadas
+  history.forEach(m=>{
+    if (m.captured){
+      if (m.color === 'w') capturedByWhite.push(PIECE_GLYPH['b'][m.captured]);
+      else capturedByBlack.push(PIECE_GLYPH['w'][m.captured]);
+    }
+  });
+  capturedWhiteEl.textContent = capturedByWhite.join(' ') || '—';
+  capturedBlackEl.textContent = capturedByBlack.join(' ') || '—';
+}
+
+// ---------- Estado / fim de jogo ----------
+function updateStatus(){
+  if (engineThinking){
+    statusTextEl.textContent = 'Stockfish a pensar…';
+    dotTurnEl.style.background = 'var(--gold)';
+    return;
+  }
+  if (game.game_over()){
+    dotTurnEl.style.background = 'var(--danger)';
+    return;
+  }
+  const turn = game.turn();
+  const isPlayerTurn = turn === playerColor;
+  dotTurnEl.style.background = turn === 'w' ? '#FBF3E7' : 'var(--slate)';
+  dotTurnEl.style.boxShadow = 'inset 0 0 0 1.5px var(--slate)';
+  if (game.in_check()){
+    statusTextEl.textContent = (isPlayerTurn ? 'Estás em xeque' : 'Xeque ao Stockfish');
+  } else {
+    statusTextEl.textContent = isPlayerTurn ? 'A tua vez' : 'Vez do Stockfish';
+  }
+}
+
+function checkGameOver(){
+  if (!game.game_over()) return false;
+  let glyph = '🤝', title = 'Empate', desc = 'A partida terminou em empate.';
+  if (game.in_checkmate()){
+    const winner = game.turn() === 'w' ? 'Pretas' : 'Brancas';
+    const playerWon = (game.turn() !== playerColor);
+    glyph = playerWon ? '🏆' : '🤖';
+    title = 'Xeque-mate';
+    desc = winner + ' venceram.' + (playerWon ? ' Parabéns!' : ' O Stockfish leva a melhor desta vez.');
+  } else if (game.in_stalemate()){
+    title = 'Empate por afogamento';
+    desc = 'Nenhuma jogada legal disponível — o jogo termina em empate.';
+  } else if (game.in_threefold_repetition()){
+    title = 'Empate por repetição';
+    desc = 'A mesma posição ocorreu três vezes.';
+  } else if (game.insufficient_material()){
+    title = 'Empate';
+    desc = 'Material insuficiente para dar xeque-mate.';
+  } else if (game.in_draw()){
+    title = 'Empate';
+    desc = 'Regra dos 50 lances sem captura ou movimento de peão.';
+  }
+  document.getElementById('result-glyph').textContent = glyph;
+  document.getElementById('result-title').textContent = title;
+  document.getElementById('result-desc').textContent = desc;
+  resultModal.classList.remove('hidden');
+  return true;
+}
+
+// ---------- Arranque ----------
+levelValueEl.textContent = skillLevel;
+levelNameEl.textContent = levelNameFor(skillLevel);
+startBtn.disabled = true;
+initEngine();
+</script>
+</body>
+</html>
