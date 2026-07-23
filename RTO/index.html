@@ -113,26 +113,26 @@
     flex-shrink:0;
     display:grid;
     grid-template-columns:repeat(2,1fr);
-    gap:7px;
-    padding:8px 16px 0;
+    gap:10px;
+    padding:12px 16px 4px;
   }
   .stat{
     background:#fff;
     border:1px solid var(--line);
     border-left:4px solid var(--line);
-    border-radius:10px;
-    padding:6px 10px;
+    border-radius:12px;
+    padding:12px 14px;
     transition:border-color .15s ease, background .15s ease;
   }
-  .stat .label{font-size:0.64rem;color:#6b6558;text-transform:uppercase;letter-spacing:.03em;}
-  .stat .value{font-size:1.05rem;font-weight:700;margin-top:1px;}
-  .stat .sub2{font-size:0.64rem;color:#a29c8c;margin-top:1px;}
+  .stat .label{font-size:0.72rem;color:#6b6558;text-transform:uppercase;letter-spacing:.03em;}
+  .stat .value{font-size:1.4rem;font-weight:700;margin-top:2px;}
+  .stat .sub2{font-size:0.7rem;color:#a29c8c;margin-top:2px;}
   .statBtn{
     font-family:inherit;
     cursor:pointer;
     text-align:center;
     line-height:1.4;
-    font-size:0.74rem;
+    font-size:0.85rem;
     font-weight:700;
     color:var(--ink);
     border-left-color:var(--brand);
@@ -267,16 +267,9 @@
   .switch input:checked + .slider::before{transform:translateX(18px);}
 
   #tabCalendario{
-    display:flex;
-    flex-direction:column;
-    overflow:hidden;
   }
   #calendar{
     padding:0 14px 8px;
-    display:flex;
-    flex-direction:column;
-    flex:1;
-    min-height:0;
   }
   .weekhead{
     display:grid;
@@ -285,16 +278,14 @@
     font-size:0.66rem;
     color:#a29c8c;
     margin-bottom:3px;
-    flex-shrink:0;
   }
   .grid{
     display:grid;
     grid-template-columns:repeat(7,1fr);
     gap:3px;
-    flex:1;
-    min-height:0;
   }
   .day{
+    aspect-ratio:1;
     border-radius:8px;
     border:1px solid var(--line);
     background:#fff;
@@ -607,7 +598,7 @@
 /* ============================================================
    CONFIGURAÇÃO — preenche estes 2 valores antes de usar
    ============================================================ */
-const APP_VERSION = 'v3.0.0';
+const APP_VERSION = 'v3.1.0';
 
 const ICON_EDIT = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>';
 const ICON_TRASH = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>';
@@ -767,21 +758,7 @@ function showTab(tab){
   document.getElementById('tabNotas').classList.toggle('hidden', tab !== 'notas');
   document.getElementById('tabBtnCal').classList.toggle('active', tab === 'cal');
   document.getElementById('tabBtnNotas').classList.toggle('active', tab === 'notas');
-  if (tab === 'cal') fitCalendarHeight();
 }
-
-/* ---------- Ajusta a altura do separador Calendário para preencher exatamente o ecrã visível, sem scroll ---------- */
-function fitCalendarHeight(){
-  const tabCal = document.getElementById('tabCalendario');
-  if (tabCal.classList.contains('hidden')) return;
-  const header = document.querySelector('header');
-  const tabBar = document.getElementById('tabBar');
-  const used = (header ? header.offsetHeight : 0) + (tabBar ? tabBar.offsetHeight : 0);
-  const available = window.innerHeight - used;
-  tabCal.style.height = Math.max(280, available) + 'px';
-}
-window.addEventListener('resize', () => { if (currentTab === 'cal') fitCalendarHeight(); });
-window.addEventListener('orientationchange', () => { if (currentTab === 'cal') setTimeout(fitCalendarHeight, 200); });
 
 async function onSignedIn(){
   document.getElementById('authArea').classList.add('hidden');
@@ -1015,8 +992,6 @@ function renderMonth(){
 
   const firstDay = new Date(currentYear, currentMonth, 1).getDay(); // 0=Dom
   const daysInMonth = new Date(currentYear, currentMonth+1, 0).getDate();
-  const weeksNeeded = Math.ceil((firstDay + daysInMonth) / 7);
-  grid.style.gridTemplateRows = `repeat(${weeksNeeded}, 1fr)`;
   const today = new Date();
   today.setHours(0,0,0,0);
   const todayStr = isoDate(today.getFullYear(), today.getMonth(), today.getDate());
@@ -1052,7 +1027,6 @@ function renderMonth(){
     grid.appendChild(cell);
     cellIndex++;
   }
-  fitCalendarHeight();
 }
 
 let slideDirection = 0; // 1 = mês seguinte (desliza da direita), -1 = mês anterior (desliza da esquerda)
