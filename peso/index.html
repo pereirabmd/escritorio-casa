@@ -100,7 +100,7 @@
     border-bottom:1px solid var(--line);
   }
   header .brand{font-size:1.05rem;font-weight:800;letter-spacing:-0.01em;display:flex;align-items:center;gap:6px;}
-  header .brand .ico{color:var(--lime);}
+  .brand-ico{height:22px;width:22px;border-radius:6px;display:block;}
   header .sub{font-size:0.68rem;color:var(--text-dim);text-transform:uppercase;letter-spacing:.06em;}
 
   #authArea{flex:0 0 auto;padding:56px 24px 24px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;text-align:center;}
@@ -295,7 +295,7 @@
 
 
 <header>
-  <div class="brand"><span class="ico">⚖</span> Peso</div>
+  <div class="brand"><img class="brand-ico" src="pesoicon192.png" alt="Peso"> Peso</div>
   <div class="sub" id="headerSub">controlo diário</div>
 </header>
 
@@ -441,7 +441,7 @@
 /* ============================================================
    CONFIGURAÇÃO
    ============================================================ */
-const APP_VERSION = 'v1.9.0';
+const APP_VERSION = 'v1.9.1';
 const CLIENT_ID = '108256538530-fgunbb52s7f3s9aurfpjtaf01v8fjbph.apps.googleusercontent.com';
 const SPREADSHEET_ID = '1UzEXtl7w6jMsk-c7Pkt3kq97AXL6XIiwTrjOYUaYFLs';
 const SHEET_REGISTOS = 'Registos';
