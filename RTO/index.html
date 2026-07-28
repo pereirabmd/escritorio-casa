@@ -598,7 +598,7 @@
 /* ============================================================
    CONFIGURAÇÃO — preenche estes 2 valores antes de usar
    ============================================================ */
-const APP_VERSION = 'v3.2.1';
+const APP_VERSION = 'v3.2.2';
 
 const ICON_EDIT = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>';
 const ICON_TRASH = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>';
@@ -1157,7 +1157,11 @@ function nextBusinessDayPt(pt){
 }
 function notaRange(row){ return `${NOTAS_SHEET}!A${row}:D${row}`; }
 
+let feriasBusy = false;
+
 async function toggleFeriasDay(dateStr, cell){
+  if (feriasBusy){ return; }
+  feriasBusy = true;
   const pt = toPtDate(dateStr);
   const d = parsePtDate(pt);
 
@@ -1241,6 +1245,8 @@ async function toggleFeriasDay(dateStr, cell){
     setStatus('');
   }catch(err){
     setStatus('Não gravou: ' + err.message, true);
+  } finally {
+    feriasBusy = false;
   }
 }
 
@@ -1523,12 +1529,16 @@ function cancelNotaEdit(){
   positionNotaForm();
 }
 
+let notaSaveBusy = false;
+
 async function onNotaSave(){
+  if (notaSaveBusy) return;
   const dataInicio = toPtDate(document.getElementById('notaDataInicio').value);
   const dataFim = toPtDate(document.getElementById('notaDataFim').value);
   const categoria = document.getElementById('notaCategoria').value.trim();
   const descricao = document.getElementById('notaDescricao').value.trim();
   if (!dataInicio && !dataFim && !categoria && !descricao) return;
+  notaSaveBusy = true;
 
   const catNorm = normalizeCategoria(categoria);
   if (!adminMode && (catNorm.includes('feria') || catNorm.includes('astr')) && isDateBeforeToday(dataFim || dataInicio)){
@@ -1557,6 +1567,8 @@ async function onNotaSave(){
     setStatus('');
   }catch(err){
     setStatus('Não gravou a nota: ' + err.message, true);
+  } finally {
+    notaSaveBusy = false;
   }
 }
 
