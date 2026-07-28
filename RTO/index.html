@@ -161,6 +161,7 @@
   .stat.saldo-warn .value{color:#a8690f;}
   .stat.saldo-bad{border-left-color:var(--bad);background:var(--h-tint);}
   .stat.saldo-bad .value{color:var(--bad);}
+  #statSaldoBox, #statSaldoCondBox{cursor:pointer;}
 
   #monthNav{
     flex-shrink:0;
@@ -345,6 +346,17 @@
     min-height:1.2em;
   }
   #status.err{color:var(--bad);}
+  #offlineBanner{
+    margin:0 16px 8px;
+    background:var(--h-tint);
+    border:1px solid var(--bad);
+    color:#8a2e24;
+    border-radius:10px;
+    padding:8px 12px;
+    font-size:0.78rem;
+    font-weight:600;
+    text-align:center;
+  }
   .hidden{display:none !important;}
 
   #logoutRow{text-align:center;padding-top:16px;}
@@ -354,6 +366,49 @@
     min-height:auto;font-weight:400;
   }
   .linkBtn:active{color:var(--bad);}
+
+  #anoHeader{
+    display:flex;align-items:center;justify-content:space-between;
+    gap:8px;padding:10px 16px 4px;
+  }
+  #anoYearLabel{font-size:0.95rem;font-weight:700;flex:1;text-align:center;}
+  #anoLegend{
+    display:flex;flex-wrap:wrap;justify-content:center;gap:8px;
+    padding:2px 16px 8px;font-size:0.66rem;color:#6b6558;
+  }
+  #anoGrid{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:8px;
+    padding:0 12px 16px;
+  }
+  .miniMonth{
+    background:#fff;
+    border:1px solid var(--line);
+    border-radius:8px;
+    padding:6px 6px 8px;
+  }
+  .miniMonthTitle{
+    font-size:0.68rem;font-weight:700;text-align:center;
+    color:var(--brand);margin-bottom:4px;
+  }
+  .miniGrid{
+    display:grid;
+    grid-template-columns:repeat(7,1fr);
+    gap:2px;
+  }
+  .miniDay{
+    aspect-ratio:1;
+    border-radius:2px;
+    background:#efece4;
+  }
+  .miniDay.empty{visibility:hidden;}
+  .miniDay.T{background:var(--t-color);}
+  .miniDay.C{background:var(--c-color);}
+  .miniDay.F{background:var(--f-color);}
+  .miniDay.A{background:var(--a-color);}
+  .miniDay.holiday{background:var(--h-color);}
+  .miniDay.today{box-shadow:0 0 0 1.5px var(--ink) inset;}
 
   #appFooter{
     text-align:center;
@@ -378,6 +433,29 @@
     opacity:0.5;
   }
   .day.hasInfo.holiday::after, .day.hasInfo.A::after{ background:#fff; opacity:0.85; }
+
+  #undoToast{
+    position:fixed;
+    left:16px; right:16px;
+    bottom:calc(16px + env(safe-area-inset-bottom));
+    max-width:448px;
+    margin:0 auto;
+    background:var(--ink);
+    color:#fff;
+    border-radius:12px;
+    padding:12px 14px;
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:12px;
+    font-size:0.85rem;
+    z-index:30;
+    box-shadow:0 4px 16px rgba(0,0,0,0.25);
+  }
+  #undoBtn{
+    background:none;border:none;color:var(--brand-light);
+    font-weight:700;font-size:0.85rem;padding:4px 6px;min-height:auto;
+  }
 
   #dayInfoOverlay{
     position:fixed; inset:0;
@@ -480,6 +558,7 @@
 
   <div id="tabBar">
     <button id="tabBtnCal" class="tabBtn active">Calendário</button>
+    <button id="tabBtnAno" class="tabBtn">Ano</button>
     <button id="tabBtnNotas" class="tabBtn">Notas</button>
   </div>
 
@@ -545,6 +624,22 @@
 
   </div>
 
+  <div id="tabAno" class="hidden">
+    <div id="anoHeader">
+      <button id="anoPrevYear" class="navBtn">‹</button>
+      <div id="anoYearLabel">2026</div>
+      <button id="anoNextYear" class="navBtn">›</button>
+    </div>
+    <div id="anoLegend">
+      <span><span class="dot t"></span> T</span>
+      <span><span class="dot c"></span> C</span>
+      <span><span class="dot f"></span> F</span>
+      <span><span class="dot a"></span> A</span>
+      <span><span class="dot h"></span> f</span>
+    </div>
+    <div id="anoGrid"></div>
+  </div>
+
   <div id="tabNotas" class="hidden">
 
     <div id="notasSection">
@@ -573,9 +668,15 @@
 
 </div>
 
+<div id="offlineBanner" class="hidden">📶 Sem ligação à internet — as alterações não vão ser guardadas até a ligação voltar</div>
 <div id="status"></div>
 
 <div id="dayInfoOverlay" class="hidden"></div>
+<div id="undoToast" class="hidden">
+  <span>Ação guardada</span>
+  <button id="undoBtn">Desfazer</button>
+</div>
+
 <div id="dayInfoCard" class="hidden">
   <div id="dayInfoContent"></div>
   <button id="dayInfoClose" class="btn-secondary" style="width:100%;">Fechar</button>
@@ -598,7 +699,7 @@
 /* ============================================================
    CONFIGURAÇÃO — preenche estes 2 valores antes de usar
    ============================================================ */
-const APP_VERSION = 'v3.2.2';
+const APP_VERSION = 'v3.3.0';
 
 const ICON_EDIT = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>';
 const ICON_TRASH = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>';
@@ -715,10 +816,16 @@ window.onload = () => {
   document.getElementById('todayBtn').onclick = () => goToToday();
   document.getElementById('dayInfoClose').onclick = () => hideDayInfo();
   document.getElementById('dayInfoOverlay').onclick = () => hideDayInfo();
+  document.getElementById('statSaldoBox').onclick = () => showSaldoExplain(false);
+  document.getElementById('statSaldoCondBox').onclick = () => showSaldoExplain(true);
+  document.getElementById('undoBtn').onclick = () => performUndo();
   document.getElementById('notaSaveBtn').onclick = onNotaSave;
   document.getElementById('notaCancelBtn').onclick = cancelNotaEdit;
   document.getElementById('tabBtnCal').onclick = () => showTab('cal');
   document.getElementById('tabBtnNotas').onclick = () => showTab('notas');
+  document.getElementById('tabBtnAno').onclick = () => showTab('ano');
+  document.getElementById('anoPrevYear').onclick = () => { currentYear--; renderAno(); };
+  document.getElementById('anoNextYear').onclick = () => { currentYear++; renderAno(); };
   document.getElementById('feriasModeToggle').onchange = (e) => {
     feriasMode = e.target.checked;
     renderMonth();
@@ -735,6 +842,10 @@ window.onload = () => {
     renderMonth();
     renderNotes();
   };
+
+  updateOfflineBanner();
+  window.addEventListener('online', updateOfflineBanner);
+  window.addEventListener('offline', updateOfflineBanner);
 
   // ---- Tentar sessão persistente ----
   const savedToken = loadSavedToken();
@@ -755,9 +866,12 @@ let currentTab = 'cal';
 function showTab(tab){
   currentTab = tab;
   document.getElementById('tabCalendario').classList.toggle('hidden', tab !== 'cal');
+  document.getElementById('tabAno').classList.toggle('hidden', tab !== 'ano');
   document.getElementById('tabNotas').classList.toggle('hidden', tab !== 'notas');
   document.getElementById('tabBtnCal').classList.toggle('active', tab === 'cal');
+  document.getElementById('tabBtnAno').classList.toggle('active', tab === 'ano');
   document.getElementById('tabBtnNotas').classList.toggle('active', tab === 'notas');
+  if (tab === 'ano') renderAno();
 }
 
 async function onSignedIn(){
@@ -770,9 +884,24 @@ async function onSignedIn(){
 }
 
 /* ---------- Sheets API helpers ---------- */
+function updateOfflineBanner(){
+  document.getElementById('offlineBanner').classList.toggle('hidden', navigator.onLine);
+}
+
+async function apiFetch(url, opts){
+  if (!navigator.onLine){
+    throw new Error('Sem ligação à internet');
+  }
+  try{
+    return await fetch(url, opts);
+  }catch(err){
+    throw new Error('Sem ligação à internet — tenta novamente');
+  }
+}
+
 async function sheetsGet(range){
   const url = `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/${encodeURIComponent(range)}`;
-  const res = await fetch(url, { headers: { Authorization: 'Bearer ' + accessToken } });
+  const res = await apiFetch(url, { headers: { Authorization: 'Bearer ' + accessToken } });
   if (res.status === 401){ onSessaoExpirada(); throw new Error('Sessão expirada'); }
   if (!res.ok) throw new Error('Erro a ler a folha (' + res.status + ')');
   return res.json();
@@ -780,7 +909,7 @@ async function sheetsGet(range){
 
 async function sheetsPut(range, values){
   const url = `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/${encodeURIComponent(range)}?valueInputOption=RAW`;
-  const res = await fetch(url, {
+  const res = await apiFetch(url, {
     method: 'PUT',
     headers: {
       Authorization: 'Bearer ' + accessToken,
@@ -795,7 +924,7 @@ async function sheetsPut(range, values){
 
 async function sheetsAppend(range, values){
   const url = `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/${encodeURIComponent(range)}:append?valueInputOption=RAW`;
-  const res = await fetch(url, {
+  const res = await apiFetch(url, {
     method: 'POST',
     headers: {
       Authorization: 'Bearer ' + accessToken,
@@ -1105,6 +1234,7 @@ function hideDayInfo(){
 
 /* ---------- Tap to cycle: '' -> T -> C -> '' (dias úteis apenas) ---------- */
 async function cycleDay(dateStr, cell){
+  captureSnapshot();
   const current = dayData[dateStr] || '';
   const next = current === '' ? 'T' : current === 'T' ? 'C' : '';
 
@@ -1125,6 +1255,7 @@ async function cycleDay(dateStr, cell){
   try{
     await sheetsPut(`${SHEET_NAME}!B${row}`, [[next]]);
     setStatus('');
+    showUndoToast();
   }catch(err){
     setStatus('Não gravou: ' + err.message, true);
   }
@@ -1157,11 +1288,134 @@ function nextBusinessDayPt(pt){
 }
 function notaRange(row){ return `${NOTAS_SHEET}!A${row}:D${row}`; }
 
+/* ---------- Visão do ano (mapa de calor compacto, 12 meses) ---------- */
+function renderAno(){
+  ensureHolidays(currentYear);
+  document.getElementById('anoYearLabel').textContent = currentYear;
+  const container = document.getElementById('anoGrid');
+  container.innerHTML = '';
+  const today = new Date();
+  today.setHours(0,0,0,0);
+  const todayStr = isoDate(today.getFullYear(), today.getMonth(), today.getDate());
+
+  for (let m = 0; m < 12; m++){
+    const box = document.createElement('div');
+    box.className = 'miniMonth';
+    const title = document.createElement('div');
+    title.className = 'miniMonthTitle';
+    title.textContent = MESES[m];
+    box.appendChild(title);
+
+    const grid = document.createElement('div');
+    grid.className = 'miniGrid';
+    const firstDay = new Date(currentYear, m, 1).getDay();
+    const daysInMonth = new Date(currentYear, m+1, 0).getDate();
+
+    for (let i = 0; i < firstDay; i++){
+      const empty = document.createElement('div');
+      empty.className = 'miniDay empty';
+      grid.appendChild(empty);
+    }
+    for (let d = 1; d <= daysInMonth; d++){
+      const dateStr = isoDate(currentYear, m, d);
+      const { cls } = computeCellDisplay(dateStr);
+      const cell = document.createElement('div');
+      cell.className = 'miniDay' + (cls ? ' ' + cls : '') + (dateStr === todayStr ? ' today' : '');
+      cell.title = `${d}/${m+1}`;
+      cell.onclick = () => {
+        currentMonth = m;
+        showTab('cal');
+        document.getElementById('tabBtnCal').classList.add('active');
+        document.getElementById('tabBtnAno').classList.remove('active');
+        renderMonth();
+        updateTotals();
+      };
+      grid.appendChild(cell);
+    }
+    box.appendChild(grid);
+    container.appendChild(box);
+  }
+}
+
+/* ---------- Desfazer: guarda um retrato antes de cada alteração e restaura-o se pedido ---------- */
+let undoSnapshot = null;
+let undoTimeout = null;
+
+function captureSnapshot(){
+  undoSnapshot = {
+    dayData: Object.assign({}, dayData),
+    notasData: notasData.map(n => Object.assign({}, n)),
+    notasNextRow: notasNextRow
+  };
+}
+
+function showUndoToast(){
+  clearTimeout(undoTimeout);
+  document.getElementById('undoToast').classList.remove('hidden');
+  undoTimeout = setTimeout(() => {
+    document.getElementById('undoToast').classList.add('hidden');
+    undoSnapshot = null;
+  }, 6000);
+}
+
+function hideUndoToast(){
+  clearTimeout(undoTimeout);
+  document.getElementById('undoToast').classList.add('hidden');
+}
+
+async function performUndo(){
+  if (!undoSnapshot) return;
+  const snap = undoSnapshot;
+  undoSnapshot = null;
+  hideUndoToast();
+  setStatus('A desfazer…');
+  try{
+    const beforeDay = snap.dayData;
+    const afterDay = dayData;
+    const allDates = new Set([...Object.keys(beforeDay), ...Object.keys(afterDay)]);
+    for (const dt of allDates){
+      if ((beforeDay[dt] || '') !== (afterDay[dt] || '') && rowIndex[dt]){
+        await sheetsPut(`${SHEET_NAME}!B${rowIndex[dt]}`, [[beforeDay[dt] || '']]);
+      }
+    }
+    dayData = Object.assign({}, beforeDay);
+
+    const beforeByRow = new Map(snap.notasData.map(n => [n.row, n]));
+    const afterByRow = new Map(notasData.map(n => [n.row, n]));
+    const allRows = new Set([...beforeByRow.keys(), ...afterByRow.keys()]);
+    for (const row of allRows){
+      const b = beforeByRow.get(row);
+      const a = afterByRow.get(row);
+      const same = b && a && b.dataInicio === a.dataInicio && b.dataFim === a.dataFim
+        && b.categoria === a.categoria && b.descricao === a.descricao;
+      if (!same){
+        if (b){
+          await sheetsPut(notaRange(row), [[b.dataInicio, b.dataFim, b.categoria, b.descricao]]);
+        } else {
+          await sheetsPut(notaRange(row), [['','','','']]);
+        }
+      }
+    }
+    notasData = snap.notasData.map(n => Object.assign({}, n));
+    notasNextRow = snap.notasNextRow;
+
+    sortNotas();
+    computeNoteMarks();
+    renderNotes();
+    renderMonth();
+    updateTotals();
+    setStatus('Ação desfeita.');
+  }catch(err){
+    setStatus('Não foi possível desfazer: ' + err.message, true);
+  }
+}
+
 let feriasBusy = false;
 
 async function toggleFeriasDay(dateStr, cell){
   if (feriasBusy){ return; }
   feriasBusy = true;
+  captureSnapshot();
   const pt = toPtDate(dateStr);
   const d = parsePtDate(pt);
 
@@ -1243,6 +1497,7 @@ async function toggleFeriasDay(dateStr, cell){
     renderMonth();
     updateTotals();
     setStatus('');
+    showUndoToast();
   }catch(err){
     setStatus('Não gravou: ' + err.message, true);
   } finally {
@@ -1293,11 +1548,13 @@ function updateTotals(){
   });
 
   // Astreinte: cada dia com astreinte vale menos um dia em casa (crédito), independente do que estiver marcado nesse dia
+  let astreinteCredits = 0;
   astreinteDatesSet.forEach(date => {
     if (parseInt(date.slice(0,4), 10) !== currentYear) return;
     if (rtoSuspensaoDatesSet.has(date)) return; // já excluído acima, evita dupla contagem
-    countC_cond -= 1;
+    astreinteCredits++;
   });
+  countC_cond -= astreinteCredits;
 
   const now = new Date();
   const startYear = new Date(currentYear,0,1);
@@ -1310,6 +1567,11 @@ function updateTotals(){
   const quotaProRata = Math.round((QUOTA_ANUAL * elapsedDays / daysInYear) * 10) / 10;
   const saldo = Math.round((quotaProRata - countC) * 10) / 10;
   const saldoCond = Math.round((quotaProRata - countC_cond) * 10) / 10;
+
+  lastCalc = {
+    countT, countC, countC_cond, astreinteCredits,
+    elapsedDays, daysInYear, quotaProRata, saldo, saldoCond
+  };
 
   animateValue('statT', countT);
   animateValue('statC', countC);
@@ -1327,6 +1589,31 @@ function updateTotals(){
 
   animateValue('statSaldoCond', saldoCond);
   document.getElementById('statSaldoCondBox').className = 'stat ' + saldoTier(saldoCond);
+}
+
+let lastCalc = null;
+
+function showSaldoExplain(cond){
+  if (!lastCalc) return;
+  const c = lastCalc;
+  const lines = [
+    { label: 'Dias em casa (marcados)', text: `${c.countC}` },
+  ];
+  if (cond){
+    lines.push({ label: 'Astreinte (crédito -1 cada)', text: `-${c.astreinteCredits}` });
+    lines.push({ label: 'Dias em casa (ajustado)', text: `${c.countC_cond}` });
+  }
+  lines.push({ label: 'Dias decorridos do ano', text: `${c.elapsedDays} de ${c.daysInYear}` });
+  lines.push({ label: 'Quota anual', text: `${QUOTA_ANUAL} dias` });
+  lines.push({ label: 'Quota pro-rata', text: `${QUOTA_ANUAL} × ${c.elapsedDays}/${c.daysInYear} = ${c.quotaProRata}` });
+  lines.push({ label: 'Saldo', text: `${c.quotaProRata} − ${cond ? c.countC_cond : c.countC} = ${cond ? c.saldoCond : c.saldo}` });
+
+  const html = [`<div class="dayInfoDate">${cond ? 'Como se calcula o Saldo (condicional)' : 'Como se calcula o Saldo'}</div>`]
+    .concat(lines.map(l => `<div class="dayInfoLine"><strong>${l.label}</strong> — ${l.text}</div>`))
+    .join('');
+  document.getElementById('dayInfoContent').innerHTML = html;
+  document.getElementById('dayInfoOverlay').classList.remove('hidden');
+  document.getElementById('dayInfoCard').classList.remove('hidden');
 }
 
 /* ---------- Notas (4 campos: Data Início | Data Fim | Categoria | Descrição) ---------- */
@@ -1543,8 +1830,10 @@ async function onNotaSave(){
   const catNorm = normalizeCategoria(categoria);
   if (!adminMode && (catNorm.includes('feria') || catNorm.includes('astr')) && isDateBeforeToday(dataFim || dataInicio)){
     setStatus('Não é possível registar/alterar férias ou astreinte numa data já passada.', true);
+    notaSaveBusy = false;
     return;
   }
+  captureSnapshot();
 
   const values = [[dataInicio, dataFim, categoria, descricao]];
   setStatus('A gravar nota…');
@@ -1565,6 +1854,7 @@ async function onNotaSave(){
     renderNotes();
     renderMonth();
     setStatus('');
+    showUndoToast();
   }catch(err){
     setStatus('Não gravou a nota: ' + err.message, true);
   } finally {
@@ -1578,6 +1868,7 @@ async function deleteNota(n){
     return;
   }
   if (!confirm(`Eliminar a nota "${n.categoria || n.descricao}"?`)) return;
+  captureSnapshot();
   setStatus('A eliminar…');
   try{
     await sheetsPut(`${NOTAS_SHEET}!A${n.row}:D${n.row}`, [['','','','']]);
@@ -1587,6 +1878,7 @@ async function deleteNota(n){
     renderNotes();
     renderMonth();
     setStatus('');
+    showUndoToast();
   }catch(err){
     setStatus('Não eliminou: ' + err.message, true);
   }
