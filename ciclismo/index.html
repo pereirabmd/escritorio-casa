@@ -1,0 +1,508 @@
+<!DOCTYPE html>
+<html lang="pt-PT">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0E5A6E">
+<title>Ciclismo · Plano de Treino</title>
+<link rel="manifest" href="manifest.json">
+<link rel="icon" type="image/png" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<style>
+  :root{
+    --bg:#F5F8F8; --card:#FFFFFF; --border:#E1E8E8;
+    --ink:#12313D; --ink-dim:#66787D; --ink-faint:#9AA9AC;
+    --esmeralda:#12B76A; --esmeralda-soft:#E5F8EE;
+    --petroleo:#0E5A6E; --petroleo-soft:#E4EFF1;
+    --ceu:#33B1F0; --ceu-soft:#E9F7FE;
+    --amarelo:#EFAE00; --amarelo-soft:#FCF2D6;
+    --rest:#9BA8AB; --rest-soft:#EEF1F1;
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  html,body{margin:0;padding:0;background:var(--bg);color:var(--ink);
+    font-family:-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    -webkit-font-smoothing:antialiased;}
+  body{min-height:100svh; display:flex; flex-direction:column;}
+
+  header.top{ padding:22px 20px 0; }
+  .eyebrow{ font-size:11px; font-weight:700; letter-spacing:.14em; color:var(--petroleo); text-transform:uppercase; margin:0 0 4px;}
+  h1{ font-size:23px; font-weight:800; letter-spacing:-.01em; margin:0; }
+  .updated-row{ display:flex; align-items:center; justify-content:space-between; gap:10px; margin-top:8px; }
+  .updated{ font-size:12px; color:var(--ink-dim); line-height:1.4; }
+  .updated b{ color:var(--ink); font-weight:600; }
+  .upload-btn{
+    appearance:none; border:1.5px solid var(--petroleo); background:var(--petroleo);
+    color:#fff; font-size:12.5px; font-weight:700; letter-spacing:.01em;
+    padding:9px 14px; border-radius:9px; cursor:pointer; white-space:nowrap; flex-shrink:0;
+  }
+  .upload-btn:active{ transform:scale(.97); }
+  .install-btn{ background:var(--esmeralda); border-color:var(--esmeralda); }
+  #fileInput{ display:none; }
+
+  nav.tabs{
+    display:flex; margin-top:18px; border-bottom:1px solid var(--border);
+    position:sticky; top:0; background:var(--bg); z-index:5;
+  }
+  nav.tabs button{
+    appearance:none; background:none; border:none; flex:1;
+    font-size:12.5px; font-weight:700; color:var(--ink-faint);
+    padding:11px 4px 10px; cursor:pointer; letter-spacing:.01em;
+    border-bottom:2px solid transparent; margin-bottom:-1px;
+  }
+  nav.tabs button.active{ color:var(--petroleo); border-color:var(--petroleo); }
+
+  main{ flex:1; padding:16px 20px 28px; }
+  .panel{ display:none; }
+  .panel.active{ display:block; }
+
+  .card{
+    background:var(--card); border:1px solid var(--border); border-radius:14px;
+    padding:14px 16px; margin-bottom:12px;
+  }
+  .card h3{ margin:0 0 10px; font-size:13px; font-weight:800; color:var(--ink); }
+
+  /* ---- Semana / day cards ---- */
+  .day-card{ border-radius:14px; border:1px solid var(--border); background:var(--card); margin-bottom:12px; overflow:hidden; }
+  .day-head{ display:flex; align-items:center; gap:10px; padding:12px 14px; border-bottom:1px solid var(--border); }
+  .day-dot{ width:9px; height:9px; border-radius:50%; flex-shrink:0; }
+  .day-name{ font-size:14px; font-weight:800; }
+  .day-date{ font-size:11.5px; color:var(--ink-dim); }
+  .day-status{ margin-left:auto; font-size:10.5px; font-weight:700; letter-spacing:.03em; padding:3px 9px; border-radius:999px; text-transform:uppercase; }
+  .status-realizado{ background:var(--esmeralda-soft); color:var(--esmeralda); }
+  .status-planeado{ background:var(--petroleo-soft); color:var(--petroleo); }
+  .status-condicional{ background:var(--amarelo-soft); color:#8a6c00; }
+  .day-body{ padding:6px 14px 12px; }
+  .session-block{ padding:8px 0; }
+  .session-block + .session-block{ border-top:1px dashed var(--border); }
+  .session-heading{ font-size:11px; font-weight:800; color:var(--ink-dim); text-transform:uppercase; letter-spacing:.04em; margin-bottom:6px; }
+  .kv-row{ display:flex; justify-content:space-between; gap:12px; padding:3px 0; font-size:13px; }
+  .kv-row .k{ color:var(--ink-dim); }
+  .kv-row .v{ color:var(--ink); font-weight:600; text-align:right; }
+  .para-row{ font-size:13px; color:var(--ink); padding:4px 0; line-height:1.45; }
+  .para-row.heading{ font-weight:800; font-size:12px; text-transform:uppercase; letter-spacing:.03em; color:var(--ink-dim); margin-top:6px; }
+  .bullet-row{ display:flex; gap:8px; align-items:flex-start; padding:3px 0; font-size:13px; line-height:1.45; }
+  .bullet-row .dot{ width:6px; height:6px; border-radius:50%; margin-top:6px; flex-shrink:0; background:var(--amarelo); }
+  .total-row{ margin-top:8px; padding:8px 10px; background:var(--petroleo-soft); border-radius:8px; font-size:12.5px; font-weight:700; color:var(--petroleo); }
+
+  /* ---- Zonas ---- */
+  .zone-row{ display:flex; align-items:center; gap:10px; padding:9px 0; border-bottom:1px solid var(--border); }
+  .zone-row:last-child{ border-bottom:none; }
+  .zone-chip{ width:34px; height:22px; border-radius:6px; display:flex; align-items:center; justify-content:center; font-size:11px; font-weight:800; color:#fff; flex-shrink:0; }
+  .zone-label{ font-size:13px; font-weight:700; flex:1; }
+  .zone-range{ font-size:12.5px; color:var(--ink-dim); font-variant-numeric:tabular-nums; }
+
+  details.extra{ margin-top:2px; }
+  details.extra summary{ font-size:12px; font-weight:700; color:var(--ink-dim); cursor:pointer; padding:6px 0; }
+
+  .empty{ text-align:center; padding:70px 24px; color:var(--ink-dim); }
+  .empty svg{ opacity:.5; margin-bottom:14px; }
+  .empty p{ font-size:13.5px; line-height:1.5; max-width:260px; margin:0 auto; }
+
+  footer{
+    display:flex; align-items:center; justify-content:center; gap:8px;
+    padding:16px 20px 22px; margin-top:auto;
+  }
+  footer img{ height:36px; width:auto; opacity:.85; display:block; }
+  footer span{ font-size:11px; color:var(--ink-faint); font-weight:600; letter-spacing:.02em; }
+
+  .toast{
+    position:fixed; left:50%; bottom:24px; transform:translate(-50%,12px);
+    background:var(--petroleo); color:#fff; font-size:13px; font-weight:700;
+    padding:10px 18px; border-radius:999px; opacity:0; pointer-events:none;
+    transition:opacity .25s ease, transform .25s ease; z-index:20;
+  }
+  .toast.show{ opacity:1; transform:translate(-50%,0); }
+</style>
+</head>
+<body>
+
+<header class="top">
+  <p class="eyebrow">Ciclismo de Estrada</p>
+  <h1>Plano de Treino</h1>
+  <div class="updated-row">
+    <div class="updated" id="updatedLabel">Nenhum plano carregado</div>
+    <button class="upload-btn install-btn" id="installBtn" style="display:none">Instalar app</button>
+    <button class="upload-btn" id="uploadBtn">Carregar .txt</button>
+    <input type="file" id="fileInput" accept=".txt,text/plain">
+  </div>
+</header>
+
+<nav class="tabs">
+  <button class="tab-btn active" data-tab="semana">Semana</button>
+  <button class="tab-btn" data-tab="atleta">Atleta</button>
+  <button class="tab-btn" data-tab="zonas">Zonas</button>
+  <button class="tab-btn" data-tab="mais">Mais</button>
+</nav>
+
+<main>
+  <div class="panel active" id="panel-semana"></div>
+  <div class="panel" id="panel-atleta"></div>
+  <div class="panel" id="panel-zonas"></div>
+  <div class="panel" id="panel-mais"></div>
+</main>
+
+<footer>
+  <img src="data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20viewBox%3D%220%200%2080%2076%22%3E%20%3Cdefs%3E%20%3ClinearGradient%20id%3D%22g%22%20x1%3D%220%22%20y1%3D%220%22%20x2%3D%221%22%20y2%3D%221%22%3E%20%3Cstop%20offset%3D%220%25%22%20stop-color%3D%22%2312B76A%22/%3E%20%3Cstop%20offset%3D%22100%25%22%20stop-color%3D%22%2333B1F0%22/%3E%20%3C/linearGradient%3E%20%3Cpath%20id%3D%22p%22%20d%3D%22M40%2C38%20C24%2C32%2016%2C16%2028%2C6%20C40%2C-3%2052%2C10%2046%2C24%20C43%2C31%2041%2C35%2040%2C38%20Z%22/%3E%20%3C/defs%3E%20%3Cg%20stroke%3D%22%23F5F8F8%22%20stroke-width%3D%222.4%22%20stroke-linejoin%3D%22round%22%3E%20%3Cuse%20href%3D%22%23p%22%20fill%3D%22url%28%23g%29%22%20transform%3D%22rotate%280%2040%2038%29%22/%3E%20%3Cuse%20href%3D%22%23p%22%20fill%3D%22url%28%23g%29%22%20transform%3D%22rotate%2872%2040%2038%29%22/%3E%20%3Cuse%20href%3D%22%23p%22%20fill%3D%22url%28%23g%29%22%20transform%3D%22rotate%28144%2040%2038%29%22/%3E%20%3Cuse%20href%3D%22%23p%22%20fill%3D%22url%28%23g%29%22%20transform%3D%22rotate%28216%2040%2038%29%22/%3E%20%3Cuse%20href%3D%22%23p%22%20fill%3D%22url%28%23g%29%22%20transform%3D%22rotate%28288%2040%2038%29%22/%3E%20%3C/g%3E%20%3Ccircle%20cx%3D%2240%22%20cy%3D%2238%22%20r%3D%226%22%20fill%3D%22%23F5F8F8%22/%3E%20%3C/svg%3E" width="80" height="76" alt="Claudinho">
+  <span>Beta 2</span>
+</footer>
+
+<div class="toast" id="toast"></div>
+
+<script>
+(function(){
+  var STORAGE_KEY = 'ciclismo.plano';
+  var DAY_ORDER = ['SEGUNDA','TERCA','QUARTA','QUINTA','SEXTA','SABADO','DOMINGO'];
+  var DAY_SHORT = {SEGUNDA:'Segunda',TERCA:'Terça',QUARTA:'Quarta',QUINTA:'Quinta',SEXTA:'Sexta',SABADO:'Sábado',DOMINGO:'Domingo'};
+
+  function stripAccents(s){ return s.normalize('NFD').replace(/[\u0300-\u036f]/g,''); }
+  function esc(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+  /* ---------------- PARSER ---------------- */
+
+  function parseFreeform(rawLines){
+    var items = [];
+    rawLines.forEach(function(raw){
+      var indent = raw.length - raw.replace(/^\s+/,'').length;
+      var t = raw.trim();
+      if (!t) return;
+      if (/^[-*]\s+/.test(t)){
+        items.push({type:'bullet', text:t.replace(/^[-*]\s+/,'')});
+      } else if (indent > 0 && items.length){
+        items[items.length-1].text += ' ' + t;
+      } else {
+        items.push({type:'para', text:t});
+      }
+    });
+    return items;
+  }
+
+  function splitByMarker(lines, regex){
+    // returns array of {header, lines} splitting on lines fully matched by regex (the header line itself excluded)
+    var blocks = []; var current = null;
+    lines.forEach(function(line){
+      var m = line.match(regex);
+      if (m){
+        if (current) blocks.push(current);
+        current = {header: m[1] ? m[1].trim() : line.trim(), lines: []};
+      } else if (current){
+        current.lines.push(line);
+      }
+    });
+    if (current) blocks.push(current);
+    return blocks;
+  }
+
+  function parseDayBlock(lines){
+    var sessions = []; var current = {heading:null, items:[]};
+    var totalLine = null;
+    var hasContent = false;
+    lines.forEach(function(raw){
+      var t = raw.trim();
+      if (!t) return;
+      if (/^Sess[aã]o\s*\d+.*:\s*$/i.test(t)){
+        if (hasContent) sessions.push(current);
+        current = {heading:t.replace(/:\s*$/,''), items:[]};
+        hasContent = false;
+      } else if (/^Total do dia:/i.test(t)){
+        totalLine = t.replace(/^Total do dia:\s*/i,'');
+      } else {
+        hasContent = true;
+        var indent = raw.length - raw.replace(/^\s+/,'').length;
+        if (/^[-*]\s+/.test(t)){
+          current.items.push({type:'bullet', text:t.replace(/^[-*]\s+/,'')});
+        } else if (indent > 2 && current.items.length){
+          current.items[current.items.length-1].text += ' ' + t;
+        } else {
+          current.items.push({type:'para', text:t});
+        }
+      }
+    });
+    if (hasContent) sessions.push(current);
+    return {sessions: sessions, totalLine: totalLine};
+  }
+
+  function parseHrZones(lines){
+    var zones = []; var rest = [];
+    lines.forEach(function(raw){
+      var t = raw.trim();
+      if (!t) return;
+      var m = t.match(/^(Z[1-5])\s*-\s*(.+?):\s*(.+)$/i);
+      if (m){ zones.push({zone:m[1].toUpperCase(), label:m[2], range:m[3]}); }
+      else rest.push(raw);
+    });
+    return {zones: zones, notes: parseFreeform(rest)};
+  }
+
+  function normalizeHeader(h){
+    return stripAccents(h).toUpperCase().replace(/\s+/g,' ').trim();
+  }
+
+  function parseTrainingFile(text){
+    var allLines = text.split(/\r?\n/);
+    var markerIdx = [];
+    allLines.forEach(function(l,i){ if (/^=+\s*$/.test(l.trim())) markerIdx.push(i); });
+
+    var preamble = markerIdx.length ? allLines.slice(0, markerIdx[0]) : allLines.slice();
+    var sections = [];
+    var i = 0;
+    while (i+1 < markerIdx.length){
+      var startEq = markerIdx[i];
+      var headerLine = (allLines[startEq+1] || '').trim();
+      var endEq = markerIdx[i+1];
+      var contentEnd = (i+2 < markerIdx.length) ? markerIdx[i+2] : allLines.length;
+      var content = allLines.slice(endEq+1, contentEnd);
+      sections.push({header: headerLine, lines: content});
+      i += 2;
+    }
+
+    var result = { meta:{}, athlete:null, hrZones:null, calories:null, days:null, notes:null, devices:null, extra:[] };
+
+    var titleLine = preamble.find(function(l){ return l.trim(); });
+    result.meta.title = titleLine ? titleLine.trim() : 'Plano de Treino';
+    preamble.forEach(function(l){
+      var mg = l.match(/Ficheiro gerado em:\s*(.+)/i);
+      if (mg) result.meta.generatedAt = mg[1].trim();
+      var mw = l.match(/^Semana:\s*(.+)/i);
+      if (mw) result.meta.weekRange = mw[1].trim();
+    });
+
+    sections.forEach(function(sec){
+      var h = normalizeHeader(sec.header);
+      if (h.indexOf('DADOS DO ATLETA') !== -1){
+        result.athlete = parseFreeform(sec.lines);
+      } else if (h.indexOf('ZONAS DE FREQUENCIA') !== -1){
+        result.hrZones = parseHrZones(sec.lines);
+      } else if (h.indexOf('CALCULO DE CALORIAS') !== -1){
+        result.calories = parseFreeform(sec.lines);
+      } else if (h.indexOf('RESUMO SEMANAL') !== -1){
+        var dayBlocks = splitByMarker(sec.lines, /^---\s*(.+?)\s*---\s*$/);
+        var days = {};
+        dayBlocks.forEach(function(db){
+          var m = db.header.match(/^(\S+)\s+([\d.\-\/]+)\s*\((.+)\)$/);
+          var name, date, status;
+          if (m){ name = m[1].toUpperCase(); date = m[2]; status = m[3]; }
+          else { name = db.header.toUpperCase(); date=''; status=''; }
+          var canon = DAY_ORDER.find(function(d){ return name.indexOf(d.slice(0,3)) === 0 || stripAccents(name).indexOf(d.slice(0,3)) === 0; }) || name;
+          days[canon] = { date:date, status:status, raw: parseDayBlock(db.lines) };
+        });
+        result.days = days;
+      } else if (h.indexOf('CONTEXTO E NOTAS') !== -1){
+        result.notes = parseFreeform(sec.lines);
+      } else if (h.indexOf('DISPOSITIVOS') !== -1){
+        result.devices = parseFreeform(sec.lines);
+      } else {
+        result.extra.push({header: sec.header, items: parseFreeform(sec.lines)});
+      }
+    });
+
+    return result;
+  }
+
+  /* ---------------- RENDER HELPERS ---------------- */
+
+  function renderFreeformItems(items){
+    var html = '';
+    items.forEach(function(it){
+      if (it.type === 'bullet'){
+        html += '<div class="bullet-row"><div class="dot"></div><div>' + esc(it.text) + '</div></div>';
+      } else {
+        var m = it.text.match(/^([^:]{1,42}):\s*(.+)$/);
+        if (m){
+          html += '<div class="kv-row"><span class="k">' + esc(m[1]) + '</span><span class="v">' + esc(m[2]) + '</span></div>';
+        } else if (/:\s*$/.test(it.text)){
+          html += '<div class="para-row heading">' + esc(it.text.replace(/:\s*$/,'')) + '</div>';
+        } else {
+          html += '<div class="para-row">' + esc(it.text) + '</div>';
+        }
+      }
+    });
+    return html;
+  }
+
+  function classifyDay(raw){
+    var joined = raw.sessions.map(function(s){ return s.items.map(function(it){return it.text;}).join(' '); }).join(' ');
+    var n = stripAccents(joined).toLowerCase();
+    if (n.indexOf('descanso') !== -1 && raw.sessions.length <= 1) return 'rest';
+    if (n.indexOf('z3') !== -1 || n.indexOf('z4') !== -1 || n.indexOf('limiar') !== -1 || n.indexOf('forte') !== -1) return 'intense';
+    return 'easy';
+  }
+
+  function statusClass(status){
+    var n = stripAccents(status||'').toUpperCase();
+    if (n.indexOf('REALIZADO') !== -1) return 'status-realizado';
+    if (n.indexOf('CONDICIONAL') !== -1) return 'status-condicional';
+    return 'status-planeado';
+  }
+
+  function renderSemana(data){
+    if (!data.days) return emptyStateHtml();
+    var html = '';
+    DAY_ORDER.forEach(function(day){
+      var d = data.days[day];
+      if (!d){
+        html += '<div class="day-card"><div class="day-head"><div class="day-dot" style="background:var(--rest)"></div><div><div class="day-name">' + DAY_SHORT[day] + '</div></div></div></div>';
+        return;
+      }
+      var kind = classifyDay(d.raw);
+      var dotColor = kind === 'rest' ? 'var(--rest)' : (kind === 'intense' ? 'var(--amarelo)' : 'var(--esmeralda)');
+      html += '<div class="day-card">';
+      html += '<div class="day-head"><div class="day-dot" style="background:' + dotColor + '"></div>';
+      html += '<div><div class="day-name">' + DAY_SHORT[day] + '</div><div class="day-date">' + esc(d.date) + '</div></div>';
+      if (d.status) html += '<div class="day-status ' + statusClass(d.status) + '">' + esc(d.status) + '</div>';
+      html += '</div><div class="day-body">';
+      d.raw.sessions.forEach(function(s){
+        html += '<div class="session-block">';
+        if (s.heading) html += '<div class="session-heading">' + esc(s.heading) + '</div>';
+        html += renderFreeformItems(s.items);
+        html += '</div>';
+      });
+      if (d.raw.totalLine) html += '<div class="total-row">Total do dia — ' + esc(d.raw.totalLine) + '</div>';
+      html += '</div></div>';
+    });
+    return html;
+  }
+
+  function renderAtleta(data){
+    if (!data.athlete) return emptyStateHtml();
+    var html = '<div class="card"><h3>Dados do Atleta</h3>' + renderFreeformItems(data.athlete) + '</div>';
+    return html;
+  }
+
+  var ZONE_VAR = {Z1:'var(--rest)', Z2:'var(--esmeralda)', Z3:'var(--ceu)', Z4:'var(--amarelo)', Z5:'var(--petroleo)'};
+
+  function renderZonas(data){
+    if (!data.hrZones) return emptyStateHtml();
+    var html = '<div class="card"><h3>Zonas de Frequência Cardíaca</h3>';
+    data.hrZones.zones.forEach(function(z){
+      html += '<div class="zone-row"><div class="zone-chip" style="background:' + (ZONE_VAR[z.zone]||'var(--ink-faint)') + '">' + z.zone + '</div>';
+      html += '<div class="zone-label">' + esc(z.label) + '</div><div class="zone-range">' + esc(z.range) + '</div></div>';
+    });
+    html += '</div>';
+    if (data.hrZones.notes && data.hrZones.notes.length){
+      html += '<div class="card">' + renderFreeformItems(data.hrZones.notes) + '</div>';
+    }
+    return html;
+  }
+
+  function renderMais(data){
+    var html = '';
+    if (data.notes && data.notes.length){
+      html += '<div class="card"><h3>Contexto e Notas de Treino</h3>' + renderFreeformItems(data.notes) + '</div>';
+    }
+    if (data.calories && data.calories.length){
+      html += '<div class="card"><h3>Cálculo de Calorias</h3>' + renderFreeformItems(data.calories) + '</div>';
+    }
+    if (data.devices && data.devices.length){
+      html += '<div class="card"><h3>Dispositivos e Ferramentas</h3>' + renderFreeformItems(data.devices) + '</div>';
+    }
+    (data.extra||[]).forEach(function(ex){
+      html += '<div class="card"><h3>' + esc(ex.header) + '</h3>' + renderFreeformItems(ex.items) + '</div>';
+    });
+    if (!html) return emptyStateHtml();
+    return html;
+  }
+
+  function emptyStateHtml(){
+    return '<div class="empty"><svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#9AA9AC" stroke-width="1.5">' +
+      '<circle cx="5.5" cy="17.5" r="3.5"/><circle cx="18.5" cy="17.5" r="3.5"/>' +
+      '<path d="M15 6a1 1 0 100-2 1 1 0 000 2zM12 17.5V14l-3-3 4-3 2 3h3"/></svg>' +
+      '<p>Ainda não há dados nesta secção. Carrega um ficheiro .txt para começar.</p></div>';
+  }
+
+  /* ---------------- APP STATE ---------------- */
+
+  function loadStored(){
+    var raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return null;
+    try { return JSON.parse(raw); } catch(e){ return null; }
+  }
+
+  function renderAll(){
+    var stored = loadStored();
+    var updatedLabel = document.getElementById('updatedLabel');
+    if (!stored){
+      updatedLabel.textContent = 'Nenhum plano carregado';
+      document.getElementById('panel-semana').innerHTML = emptyStateHtml();
+      document.getElementById('panel-atleta').innerHTML = emptyStateHtml();
+      document.getElementById('panel-zonas').innerHTML = emptyStateHtml();
+      document.getElementById('panel-mais').innerHTML = emptyStateHtml();
+      return;
+    }
+    var d = new Date(stored.updatedAt);
+    var dateStr = d.toLocaleDateString('pt-PT') + ' às ' + d.toLocaleTimeString('pt-PT',{hour:'2-digit',minute:'2-digit'});
+    updatedLabel.innerHTML = 'Atualizado <b>' + dateStr + '</b>' + (stored.sourceName ? ' · ' + esc(stored.sourceName) : '');
+    var data = stored.data;
+    document.getElementById('panel-semana').innerHTML = renderSemana(data);
+    document.getElementById('panel-atleta').innerHTML = renderAtleta(data);
+    document.getElementById('panel-zonas').innerHTML = renderZonas(data);
+    document.getElementById('panel-mais').innerHTML = renderMais(data);
+  }
+
+  function toast(msg){
+    var t = document.getElementById('toast');
+    t.textContent = msg; t.classList.add('show');
+    setTimeout(function(){ t.classList.remove('show'); }, 2400);
+  }
+
+  document.getElementById('uploadBtn').addEventListener('click', function(){
+    document.getElementById('fileInput').click();
+  });
+
+  document.getElementById('fileInput').addEventListener('change', function(e){
+    var file = e.target.files[0];
+    if (!file) return;
+    var reader = new FileReader();
+    reader.onload = function(evt){
+      try {
+        var data = parseTrainingFile(evt.target.result);
+        var record = { updatedAt: Date.now(), sourceName: file.name, data: data };
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(record));
+        renderAll();
+        toast('Plano substituído com sucesso');
+      } catch(err){
+        toast('Não foi possível ler este ficheiro');
+      }
+    };
+    reader.readAsText(file, 'UTF-8');
+    e.target.value = '';
+  });
+
+  document.querySelectorAll('.tab-btn').forEach(function(btn){
+    btn.addEventListener('click', function(){
+      document.querySelectorAll('.tab-btn').forEach(function(b){ b.classList.remove('active'); });
+      document.querySelectorAll('.panel').forEach(function(p){ p.classList.remove('active'); });
+      btn.classList.add('active');
+      document.getElementById('panel-' + btn.dataset.tab).classList.add('active');
+    });
+  });
+
+  /* ---------------- PWA setup ---------------- */
+  if ('serviceWorker' in navigator){
+    navigator.serviceWorker.register('sw.js').catch(function(){});
+  }
+
+  var deferredPrompt = null;
+  window.addEventListener('beforeinstallprompt', function(e){
+    e.preventDefault();
+    deferredPrompt = e;
+    document.getElementById('installBtn').style.display = 'inline-block';
+  });
+  var installBtn = document.getElementById('installBtn');
+  if (installBtn) installBtn.addEventListener('click', function(){
+    if (!deferredPrompt) return;
+    deferredPrompt.prompt();
+    deferredPrompt.userChoice.finally(function(){
+      deferredPrompt = null;
+      installBtn.style.display = 'none';
+    });
+  });
+  window.addEventListener('appinstalled', function(){
+    if (installBtn) installBtn.style.display = 'none';
+    toast('App instalada');
+  });
+
+  renderAll();
+})();
+</script>
+</body>
+</html>
