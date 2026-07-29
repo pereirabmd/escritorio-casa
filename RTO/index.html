@@ -33,7 +33,41 @@
     --ok:#2f8a52;
     --bad:#c94b3f;
     --accent:#1c2430;
+    --surface:#fff;
+    --muted:#6b6558;
+    --muted2:#a29c8c;
+    --weekend-bg:#efece4;
   }
+  body.dark{
+    --ink:#eae7e1;
+    --paper:#15181d;
+    --line:#3a3f47;
+    --brand:#5b9bc4;
+    --brand-light:#7fc0ea;
+    --brand-tint:#1d2e3a;
+    --t-color:#7fc0ea;
+    --t-tint:#1d2e3a;
+    --c-color:#f0975a;
+    --c-tint:#3a2a1a;
+    --f-color:#5cc586;
+    --f-tint:#1a3324;
+    --a-color:#b294e8;
+    --a-tint:#2e2442;
+    --h-color:#e2695c;
+    --h-tint:#3a1f1c;
+    --ok:#5cc586;
+    --bad:#e2695c;
+    --surface:#222630;
+    --muted:#a6a29a;
+    --muted2:#8a8680;
+    --weekend-bg:#1b1e24;
+  }
+  body.dark .switch .slider{background:#4a4f57;}
+  body.dark #yearBanner{background:#3a3018;border-color:#8a6d1f;color:#e0c168;}
+  body.dark #adminBanner{background:#3a3018;border-color:#8a6d1f;color:#e0c168;}
+  body.dark #offlineBanner{background:#3a1f1c;border-color:var(--bad);color:#f0a89e;}
+  body.dark #notaForm input::placeholder{color:#6b6860;}
+  body.dark #undoToast{background:#2c313a;}
   *{box-sizing:border-box;}
   html{background:var(--paper);height:100%;}
   body{
@@ -74,7 +108,7 @@
   }
   .sub{
     font-size:0.82rem;
-    color:#6b6558;
+    color:var(--muted);
   }
   #authArea{padding:40px 18px;text-align:center;display:flex;flex-direction:column;align-items:center;gap:10px;}
   button{
@@ -98,13 +132,13 @@
   }
   .tabBtn{
     flex:1;
-    background:#fff;
+    background:var(--surface);
     border:1px solid var(--line);
     border-radius:10px;
     padding:8px;
     font-weight:600;
     font-size:0.85rem;
-    color:#6b6558;
+    color:var(--muted);
     min-height:38px;
   }
   .tabBtn.active{background:var(--brand);color:#fff;border-color:var(--brand);}
@@ -117,16 +151,16 @@
     padding:12px 16px 4px;
   }
   .stat{
-    background:#fff;
+    background:var(--surface);
     border:1px solid var(--line);
     border-left:4px solid var(--line);
     border-radius:12px;
     padding:12px 14px;
     transition:border-color .15s ease, background .15s ease;
   }
-  .stat .label{font-size:0.72rem;color:#6b6558;text-transform:uppercase;letter-spacing:.03em;}
+  .stat .label{font-size:0.72rem;color:var(--muted);text-transform:uppercase;letter-spacing:.03em;}
   .stat .value{font-size:1.4rem;font-weight:700;margin-top:2px;}
-  .stat .sub2{font-size:0.7rem;color:#a29c8c;margin-top:2px;}
+  .stat .sub2{font-size:0.7rem;color:var(--muted2);margin-top:2px;}
   .statBtn{
     font-family:inherit;
     cursor:pointer;
@@ -193,7 +227,7 @@
     flex-shrink:0;
     display:flex;flex-wrap:wrap;justify-content:center;text-align:center;gap:8px;
     padding:2px 16px 4px;
-    font-size:0.68rem;color:#6b6558;
+    font-size:0.68rem;color:var(--muted);
   }
   #legend span{display:inline-flex;align-items:center;gap:4px;}
   .dot{width:8px;height:8px;border-radius:50%;display:inline-block;}
@@ -227,9 +261,18 @@
     gap:10px;
     padding:0 16px 6px;
     font-size:0.74rem;
-    color:#6b6558;
+    color:var(--muted);
   }
   #adminRow{padding:0 16px 10px;text-align:center;}
+  #darkModeRow{padding:16px 16px 4px;text-align:center;}
+  #darkModeLabel{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:10px;
+    font-size:0.8rem;
+    color:var(--muted);
+  }
   #adminBanner{
     flex-shrink:0;
     margin:0 16px 8px;
@@ -277,7 +320,7 @@
     grid-template-columns:repeat(7,1fr);
     text-align:center;
     font-size:0.66rem;
-    color:#a29c8c;
+    color:var(--muted2);
     margin-bottom:3px;
   }
   .grid{
@@ -289,7 +332,7 @@
     aspect-ratio:1;
     border-radius:8px;
     border:1px solid var(--line);
-    background:#fff;
+    background:var(--surface);
     display:flex;
     flex-direction:column;
     align-items:center;
@@ -304,7 +347,7 @@
   }
   .day:active{transform:scale(0.93);}
   .day.empty{visibility:hidden;cursor:default;}
-  .day.weekend{background:#efece4;cursor:default;}
+  .day.weekend{background:var(--weekend-bg);cursor:default;}
   .day.locked{opacity:0.4;cursor:default;}
   .day .num{font-weight:600;}
   .day .mark{font-size:0.6rem;font-weight:700;letter-spacing:.02em;margin-top:0;}
@@ -342,7 +385,7 @@
   #status{
     padding:8px 18px;
     font-size:0.78rem;
-    color:#a29c8c;
+    color:var(--muted2);
     min-height:1.2em;
   }
   #status.err{color:var(--bad);}
@@ -362,7 +405,7 @@
   #logoutRow{text-align:center;padding-top:16px;}
   .linkBtn{
     background:none;border:none;padding:6px 10px;
-    color:#a29c8c;font-size:0.76rem;text-decoration:underline;
+    color:var(--muted2);font-size:0.76rem;text-decoration:underline;
     min-height:auto;font-weight:400;
   }
   .linkBtn:active{color:var(--bad);}
@@ -374,7 +417,7 @@
   #anoYearLabel{font-size:0.95rem;font-weight:700;flex:1;text-align:center;}
   #anoLegend{
     display:flex;flex-wrap:wrap;justify-content:center;gap:8px;
-    padding:2px 16px 8px;font-size:0.66rem;color:#6b6558;
+    padding:2px 16px 8px;font-size:0.66rem;color:var(--muted);
   }
   #anoGrid{
     display:grid;
@@ -383,7 +426,7 @@
     padding:0 12px 16px;
   }
   .miniMonth{
-    background:#fff;
+    background:var(--surface);
     border:1px solid var(--line);
     border-radius:8px;
     padding:6px 6px 8px;
@@ -400,7 +443,7 @@
   .miniDay{
     aspect-ratio:1;
     border-radius:2px;
-    background:#efece4;
+    background:var(--weekend-bg);
   }
   .miniDay.empty{visibility:hidden;}
   .miniDay.T{background:var(--t-color);}
@@ -413,7 +456,7 @@
   #appFooter{
     text-align:center;
     font-size:0.72rem;
-    color:#a29c8c;
+    color:var(--muted2);
     padding:20px 18px calc(10px + env(safe-area-inset-bottom));
     display:flex;
     flex-direction:column;
@@ -467,7 +510,7 @@
     left:0; right:0; bottom:0;
     max-width:480px;
     margin:0 auto;
-    background:#fff;
+    background:var(--surface);
     border-radius:16px 16px 0 0;
     padding:18px 18px calc(18px + env(safe-area-inset-bottom));
     z-index:21;
@@ -484,10 +527,10 @@
     border-top:1px solid var(--line);
     margin-top:6px;
   }
-  .notasSub{font-size:0.78rem;color:#6b6558;margin-top:2px;margin-bottom:14px;}
+  .notasSub{font-size:0.78rem;color:var(--muted);margin-top:2px;margin-bottom:14px;}
 
   .notaCard{
-    background:#fff;
+    background:var(--surface);
     border:1px solid var(--line);
     border-radius:12px;
     padding:12px 14px;
@@ -499,17 +542,17 @@
   }
   .notaCard .txt{flex:1;min-width:0;}
   .notaCard .desc{font-weight:600;font-size:0.9rem;}
-  .notaCard .det{font-size:0.8rem;color:#6b6558;margin-top:2px;}
+  .notaCard .det{font-size:0.8rem;color:var(--muted);margin-top:2px;}
   .notaCard .actions{display:flex;gap:6px;flex-shrink:0;}
   .notaCard .actions button{
     background:transparent;border:none;font-size:1rem;
-    padding:4px 6px;cursor:pointer;color:#a29c8c;
+    padding:4px 6px;cursor:pointer;color:var(--muted2);
     display:inline-flex;align-items:center;justify-content:center;
     min-height:auto;
   }
   .notaCard .actions button:hover{color:var(--ink);}
-  .notaLocked{opacity:0.5;padding:4px 6px;display:inline-flex;align-items:center;color:#a29c8c;}
-  .notaEmpty{font-size:0.85rem;color:#a29c8c;padding:6px 0 14px;}
+  .notaLocked{opacity:0.5;padding:4px 6px;display:inline-flex;align-items:center;color:var(--muted2);}
+  .notaEmpty{font-size:0.85rem;color:var(--muted2);padding:6px 0 14px;}
 
   #notaForm{
     display:flex;
@@ -523,7 +566,7 @@
     padding:10px 12px;
     border:1px solid var(--line);
     border-radius:10px;
-    background:#fff;
+    background:var(--surface);
     color:var(--ink);
   }
   #notaForm input:focus{outline:2px solid var(--ink);outline-offset:1px;}
@@ -682,6 +725,16 @@
   <button id="dayInfoClose" class="btn-secondary" style="width:100%;">Fechar</button>
 </div>
 
+<div id="darkModeRow">
+  <label id="darkModeLabel">
+    <span>Modo noturno</span>
+    <span class="switch">
+      <input type="checkbox" id="darkModeToggle">
+      <span class="slider"></span>
+    </span>
+  </label>
+</div>
+
 <div id="adminRow" class="hidden">
   <label id="adminModeRow">
     <span>Modo Administrador — ignora todas as restrições de data</span>
@@ -699,7 +752,7 @@
 /* ============================================================
    CONFIGURAÇÃO — preenche estes 2 valores antes de usar
    ============================================================ */
-const APP_VERSION = 'v3.3.1';
+const APP_VERSION = 'v3.4.0';
 
 const ICON_EDIT = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>';
 const ICON_TRASH = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>';
@@ -846,6 +899,15 @@ window.onload = () => {
   updateOfflineBanner();
   window.addEventListener('online', updateOfflineBanner);
   window.addEventListener('offline', updateOfflineBanner);
+
+  const darkToggle = document.getElementById('darkModeToggle');
+  const darkSaved = localStorage.getItem('rto_dark_mode') === '1';
+  darkToggle.checked = darkSaved;
+  document.body.classList.toggle('dark', darkSaved);
+  darkToggle.onchange = (e) => {
+    document.body.classList.toggle('dark', e.target.checked);
+    try{ localStorage.setItem('rto_dark_mode', e.target.checked ? '1' : '0'); }catch(err){}
+  };
 
   // ---- Tentar sessão persistente ----
   const savedToken = loadSavedToken();
@@ -1787,15 +1849,13 @@ function isDateBeforeToday(pt){
 
 function isPastFeriasNote(n){
   if (adminMode) return false;
-  const cat = normalizeCategoria(n.categoria);
-  if (!(cat.includes('feria') || cat.includes('astr'))) return false;
   const endPt = n.dataFim || n.dataInicio;
   return isDateBeforeToday(endPt);
 }
 
 function startNotaEdit(n){
   if (isPastFeriasNote(n)){
-    setStatus('Não é possível editar férias/astreinte que já terminaram.', true);
+    setStatus('Não é possível editar notas de datas já passadas (usa o Modo Administrador).', true);
     return;
   }
   editingRow = n.row;
@@ -1831,9 +1891,8 @@ async function onNotaSave(){
   if (!dataInicio && !dataFim && !categoria && !descricao) return;
   notaSaveBusy = true;
 
-  const catNorm = normalizeCategoria(categoria);
-  if (!adminMode && (catNorm.includes('feria') || catNorm.includes('astr')) && isDateBeforeToday(dataFim || dataInicio)){
-    setStatus('Não é possível registar/alterar férias ou astreinte numa data já passada.', true);
+  if (!adminMode && isDateBeforeToday(dataFim || dataInicio)){
+    setStatus('Não é possível registar/alterar notas numa data já passada (usa o Modo Administrador).', true);
     notaSaveBusy = false;
     return;
   }
@@ -1868,7 +1927,7 @@ async function onNotaSave(){
 
 async function deleteNota(n){
   if (isPastFeriasNote(n)){
-    setStatus('Não é possível eliminar férias/astreinte que já terminaram.', true);
+    setStatus('Não é possível eliminar notas de datas já passadas (usa o Modo Administrador).', true);
     return;
   }
   if (!confirm(`Eliminar a nota "${n.categoria || n.descricao}"?`)) return;
