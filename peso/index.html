@@ -37,6 +37,25 @@
     --font-mono:'DM Mono', monospace;
     --font-sans:'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
   }
+  body.dark{
+    --bg:#121815;
+    --panel:#1B2420;
+    --panel2:#232F29;
+    --line:#2E3B34;
+    --text:#E7EDE9;
+    --text-dim:#93A69B;
+    --lime:#6FAF8F;
+    --lime-ink:#12181C;
+    --lime-glow:rgba(111,175,143,.28);
+    --teal:#A8D5BA;
+    --mint:#3E5548;
+    --amber:#E3B166;
+    --amber-tint:rgba(227,177,102,.18);
+    --danger:#E58F7A;
+    --danger-tint:rgba(229,143,122,.18);
+    --ok:#6FAF8F;
+    --ok-tint:rgba(111,175,143,.18);
+  }
   *{box-sizing:border-box;}
   html,body{height:100%;}
   body{
@@ -72,6 +91,11 @@
     pointer-events:none;
     z-index:0;
   }
+  body.dark #bgWatermark{ opacity:0.14; filter:saturate(1.1) brightness(1.6); }
+
+  body, .card, header, footer, .hero-add, .stat-chip, .chip, .progress-block, input, select, .tabBtn{
+    transition: background-color .25s ease, border-color .25s ease, color .25s ease;
+  }
 
   header, #authArea, #app, footer{ position:relative; z-index:1; }
 
@@ -102,6 +126,13 @@
   header .brand{font-size:1.05rem;font-weight:800;letter-spacing:-0.01em;display:flex;align-items:center;gap:6px;}
   .brand-ico{height:22px;width:22px;border-radius:6px;display:block;}
   header .sub{font-size:0.68rem;color:var(--text-dim);text-transform:uppercase;letter-spacing:.06em;}
+  .header-right{display:flex;align-items:center;gap:9px;}
+  .icon-theme{
+    background:none;border:1px solid var(--line);color:var(--text-dim);
+    border-radius:8px;width:26px;height:26px;padding:0;
+    display:flex;align-items:center;justify-content:center;min-height:auto;
+  }
+  .icon-theme:active{color:var(--lime);border-color:var(--lime);}
 
   #authArea{flex:0 0 auto;padding:56px 24px 24px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;text-align:center;}
   #authArea p{color:var(--text-dim);font-size:0.9rem;margin:0;}
@@ -284,7 +315,7 @@
   #undoToastBtn{background:none;border:none;color:var(--lime);font-weight:800;font-size:0.82rem;padding:4px 6px;min-height:auto;}
 
   .lcd-record{font-size:0.68rem;color:var(--amber);margin-top:3px;font-weight:800;}
-  .min-tag{font-size:0.58rem;font-weight:800;color:#556066;background:var(--amber);padding:1px 5px;border-radius:5px;letter-spacing:.03em;}
+  .min-tag{font-size:0.58rem;font-weight:800;color:#2B2115;background:var(--amber);padding:1px 5px;border-radius:5px;letter-spacing:.03em;}
 </style>
 </head>
 <body>
@@ -296,7 +327,13 @@
 
 <header>
   <div class="brand"><img class="brand-ico" src="pesoicon192.png" alt="Peso"> Peso</div>
-  <div class="sub" id="headerSub">controlo diário</div>
+  <div class="header-right">
+    <span class="sub" id="headerSub">controlo diário</span>
+    <button id="btnTheme" class="icon-theme" title="Alternar modo noturno">
+      <svg id="iconMoon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79Z"/></svg>
+      <svg id="iconSun" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="hidden"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></svg>
+    </button>
+  </div>
 </header>
 
 <div id="authArea">
@@ -441,7 +478,7 @@
 /* ============================================================
    CONFIGURAÇÃO
    ============================================================ */
-const APP_VERSION = 'v1.9.1';
+const APP_VERSION = 'v2.0.0';
 const CLIENT_ID = '108256538530-fgunbb52s7f3s9aurfpjtaf01v8fjbph.apps.googleusercontent.com';
 const SPREADSHEET_ID = '1UzEXtl7w6jMsk-c7Pkt3kq97AXL6XIiwTrjOYUaYFLs';
 const SHEET_REGISTOS = 'Registos';
@@ -497,6 +534,8 @@ function clearSavedToken(){
 
 window.onload = () => {
   document.getElementById('footerVersion').textContent = APP_VERSION;
+  initTheme();
+  document.getElementById('btnTheme').onclick = toggleTheme;
 
   tokenClient = google.accounts.oauth2.initTokenClient({
     client_id: CLIENT_ID,
@@ -616,6 +655,36 @@ function initPullToRefresh(){
     }
     distancia = 0;
   }, { passive: true });
+}
+
+/* ---------- Modo noturno ---------- */
+const THEME_KEY = 'peso_theme';
+
+function initTheme(){
+  let tema = null;
+  try{ tema = localStorage.getItem(THEME_KEY); } catch(e){}
+  if (!tema){
+    tema = (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) ? 'dark' : 'light';
+  }
+  applyTheme(tema);
+}
+
+function toggleTheme(){
+  const atual = document.body.classList.contains('dark') ? 'dark' : 'light';
+  const novo = atual === 'dark' ? 'light' : 'dark';
+  applyTheme(novo);
+  try{ localStorage.setItem(THEME_KEY, novo); } catch(e){}
+}
+
+function applyTheme(tema){
+  const escuro = tema === 'dark';
+  document.body.classList.toggle('dark', escuro);
+  document.getElementById('iconMoon').classList.toggle('hidden', escuro);
+  document.getElementById('iconSun').classList.toggle('hidden', !escuro);
+  const metaTheme = document.querySelector('meta[name="theme-color"]');
+  if (metaTheme) metaTheme.setAttribute('content', escuro ? '#121815' : '#FAFBF8');
+  // se o gráfico já estiver desenhado, redesenha com as cores do novo tema
+  if (weightChart && currentTab === 'grafico') renderChart(true);
 }
 
 function showTab(tab){
@@ -1366,16 +1435,29 @@ function renderChart(entrando = false){
   const datasFiltradas = new Set(filtrado.map(r => r.date.getTime()));
   const mediasFiltradas = mediasCompletas.filter(m => datasFiltradas.has(m.date.getTime())).map(m => m.media);
 
+  const escuro = document.body.classList.contains('dark');
+
   const canvasCtx = ctx.getContext('2d');
   const alturaCanvas = ctx.clientHeight || 280;
   const gradienteArea = canvasCtx.createLinearGradient(0, 0, 0, alturaCanvas);
-  gradienteArea.addColorStop(0, 'rgba(79,141,116,0.40)');
-  gradienteArea.addColorStop(0.6, 'rgba(79,141,116,0.10)');
-  gradienteArea.addColorStop(1, 'rgba(79,141,116,0.0)');
+  if (escuro){
+    gradienteArea.addColorStop(0, 'rgba(111,175,143,0.38)');
+    gradienteArea.addColorStop(0.6, 'rgba(111,175,143,0.10)');
+    gradienteArea.addColorStop(1, 'rgba(111,175,143,0.0)');
+  } else {
+    gradienteArea.addColorStop(0, 'rgba(79,141,116,0.40)');
+    gradienteArea.addColorStop(0.6, 'rgba(79,141,116,0.10)');
+    gradienteArea.addColorStop(1, 'rgba(79,141,116,0.0)');
+  }
 
   const gradienteLinha = canvasCtx.createLinearGradient(0, 0, ctx.clientWidth || 300, 0);
-  gradienteLinha.addColorStop(0, '#6FAF8F');
-  gradienteLinha.addColorStop(1, '#4F8D74');
+  if (escuro){
+    gradienteLinha.addColorStop(0, '#A8D5BA');
+    gradienteLinha.addColorStop(1, '#6FAF8F');
+  } else {
+    gradienteLinha.addColorStop(0, '#6FAF8F');
+    gradienteLinha.addColorStop(1, '#4F8D74');
+  }
 
   // ---- Já existe gráfico e não é uma entrada na aba: só atualizar dados, com transição suave ----
   if (weightChart && !entrando){
@@ -1414,14 +1496,14 @@ function renderChart(entrando = false){
           borderWidth: 2.5,
           tension: 0.25,
           pointRadius: 2,
-          pointBackgroundColor: '#4F8D74',
+          pointBackgroundColor: escuro ? '#A8D5BA' : '#4F8D74',
           fill: true,
           order: 2,
         },
         {
           label: 'Média 7 dias',
           data: mediasFiltradas,
-          borderColor: '#D69E4D',
+          borderColor: escuro ? '#E3B166' : '#D69E4D',
           backgroundColor: 'transparent',
           borderWidth: 2,
           borderDash: [4, 3],
@@ -1457,8 +1539,8 @@ function renderChart(entrando = false){
       },
       plugins: { legend: { display: false } },
       scales: {
-        x: { ticks: { maxTicksLimit: 6, font: { size: 9 }, color: '#8B979C' }, grid: { color: '#DCE7E0' } },
-        y: { ticks: { font: { size: 9 }, color: '#8B979C' }, grid: { color: '#DCE7E0' } }
+        x: { ticks: { maxTicksLimit: 6, font: { size: 9 }, color: escuro ? '#93A69B' : '#8B979C' }, grid: { color: escuro ? '#2E3B34' : '#DCE7E0' } },
+        y: { ticks: { font: { size: 9 }, color: escuro ? '#93A69B' : '#8B979C' }, grid: { color: escuro ? '#2E3B34' : '#DCE7E0' } }
       }
     }
   });
