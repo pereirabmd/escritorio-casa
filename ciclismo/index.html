@@ -15,9 +15,20 @@
     --esmeralda:#12B76A; --esmeralda-soft:#E5F8EE;
     --petroleo:#0E5A6E; --petroleo-soft:#E4EFF1;
     --ceu:#33B1F0; --ceu-soft:#E9F7FE;
-    --amarelo:#EFAE00; --amarelo-soft:#FCF2D6;
+    --amarelo:#EFAE00; --amarelo-soft:#FCF2D6; --condicional-text:#8a6c00;
     --rest:#9BA8AB; --rest-soft:#EEF1F1;
   }
+  [data-theme="dark"]{
+    --bg:#0E1719; --card:#17262A; --border:#243A3E;
+    --ink:#EAF3F1; --ink-dim:#93AAAC; --ink-faint:#647D80;
+    --esmeralda:#25D68E; --esmeralda-soft:rgba(37,214,142,.15);
+    --petroleo:#4CB2CE; --petroleo-soft:rgba(76,178,206,.15);
+    --ceu:#5BC8FB; --ceu-soft:rgba(91,200,251,.14);
+    --amarelo:#FFC83C; --amarelo-soft:rgba(255,200,60,.16); --condicional-text:#FFD873;
+    --rest:#7C8F92; --rest-soft:rgba(124,143,146,.14);
+  }
+  html{ background:var(--bg); }
+  html, body{ transition: background-color .25s ease; }
   *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
   html,body{margin:0;padding:0;background:var(--bg);color:var(--ink);
     font-family:-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
@@ -25,6 +36,13 @@
   body{min-height:100svh; display:flex; flex-direction:column;}
 
   header.top{ padding:22px 20px 0; position:relative; z-index:1; }
+  .theme-btn{
+    position:absolute; top:18px; right:18px; width:34px; height:34px; border-radius:50%;
+    border:1px solid var(--border); background:var(--card); display:flex; align-items:center;
+    justify-content:center; cursor:pointer; padding:0; transition:background-color .2s ease, border-color .2s ease;
+  }
+  .theme-btn svg{ width:16px; height:16px; stroke:var(--ink-dim); }
+  .theme-btn:active{ transform:scale(.93); }
   .eyebrow{ font-size:11px; font-weight:700; letter-spacing:.14em; color:var(--petroleo); text-transform:uppercase; margin:0 0 4px;}
   h1{ font-size:23px; font-weight:800; letter-spacing:-.01em; margin:0; }
   .updated-row{ display:flex; align-items:center; justify-content:space-between; gap:10px; margin-top:8px; }
@@ -65,8 +83,9 @@
   .card h3{ margin:0 0 10px; font-size:13px; font-weight:800; color:var(--ink); }
 
   /* ---- Semana / day cards ---- */
-  .day-card{ border-radius:14px; border:1px solid var(--border); background:var(--card); margin-bottom:12px; overflow:hidden;
+  .day-card{ border-radius:14px; border:1px solid var(--border); border-left-width:4px; background:var(--card); margin-bottom:12px; overflow:hidden;
     opacity:0; animation:cardIn .45s cubic-bezier(.2,.7,.3,1) forwards; }
+  .day-card.today{ box-shadow:0 0 0 2px var(--petroleo); }
   .day-card:nth-child(1){ animation-delay:.02s; }
   .day-card:nth-child(2){ animation-delay:.07s; }
   .day-card:nth-child(3){ animation-delay:.12s; }
@@ -76,14 +95,16 @@
   .day-card:nth-child(7){ animation-delay:.32s; }
   @keyframes cardIn{ from{ opacity:0; transform:translateY(14px); } to{ opacity:1; transform:translateY(0); } }
   @media (prefers-reduced-motion: reduce){ .day-card{ animation:none; opacity:1; } }
+  .today-pill{ font-size:9.5px; font-weight:800; letter-spacing:.04em; color:#fff; background:var(--petroleo); padding:2px 7px; border-radius:999px; margin-left:8px; text-transform:uppercase; }
   .day-head{ display:flex; align-items:center; gap:10px; padding:12px 14px; border-bottom:1px solid var(--border); }
+  .session-block:nth-of-type(even){ background:var(--rest-soft); margin:2px -14px 0; padding:8px 14px; }
   .day-dot{ width:9px; height:9px; border-radius:50%; flex-shrink:0; }
   .day-name{ font-size:14px; font-weight:800; }
   .day-date{ font-size:11.5px; color:var(--ink-dim); }
   .day-status{ margin-left:auto; font-size:10.5px; font-weight:700; letter-spacing:.03em; padding:3px 9px; border-radius:999px; text-transform:uppercase; }
   .status-realizado{ background:var(--esmeralda-soft); color:var(--esmeralda); }
   .status-planeado{ background:var(--petroleo-soft); color:var(--petroleo); }
-  .status-condicional{ background:var(--amarelo-soft); color:#8a6c00; }
+  .status-condicional{ background:var(--amarelo-soft); color:var(--condicional-text); }
   .day-body{ padding:6px 14px 12px; }
   .session-block{ padding:8px 0; }
   .session-block + .session-block{ border-top:1px dashed var(--border); }
@@ -121,8 +142,9 @@
   .watermark{
     position:fixed; left:50%; bottom:-70px; width:380px; max-width:70vw;
     transform:translateX(-50%); opacity:.07; pointer-events:none; z-index:0;
-    filter:saturate(1.1);
+    filter:saturate(1.1); transition:opacity .25s ease;
   }
+  [data-theme="dark"] .watermark{ opacity:.12; }
   @media (prefers-reduced-motion: no-preference){
     .watermark{ animation:drift 26s ease-in-out infinite; }
   }
@@ -145,6 +167,7 @@
 <img class="watermark" src="icon-watermark.png" alt="" aria-hidden="true">
 
 <header class="top">
+  <button class="theme-btn" id="themeBtn" aria-label="Alternar modo noturno"></button>
   <p class="eyebrow">Ciclismo de Estrada</p>
   <h1>Plano de Treino</h1>
   <div class="updated-row">
@@ -171,7 +194,7 @@
 
 <footer>
   <img class="brand" src="claudinho.png" width="80" height="76" alt="Claudinho">
-  <span>Beta 4</span>
+  <span>Beta 5</span>
 </footer>
 
 <div class="toast" id="toast"></div>
@@ -362,20 +385,34 @@
     return 'status-planeado';
   }
 
+  var KIND_STYLE = {
+    rest: {dot:'var(--rest)', soft:'var(--rest-soft)'},
+    intense: {dot:'var(--amarelo)', soft:'var(--amarelo-soft)'},
+    easy: {dot:'var(--esmeralda)', soft:'var(--esmeralda-soft)'}
+  };
+
+  function todayStr(){
+    var d = new Date();
+    var mm = String(d.getMonth()+1).padStart(2,'0');
+    var dd = String(d.getDate()).padStart(2,'0');
+    return d.getFullYear() + '-' + mm + '-' + dd;
+  }
+
   function renderSemana(data){
     if (!data.days) return emptyStateHtml();
-    var html = '';
+    var html = ''; var today = todayStr();
     DAY_ORDER.forEach(function(day){
       var d = data.days[day];
       if (!d){
-        html += '<div class="day-card"><div class="day-head"><div class="day-dot" style="background:var(--rest)"></div><div><div class="day-name">' + DAY_SHORT[day] + '</div></div></div></div>';
+        html += '<div class="day-card" style="border-left-color:var(--rest)"><div class="day-head"><div class="day-dot" style="background:var(--rest)"></div><div><div class="day-name">' + DAY_SHORT[day] + '</div></div></div></div>';
         return;
       }
       var kind = classifyDay(d.raw);
-      var dotColor = kind === 'rest' ? 'var(--rest)' : (kind === 'intense' ? 'var(--amarelo)' : 'var(--esmeralda)');
-      html += '<div class="day-card">';
-      html += '<div class="day-head"><div class="day-dot" style="background:' + dotColor + '"></div>';
-      html += '<div><div class="day-name">' + DAY_SHORT[day] + '</div><div class="day-date">' + esc(d.date) + '</div></div>';
+      var style = KIND_STYLE[kind];
+      var isToday = d.date && d.date === today;
+      html += '<div class="day-card' + (isToday ? ' today' : '') + '" style="border-left-color:' + style.dot + '" data-date="' + esc(d.date) + '">';
+      html += '<div class="day-head" style="background:' + style.soft + '"><div class="day-dot" style="background:' + style.dot + '"></div>';
+      html += '<div><div class="day-name">' + DAY_SHORT[day] + (isToday ? '<span class="today-pill">Hoje</span>' : '') + '</div><div class="day-date">' + esc(d.date) + '</div></div>';
       if (d.status) html += '<div class="day-status ' + statusClass(d.status) + '">' + esc(d.status) + '</div>';
       html += '</div><div class="day-body">';
       d.raw.sessions.forEach(function(s){
@@ -464,6 +501,14 @@
     document.getElementById('panel-atleta').innerHTML = renderAtleta(data);
     document.getElementById('panel-zonas').innerHTML = renderZonas(data);
     document.getElementById('panel-mais').innerHTML = renderMais(data);
+    scrollToToday();
+  }
+
+  function scrollToToday(){
+    setTimeout(function(){
+      var el = document.querySelector('.day-card.today');
+      if (el) el.scrollIntoView({behavior:'smooth', block:'center'});
+    }, 420);
   }
 
   function toast(msg){
@@ -503,6 +548,31 @@
       document.getElementById('panel-' + btn.dataset.tab).classList.add('active');
     });
   });
+
+  /* ---------------- Tema ---------------- */
+  var MOON_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A9 9 0 1111.2 3 7 7 0 0021 12.8z"/></svg>';
+  var SUN_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>';
+
+  function applyTheme(theme){
+    document.documentElement.setAttribute('data-theme', theme);
+    var btn = document.getElementById('themeBtn');
+    if (btn) btn.innerHTML = theme === 'dark' ? SUN_SVG : MOON_SVG;
+    var meta = document.querySelector('meta[name="theme-color"]');
+    if (meta) meta.setAttribute('content', theme === 'dark' ? '#0E1719' : '#0E5A6E');
+    localStorage.setItem('ciclismo.theme', theme);
+  }
+
+  function initTheme(){
+    var stored = localStorage.getItem('ciclismo.theme');
+    var theme = stored || (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+    applyTheme(theme);
+  }
+  var themeBtn = document.getElementById('themeBtn');
+  if (themeBtn) themeBtn.addEventListener('click', function(){
+    var current = document.documentElement.getAttribute('data-theme');
+    applyTheme(current === 'dark' ? 'light' : 'dark');
+  });
+  initTheme();
 
   /* ---------------- PWA setup ---------------- */
   if ('serviceWorker' in navigator){
