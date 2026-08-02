@@ -263,17 +263,33 @@
   }
   #yearBanner button{padding:6px 10px;font-size:0.76rem;min-height:32px;}
 
-  #feriasModeRow{
-    flex-shrink:0;
+  #modeRow{flex-shrink:0;padding:2px 16px 8px;}
+  #modeSegmented{
     display:flex;
-    align-items:center;
-    justify-content:space-between;
-    gap:10px;
-    padding:0 16px 6px;
-    font-size:0.74rem;
-    color:var(--muted);
+    background:var(--surface);
+    border:1px solid var(--line);
+    border-radius:10px;
+    padding:3px;
+    gap:3px;
   }
-  #adminRow{padding:0 16px 10px;text-align:center;}
+  .modeBtn{
+    flex:1;
+    background:none;
+    border:none;
+    padding:8px 4px;
+    font-size:0.76rem;
+    font-weight:600;
+    color:var(--muted);
+    border-radius:7px;
+    min-height:36px;
+  }
+  .modeBtn.active{background:var(--brand);color:#fff;}
+  #modeHint{
+    font-size:0.7rem;
+    color:var(--muted2);
+    text-align:center;
+    margin-top:4px;
+  }
   #adminBanner{
     flex-shrink:0;
     margin:0 16px 8px;
@@ -285,14 +301,6 @@
     font-size:0.72rem;
     font-weight:600;
     text-align:center;
-  }
-  #adminModeRow{
-    display:flex;
-    align-items:center;
-    justify-content:space-between;
-    gap:10px;
-    font-size:0.78rem;
-    color:#a8690f;
   }
   .switch{position:relative;display:inline-block;width:44px;height:26px;flex-shrink:0;}
   .switch input{opacity:0;width:0;height:0;position:absolute;}
@@ -644,13 +652,14 @@
     <div id="yearBanner" class="hidden"></div>
     <div id="adminBanner" class="hidden">⚠ Modo Administrador ativo — sem restrições de data</div>
 
-    <label id="feriasModeRow">
-      <span>Modo Férias — ao tocar num dia, marca só férias (não mexe no T/C)</span>
-      <span class="switch">
-        <input type="checkbox" id="feriasModeToggle">
-        <span class="slider"></span>
-      </span>
-    </label>
+    <div id="modeRow">
+      <div id="modeSegmented">
+        <button class="modeBtn active" data-mode="normal">Normal</button>
+        <button class="modeBtn" data-mode="ferias">Férias</button>
+        <button class="modeBtn" data-mode="admin">Administrador</button>
+      </div>
+      <div id="modeHint">Toca num dia para marcar Escritório/Casa</div>
+    </div>
 
     <div id="calendar">
       <div class="weekhead">
@@ -728,15 +737,6 @@
 </div>
 
 
-<div id="adminRow" class="hidden">
-  <label id="adminModeRow">
-    <span>Modo Administrador — ignora todas as restrições de data</span>
-    <span class="switch">
-      <input type="checkbox" id="adminModeToggle">
-      <span class="slider"></span>
-    </span>
-  </label>
-</div>
 <div id="logoutRow" class="hidden"><button id="logoutBtn" class="linkBtn">Terminar sessão</button></div>
 
 <footer id="appFooter"><img id="footerLogo" src="data:image/png;base64,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" alt="Logo"><div><span id="footerVersion"></span></div></footer>
@@ -745,7 +745,7 @@
 /* ============================================================
    CONFIGURAÇÃO — preenche estes 2 valores antes de usar
    ============================================================ */
-const APP_VERSION = 'v3.5.0';
+const APP_VERSION = 'v3.6.1';
 
 const ICON_EDIT = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>';
 const ICON_TRASH = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>';
@@ -767,6 +767,7 @@ let dayData = {};      // { 'YYYY-MM-DD': 'T' | 'C' | '' }
 let rowIndex = {};      // { 'YYYY-MM-DD': rowNumber } (1-indexed sheet row)
 let feriasMode = false;
 let adminMode = false;
+let appMode = 'normal'; // 'normal' | 'ferias' | 'admin'
 let currentMonth = new Date().getMonth();
 
 const MESES = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
@@ -812,7 +813,6 @@ function onSessaoExpirada(){
   accessToken = null;
   document.getElementById('app').classList.add('hidden');
   document.getElementById('logoutRow').classList.add('hidden');
-  document.getElementById('adminRow').classList.add('hidden');
   document.getElementById('authArea').classList.remove('hidden');
   document.getElementById('authChecking').classList.add('hidden');
   document.getElementById('signinBtn').classList.remove('hidden');
@@ -829,7 +829,6 @@ function onTerminarSessao(){
   }
   document.getElementById('app').classList.add('hidden');
   document.getElementById('logoutRow').classList.add('hidden');
-  document.getElementById('adminRow').classList.add('hidden');
   document.getElementById('authArea').classList.remove('hidden');
   document.getElementById('authChecking').classList.add('hidden');
   document.getElementById('signinBtn').classList.remove('hidden');
@@ -874,22 +873,11 @@ window.onload = () => {
   document.getElementById('tabBtnAno').onclick = () => showTab('ano');
   document.getElementById('anoPrevYear').onclick = () => { currentYear--; renderAno(); };
   document.getElementById('anoNextYear').onclick = () => { currentYear++; renderAno(); };
-  document.getElementById('feriasModeToggle').onchange = (e) => {
-    feriasMode = e.target.checked;
-    renderMonth();
-  };
+  document.querySelectorAll('.modeBtn').forEach(btn => {
+    btn.onclick = () => setAppMode(btn.dataset.mode);
+  });
   const logoutBtn = document.getElementById('logoutBtn');
   if (logoutBtn) logoutBtn.onclick = onTerminarSessao;
-  document.getElementById('adminModeToggle').onchange = (e) => {
-    if (e.target.checked){
-      const ok = confirm('Ativar Modo Administrador?\n\nVais poder alterar qualquer registo, incluindo dias e notas já passados, sem restrições.');
-      if (!ok){ e.target.checked = false; return; }
-    }
-    adminMode = e.target.checked;
-    document.getElementById('adminBanner').classList.toggle('hidden', !adminMode);
-    renderMonth();
-    renderNotes();
-  };
 
   updateOfflineBanner();
   window.addEventListener('online', updateOfflineBanner);
@@ -936,11 +924,35 @@ function showTab(tab){
   if (tab === 'ano') renderAno();
 }
 
+/* ---------- Modo de calendário: Normal | Férias | Administrador (mutuamente exclusivos) ---------- */
+const MODE_HINTS = {
+  normal: 'Toca num dia para marcar Escritório/Casa',
+  ferias: 'Toca num dia para marcar só férias (não mexe no T/C)',
+  admin: '⚠ Toca num dia para percorrer: vazio → T → C → Férias (sem restrições de data)'
+};
+
+function setAppMode(mode){
+  if (mode === appMode) return;
+  if (mode === 'admin'){
+    const ok = confirm('Ativar Modo Administrador?\n\nVais poder alterar qualquer registo, incluindo dias e notas já passados, sem restrições.');
+    if (!ok) return;
+  }
+  appMode = mode;
+  feriasMode = (mode === 'ferias');
+  adminMode = (mode === 'admin');
+  document.querySelectorAll('.modeBtn').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.mode === mode);
+  });
+  document.getElementById('modeHint').textContent = MODE_HINTS[mode];
+  document.getElementById('adminBanner').classList.toggle('hidden', mode !== 'admin');
+  renderMonth();
+  renderNotes();
+}
+
 async function onSignedIn(){
   document.getElementById('authArea').classList.add('hidden');
   document.getElementById('app').classList.remove('hidden');
   document.getElementById('logoutRow').classList.remove('hidden');
-  document.getElementById('adminRow').classList.remove('hidden');
   await loadData();
   await loadNotes();
   await handleQuickAction();
@@ -1243,7 +1255,11 @@ function renderMonth(){
     cell.style.setProperty('--i', cellIndex % 7);
     cell.innerHTML = `<div class="num">${d}</div><div class="mark">${markHTML}</div>`;
     if (!blocked){
-      cell.onclick = feriasMode ? (() => onDayTap(dateStr, cell, toggleFeriasDay)) : (() => onDayTap(dateStr, cell, cycleDay));
+      cell.onclick = adminMode
+        ? (() => onDayTap(dateStr, cell, cycleDayAdmin))
+        : feriasMode
+          ? (() => onDayTap(dateStr, cell, toggleFeriasDay))
+          : (() => onDayTap(dateStr, cell, cycleDay));
     }
     attachLongPress(cell, dateStr);
     grid.appendChild(cell);
@@ -1505,85 +1521,129 @@ async function performUndo(){
 
 let feriasBusy = false;
 
+async function applyFeriasCore(dateStr){
+  const pt = toPtDate(dateStr);
+  const d = parsePtDate(pt);
+
+  const covering = notasData.find(n => {
+    if (!normalizeCategoria(n.categoria).includes('feria')) return false;
+    const s = parsePtDate(n.dataInicio) || parsePtDate(n.dataFim);
+    const e = parsePtDate(n.dataFim) || s;
+    return s && e && d >= s && d <= e;
+  });
+
+  if (covering){
+    /* -------- remover este dia de uma nota existente (encolher / dividir / apagar) -------- */
+    const origStart = covering.dataInicio, origEnd = covering.dataFim;
+    const s = parsePtDate(origStart), e = parsePtDate(origEnd);
+
+    if (+s === +d && +e === +d){
+      await sheetsPut(notaRange(covering.row), [['','','','']]);
+      notasData = notasData.filter(x => x.row !== covering.row);
+    } else if (+d === +s){
+      const newStart = ptAddDays(origStart, 1);
+      await sheetsPut(notaRange(covering.row), [[newStart, origEnd, covering.categoria, covering.descricao]]);
+      covering.dataInicio = newStart;
+    } else if (+d === +e){
+      const newEnd = ptAddDays(origEnd, -1);
+      await sheetsPut(notaRange(covering.row), [[origStart, newEnd, covering.categoria, covering.descricao]]);
+      covering.dataFim = newEnd;
+    } else {
+      const leftEnd = ptAddDays(pt, -1);
+      const rightStart = ptAddDays(pt, 1);
+      await sheetsPut(notaRange(covering.row), [[origStart, leftEnd, covering.categoria, covering.descricao]]);
+      covering.dataFim = leftEnd;
+      const newRow = notasNextRow++;
+      await sheetsPut(notaRange(newRow), [[rightStart, origEnd, covering.categoria, covering.descricao]]);
+      notasData.push({ row:newRow, dataInicio:rightStart, dataFim:origEnd, categoria:covering.categoria, descricao:covering.descricao });
+    }
+  } else {
+    /* -------- adicionar este dia, juntando a notas de Férias adjacentes se existirem -------- */
+    const prevDay = prevBusinessDayPt(pt);
+    const nextDay = nextBusinessDayPt(pt);
+    const prevNote = notasData.find(n => normalizeCategoria(n.categoria).includes('feria') && n.dataFim === prevDay);
+    const nextNote = notasData.find(n => normalizeCategoria(n.categoria).includes('feria') && n.dataInicio === nextDay);
+
+    if (prevNote && nextNote){
+      const newEnd = nextNote.dataFim;
+      const mergedCategoria = prevNote.categoria || nextNote.categoria;
+      const mergedDescricao = [prevNote.descricao, nextNote.descricao]
+        .map(s => (s||'').trim()).filter(Boolean)
+        .filter((v,i,a) => a.indexOf(v) === i)
+        .join(' / ');
+      await sheetsPut(notaRange(prevNote.row), [[prevNote.dataInicio, newEnd, mergedCategoria, mergedDescricao]]);
+      await sheetsPut(notaRange(nextNote.row), [['','','','']]);
+      prevNote.dataFim = newEnd;
+      prevNote.categoria = mergedCategoria;
+      prevNote.descricao = mergedDescricao;
+      notasData = notasData.filter(x => x.row !== nextNote.row);
+    } else if (prevNote){
+      await sheetsPut(notaRange(prevNote.row), [[prevNote.dataInicio, pt, prevNote.categoria, prevNote.descricao]]);
+      prevNote.dataFim = pt;
+    } else if (nextNote){
+      await sheetsPut(notaRange(nextNote.row), [[pt, nextNote.dataFim, nextNote.categoria, nextNote.descricao]]);
+      nextNote.dataInicio = pt;
+    } else {
+      const row = notasNextRow++;
+      await sheetsPut(notaRange(row), [[pt, pt, 'Férias', '']]);
+      notasData.push({ row, dataInicio: pt, dataFim: pt, categoria: 'Férias', descricao: '' });
+    }
+
+    // um dia de férias deixa de ser um dia de trabalho
+    if (rowIndex[dateStr] && dayData[dateStr]){
+      await sheetsPut(`${SHEET_NAME}!B${rowIndex[dateStr]}`, [['']]);
+      dayData[dateStr] = '';
+    }
+  }
+}
+
 async function toggleFeriasDay(dateStr, cell){
   if (feriasBusy){ return; }
   feriasBusy = true;
   captureSnapshot();
-  const pt = toPtDate(dateStr);
-  const d = parsePtDate(pt);
-
   setStatus('A atualizar férias…');
   try{
-    const covering = notasData.find(n => {
-      if (!normalizeCategoria(n.categoria).includes('feria')) return false;
-      const s = parsePtDate(n.dataInicio) || parsePtDate(n.dataFim);
-      const e = parsePtDate(n.dataFim) || s;
-      return s && e && d >= s && d <= e;
-    });
+    await applyFeriasCore(dateStr);
+    sortNotas();
+    computeNoteMarks();
+    renderNotes();
+    renderMonth();
+    updateTotals();
+    setStatus('');
+    showUndoToast();
+  }catch(err){
+    setStatus('Não gravou: ' + err.message, true);
+  } finally {
+    feriasBusy = false;
+  }
+}
 
-    if (covering){
-      /* -------- remover este dia de uma nota existente (encolher / dividir / apagar) -------- */
-      const origStart = covering.dataInicio, origEnd = covering.dataFim;
-      const s = parsePtDate(origStart), e = parsePtDate(origEnd);
+/* ---------- Modo Administrador: ciclo alargado num só toque — vazio → T → C → Férias → vazio ---------- */
+async function cycleDayAdmin(dateStr, cell){
+  if (feriasBusy){ return; }
+  feriasBusy = true;
+  captureSnapshot();
+  setStatus('A gravar…');
+  try{
+    const mark = dayData[dateStr] || '';
+    const isFerias = feriasDatesSet.has(dateStr);
+    const state = mark || (isFerias ? 'F' : '');
+    const order = ['', 'T', 'C', 'F'];
+    const next = order[(order.indexOf(state) + 1) % order.length];
 
-      if (+s === +d && +e === +d){
-        await sheetsPut(notaRange(covering.row), [['','','','']]);
-        notasData = notasData.filter(x => x.row !== covering.row);
-      } else if (+d === +s){
-        const newStart = ptAddDays(origStart, 1);
-        await sheetsPut(notaRange(covering.row), [[newStart, origEnd, covering.categoria, covering.descricao]]);
-        covering.dataInicio = newStart;
-      } else if (+d === +e){
-        const newEnd = ptAddDays(origEnd, -1);
-        await sheetsPut(notaRange(covering.row), [[origStart, newEnd, covering.categoria, covering.descricao]]);
-        covering.dataFim = newEnd;
-      } else {
-        const leftEnd = ptAddDays(pt, -1);
-        const rightStart = ptAddDays(pt, 1);
-        await sheetsPut(notaRange(covering.row), [[origStart, leftEnd, covering.categoria, covering.descricao]]);
-        covering.dataFim = leftEnd;
-        const newRow = notasNextRow++;
-        await sheetsPut(notaRange(newRow), [[rightStart, origEnd, covering.categoria, covering.descricao]]);
-        notasData.push({ row:newRow, dataInicio:rightStart, dataFim:origEnd, categoria:covering.categoria, descricao:covering.descricao });
-      }
+    if (state === 'F'){
+      await applyFeriasCore(dateStr); // remove este dia da nota de férias
+    }
+    if (next === 'F'){
+      await applyFeriasCore(dateStr); // adiciona este dia a uma nota de férias (limpa T/C sozinho)
     } else {
-      /* -------- adicionar este dia, juntando a notas de Férias adjacentes se existirem -------- */
-      const prevDay = prevBusinessDayPt(pt);
-      const nextDay = nextBusinessDayPt(pt);
-      const prevNote = notasData.find(n => normalizeCategoria(n.categoria).includes('feria') && n.dataFim === prevDay);
-      const nextNote = notasData.find(n => normalizeCategoria(n.categoria).includes('feria') && n.dataInicio === nextDay);
-
-      if (prevNote && nextNote){
-        const newEnd = nextNote.dataFim;
-        const mergedCategoria = prevNote.categoria || nextNote.categoria;
-        const mergedDescricao = [prevNote.descricao, nextNote.descricao]
-          .map(s => (s||'').trim()).filter(Boolean)
-          .filter((v,i,a) => a.indexOf(v) === i)
-          .join(' / ');
-        await sheetsPut(notaRange(prevNote.row), [[prevNote.dataInicio, newEnd, mergedCategoria, mergedDescricao]]);
-        await sheetsPut(notaRange(nextNote.row), [['','','','']]);
-        prevNote.dataFim = newEnd;
-        prevNote.categoria = mergedCategoria;
-        prevNote.descricao = mergedDescricao;
-        notasData = notasData.filter(x => x.row !== nextNote.row);
-      } else if (prevNote){
-        await sheetsPut(notaRange(prevNote.row), [[prevNote.dataInicio, pt, prevNote.categoria, prevNote.descricao]]);
-        prevNote.dataFim = pt;
-      } else if (nextNote){
-        await sheetsPut(notaRange(nextNote.row), [[pt, nextNote.dataFim, nextNote.categoria, nextNote.descricao]]);
-        nextNote.dataInicio = pt;
-      } else {
-        const row = notasNextRow++;
-        await sheetsPut(notaRange(row), [[pt, pt, 'Férias', '']]);
-        notasData.push({ row, dataInicio: pt, dataFim: pt, categoria: 'Férias', descricao: '' });
-      }
-
-      // um dia de férias deixa de ser um dia de trabalho
-      if (rowIndex[dateStr] && dayData[dateStr]){
-        await sheetsPut(`${SHEET_NAME}!B${rowIndex[dateStr]}`, [['']]);
-        dayData[dateStr] = '';
+      const row = rowIndex[dateStr];
+      if (row){
+        await sheetsPut(`${SHEET_NAME}!B${row}`, [[next]]);
+        dayData[dateStr] = next;
       }
     }
+
     sortNotas();
     computeNoteMarks();
     renderNotes();
