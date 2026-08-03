@@ -186,6 +186,7 @@
     justify-content:center;
   }
   .statBtn:hover{background:var(--brand-tint);}
+  .statBtnIcon{margin-bottom:2px;}
 
   .stat.t{border-left-color:var(--t-color);}
   .stat.t .value{color:var(--t-color);}
@@ -263,32 +264,29 @@
   }
   #yearBanner button{padding:6px 10px;font-size:0.76rem;min-height:32px;}
 
-  #modeRow{flex-shrink:0;padding:2px 16px 8px;}
+  #modeRow{flex-shrink:0;padding:2px 16px 6px;}
   #modeSegmented{
     display:flex;
-    background:var(--surface);
-    border:1px solid var(--line);
-    border-radius:10px;
-    padding:3px;
-    gap:3px;
+    gap:6px;
   }
   .modeBtn{
     flex:1;
     background:none;
-    border:none;
-    padding:8px 4px;
-    font-size:0.76rem;
-    font-weight:600;
-    color:var(--muted);
+    border:1px solid var(--line);
+    padding:5px 4px;
+    font-size:0.68rem;
+    font-weight:500;
+    color:var(--muted2);
     border-radius:7px;
-    min-height:36px;
+    min-height:28px;
+    transition:color .15s ease, border-color .15s ease;
   }
-  .modeBtn.active{background:var(--brand);color:#fff;}
+  .modeBtn.active{color:var(--brand);border-color:var(--brand);font-weight:600;}
   #modeHint{
-    font-size:0.7rem;
+    font-size:0.66rem;
     color:var(--muted2);
     text-align:center;
-    margin-top:4px;
+    margin-top:3px;
   }
   #adminBanner{
     flex-shrink:0;
@@ -639,7 +637,7 @@
         <div class="label">Saldo (condicional)</div>
         <div class="value" id="statSaldoCond">–</div>
       </div>
-      <button id="exportBtn" class="stat statBtn">⬇<br>Exportar Excel</button>
+      <button id="exportBtn" class="stat statBtn"><div class="statBtnIcon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></div><div>Exportar Excel</div></button>
     </div>
 
     <div id="monthNav">
@@ -745,7 +743,7 @@
 /* ============================================================
    CONFIGURAÇÃO — preenche estes 2 valores antes de usar
    ============================================================ */
-const APP_VERSION = 'v3.6.1';
+const APP_VERSION = 'v3.7.0';
 
 const ICON_EDIT = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>';
 const ICON_TRASH = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>';
