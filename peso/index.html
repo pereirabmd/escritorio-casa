@@ -478,7 +478,7 @@
 /* ============================================================
    CONFIGURAÇÃO
    ============================================================ */
-const APP_VERSION = 'v2.0.1';
+const APP_VERSION = 'v2.0.2';
 const CLIENT_ID = '108256538530-fgunbb52s7f3s9aurfpjtaf01v8fjbph.apps.googleusercontent.com';
 const SPREADSHEET_ID = '1UzEXtl7w6jMsk-c7Pkt3kq97AXL6XIiwTrjOYUaYFLs';
 const SHEET_REGISTOS = 'Registos';
@@ -783,7 +783,12 @@ function onTerminarSessao(){
 /* ---------- Date helpers (serial <-> Date) ---------- */
 function serialToDate(v){
   if (typeof v === 'number') {
-    return new Date(Date.UTC(1899, 11, 30) + Math.round(v * 86400000));
+    // O número de série do Sheets é "ingénuo" (sem fuso horário) — representa a data/hora
+    // exatamente como foi escrita (hora local). Construímos a data usando o construtor local
+    // com os mesmos componentes, para não introduzir nenhum desvio de fuso horário.
+    const utcMillis = Date.UTC(1899, 11, 30) + Math.round(v * 86400000);
+    const u = new Date(utcMillis);
+    return new Date(u.getUTCFullYear(), u.getUTCMonth(), u.getUTCDate(), u.getUTCHours(), u.getUTCMinutes(), u.getUTCSeconds());
   }
   if (typeof v === 'string' && v.trim() !== '') {
     const d = new Date(v.replace(' ', 'T'));
