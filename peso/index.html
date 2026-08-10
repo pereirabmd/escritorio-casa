@@ -269,6 +269,10 @@
   .regDate{flex:1;min-width:0;}
   .regDate .d1{font-weight:700;font-size:0.86rem;display:flex;align-items:center;gap:6px;}
   .seg-tag{font-size:0.58rem;font-weight:800;color:var(--amber);background:rgba(245,185,66,.18);padding:1px 5px;border-radius:5px;letter-spacing:.03em;}
+  .week-tag{font-size:0.58rem;font-weight:800;padding:1px 5px;border-radius:5px;letter-spacing:.03em;}
+  .week-tag.down{color:var(--ok);background:var(--ok-tint);}
+  .week-tag.up{color:var(--danger);background:var(--danger-tint);}
+  .week-tag.same{color:var(--text-dim);background:var(--panel2);}
   .regDate .d2{font-size:0.68rem;color:var(--text-dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
   .regPeso{font-family:var(--font-mono);font-weight:700;font-size:0.95rem;min-width:58px;text-align:right;}
   .regDelta{font-size:0.68rem;font-weight:800;min-width:46px;text-align:right;}
@@ -478,7 +482,7 @@
 /* ============================================================
    CONFIGURAÇÃO
    ============================================================ */
-const APP_VERSION = 'v2.0.2';
+const APP_VERSION = 'v2.1.0';
 const CLIENT_ID = '108256538530-fgunbb52s7f3s9aurfpjtaf01v8fjbph.apps.googleusercontent.com';
 const SPREADSHEET_ID = '1UzEXtl7w6jMsk-c7Pkt3kq97AXL6XIiwTrjOYUaYFLs';
 const SHEET_REGISTOS = 'Registos';
@@ -1272,6 +1276,11 @@ function renderRegistos(){
   }
   const desc = [...registos].sort((a,b) => b.date - a.date);
   const minGlobal = Math.min(...registos.map(r => r.peso));
+
+  // mapa dia -> peso, para comparar cada segunda-feira com a segunda-feira anterior (7 dias antes)
+  const pesoPorDia = new Map();
+  registos.forEach(r => pesoPorDia.set(isoDateOnly(r.date), r.peso));
+
   desc.forEach((reg) => {
     const idxAsc = registos.indexOf(reg);
     const anterior = idxAsc > 0 ? registos[idxAsc - 1] : null;
@@ -1284,11 +1293,24 @@ function renderRegistos(){
     }
     const isMonday = reg.date.getDay() === 1;
     const isMin = registos.length > 1 && reg.peso <= minGlobal + 0.001;
+
+    let weekTagHtml = '';
+    if (isMonday){
+      const dataSemanaAnterior = new Date(reg.date.getTime() - 7 * 86400000);
+      const pesoSemanaAnterior = pesoPorDia.get(isoDateOnly(dataSemanaAnterior));
+      if (pesoSemanaAnterior !== undefined){
+        const diffSemana = reg.peso - pesoSemanaAnterior;
+        if (diffSemana > 0.001) weekTagHtml = `<span class="week-tag up">▲${diffSemana.toFixed(1)} kg/sem</span>`;
+        else if (diffSemana < -0.001) weekTagHtml = `<span class="week-tag down">▼${Math.abs(diffSemana).toFixed(1)} kg/sem</span>`;
+        else weekTagHtml = `<span class="week-tag same">= kg/sem</span>`;
+      }
+    }
+
     const row = document.createElement('div');
     row.className = 'regRow' + (isMonday ? ' monday' : '');
     row.innerHTML = `
       <div class="regDate">
-        <div class="d1">${fmtDataCurta(reg.date)}${isMonday ? '<span class="seg-tag">SEG</span>' : ''}${isMin ? '<span class="min-tag">🏆 MÍN</span>' : ''}</div>
+        <div class="d1">${fmtDataCurta(reg.date)}${isMonday ? '<span class="seg-tag">SEG</span>' : ''}${weekTagHtml}${isMin ? '<span class="min-tag">🏆 MÍN</span>' : ''}</div>
         <div class="d2">${pad(reg.date.getHours())}:${pad(reg.date.getMinutes())}${reg.nota ? ' · ' + escapeHtml(reg.nota) : ''}</div>
       </div>
       <div class="regPeso">${reg.peso.toFixed(1)}</div>
