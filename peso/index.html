@@ -149,7 +149,24 @@
   input::placeholder{color:var(--text-dim);}
   label{font-size:0.68rem;color:var(--text-dim);font-weight:700;text-transform:uppercase;letter-spacing:.04em;display:block;margin-bottom:4px;}
 
-  #app{flex:1;display:flex;flex-direction:column;min-height:0;}
+  #app{flex:1;display:flex;flex-direction:column;min-height:0;position:relative;}
+
+  #loadingOverlay{
+    position:absolute;inset:0;z-index:15;
+    background:var(--bg);
+    display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;
+    transition:opacity .35s ease;
+  }
+  #loadingOverlay.hidden{opacity:0;pointer-events:none;}
+  .loading-icon{width:56px;height:56px;border-radius:14px;animation:loadingPulse 1.6s ease-in-out infinite;}
+  .loading-spinner{
+    width:26px;height:26px;border-radius:50%;
+    border:3px solid var(--line);border-top-color:var(--lime);
+    animation:loadingSpin .8s linear infinite;
+  }
+  .loading-text{font-size:0.8rem;color:var(--text-dim);}
+  @keyframes loadingPulse{0%,100%{transform:scale(1);opacity:1;}50%{transform:scale(0.92);opacity:0.7;}}
+  @keyframes loadingSpin{to{transform:rotate(360deg);}}
 
   #tabBar{flex:0 0 auto;display:flex;gap:6px;padding:8px 12px;}
   .tabBtn{flex:1;background:var(--panel);border:1px solid var(--line);color:var(--text-dim);border-radius:9px;padding:8px 2px;font-size:0.72rem;font-weight:700;min-height:38px;}
@@ -346,6 +363,11 @@
 </div>
 
 <div id="app" class="hidden">
+  <div id="loadingOverlay">
+    <img src="pesoicon192.png" alt="" class="loading-icon">
+    <div class="loading-spinner"></div>
+    <div class="loading-text">A carregar dados…</div>
+  </div>
   <div id="tabBar">
     <button class="tabBtn active" id="tabBtnResumo">Resumo</button>
     <button class="tabBtn" id="tabBtnGrafico">Gráfico</button>
@@ -482,7 +504,7 @@
 /* ============================================================
    CONFIGURAÇÃO
    ============================================================ */
-const APP_VERSION = 'v2.1.0';
+const APP_VERSION = 'v2.2.0';
 const CLIENT_ID = '108256538530-fgunbb52s7f3s9aurfpjtaf01v8fjbph.apps.googleusercontent.com';
 const SPREADSHEET_ID = '1UzEXtl7w6jMsk-c7Pkt3kq97AXL6XIiwTrjOYUaYFLs';
 const SHEET_REGISTOS = 'Registos';
@@ -703,13 +725,14 @@ function showTab(tab){
 async function onSignedIn(){
   document.getElementById('authArea').classList.add('hidden');
   document.getElementById('app').classList.remove('hidden');
-  setStatus('A carregar dados...');
+  const overlay = document.getElementById('loadingOverlay');
+  overlay.classList.remove('hidden');
   await loadConfig();
   await loadRegistos();
-  setStatus('');
   animateNumbersNow = true;
   renderAll();
   animateNumbersNow = false;
+  overlay.classList.add('hidden');
 }
 
 /* ---------- Animação de contagem dos números (só no carregamento inicial) ---------- */
