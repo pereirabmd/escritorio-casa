@@ -477,6 +477,13 @@
   .skelNav{height:36px;margin-bottom:14px;}
   .skelGrid{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;}
   .skelGrid .skelBox{aspect-ratio:1;border-radius:8px;}
+  #skelLoadingText{
+    text-align:center;
+    font-size:0.85rem;
+    font-weight:600;
+    color:var(--brand);
+    margin-top:16px;
+  }
 
   .skelTab:nth-child(2){animation-delay:.1s;}
   .skelTab:nth-child(3){animation-delay:.2s;}
@@ -647,6 +654,7 @@
     </div>
     <div class="skelBox skelNav"></div>
     <div class="skelGrid" id="skelGrid"></div>
+    <div id="skelLoadingText">A carregar dados</div>
   </div>
 
   <div id="tabBar">
@@ -785,7 +793,7 @@
 /* ============================================================
    CONFIGURAÇÃO — preenche estes 2 valores antes de usar
    ============================================================ */
-const APP_VERSION = 'v3.8.0';
+const APP_VERSION = 'v3.8.1';
 
 const ICON_EDIT = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>';
 const ICON_TRASH = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>';
@@ -1001,6 +1009,8 @@ async function onSignedIn(){
   await handleQuickAction();
 }
 
+let loadingDotsTimer = null;
+
 function showSkeleton(show){
   document.getElementById('skeletonOverlay').classList.toggle('hidden', !show);
   document.getElementById('tabBar').classList.toggle('hidden', show);
@@ -1008,6 +1018,18 @@ function showSkeleton(show){
   if (!show){
     document.getElementById('tabAno').classList.toggle('hidden', currentTab !== 'ano');
     document.getElementById('tabNotas').classList.toggle('hidden', currentTab !== 'notas');
+  }
+
+  const textEl = document.getElementById('skelLoadingText');
+  clearInterval(loadingDotsTimer);
+  if (show){
+    const frames = ['A carregar dados', 'A carregar dados.', 'A carregar dados..', 'A carregar dados...'];
+    let i = 0;
+    textEl.textContent = frames[0];
+    loadingDotsTimer = setInterval(() => {
+      i = (i + 1) % frames.length;
+      textEl.textContent = frames[i];
+    }, 400);
   }
 }
 
