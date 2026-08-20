@@ -610,7 +610,19 @@
         method: "POST",
         headers: Object.assign({ "Content-Type": "multipart/related; boundary=" + boundary }, driveHeaders(token)),
         body: body
-      }).then(function(r){ if(!r.ok) throw new Error("upload_failed"); return r.json(); });
+      }).then(function(r){
+        if(!r.ok){
+          return r.text().then(function(errText){
+            var msg = "upload_failed:" + r.status;
+            try{
+              var parsed = JSON.parse(errText);
+              if(parsed && parsed.error && parsed.error.message){ msg += ":" + parsed.error.message; }
+            }catch(e){ if(errText){ msg += ":" + errText.slice(0,200); } }
+            throw new Error(msg);
+          });
+        }
+        return r.json();
+      });
     });
   }
 
@@ -881,6 +893,7 @@
       toast("Escolhe ficheiros .txt.");
       return;
     }
+    var lastError = null;
     getValidToken(true).then(function(token){
       return ensureFolder(token).then(function(folderId){
         state.cache.folderId = folderId;
@@ -889,20 +902,29 @@
         files.forEach(function(file, idx){
           chain = chain.then(function(){
             toast("A carregar " + (idx + 1) + " de " + files.length + "...", 4000);
-            return uploadTxtFile(folderId, file, token).then(function(){ done++; }).catch(function(){});
+            return uploadTxtFile(folderId, file, token).then(function(){ done++; }).catch(function(err){
+              lastError = (err && err.message) ? err.message : String(err);
+              console.error("Falha ao carregar " + file.name + ":", err);
+            });
           });
         });
         return chain.then(function(){ return done; });
       });
     }).then(function(done){
-      toast(done + " receita" + (done === 1 ? "" : "s") + " carregada" + (done === 1 ? "" : "s") + ".");
+      if(done > 0){
+        toast(done + " receita" + (done === 1 ? "" : "s") + " carregada" + (done === 1 ? "" : "s") + ".");
+      } else {
+        toast("Falha ao carregar: " + (lastError || "erro desconhecido"), 5000);
+      }
       renderSkeletons();
       return syncRecipes();
     }).then(function(){
       renderCategoryChips();
       renderGrid();
     }).catch(function(err){
-      toast("Não foi possível carregar. Verifica a ligação.");
+      var msg = (err && err.message) ? err.message : "erro de ligação";
+      toast("Não foi possível carregar: " + msg, 5000);
+      console.error("Erro geral no upload:", err);
     });
   }
 
