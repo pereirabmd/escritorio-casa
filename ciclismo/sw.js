@@ -1,4 +1,4 @@
-var CACHE = 'ciclismo-shell-v8';
+var CACHE = 'ciclismo-shell-v9';
 var SHELL = ['./', './index.html', './manifest.json', './icon-192.png', './icon-512.png', './icon-watermark.png'];
 
 self.addEventListener('install', function(e){
