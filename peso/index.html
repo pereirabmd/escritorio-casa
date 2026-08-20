@@ -282,7 +282,7 @@
   .reg-list{flex:1;min-height:0;overflow-y:auto;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:2px 12px;}
   .regRow{display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--line);position:relative;}
   .regRow:last-child{border-bottom:none;}
-  .regRow.monday{background:var(--amber-tint);margin:0 -12px;padding:8px 12px;border-left:3px solid var(--amber);border-bottom:1px solid transparent;}
+  .regRow.controlday{background:var(--amber-tint);margin:0 -12px;padding:8px 12px;border-left:3px solid var(--amber);border-bottom:1px solid transparent;}
   .regDate{flex:1;min-width:0;}
   .regDate .d1{font-weight:700;font-size:0.86rem;display:flex;align-items:center;gap:6px;}
   .seg-tag{font-size:0.58rem;font-weight:800;color:var(--amber);background:rgba(245,185,66,.18);padding:1px 5px;border-radius:5px;letter-spacing:.03em;}
@@ -478,6 +478,17 @@
             <option value="1.7">Muito ativo</option>
           </select>
         </div>
+        <div class="field full"><label>Dia de controlo semanal</label>
+          <select id="cfgDiaControlo">
+            <option value="0">Domingo</option>
+            <option value="1">Segunda-feira</option>
+            <option value="2">Terça-feira</option>
+            <option value="3">Quarta-feira</option>
+            <option value="4">Quinta-feira</option>
+            <option value="5">Sexta-feira</option>
+            <option value="6">Sábado</option>
+          </select>
+        </div>
       </div>
       <button class="btn-lime" id="btnGuardarConfig" style="width:100%;">Guardar configuração</button>
       <button class="btn-ghost" id="btnTerminarSessao" style="width:100%;margin-top:8px;">Terminar sessão</button>
@@ -526,12 +537,14 @@
 /* ============================================================
    CONFIGURAÇÃO
    ============================================================ */
-const APP_VERSION = 'v2.3.0';
+const APP_VERSION = 'v2.4.0';
 const CLIENT_ID = '108256538530-fgunbb52s7f3s9aurfpjtaf01v8fjbph.apps.googleusercontent.com';
 const SPREADSHEET_ID = '1UzEXtl7w6jMsk-c7Pkt3kq97AXL6XIiwTrjOYUaYFLs';
 const SHEET_REGISTOS = 'Registos';
 const SHEET_CONFIG = 'Config';
 const SCOPES = 'https://www.googleapis.com/auth/spreadsheets';
+const DIAS_ABREV = ['DOM', 'SEG', 'TER', 'QUA', 'QUI', 'SEX', 'SAB'];
+const DIAS_NOMES = ['Domingo', 'Segunda-feira', 'Terça-feira', 'Quarta-feira', 'Quinta-feira', 'Sexta-feira', 'Sábado'];
 
 const ICON_EDIT = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>';
 const ICON_TRASH = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>';
@@ -540,7 +553,7 @@ const ICON_TRASH = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" 
 let tokenClient;
 let accessToken = null;
 let registos = [];   // [{row, date: Date, peso: Number, nota: String}]
-let config = { altura: null, nascimento: null, sexo: '', pesoAlvo: null, atividade: 1.2 };
+let config = { altura: null, nascimento: null, sexo: '', pesoAlvo: null, atividade: 1.2, diaControlo: 1 };
 let currentTab = 'resumo';
 let currentPeriod = 'all';
 let weightChart = null;
@@ -875,7 +888,7 @@ function normalizaAtividade(raw){
 /* ---------- Load Config ---------- */
 async function loadConfig(){
   try{
-    const data = await sheetsGet(`${SHEET_CONFIG}!B2:B6`);
+    const data = await sheetsGet(`${SHEET_CONFIG}!B2:B7`);
     const v = data.values || [];
     config.altura = v[0] && v[0][0] !== '' ? Number(v[0][0]) : null;
     const nasc = v[1] ? v[1][0] : '';
@@ -891,6 +904,8 @@ async function loadConfig(){
     config.pesoAlvo = v[3] && v[3][0] !== '' ? Number(v[3][0]) : null;
     const atividadeRaw = v[4] && v[4][0] !== '' ? Number(v[4][0]) : 1.2;
     config.atividade = normalizaAtividade(atividadeRaw);
+    const diaRaw = v[5] && v[5][0] !== '' ? Number(v[5][0]) : 1;
+    config.diaControlo = (Number.isInteger(diaRaw) && diaRaw >= 0 && diaRaw <= 6) ? diaRaw : 1;
   } catch(e){
     setStatus('Não foi possível ler a Config: ' + e.message, true);
   }
@@ -899,6 +914,7 @@ async function loadConfig(){
   document.getElementById('cfgSexo').value = config.sexo || '';
   document.getElementById('cfgPesoAlvo').value = config.pesoAlvo ?? '';
   document.getElementById('cfgAtividade').value = config.atividade;
+  document.getElementById('cfgDiaControlo').value = config.diaControlo;
 }
 
 function isoDateOnly(d){
@@ -912,8 +928,9 @@ async function onGuardarConfig(){
   const sexo = document.getElementById('cfgSexo').value;
   const pesoAlvo = document.getElementById('cfgPesoAlvo').value;
   const atividade = document.getElementById('cfgAtividade').value;
+  const diaControlo = document.getElementById('cfgDiaControlo').value;
   try{
-    await sheetsPut(`${SHEET_CONFIG}!B2:B6`, [[altura],[nascimento],[sexo],[pesoAlvo],[atividade]]);
+    await sheetsPut(`${SHEET_CONFIG}!B2:B7`, [[altura],[nascimento],[sexo],[pesoAlvo],[atividade],[diaControlo]]);
     setStatus('Configuração guardada.');
     await loadConfig();
     renderAll();
@@ -979,6 +996,7 @@ async function onRegistarNovo(){
 /* ---------- Dicas explicativas ---------- */
 /* ---------- Histórico de versões (mais recente primeiro) ---------- */
 const CHANGELOG = [
+  { v:'v2.4.0', itens:['Dia de controlo semanal configurável em Config (deixa de ser sempre segunda-feira)'] },
   { v:'v2.3.0', itens:['Histórico de versões — toca na versão no rodapé para ver as alterações de cada uma'] },
   { v:'v2.2.0', itens:['Ecrã de carregamento animado ao entrar na app', 'Corrigido: arrastar dentro da lista de Registos já não ativa a atualização da página'] },
   { v:'v2.1.0', itens:['Variação semanal nas segundas-feiras (comparação com a segunda anterior)'] },
@@ -1375,7 +1393,7 @@ function renderRegistos(){
   const desc = [...registos].sort((a,b) => b.date - a.date);
   const minGlobal = Math.min(...registos.map(r => r.peso));
 
-  // mapa dia -> peso, para comparar cada segunda-feira com a segunda-feira anterior (7 dias antes)
+  // mapa dia -> peso, para comparar cada dia de controlo com o dia de controlo anterior (7 dias antes)
   const pesoPorDia = new Map();
   registos.forEach(r => pesoPorDia.set(isoDateOnly(r.date), r.peso));
 
@@ -1389,11 +1407,11 @@ function renderRegistos(){
       else if (diff < -0.001) deltaHtml = `<span class="regDelta down">▼${Math.abs(diff).toFixed(1)}</span>`;
       else deltaHtml = '<span class="regDelta same">=</span>';
     }
-    const isMonday = reg.date.getDay() === 1;
+    const isDiaControlo = reg.date.getDay() === config.diaControlo;
     const isMin = registos.length > 1 && reg.peso <= minGlobal + 0.001;
 
     let weekTagHtml = '';
-    if (isMonday){
+    if (isDiaControlo){
       const dataSemanaAnterior = new Date(reg.date.getTime() - 7 * 86400000);
       const pesoSemanaAnterior = pesoPorDia.get(isoDateOnly(dataSemanaAnterior));
       if (pesoSemanaAnterior !== undefined){
@@ -1405,10 +1423,10 @@ function renderRegistos(){
     }
 
     const row = document.createElement('div');
-    row.className = 'regRow' + (isMonday ? ' monday' : '');
+    row.className = 'regRow' + (isDiaControlo ? ' controlday' : '');
     row.innerHTML = `
       <div class="regDate">
-        <div class="d1">${fmtDataCurta(reg.date)}${isMonday ? '<span class="seg-tag">SEG</span>' : ''}${weekTagHtml}${isMin ? '<span class="min-tag">🏆 MÍN</span>' : ''}</div>
+        <div class="d1">${fmtDataCurta(reg.date)}${isDiaControlo ? `<span class="seg-tag">${DIAS_ABREV[config.diaControlo]}</span>` : ''}${weekTagHtml}${isMin ? '<span class="min-tag">🏆 MÍN</span>' : ''}</div>
         <div class="d2">${pad(reg.date.getHours())}:${pad(reg.date.getMinutes())}${reg.nota ? ' · ' + escapeHtml(reg.nota) : ''}</div>
       </div>
       <div class="regPeso">${reg.peso.toFixed(1)}</div>
@@ -1457,6 +1475,7 @@ function exportarXLSX(){
     { Campo: 'Sexo', Valor: config.sexo || '—' },
     { Campo: 'Peso alvo (kg)', Valor: config.pesoAlvo ?? '—' },
     { Campo: 'Nível de atividade', Valor: atividadeLabels[config.atividade] || config.atividade || '—' },
+    { Campo: 'Dia de controlo semanal', Valor: DIAS_NOMES[config.diaControlo] ?? '—' },
   ];
   const wsConfig = XLSX.utils.json_to_sheet(linhasConfig);
   wsConfig['!cols'] = [{ wch: 22 }, { wch: 22 }];
