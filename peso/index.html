@@ -304,7 +304,8 @@
   .iconBtn:hover{color:var(--lime);}
 
   /* ---------- Config ---------- */
-  .cfg-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px 10px;margin-bottom:12px;}
+  .cfg-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px 10px;margin-bottom:14px;}
+  .cfg-section-label{font-size:0.68rem;font-weight:800;color:var(--text-dim);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;}
   .cfg-grid .field.full{grid-column:1/-1;}
 
   /* ---------- Modal ---------- */
@@ -483,20 +484,31 @@
 
     <!-- ===== CONFIG ===== -->
     <section id="tabConfig" class="tabPanel hidden">
+      <div class="cfg-section-label">Dados pessoais</div>
       <div class="cfg-grid">
         <div class="field"><label>Altura (cm)</label><input type="number" id="cfgAltura" placeholder="178"></div>
-        <div class="field"><label>Peso alvo (kg)</label><input type="number" step="0.1" id="cfgPesoAlvo" placeholder="90"></div>
         <div class="field"><label>Nascimento</label><input type="date" id="cfgNascimento"></div>
         <div class="field"><label>Sexo</label>
           <select id="cfgSexo"><option value="">—</option><option value="M">M</option><option value="F">F</option></select>
         </div>
-        <div class="field full"><label>Nível de atividade</label>
+        <div class="field"><label>Nível de atividade</label>
           <select id="cfgAtividade">
             <option value="1.2">Pouco ativo</option>
             <option value="1.45">Moderadamente ativo</option>
             <option value="1.7">Muito ativo</option>
           </select>
         </div>
+      </div>
+
+      <div class="cfg-section-label">Objetivo de peso</div>
+      <div class="cfg-grid">
+        <div class="field full"><label>Peso alvo (kg)</label><input type="number" step="0.1" id="cfgPesoAlvo" placeholder="90"></div>
+        <div class="field"><label>Peso mín. desejável (kg)</label><input type="number" step="0.1" id="cfgPesoMin" placeholder="ex: 85"></div>
+        <div class="field"><label>Peso máx. desejável (kg)</label><input type="number" step="0.1" id="cfgPesoMax" placeholder="ex: 92"></div>
+      </div>
+
+      <div class="cfg-section-label">Preferências</div>
+      <div class="cfg-grid">
         <div class="field full"><label>Dia de controlo semanal</label>
           <select id="cfgDiaControlo">
             <option value="0">Domingo</option>
@@ -508,9 +520,8 @@
             <option value="6">Sábado</option>
           </select>
         </div>
-        <div class="field"><label>Peso mín. desejável (kg)</label><input type="number" step="0.1" id="cfgPesoMin" placeholder="ex: 85"></div>
-        <div class="field"><label>Peso máx. desejável (kg)</label><input type="number" step="0.1" id="cfgPesoMax" placeholder="ex: 92"></div>
       </div>
+
       <button class="btn-lime" id="btnGuardarConfig" style="width:100%;">Guardar configuração</button>
       <button class="btn-ghost" id="btnTerminarSessao" style="width:100%;margin-top:8px;">Terminar sessão</button>
     </section>
@@ -563,7 +574,7 @@
 /* ============================================================
    CONFIGURAÇÃO
    ============================================================ */
-const APP_VERSION = 'v2.6.0';
+const APP_VERSION = 'v2.6.1';
 const CLIENT_ID = '108256538530-fgunbb52s7f3s9aurfpjtaf01v8fjbph.apps.googleusercontent.com';
 const SPREADSHEET_ID = '1UzEXtl7w6jMsk-c7Pkt3kq97AXL6XIiwTrjOYUaYFLs';
 const SHEET_REGISTOS = 'Registos';
@@ -1049,6 +1060,7 @@ async function onRegistarNovo(){
 /* ---------- Dicas explicativas ---------- */
 /* ---------- Histórico de versões (mais recente primeiro) ---------- */
 const CHANGELOG = [
+  { v:'v2.6.1', itens:['Config reorganizada em 3 grupos: Dados pessoais, Objetivo de peso, Preferências'] },
   { v:'v2.6.0', itens:['Peso mínimo e máximo desejável, configuráveis em Config', 'Indicação de "dentro/fora do controlo" no Resumo e na lista de Registos'] },
   { v:'v2.5.0', itens:['Aviso visível (✓) ao registar peso, editar um registo, ou guardar a configuração'] },
   { v:'v2.4.0', itens:['Dia de controlo semanal configurável em Config (deixa de ser sempre segunda-feira)'] },
