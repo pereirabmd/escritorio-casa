@@ -574,7 +574,7 @@
 /* ============================================================
    CONFIGURAÇÃO
    ============================================================ */
-const APP_VERSION = 'v2.6.1';
+const APP_VERSION = 'v2.6.2';
 const CLIENT_ID = '108256538530-fgunbb52s7f3s9aurfpjtaf01v8fjbph.apps.googleusercontent.com';
 const SPREADSHEET_ID = '1UzEXtl7w6jMsk-c7Pkt3kq97AXL6XIiwTrjOYUaYFLs';
 const SHEET_REGISTOS = 'Registos';
@@ -993,9 +993,19 @@ async function onGuardarConfig(){
   }
   try{
     await sheetsPut(`${SHEET_CONFIG}!B2:B9`, [[altura],[nascimento],[sexo],[pesoAlvo],[atividade],[diaControlo],[pesoMin],[pesoMax]]);
+    // atualizar o estado local diretamente com o que acabámos de gravar, em vez de voltar a
+    // ler do Sheets: a API pode cortar células vazias no fim do intervalo pedido, o que podia
+    // fazer um campo recém-gravado (como o peso mínimo) parecer "perdido" logo a seguir a gravar
+    config.altura = altura !== '' ? Number(altura) : null;
+    config.nascimento = nascimento ? new Date(nascimento) : null;
+    config.sexo = sexo;
+    config.pesoAlvo = pesoAlvo !== '' ? Number(pesoAlvo) : null;
+    config.atividade = normalizaAtividade(Number(atividade));
+    config.diaControlo = Number(diaControlo);
+    config.pesoMin = pesoMin !== '' ? Number(pesoMin) : null;
+    config.pesoMax = pesoMax !== '' ? Number(pesoMax) : null;
     setStatus('Configuração guardada.');
     showConfirmToast('Configuração guardada');
-    await loadConfig();
     renderAll();
   } catch(e){
     setStatus('Erro ao guardar configuração: ' + e.message, true);
@@ -1060,6 +1070,7 @@ async function onRegistarNovo(){
 /* ---------- Dicas explicativas ---------- */
 /* ---------- Histórico de versões (mais recente primeiro) ---------- */
 const CHANGELOG = [
+  { v:'v2.6.2', itens:['Corrigido: peso mínimo desejável podia não aparecer logo a seguir a gravar a configuração'] },
   { v:'v2.6.1', itens:['Config reorganizada em 3 grupos: Dados pessoais, Objetivo de peso, Preferências'] },
   { v:'v2.6.0', itens:['Peso mínimo e máximo desejável, configuráveis em Config', 'Indicação de "dentro/fora do controlo" no Resumo e na lista de Registos'] },
   { v:'v2.5.0', itens:['Aviso visível (✓) ao registar peso, editar um registo, ou guardar a configuração'] },
