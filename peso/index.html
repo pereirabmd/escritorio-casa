@@ -212,6 +212,7 @@
   .mini-badge.up{color:var(--danger);background:var(--danger-tint);}
   .mini-badge.streak{color:var(--amber);background:var(--amber-tint);}
   .mini-badge.record{color:#3E5B43;background:var(--ok-tint);}
+  .mini-badge.warn{color:var(--amber);background:var(--amber-tint);}
   .mini-badge:empty{display:none;}
 
   .stat-strip-2 .stat-chip{padding:9px 10px;}
@@ -292,6 +293,8 @@
   .week-tag.same{color:var(--text-dim);background:var(--panel2);}
   .regDate .d2{font-size:0.68rem;color:var(--text-dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
   .regPeso{font-family:var(--font-mono);font-weight:700;font-size:0.95rem;min-width:58px;text-align:right;}
+  .regPeso.reg-up{color:var(--danger);}
+  .regPeso.reg-warn{color:var(--amber);}
   .regDelta{font-size:0.68rem;font-weight:800;min-width:46px;text-align:right;}
   .regDelta.up{color:var(--danger);}
   .regDelta.down{color:var(--ok);}
@@ -425,6 +428,7 @@
         <span class="mini-badge same" id="lcdDelta">—</span>
         <span class="mini-badge streak" id="lcdStreak"></span>
         <span class="mini-badge record" id="lcdRecord"></span>
+        <span class="mini-badge" id="lcdControlo"></span>
       </div>
 
       <div class="stat-strip stat-strip-2" id="statStrip"></div>
@@ -504,6 +508,8 @@
             <option value="6">Sábado</option>
           </select>
         </div>
+        <div class="field"><label>Peso mín. desejável (kg)</label><input type="number" step="0.1" id="cfgPesoMin" placeholder="ex: 85"></div>
+        <div class="field"><label>Peso máx. desejável (kg)</label><input type="number" step="0.1" id="cfgPesoMax" placeholder="ex: 92"></div>
       </div>
       <button class="btn-lime" id="btnGuardarConfig" style="width:100%;">Guardar configuração</button>
       <button class="btn-ghost" id="btnTerminarSessao" style="width:100%;margin-top:8px;">Terminar sessão</button>
@@ -557,7 +563,7 @@
 /* ============================================================
    CONFIGURAÇÃO
    ============================================================ */
-const APP_VERSION = 'v2.5.0';
+const APP_VERSION = 'v2.6.0';
 const CLIENT_ID = '108256538530-fgunbb52s7f3s9aurfpjtaf01v8fjbph.apps.googleusercontent.com';
 const SPREADSHEET_ID = '1UzEXtl7w6jMsk-c7Pkt3kq97AXL6XIiwTrjOYUaYFLs';
 const SHEET_REGISTOS = 'Registos';
@@ -573,7 +579,7 @@ const ICON_TRASH = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" 
 let tokenClient;
 let accessToken = null;
 let registos = [];   // [{row, date: Date, peso: Number, nota: String}]
-let config = { altura: null, nascimento: null, sexo: '', pesoAlvo: null, atividade: 1.2, diaControlo: 1 };
+let config = { altura: null, nascimento: null, sexo: '', pesoAlvo: null, atividade: 1.2, diaControlo: 1, pesoMin: null, pesoMax: null };
 let currentTab = 'resumo';
 let currentPeriod = 'all';
 let weightChart = null;
@@ -923,7 +929,7 @@ function normalizaAtividade(raw){
 /* ---------- Load Config ---------- */
 async function loadConfig(){
   try{
-    const data = await sheetsGet(`${SHEET_CONFIG}!B2:B7`);
+    const data = await sheetsGet(`${SHEET_CONFIG}!B2:B9`);
     const v = data.values || [];
     config.altura = v[0] && v[0][0] !== '' ? Number(v[0][0]) : null;
     const nasc = v[1] ? v[1][0] : '';
@@ -941,6 +947,8 @@ async function loadConfig(){
     config.atividade = normalizaAtividade(atividadeRaw);
     const diaRaw = v[5] && v[5][0] !== '' ? Number(v[5][0]) : 1;
     config.diaControlo = (Number.isInteger(diaRaw) && diaRaw >= 0 && diaRaw <= 6) ? diaRaw : 1;
+    config.pesoMin = v[6] && v[6][0] !== '' ? Number(v[6][0]) : null;
+    config.pesoMax = v[7] && v[7][0] !== '' ? Number(v[7][0]) : null;
   } catch(e){
     setStatus('Não foi possível ler a Config: ' + e.message, true);
   }
@@ -950,6 +958,8 @@ async function loadConfig(){
   document.getElementById('cfgPesoAlvo').value = config.pesoAlvo ?? '';
   document.getElementById('cfgAtividade').value = config.atividade;
   document.getElementById('cfgDiaControlo').value = config.diaControlo;
+  document.getElementById('cfgPesoMin').value = config.pesoMin ?? '';
+  document.getElementById('cfgPesoMax').value = config.pesoMax ?? '';
 }
 
 function isoDateOnly(d){
@@ -964,8 +974,14 @@ async function onGuardarConfig(){
   const pesoAlvo = document.getElementById('cfgPesoAlvo').value;
   const atividade = document.getElementById('cfgAtividade').value;
   const diaControlo = document.getElementById('cfgDiaControlo').value;
+  const pesoMin = document.getElementById('cfgPesoMin').value;
+  const pesoMax = document.getElementById('cfgPesoMax').value;
+  if (pesoMin !== '' && pesoMax !== '' && Number(pesoMin) > Number(pesoMax)){
+    setStatus('O peso mínimo não pode ser maior do que o máximo.', true);
+    return;
+  }
   try{
-    await sheetsPut(`${SHEET_CONFIG}!B2:B7`, [[altura],[nascimento],[sexo],[pesoAlvo],[atividade],[diaControlo]]);
+    await sheetsPut(`${SHEET_CONFIG}!B2:B9`, [[altura],[nascimento],[sexo],[pesoAlvo],[atividade],[diaControlo],[pesoMin],[pesoMax]]);
     setStatus('Configuração guardada.');
     showConfirmToast('Configuração guardada');
     await loadConfig();
@@ -1033,6 +1049,7 @@ async function onRegistarNovo(){
 /* ---------- Dicas explicativas ---------- */
 /* ---------- Histórico de versões (mais recente primeiro) ---------- */
 const CHANGELOG = [
+  { v:'v2.6.0', itens:['Peso mínimo e máximo desejável, configuráveis em Config', 'Indicação de "dentro/fora do controlo" no Resumo e na lista de Registos'] },
   { v:'v2.5.0', itens:['Aviso visível (✓) ao registar peso, editar um registo, ou guardar a configuração'] },
   { v:'v2.4.0', itens:['Dia de controlo semanal configurável em Config (deixa de ser sempre segunda-feira)'] },
   { v:'v2.3.0', itens:['Histórico de versões — toca na versão no rodapé para ver as alterações de cada uma'] },
@@ -1270,6 +1287,7 @@ function renderLcd(){
     document.getElementById('lcdDelta').textContent = '—';
     document.getElementById('lcdStreak').textContent = '';
     document.getElementById('lcdRecord').textContent = '';
+    document.getElementById('lcdControlo').textContent = '';
     return;
   }
   const ultimo = registos[registos.length - 1];
@@ -1296,6 +1314,27 @@ function renderLcd(){
     recordEl.textContent = '';
   }
   recordEl.className = 'mini-badge record';
+
+  const controloEl = document.getElementById('lcdControlo');
+  const controlo = calcControloStatus(ultimo.peso);
+  if (controlo){
+    controloEl.textContent = controlo.texto;
+    controloEl.className = 'mini-badge ' + controlo.classe;
+  } else {
+    controloEl.textContent = '';
+  }
+}
+
+// estado do peso face ao intervalo mín/máx desejável definido em Config
+function calcControloStatus(peso){
+  if (config.pesoMin === null && config.pesoMax === null) return null;
+  if (config.pesoMax !== null && peso > config.pesoMax){
+    return { texto: '▲ acima do controlo', classe: 'up' };
+  }
+  if (config.pesoMin !== null && peso < config.pesoMin){
+    return { texto: '▼ abaixo do controlo', classe: 'warn' };
+  }
+  return { texto: '✓ dentro do controlo', classe: 'down' };
 }
 
 // dias consecutivos (calendário) com pelo menos um registo, a contar do registo mais recente
@@ -1461,6 +1500,9 @@ function renderRegistos(){
       }
     }
 
+    const controloReg = calcControloStatus(reg.peso);
+    const pesoClasse = controloReg && controloReg.classe !== 'down' ? ` reg-${controloReg.classe}` : '';
+
     const row = document.createElement('div');
     row.className = 'regRow' + (isDiaControlo ? ' controlday' : '');
     row.innerHTML = `
@@ -1468,7 +1510,7 @@ function renderRegistos(){
         <div class="d1">${fmtDataCurta(reg.date)}${isDiaControlo ? `<span class="seg-tag">${DIAS_ABREV[config.diaControlo]}</span>` : ''}${weekTagHtml}${isMin ? '<span class="min-tag">🏆 MÍN</span>' : ''}</div>
         <div class="d2">${pad(reg.date.getHours())}:${pad(reg.date.getMinutes())}${reg.nota ? ' · ' + escapeHtml(reg.nota) : ''}</div>
       </div>
-      <div class="regPeso">${reg.peso.toFixed(1)}</div>
+      <div class="regPeso${pesoClasse}" title="${controloReg ? controloReg.texto : ''}">${reg.peso.toFixed(1)}</div>
       ${deltaHtml}
       <div class="regActions">
         <button class="iconBtn iconEdit" title="Editar">${ICON_EDIT}</button>
@@ -1515,6 +1557,8 @@ function exportarXLSX(){
     { Campo: 'Peso alvo (kg)', Valor: config.pesoAlvo ?? '—' },
     { Campo: 'Nível de atividade', Valor: atividadeLabels[config.atividade] || config.atividade || '—' },
     { Campo: 'Dia de controlo semanal', Valor: DIAS_NOMES[config.diaControlo] ?? '—' },
+    { Campo: 'Peso mínimo desejável (kg)', Valor: config.pesoMin ?? '—' },
+    { Campo: 'Peso máximo desejável (kg)', Valor: config.pesoMax ?? '—' },
   ];
   const wsConfig = XLSX.utils.json_to_sheet(linhasConfig);
   wsConfig['!cols'] = [{ wch: 22 }, { wch: 22 }];
