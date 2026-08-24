@@ -607,7 +607,7 @@
     gap:8px;
     margin-top:10px;
   }
-  #notaForm input{
+  #notaForm input, #genPanel input, #genPanel select{
     font-family:inherit;
     font-size:16px;
     padding:10px 12px;
@@ -615,9 +615,13 @@
     border-radius:10px;
     background:var(--surface);
     color:var(--ink);
+    width:100%;
   }
   #notaForm input:focus{outline:2px solid var(--ink);outline-offset:1px;}
   #notaFormBtns{display:flex;gap:8px;}
+  #genPanel{margin-top:10px;display:flex;flex-direction:column;gap:8px;}
+  #genPanel .notaRow2{display:flex;gap:8px;}
+  #genPanel .notaRow2 input, #genPanel .notaRow2 select{flex:1;min-width:0;}
   #notaFormBtns button{flex:1;}
   .notaRow2{display:flex;gap:8px;}
   .notaRow2 input{flex:1;min-width:0;}
@@ -773,6 +777,24 @@
           <button id="notaCancelBtn" class="btn-secondary hidden">Cancelar</button>
         </div>
       </div>
+
+      <button id="genToggleBtn" class="linkBtn" style="margin-top:14px;">+ Gerar validações periódicas</button>
+      <div id="genPanel" class="hidden">
+        <div class="notasSub">Cria automaticamente as notas de validação a cada 2 semanas, alternando entre dois tipos.</div>
+        <div class="notaRow2">
+          <input type="date" id="genRefDate">
+          <select id="genRefType">
+            <option value="Validação">Normal</option>
+            <option value="Validação Batica">Batica</option>
+          </select>
+        </div>
+        <div class="notasSub">↑ Data de uma validação conhecida, e o tipo dela</div>
+        <input type="date" id="genUntilDate">
+        <div class="notasSub">↑ Gerar até esta data</div>
+        <div id="notaFormBtns">
+          <button id="genRunBtn" class="btn-primary">Gerar validações</button>
+        </div>
+      </div>
     </div>
 
   </div>
@@ -802,7 +824,7 @@
 /* ============================================================
    CONFIGURAÇÃO — preenche estes 2 valores antes de usar
    ============================================================ */
-const APP_VERSION = 'v3.9.0';
+const APP_VERSION = 'v3.10.0';
 
 const ICON_EDIT = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>';
 const ICON_TRASH = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>';
@@ -899,6 +921,16 @@ window.onload = () => {
   console.log('KLx RTO app', APP_VERSION);
   buildSkeletonGrid();
   document.getElementById('changelogBtn').onclick = () => showChangelog();
+  document.getElementById('genToggleBtn').onclick = () => {
+    const panel = document.getElementById('genPanel');
+    panel.classList.toggle('hidden');
+    if (!panel.classList.contains('hidden')){
+      const todayIso = isoDate(new Date().getFullYear(), new Date().getMonth(), new Date().getDate());
+      if (!document.getElementById('genRefDate').value) document.getElementById('genRefDate').value = todayIso;
+      if (!document.getElementById('genUntilDate').value) document.getElementById('genUntilDate').value = `${currentYear}-12-31`;
+    }
+  };
+  document.getElementById('genRunBtn').onclick = () => gerarValidacoesPeriodicas();
 
   tokenClient = google.accounts.oauth2.initTokenClient({
     client_id: CLIENT_ID,
@@ -1421,6 +1453,7 @@ function attachLongPress(cell, dateStr){
 
 /* ---------- Registo de alterações (changelog) ---------- */
 const CHANGELOG = [
+  { v:'3.10.0', c:['Gerador de validações periódicas (aba Notas) — cria automaticamente as notas a cada 2 semanas, alternando entre dois tipos'] },
   { v:'3.9.0', c:['Registo de alterações (esta lista), acessível a partir do rodapé'] },
   { v:'3.8.2', c:['Mensagem de carregamento unificada, em pílula centrada no ecrã (sem duplicar com o rodapé)'] },
   { v:'3.8.1', c:['Texto animado "A carregar dados..." no ecrã de carregamento'] },
@@ -2138,6 +2171,56 @@ async function onNotaSave(){
     setStatus('Não gravou a nota: ' + err.message, true);
   } finally {
     notaSaveBusy = false;
+  }
+}
+
+/* ---------- Gerador de validações periódicas (a cada 2 semanas, alternando 2 tipos) ---------- */
+async function gerarValidacoesPeriodicas(){
+  const refVal = document.getElementById('genRefDate').value;
+  const untilVal = document.getElementById('genUntilDate').value;
+  const refType = document.getElementById('genRefType').value;
+  if (!refVal || !untilVal){
+    setStatus('Preenche a data de referência e a data limite.', true);
+    return;
+  }
+  const [ry, rm, rd] = refVal.split('-').map(Number);
+  const [uy, um, ud] = untilVal.split('-').map(Number);
+  const refDate = new Date(ry, rm-1, rd);
+  const untilDate = new Date(uy, um-1, ud);
+  if (untilDate < refDate){
+    setStatus('A data limite tem de ser depois da data de referência.', true);
+    return;
+  }
+  const otherType = refType === 'Validação' ? 'Validação Batica' : 'Validação';
+
+  setStatus('A gerar validações…');
+  try{
+    let d = new Date(refDate);
+    let i = 0;
+    let criadas = 0, existentes = 0;
+    while (d <= untilDate){
+      const categoria = (i % 2 === 0) ? refType : otherType;
+      const pt = toPtDate(isoDate(d.getFullYear(), d.getMonth(), d.getDate()));
+      const jaExiste = notasData.some(n => n.dataInicio === pt && n.dataFim === pt && n.categoria === categoria);
+      if (jaExiste){
+        existentes++;
+      } else {
+        const row = notasNextRow++;
+        await sheetsPut(notaRange(row), [[pt, pt, categoria, '']]);
+        notasData.push({ row, dataInicio: pt, dataFim: pt, categoria, descricao: '' });
+        criadas++;
+      }
+      d.setDate(d.getDate() + 14);
+      i++;
+    }
+    sortNotas();
+    computeNoteMarks();
+    renderNotes();
+    renderMonth();
+    document.getElementById('genPanel').classList.add('hidden');
+    setStatus(`${criadas} validações criadas${existentes ? ` (${existentes} já existiam)` : ''}.`);
+  }catch(err){
+    setStatus('Não gravou: ' + err.message, true);
   }
 }
 
