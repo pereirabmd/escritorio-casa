@@ -87,21 +87,41 @@ self.addEventListener('fetch', (event) => {
 // ---------------------------------------------------------------
 // PARTE 2 — Notificações push (Firebase Cloud Messaging)
 // ---------------------------------------------------------------
+const APPS_SCRIPT_URL_SW = 'https://script.google.com/macros/s/AKfycbwWfRcQ5QK0dI2YAhqHGfLbKLJoDwSCEwTb345fU352LdWk6ezdLqG1WzQLsJGO3zSj/exec';
+
 messaging.onBackgroundMessage((payload) => {
   const titulo = payload.notification?.title || 'Tarefas de Casa';
   const corpo = payload.notification?.body || '';
+  const instanciaId = payload.data?.instanciaId || '';
 
   self.registration.showNotification(titulo, {
     body: corpo,
     icon: './icon-192.png',
     badge: './icon-192.png',
-    data: payload.fcmOptions?.link || './'
+    data: { link: payload.fcmOptions?.link || './', instanciaId },
+    actions: instanciaId ? [{ action: 'concluir', title: 'Marcar feita' }] : []
   });
 });
 
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
-  const url = event.notification.data || './';
+  const dados = event.notification.data || {};
+  const url = dados.link || './';
+
+  if (event.action === 'concluir' && dados.instanciaId) {
+    event.waitUntil(
+      fetch(APPS_SCRIPT_URL_SW, {
+        method: 'POST',
+        body: JSON.stringify({ tipo: 'marcarFeita', instanciaId: dados.instanciaId })
+      }).then(() =>
+        self.registration.showNotification('Tarefas de Casa', {
+          body: 'Marcada como feita ✓',
+          icon: './icon-192.png'
+        })
+      )
+    );
+    return;
+  }
 
   event.waitUntil(
     clients.matchAll({ type: 'window', includeUncontrolled: true }).then((windowClients) => {
