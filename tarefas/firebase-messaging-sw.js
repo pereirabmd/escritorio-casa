@@ -93,11 +93,13 @@ messaging.onBackgroundMessage((payload) => {
   const titulo = payload.notification?.title || 'Tarefas de Casa';
   const corpo = payload.notification?.body || '';
   const instanciaId = payload.data?.instanciaId || '';
+  const idMensagem = payload.data?.msgId || instanciaId || (titulo + corpo);
 
   self.registration.showNotification(titulo, {
     body: corpo,
     icon: './icon-192.png',
     badge: './icon-192.png',
+    tag: idMensagem, // evita duplicar se a mesma mensagem chegar por dois caminhos
     data: { link: payload.fcmOptions?.link || './', instanciaId },
     actions: instanciaId ? [{ action: 'concluir', title: 'Marcar feita' }] : []
   });
