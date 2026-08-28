@@ -90,8 +90,8 @@ self.addEventListener('fetch', (event) => {
 const APPS_SCRIPT_URL_SW = 'https://script.google.com/macros/s/AKfycbwWfRcQ5QK0dI2YAhqHGfLbKLJoDwSCEwTb345fU352LdWk6ezdLqG1WzQLsJGO3zSj/exec';
 
 messaging.onBackgroundMessage((payload) => {
-  const titulo = payload.notification?.title || 'Tarefas de Casa';
-  const corpo = payload.notification?.body || '';
+  const titulo = payload.data?.titulo || 'Tarefas de Casa';
+  const corpo = payload.data?.corpo || '';
   const instanciaId = payload.data?.instanciaId || '';
   const idMensagem = payload.data?.msgId || instanciaId || (titulo + corpo);
 
@@ -99,7 +99,7 @@ messaging.onBackgroundMessage((payload) => {
     body: corpo,
     icon: './icon-192.png',
     badge: './icon-192.png',
-    tag: idMensagem, // evita duplicar se a mesma mensagem chegar por dois caminhos
+    tag: idMensagem,
     data: { link: payload.fcmOptions?.link || './', instanciaId },
     actions: instanciaId ? [{ action: 'concluir', title: 'Marcar feita' }] : []
   });
