@@ -101,7 +101,10 @@ messaging.onBackgroundMessage((payload) => {
     badge: './icon-192.png',
     tag: idMensagem,
     data: { link: payload.fcmOptions?.link || './', instanciaId },
-    actions: instanciaId ? [{ action: 'concluir', title: 'Marcar feita' }] : []
+    actions: instanciaId ? [
+      { action: 'concluir', title: 'Marcar feita' },
+      { action: 'snooze', title: 'Daqui a 1h' }
+    ] : []
   });
 });
 
@@ -118,6 +121,21 @@ self.addEventListener('notificationclick', (event) => {
       }).then(() =>
         self.registration.showNotification('Tarefas de Casa', {
           body: 'Marcada como feita ✓',
+          icon: './icon-192.png'
+        })
+      )
+    );
+    return;
+  }
+
+  if (event.action === 'snooze' && dados.instanciaId) {
+    event.waitUntil(
+      fetch(APPS_SCRIPT_URL_SW, {
+        method: 'POST',
+        body: JSON.stringify({ tipo: 'snooze', instanciaId: dados.instanciaId })
+      }).then(() =>
+        self.registration.showNotification('Tarefas de Casa', {
+          body: 'Vou lembrar-te daqui a 1h ⏰',
           icon: './icon-192.png'
         })
       )
