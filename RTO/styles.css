@@ -169,6 +169,7 @@ button{
 /* ---------- Adição: estado de hoje — a primeira coisa visível ao abrir a app ---------- */
 #todayStrip{
   margin:12px 16px 0;
+  width:calc(100% - 32px);
   display:flex;
   align-items:center;
   gap:12px;
@@ -205,6 +206,7 @@ button{
 
 .stat.saldoHero{
   margin:12px 16px 10px;
+  width:calc(100% - 32px);
   padding:20px 20px 18px;
   border-radius:var(--radius-l);
   border-left:none;
