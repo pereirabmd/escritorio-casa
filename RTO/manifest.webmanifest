@@ -1,0 +1,33 @@
+{
+  "name": "KLx RTO",
+  "short_name": "KLx RTO",
+  "description": "Calendário de dias no escritório/em casa, quota RTO, férias e astreinte — sincronizado com o Google Sheets.",
+  "start_url": "index.html",
+  "scope": ".",
+  "id": "/RTO/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#f6f4ef",
+  "theme_color": "#3a6b8e",
+  "lang": "pt-PT",
+  "icons": [
+    { "src": "icon192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icon192.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable" },
+    { "src": "icon512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icon512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "shortcuts": [
+    {
+      "name": "Marcar hoje: Escritório",
+      "short_name": "Hoje: Escritório",
+      "url": "index.html?quick=T",
+      "icons": [{ "src": "shortcut-t.png", "sizes": "192x192", "type": "image/png" }]
+    },
+    {
+      "name": "Marcar hoje: Casa",
+      "short_name": "Hoje: Casa",
+      "url": "index.html?quick=C",
+      "icons": [{ "src": "shortcut-c.png", "sizes": "192x192", "type": "image/png" }]
+    }
+  ]
+}
