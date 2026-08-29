@@ -4,6 +4,7 @@
   "description": "Calendário de tarefas domésticas com notificações",
   "start_url": "/escritorio-casa/tarefas/",
   "scope": "/escritorio-casa/tarefas/",
+  "id": "/escritorio-casa/tarefas/",
   "display": "standalone",
   "orientation": "portrait",
   "background_color": "#F8F7F3",

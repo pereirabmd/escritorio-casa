@@ -6,6 +6,27 @@
  */
 
 function gerarInstancias() {
+  // F19 — Lock: gerarInstancias() pode ser chamada tanto pelo trigger horário
+  // (jobPeriodico) como manualmente por qualquer pessoa ("Atualizar tarefas
+  // do dia agora"). Sem serializar, duas execuções em simultâneo podiam ler
+  // o mesmo estado de "Instancias" antes de qualquer uma escrever e ambas
+  // decidir criar a mesma ocorrência (TarefaID+Data) — duplicando-a. O lock
+  // garante que só uma execução gera de cada vez; a segunda espera a vez.
+  const lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(15000);
+  } catch (e) {
+    console.warn('gerarInstancias: não obteve o lock a tempo, outra execução está em curso.');
+    return 0;
+  }
+  try {
+    return gerarInstanciasSemLock();
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function gerarInstanciasSemLock() {
   const config = getConfigMap();
   const horizonteDias = Number(config['DiasAntecedenciaGeracao'] || 30);
 
