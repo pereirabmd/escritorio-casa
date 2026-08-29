@@ -116,7 +116,7 @@ function enviarNotificacoesDoDia() {
     const destinatarios = subsPorPessoa[inst.Pessoa] || [];
     destinatarios.forEach(sub => {
       const ok = enviarFCM(sub.Endpoint, tarefa.Nome, 'Hoje: ' + tarefa.Nome, inst.ID);
-      if (!ok) desativarSubscricao(sub);
+      registarResultadoEnvio(sub, ok);
       if (ok && auditoriaSheet) {
         auditoriaSheet.appendRow([new Date().toISOString(), 'notificacao_enviada', tarefa.Nome, inst.Pessoa, inst.ID]);
       }
@@ -142,6 +142,36 @@ function getSheetOpcional(nome) {
 
 function desativarSubscricao(sub) {
   getSheet('Subscriptions').getRange(sub._rowIndex, 6).setValue('FALSE'); // Ativa
+}
+
+// F21 — Tolerância a falhas isoladas de envio: só desativa uma subscrição
+// ao fim de duas falhas SEGUIDAS, não logo na primeira. Uma falha isolada
+// (ex: o token ficou momentaneamente desatualizado porque a app ainda não
+// teve oportunidade de o renovar sozinha) já não corta as notificações
+// seguintes de imediato — dá tempo à app cliente para se corrigir sozinha
+// da próxima vez que abrir. A notificação da própria falha continua
+// perdida (não há como reenviar algo que já devia ter sido entregue);
+// isto só evita que uma falha pontual arraste todas as seguintes.
+// Usa PropertiesService (não CacheService) porque as falhas da mesma
+// subscrição podem estar espaçadas por mais de 6 horas (o limite máximo
+// de expiração da Cache) — aqui contam-se falhas consecutivas reais,
+// sem limite de tempo entre elas.
+var FALHAS_ANTES_DE_DESATIVAR_SUBSCRICAO = 2;
+
+function registarResultadoEnvio(sub, sucesso) {
+  const props = PropertiesService.getScriptProperties();
+  const chave = 'falhasNotif_' + sub.Endpoint;
+  if (sucesso) {
+    props.deleteProperty(chave);
+    return;
+  }
+  const falhas = Number(props.getProperty(chave) || '0') + 1;
+  if (falhas >= FALHAS_ANTES_DE_DESATIVAR_SUBSCRICAO) {
+    desativarSubscricao(sub);
+    props.deleteProperty(chave);
+  } else {
+    props.setProperty(chave, String(falhas));
+  }
 }
 
 // ---- Transporte FCM (HTTP v1 API, autenticado via service account) ----
@@ -227,5 +257,5 @@ function enviarFCM(fcmToken, titulo, corpo, instanciaId) {
   if (response.getResponseCode() === 200) return true;
 
   console.error('Falha a enviar FCM: ' + response.getContentText());
-  return false; // token provavelmente inválido/expirado -> desativar
+  return false; // token provavelmente inválido/expirado -> ver registarResultadoEnvio
 }
