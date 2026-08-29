@@ -321,7 +321,7 @@
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 
 <script>
-const APP_VERSION = 'Beta 31';
+const APP_VERSION = 'Beta 32';
 
 // ---------------------------------------------------------------
 // ROBUSTEZ — erros globais e localStorage seguro
@@ -573,10 +573,86 @@ function initAuth() {
 // ---------------------------------------------------------------
 // SHEETS API HELPERS
 // ---------------------------------------------------------------
+/* ---------------------------------------------------------------
+   PEDIDOS AO SHEETS — núcleo partilhado (sheetsFetch)
+   ---------------------------------------------------------------
+   Bug corrigido: só sheetsGet detetava um token expirado (401) e o
+   renovava — sheetsAppend/sheetsUpdate falhavam direto, sem tentar
+   renovar. Isto explicava escritas a falhar ("Falha ao guardar tarefa")
+   especificamente para sessões cujo token expira sem quem está a usar a
+   app dar por isso (tipicamente quem não é o dono principal da conta, se
+   tiver sessão/expiração diferente). As três funções passam agora a
+   partilhar a mesma deteção de 401 com renovação + UM retry automático
+   do mesmo pedido — não só um erro silencioso.
+
+   Também deixam de descartar a resposta de erro da API: "Falha ao
+   guardar" sozinho não dava para diagnosticar nada à distância (401 token,
+   403 sem permissão no Sheet, 400 range inválido, etc. eram todos
+   indistinguíveis). `ultimoErroSheets` guarda a mensagem real devolvida
+   pela API depois de qualquer falha, para os toasts a poderem mostrar.
+*/
+let ultimoErroSheets = '';
+
+async function extrairErroSheets(res) {
+  try {
+    const corpo = await res.clone().json();
+    return (corpo && corpo.error && corpo.error.message) || `HTTP ${res.status}`;
+  } catch (e) {
+    return `HTTP ${res.status}`;
+  }
+}
+
+// Pede um token novo em silêncio (sem mostrar nada ao utilizador) e só
+// resolve depois de a resposta chegar — ao contrário do disparo
+// "fogo-e-esquece" que já existia, isto permite repetir o pedido original
+// a seguir com o token novo, em vez de desistir logo.
+function renovarTokenSilenciosamente() {
+  return new Promise((resolve) => {
+    if (!tokenClient) { resolve(false); return; }
+    const callbackOriginal = tokenClient.callback;
+    let respondido = false;
+    const concluir = (ok) => {
+      if (respondido) return;
+      respondido = true;
+      tokenClient.callback = callbackOriginal;
+      resolve(ok);
+    };
+    tokenClient.callback = (resp) => {
+      callbackOriginal(resp); // mantém o comportamento normal: guarda o token, esconde o ecrã de login, etc.
+      concluir(!resp.error);
+    };
+    try {
+      tokenClient.requestAccessToken({ prompt: '' });
+    } catch (e) {
+      concluir(false);
+    }
+  });
+}
+
+async function sheetsFetch(url, method, body) {
+  const fazerPedido = () => fetch(url, {
+    method,
+    headers: body !== undefined
+      ? { Authorization: 'Bearer ' + accessToken, 'Content-Type': 'application/json' }
+      : { Authorization: 'Bearer ' + accessToken },
+    body: body !== undefined ? JSON.stringify(body) : undefined
+  });
+
+  let res = await fazerPedido();
+  if (res.status === 401) {
+    const renovado = await renovarTokenSilenciosamente();
+    if (renovado) res = await fazerPedido();
+  }
+  return res;
+}
+
 async function sheetsGet(range) {
   const url = `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/${encodeURIComponent(range)}`;
-  const res = await fetch(url, { headers: { Authorization: 'Bearer ' + accessToken } });
-  if (res.status === 401) { tokenClient.requestAccessToken({ prompt: '' }); throw new Error('token expirado'); }
+  const res = await sheetsFetch(url, 'GET');
+  if (!res.ok) {
+    ultimoErroSheets = await extrairErroSheets(res);
+    throw new Error(ultimoErroSheets);
+  }
   const data = await res.json();
   return data.values || [];
 }
@@ -589,13 +665,16 @@ async function sheetsGet(range) {
 async function sheetsAppend(range, row) {
   try {
     const url = `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/${encodeURIComponent(range)}:append?valueInputOption=USER_ENTERED`;
-    const res = await fetch(url, {
-      method: 'POST',
-      headers: { Authorization: 'Bearer ' + accessToken, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ values: [row] })
-    });
-    return res.ok;
+    const res = await sheetsFetch(url, 'POST', { values: [row] });
+    if (!res.ok) {
+      ultimoErroSheets = await extrairErroSheets(res);
+      console.error('sheetsAppend falhou:', ultimoErroSheets, { range, row });
+      return false;
+    }
+    ultimoErroSheets = '';
+    return true;
   } catch (e) {
+    ultimoErroSheets = 'sem ligação à internet';
     console.error('sheetsAppend falhou (sem ligação?):', e);
     return false;
   }
@@ -604,13 +683,16 @@ async function sheetsAppend(range, row) {
 async function sheetsUpdate(range, values) {
   try {
     const url = `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/${encodeURIComponent(range)}?valueInputOption=USER_ENTERED`;
-    const res = await fetch(url, {
-      method: 'PUT',
-      headers: { Authorization: 'Bearer ' + accessToken, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ values: [values] })
-    });
-    return res.ok;
+    const res = await sheetsFetch(url, 'PUT', { values: [values] });
+    if (!res.ok) {
+      ultimoErroSheets = await extrairErroSheets(res);
+      console.error('sheetsUpdate falhou:', ultimoErroSheets, { range, values });
+      return false;
+    }
+    ultimoErroSheets = '';
+    return true;
   } catch (e) {
+    ultimoErroSheets = 'sem ligação à internet';
     console.error('sheetsUpdate falhou (sem ligação?):', e);
     return false;
   }
@@ -918,7 +1000,7 @@ async function marcarFeita(inst) {
     renderCalendario();
     renderResumo();
   }
-  toast(ok ? (novoEstado === 'Feita' ? 'Tarefa concluída' : 'Reaberta') : 'Falha ao guardar — sem ligação?');
+  toast(ok ? (novoEstado === 'Feita' ? 'Tarefa concluída' : 'Reaberta') : 'Falha ao guardar: ' + (ultimoErroSheets || 'sem ligação?'));
 }
 
 async function saltarTarefa(inst) {
@@ -932,7 +1014,7 @@ async function saltarTarefa(inst) {
     renderHoje();
     renderCalendario();
   }
-  toast(ok ? 'Tarefa saltada por hoje' : 'Falha ao guardar — sem ligação?');
+  toast(ok ? 'Tarefa saltada por hoje' : 'Falha ao guardar: ' + (ultimoErroSheets || 'sem ligação?'));
 }
 
 // F10 — Abre o Google Calendar com o evento pré-preenchido, para a pessoa
@@ -980,7 +1062,7 @@ document.getElementById('btn-confirmar-reagendar').addEventListener('click', asy
     renderHoje();
     renderCalendario();
   }
-  toast(ok ? 'Tarefa reagendada' : 'Falha ao guardar — sem ligação?');
+  toast(ok ? 'Tarefa reagendada' : 'Falha ao guardar: ' + (ultimoErroSheets || 'sem ligação?'));
   instAReagendar = null;
 });
 
@@ -1310,7 +1392,7 @@ async function apagarTarefa(tarefa) {
   if (!confirm(`Apagar "${tarefa.Nome}"? As ocorrências já concluídas mantêm-se no histórico; as pendentes desaparecem.`)) return;
 
   const ok = await sheetsUpdate(`Tarefas!J${tarefa._rowIndex}`, ['FALSE']); // Ativa = FALSE (soft delete)
-  if (!ok) { toast('Falha ao apagar'); return; }
+  if (!ok) { toast('Falha ao apagar: ' + (ultimoErroSheets || 'erro desconhecido')); return; }
 
   const pendentes = state.instancias.filter(
     i => i.TarefaID === tarefa.ID && (i.Estado === 'Pendente' || i.Estado === 'Atrasada')
@@ -1368,7 +1450,7 @@ document.getElementById('btn-guardar-tarefa').addEventListener('click', async ()
       document.getElementById('modal-backdrop').classList.remove('open');
       await carregarTudo();
     } else {
-      toast('Falha ao guardar');
+      toast('Falha ao guardar: ' + (ultimoErroSheets || 'erro desconhecido'));
     }
     return;
   }
@@ -1380,7 +1462,7 @@ document.getElementById('btn-guardar-tarefa').addEventListener('click', async ()
 
   const row = [novoId, nome, catChip.dataset.cat, '', recorrencia, diasSemanaGuardar, diaMes, hora, pessoa, 'TRUE', prioridade, rotacao, dependeDe];
   const ok = await sheetsAppend('Tarefas!A:M', row);
-  if (!ok) { toast('Falha ao guardar tarefa'); return; }
+  if (!ok) { toast('Falha ao guardar tarefa: ' + (ultimoErroSheets || 'erro desconhecido')); return; }
 
   // Tarefas Pontuais não passam pelo gerarInstancias() do Apps Script —
   // criamos já aqui a única instância correspondente.
@@ -1493,7 +1575,7 @@ async function adicionarPessoa(nome, email) {
   const nums = state.pessoasObjs.map(p => Number((p.chave.match(/\d+/) || [0])[0]));
   const proximoNum = nums.length ? Math.max(...nums) + 1 : 1;
   const ok = await sheetsAppend('Config!A:C', [`Pessoa${proximoNum}_Nome`, nome, '']);
-  if (!ok) { toast('Falha ao adicionar pessoa'); return; }
+  if (!ok) { toast('Falha ao adicionar pessoa: ' + (ultimoErroSheets || 'erro desconhecido')); return; }
 
   if (email) {
     await sheetsAppend('Config!A:C', [`Pessoa${proximoNum}_Email`, email, '']);
@@ -1514,7 +1596,7 @@ async function guardarEdicaoPessoa(nomeAntigo, novoNome, novoEmail) {
 
   if (novoNome !== nomeAntigo) {
     const ok = await sheetsUpdate(`Config!B${pessoaObj.rowIndex}`, [novoNome]);
-    if (!ok) { toast('Falha ao renomear'); return; }
+    if (!ok) { toast('Falha ao renomear: ' + (ultimoErroSheets || 'erro desconhecido')); return; }
     await atualizarReferenciasPessoa(nomeAntigo, novoNome, { apenasPendentes: false });
     if (pessoaAtual === nomeAntigo) {
       pessoaAtual = novoNome;
@@ -1658,7 +1740,7 @@ document.getElementById('btn-guardar-rapida').addEventListener('click', async ()
   const hoje = formatDate(new Date());
 
   const ok = await sheetsAppend('Tarefas!A:M', [novoId, nome, 'Outros', '', 'Pontual', hoje, '', '', pessoa, 'TRUE', 'Media', '', '']);
-  if (!ok) { toast('Falha ao criar'); return; }
+  if (!ok) { toast('Falha ao criar: ' + (ultimoErroSheets || 'erro desconhecido')); return; }
 
   await sheetsAppend('Instancias!A:G', ['I' + Date.now(), novoId, hoje, pessoa, 'Pendente', '', 'FALSE']);
   toast('Tarefa adicionada a hoje');
