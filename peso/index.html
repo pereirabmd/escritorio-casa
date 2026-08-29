@@ -2,644 +2,288 @@
 <html lang="pt">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
 <title>Peso — Controlo diário</title>
 <link rel="icon" type="image/png" href="pesoicon192.png">
 <link rel="apple-touch-icon" href="pesoicon192.png">
-<link rel="manifest" href="data:application/json;base64,eyJuYW1lIjogIkNvbnRyb2xvIGRlIFBlc28iLCAic2hvcnRfbmFtZSI6ICJQZXNvIiwgInN0YXJ0X3VybCI6ICIuLyIsICJzY29wZSI6ICIuLyIsICJkaXNwbGF5IjogInN0YW5kYWxvbmUiLCAiYmFja2dyb3VuZF9jb2xvciI6ICIjRkFGQkY4IiwgInRoZW1lX2NvbG9yIjogIiNGQUZCRjgiLCAiaWNvbnMiOiBbeyJzcmMiOiAicGVzb2ljb24xOTIucG5nIiwgInNpemVzIjogIjE5MngxOTIiLCAidHlwZSI6ICJpbWFnZS9wbmcifSwgeyJzcmMiOiAicGVzb2ljb241MTIucG5nIiwgInNpemVzIjogIjUxMng1MTIiLCAidHlwZSI6ICJpbWFnZS9wbmcifV19">
-<meta name="theme-color" content="#FAFBF8">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#F7F8F5">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Peso">
+<meta name="description" content="Registo e acompanhamento diário de peso, com gráficos, tendências e sincronização com o Google Sheets.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="preconnect" href="https://accounts.google.com">
+<link rel="preconnect" href="https://sheets.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-<style>
-  :root{
-    --bg:#FAFBF8;
-    --panel:#FFFFFF;
-    --panel2:#EEF4F0;
-    --line:#DCE7E0;
-    --text:#556066;
-    --text-dim:#8B979C;
-    --lime:#4F8D74;
-    --lime-ink:#FFFFFF;
-    --lime-glow:rgba(79,141,116,.22);
-    --teal:#6FAF8F;
-    --mint:#A8D5BA;
-    --amber:#D69E4D;
-    --amber-tint:rgba(214,158,77,.15);
-    --danger:#D97A66;
-    --danger-tint:rgba(217,122,102,.14);
-    --ok:#4F8D74;
-    --ok-tint:rgba(79,141,116,.14);
-    --font-mono:'DM Mono', monospace;
-    --font-sans:'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-  }
-  body.dark{
-    --bg:#121815;
-    --panel:#1B2420;
-    --panel2:#232F29;
-    --line:#2E3B34;
-    --text:#E7EDE9;
-    --text-dim:#93A69B;
-    --lime:#6FAF8F;
-    --lime-ink:#12181C;
-    --lime-glow:rgba(111,175,143,.28);
-    --teal:#A8D5BA;
-    --mint:#3E5548;
-    --amber:#E3B166;
-    --amber-tint:rgba(227,177,102,.18);
-    --danger:#E58F7A;
-    --danger-tint:rgba(229,143,122,.18);
-    --ok:#6FAF8F;
-    --ok-tint:rgba(111,175,143,.18);
-  }
-  *{box-sizing:border-box;}
-  html,body{height:100%;}
-  body{
-    margin:0 auto;
-    max-width:480px;
-    height:100vh;
-    height:100svh;
-    display:flex;
-    flex-direction:column;
-    overflow-y:auto;
-    overflow-x:hidden;
-    overscroll-behavior-y:auto;
-    overscroll-behavior-x:none;
-    font-family:var(--font-sans);
-    background:var(--bg);
-    color:var(--text);
-    position:relative;
-  }
-
-  #bgWatermark{
-    position:fixed;
-    bottom:-12%;
-    right:-22%;
-    width:125%;
-    max-width:600px;
-    aspect-ratio:1/1;
-    background-image:url('pesoicon512.png');
-    background-size:contain;
-    background-repeat:no-repeat;
-    background-position:bottom right;
-    opacity:0.20;
-    filter:saturate(1.3);
-    pointer-events:none;
-    z-index:0;
-  }
-  body.dark #bgWatermark{ opacity:0.14; filter:saturate(1.1) brightness(1.6); }
-
-  body, .card, header, .hero-add, .stat-chip, .chip, .progress-block, input, select, .navBtn{
-    transition: background-color .25s ease, border-color .25s ease, color .25s ease;
-  }
-
-  header, #authArea, #app{ position:relative; z-index:1; }
-
-  #ptrIndicator{
-    position:fixed;top:0;left:50%;
-    width:36px;height:36px;border-radius:50%;
-    background:var(--panel);border:1px solid var(--line);
-    box-shadow:0 2px 10px rgba(0,0,0,.15);
-    display:flex;align-items:center;justify-content:center;
-    color:var(--lime);
-    transform:translate(-50%,-60px) rotate(0deg);
-    opacity:0;
-    z-index:40;
-    pointer-events:none;
-  }
-  #ptrIndicator.ptr-animated{transition:transform .25s ease, opacity .25s ease;}
-  #ptrIndicator.ptr-refreshing svg{animation:ptrspin .7s linear infinite;}
-  @keyframes ptrspin{to{transform:rotate(360deg);}}
-
-  header{
-    flex:0 0 auto;
-    padding:calc(10px + env(safe-area-inset-top)) 16px 8px;
-    display:flex;
-    align-items:baseline;
-    justify-content:space-between;
-    border-bottom:1px solid var(--line);
-  }
-  header .brand{font-size:1.05rem;font-weight:800;letter-spacing:-0.01em;display:flex;align-items:center;gap:6px;}
-  .brand-ico{height:22px;width:22px;border-radius:6px;display:block;}
-  header .sub{font-size:0.68rem;color:var(--text-dim);text-transform:uppercase;letter-spacing:.06em;}
-  .header-right{display:flex;align-items:center;gap:9px;}
-  .icon-theme{
-    background:none;border:1px solid var(--line);color:var(--text-dim);
-    border-radius:8px;width:26px;height:26px;padding:0;
-    display:flex;align-items:center;justify-content:center;min-height:auto;
-  }
-  .icon-theme:active{color:var(--lime);border-color:var(--lime);}
-
-  #authArea{flex:0 0 auto;padding:56px 24px 24px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;text-align:center;}
-  #authArea p{color:var(--text-dim);font-size:0.9rem;margin:0;}
-
-  button{font-family:inherit;border:none;border-radius:10px;cursor:pointer;font-weight:700;}
-  .btn-lime{background:var(--lime);color:var(--lime-ink);padding:11px 20px;font-size:0.95rem;min-height:44px;}
-  .btn-ghost{background:transparent;color:var(--text);border:1px solid var(--line);padding:10px 16px;font-size:0.88rem;min-height:40px;}
-  .btn-danger{background:var(--danger);color:#2a0a0a;padding:10px 16px;font-size:0.88rem;min-height:40px;}
-
-  input,select{
-    font-family:inherit;border:1px solid var(--line);border-radius:9px;
-    padding:9px 11px;font-size:0.92rem;background:var(--panel2);color:var(--text);width:100%;
-  }
-  input::placeholder{color:var(--text-dim);}
-  label{font-size:0.68rem;color:var(--text-dim);font-weight:700;text-transform:uppercase;letter-spacing:.04em;display:block;margin-bottom:4px;}
-
-  #app{flex:1;display:flex;flex-direction:column;min-height:0;position:relative;}
-
-  #loadingOverlay{
-    position:absolute;inset:0;z-index:15;
-    background:var(--bg);
-    display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;
-    transition:opacity .35s ease;
-  }
-  #loadingOverlay.hidden{opacity:0;pointer-events:none;}
-  .loading-icon{width:56px;height:56px;border-radius:14px;animation:loadingPulse 1.6s ease-in-out infinite;}
-  .loading-spinner{
-    width:26px;height:26px;border-radius:50%;
-    border:3px solid var(--line);border-top-color:var(--lime);
-    animation:loadingSpin .8s linear infinite;
-  }
-  .loading-text{font-size:0.8rem;color:var(--text-dim);}
-  @keyframes loadingPulse{0%,100%{transform:scale(1);opacity:1;}50%{transform:scale(0.92);opacity:0.7;}}
-  @keyframes loadingSpin{to{transform:rotate(360deg);}}
-
-  #bottomNav{
-    flex:0 0 auto;display:flex;
-    padding:4px 4px calc(4px + env(safe-area-inset-bottom));
-    border-top:1px solid var(--line);
-    background:var(--panel);
-  }
-  .navBtn{
-    flex:1;background:none;border:none;color:var(--text-dim);
-    display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;
-    padding:6px 2px;min-height:52px;border-radius:10px;
-    position:relative;overflow:hidden;
-  }
-  .navBtn svg{width:21px;height:21px;transition:transform .2s cubic-bezier(.34,1.5,.64,1);}
-  .navBtn span{font-size:0.62rem;font-weight:700;}
-  .navBtn.active{color:var(--lime);}
-  .navBtn.active svg{transform:translateY(-1px) scale(1.08);}
-
-  #fabRegistar{
-    position:fixed;
-    right:18px;
-    bottom:calc(66px + env(safe-area-inset-bottom));
-    width:58px;height:58px;border-radius:50%;
-    background:linear-gradient(135deg, var(--lime) 0%, var(--teal) 100%);
-    color:var(--lime-ink);
-    display:flex;align-items:center;justify-content:center;
-    box-shadow:0 6px 18px rgba(79,141,116,.45), 0 2px 6px rgba(0,0,0,.15);
-    z-index:20;
-    transition:transform .15s ease, box-shadow .15s ease;
-    overflow:hidden;
-  }
-  #fabRegistar:active{transform:scale(0.92);box-shadow:0 3px 10px rgba(79,141,116,.4);}
-  #fabRegistar.hidden{display:none;}
-
-  .ripple{
-    position:absolute;border-radius:50%;
-    background:var(--ripple-color, rgba(0,0,0,.12));
-    transform:scale(0);pointer-events:none;
-    animation:rippleAnim .5s ease-out;
-  }
-  @keyframes rippleAnim{to{transform:scale(2.6);opacity:0;}}
-  .navBtn, .btn-lime, .btn-ghost, .btn-danger, .periodBtn, .icon-theme{
-    position:relative;overflow:hidden;
-  }
-  .btn-lime, .btn-danger, #fabRegistar{ --ripple-color: rgba(255,255,255,.4); }
-
-  #statusBar{flex:0 0 auto;font-size:0.74rem;color:var(--danger);padding:0 16px;min-height:0;}
-  #statusBar.hasmsg{padding-bottom:4px;}
-
-  #tabContent{flex:1;min-height:0;}
-  .tabPanel{height:100%;overflow-y:auto;padding:6px 14px 14px;}
-  #tabResumo{padding-bottom:72px;}
-  .tabPanel.flex-col{display:flex;flex-direction:column;overflow:hidden;padding:6px 14px 10px;}
-  .hidden{display:none !important;}
-
-  /* ---------- Resumo ---------- */
-  .hero-add{
-    background:linear-gradient(135deg, var(--lime) 0%, var(--teal) 100%);
-    border-radius:16px;
-    padding:14px 16px 16px;
-    margin-bottom:6px;
-    box-shadow:0 6px 18px rgba(126,156,131,.3);
-  }
-  .hero-label{font-size:0.72rem;color:rgba(255,255,255,.9);text-transform:uppercase;letter-spacing:.05em;font-weight:800;margin-bottom:8px;}
-  .hero-input-row{display:flex;align-items:baseline;gap:8px;margin-bottom:9px;}
-  .hero-input-row input#novoPeso{
-    background:rgba(255,255,255,.95);border:none;border-radius:10px;
-    font-family:var(--font-mono);font-size:2.1rem;font-weight:700;color:#1B2420;
-    padding:6px 12px;width:165px;text-align:right;
-  }
-  .hero-input-row input#novoPeso:focus{outline:2px solid rgba(255,255,255,.8);}
-  .hero-unit{font-size:1.15rem;font-weight:800;color:#fff;}
-  .hero-nota{background:rgba(255,255,255,.5);border:none;color:#1B2420;margin-bottom:10px;}
-  .hero-nota::placeholder{color:rgba(62,58,50,.6);}
-  .hero-btn{width:100%;background:#fff;color:#3E5B43;font-weight:800;font-size:1.02rem;padding:14px;border-radius:11px;min-height:52px;}
-  .hero-btn:active{transform:scale(0.98);}
-
-  #statusStrip{display:flex;align-items:center;gap:6px;flex-wrap:wrap;padding:1px 2px 9px;}
-  .cur-weight{font-size:0.85rem;color:var(--text);}
-  .cur-weight b{font-family:var(--font-mono);font-size:1.05rem;margin-right:3px;}
-  .cur-weight small{color:var(--text-dim);font-size:0.72rem;}
-  .mini-badge{font-size:0.72rem;font-weight:800;padding:2px 8px;border-radius:999px;}
-  .mini-badge.same{color:var(--text-dim);background:var(--panel2);}
-  .mini-badge.down{color:var(--ok);background:var(--ok-tint);}
-  .mini-badge.up{color:var(--danger);background:var(--danger-tint);}
-  .mini-badge.streak{color:var(--amber);background:var(--amber-tint);}
-  .mini-badge.record{color:#3E5B43;background:var(--ok-tint);}
-  .mini-badge.warn{color:var(--amber);background:var(--amber-tint);}
-  .mini-badge:empty{display:none;}
-
-  .stats-panel{
-    display:flex;background:var(--panel);border:1px solid var(--line);border-radius:12px;
-    margin-bottom:8px;overflow:hidden;
-  }
-  .stats-panel .stat-chip, .stats-panel .chip{
-    flex:1;min-width:0;padding:9px 8px;text-align:center;position:relative;
-    background:none;border:none;border-radius:0;
-  }
-  .stats-panel .stat-chip:not(:last-child)::after,
-  .stats-panel .chip:not(:last-child)::after{
-    content:'';position:absolute;right:0;top:18%;bottom:18%;width:1px;background:var(--line);
-  }
-  .stat-chip .lbl{font-size:0.6rem;color:var(--text-dim);text-transform:uppercase;letter-spacing:.03em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-  .stat-chip .val{font-family:var(--font-mono);font-size:1.15rem;font-weight:700;margin-top:1px;}
-  .stat-chip .val.loss{color:var(--ok);}
-  .stat-chip .val.gain{color:var(--danger);}
-  .stat-chip .val-sub{font-size:0.62rem;color:var(--text-dim);font-weight:600;margin-top:1px;}
-
-  .progress-block{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:10px 14px;margin-bottom:8px;}
-  .progress-head{display:flex;justify-content:space-between;font-size:0.7rem;color:var(--text-dim);text-transform:uppercase;letter-spacing:.04em;margin-bottom:7px;}
-  .progress-head span:last-child{color:var(--text);font-weight:800;font-size:0.85rem;}
-  .progress-track{background:var(--panel2);border-radius:999px;height:15px;overflow:hidden;border:1px solid var(--line);}
-  .progress-fill{
-    height:100%;width:0%;border-radius:999px;
-    background:linear-gradient(90deg,var(--mint),var(--teal),var(--lime));
-    background-size:300% 100%;
-    transition:width .6s cubic-bezier(.4,0,.2,1);
-    animation:progressFlow 6s ease infinite;
-  }
-  @keyframes progressFlow{
-    0%{background-position:0% 50%;}
-    50%{background-position:100% 50%;}
-    100%{background-position:0% 50%;}
-  }
-  .progress-foot{display:flex;justify-content:space-between;font-size:0.68rem;color:var(--text-dim);margin-top:5px;}
-
-  .chip-label{font-size:0.65rem;color:var(--text-dim);text-transform:uppercase;letter-spacing:.04em;}
-  .chip-value{font-family:var(--font-mono);font-size:1.2rem;font-weight:700;margin-top:2px;}
-  .chip-value-sm{font-size:0.92rem;}
-  .chip-unit{font-family:var(--font-sans);font-size:0.62em;font-weight:600;color:var(--text-dim);}
-
-  .hint-btn{
-    background:none;border:none;padding:0 0 0 2px;margin:0;
-    color:var(--text-dim);opacity:0.65;font-size:0.85em;
-    min-height:auto;line-height:1;vertical-align:middle;cursor:pointer;
-  }
-  .hint-btn:active{opacity:1;color:var(--lime);}
-
-  #hintOverlay{position:fixed;inset:0;background:rgba(0,0,0,.45);display:flex;align-items:flex-end;z-index:25;}
-  #hintOverlay.hidden{display:none;}
-  #hintBox{background:var(--panel);border:1px solid var(--line);border-radius:16px 16px 0 0;padding:18px 18px calc(18px + env(safe-area-inset-bottom));width:100%;max-width:480px;margin:0 auto;}
-  #hintTitle{font-size:0.95rem;font-weight:800;color:var(--text);margin-bottom:6px;}
-  #hintText{font-size:0.85rem;color:var(--text-dim);line-height:1.5;margin-bottom:14px;}
-  #hintClose{width:100%;}
-  .chip-sub{font-size:0.66rem;color:var(--text-dim);margin-top:2px;}
-  .imc-badge{display:inline-block;padding:2px 8px;border-radius:999px;font-size:0.68rem;font-weight:800;margin-top:2px;}
-
-  /* ---------- Gráfico ---------- */
-  #periodBar{flex:0 0 auto;display:flex;gap:5px;margin-bottom:8px;}
-  .periodBtn{flex:1;background:var(--panel);border:1px solid var(--line);color:var(--text-dim);border-radius:8px;padding:7px 2px;font-size:0.68rem;font-weight:700;min-height:32px;}
-  .periodBtn.active{background:var(--panel2);color:var(--teal);border-color:var(--teal);}
-  #forecastBar{flex:0 0 auto;font-size:0.72rem;color:var(--text-dim);background:var(--panel);border:1px solid var(--line);border-radius:9px;padding:6px 10px;margin-bottom:8px;}
-  #forecastBar b{color:var(--teal);font-weight:800;}
-  .chart-wrap{flex:1;min-height:0;position:relative;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:10px;}
-  .chart-wrap canvas{width:100% !important;height:100% !important;}
-
-  /* ---------- Registos ---------- */
-  #regHeader{flex:0 0 auto;display:flex;align-items:center;justify-content:space-between;padding:0 2px 8px;}
-  #regCount{font-size:0.72rem;color:var(--text-dim);}
-  .btn-export{padding:6px 12px;font-size:0.72rem;min-height:30px;display:inline-flex;align-items:center;}
-  .reg-list{flex:1;min-height:0;overflow-y:auto;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:2px 12px;}
-  .regRow{display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--line);position:relative;}
-  .regRow:last-child{border-bottom:none;}
-  .regRow.controlday{background:var(--amber-tint);margin:0 -12px;padding:8px 12px;border-left:3px solid var(--amber);border-bottom:1px solid transparent;}
-  .regDate{flex:1;min-width:0;}
-  .regDate .d1{font-weight:700;font-size:0.86rem;display:flex;align-items:center;gap:6px;}
-  .seg-tag{font-size:0.58rem;font-weight:800;color:var(--amber);background:rgba(245,185,66,.18);padding:1px 5px;border-radius:5px;letter-spacing:.03em;}
-  .week-tag{font-size:0.58rem;font-weight:800;padding:1px 5px;border-radius:5px;letter-spacing:.03em;}
-  .week-tag.down{color:var(--ok);background:var(--ok-tint);}
-  .week-tag.up{color:var(--danger);background:var(--danger-tint);}
-  .week-tag.same{color:var(--text-dim);background:var(--panel2);}
-  .regDate .d2{font-size:0.68rem;color:var(--text-dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-  .regPeso{font-family:var(--font-mono);font-weight:700;font-size:0.95rem;min-width:58px;text-align:right;}
-  .regPeso.reg-up{color:var(--danger);}
-  .regPeso.reg-warn{color:var(--amber);}
-  .regDelta{font-size:0.68rem;font-weight:800;min-width:46px;text-align:right;}
-  .regDelta.up{color:var(--danger);}
-  .regDelta.down{color:var(--ok);}
-  .regDelta.same{color:var(--text-dim);}
-  .regActions{display:flex;gap:2px;}
-  .iconBtn{background:none;border:none;padding:5px;min-height:auto;cursor:pointer;color:var(--text-dim);display:flex;align-items:center;justify-content:center;}
-  .iconBtn:hover{color:var(--lime);}
-
-  /* ---------- Config ---------- */
-  .cfg-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px 10px;margin-bottom:14px;}
-  .cfg-section-label{font-size:0.68rem;font-weight:800;color:var(--text-dim);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;}
-  .cfg-grid .field.full{grid-column:1/-1;}
-
-  /* ---------- Modal ---------- */
-  #modalOverlay{position:fixed;inset:0;background:rgba(0,0,0,.55);display:flex;align-items:flex-end;z-index:20;}
-  #modalOverlay.hidden{display:none;}
-  #modalBox{background:var(--panel);border:1px solid var(--line);border-radius:16px 16px 0 0;padding:18px 16px calc(18px + env(safe-area-inset-bottom));width:100%;max-width:480px;margin:0 auto;}
-  #modalBox h3{margin:0 0 12px;font-size:1rem;color:var(--text);}
-  #modalBox .field{margin-bottom:10px;}
-  #modalBtns{display:flex;gap:8px;margin-top:12px;}
-  #modalBtns button{flex:1;}
-
-  .about-block{
-    display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;
-    padding:10px 0 4px;
-  }
-  .footer-logo{height:34px;width:auto;display:block;opacity:0.85;}
-  .version-link{background:none;border:none;padding:0;color:var(--text-dim);font-size:0.7rem;text-decoration:underline;text-underline-offset:2px;min-height:auto;cursor:pointer;}
-  .version-link:active{color:var(--lime);}
-
-  #changelogOverlay{position:fixed;inset:0;background:rgba(0,0,0,.45);display:flex;align-items:flex-end;z-index:26;}
-  #changelogOverlay.hidden{display:none;}
-  #changelogBox{background:var(--panel);border:1px solid var(--line);border-radius:16px 16px 0 0;padding:18px 18px calc(14px + env(safe-area-inset-bottom));width:100%;max-width:480px;margin:0 auto;max-height:75vh;display:flex;flex-direction:column;}
-  #changelogBox h3{font-size:0.98rem;font-weight:800;color:var(--text);margin:0 0 10px;flex:0 0 auto;}
-  #changelogList{overflow-y:auto;flex:1;min-height:0;}
-  .changelog-entry{padding:9px 0;border-bottom:1px solid var(--line);}
-  .changelog-entry:last-child{border-bottom:none;}
-  .changelog-ver{font-family:var(--font-mono);font-size:0.82rem;font-weight:700;color:var(--lime);margin-bottom:3px;}
-  .changelog-entry ul{margin:0;padding-left:18px;}
-  .changelog-entry li{font-size:0.78rem;color:var(--text-dim);line-height:1.45;}
-  #changelogClose{width:100%;margin-top:12px;flex:0 0 auto;}
-
-  #undoToast{
-    position:fixed;left:50%;bottom:calc(48px + env(safe-area-inset-bottom));
-    transform:translateX(-50%);
-    background:var(--panel2);border:1px solid var(--line);border-radius:11px;
-    padding:10px 12px 10px 16px;display:flex;align-items:center;gap:14px;
-    box-shadow:0 6px 20px rgba(0,0,0,.4);
-    width:calc(100% - 32px);max-width:448px;z-index:30;
-  }
-  #undoToast.hidden{display:none;}
-  #undoToastMsg{font-size:0.82rem;color:var(--text);flex:1;}
-  #undoToastBtn{background:none;border:none;color:var(--lime);font-weight:800;font-size:0.82rem;padding:4px 6px;min-height:auto;}
-
-  #confirmToast{
-    position:fixed;left:50%;bottom:calc(48px + env(safe-area-inset-bottom));
-    transform:translate(-50%, 0);
-    background:var(--lime);color:var(--lime-ink);border-radius:11px;
-    padding:10px 16px;display:flex;align-items:center;gap:9px;
-    box-shadow:0 6px 20px rgba(0,0,0,.3);
-    width:calc(100% - 32px);max-width:448px;z-index:31;
-    opacity:0;pointer-events:none;
-    transition:opacity .25s ease, transform .25s ease;
-  }
-  #confirmToast.show{opacity:1;transform:translate(-50%, -6px);}
-  #confirmToast.hidden{display:none;}
-  .confirm-icon{font-weight:900;font-size:0.95rem;}
-  #confirmToastMsg{font-size:0.82rem;font-weight:700;}
-
-  .lcd-record{font-size:0.68rem;color:var(--amber);margin-top:3px;font-weight:800;}
-  .min-tag{font-size:0.58rem;font-weight:800;color:#2B2115;background:var(--amber);padding:1px 5px;border-radius:5px;letter-spacing:.03em;}
-</style>
+<link rel="stylesheet" href="styles.css">
 </head>
 <body>
-<div id="bgWatermark" aria-hidden="true"></div>
-<div id="ptrIndicator">
-  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg>
+<a class="skip-link" href="#app">Saltar para o conteúdo</a>
+
+<div id="appShell">
+  <div id="ptrIndicator" aria-hidden="true">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg>
+  </div>
+
+  <div id="updateBanner" class="hidden" role="status">
+    <span>Nova versão disponível</span>
+    <button id="btnAtualizarApp" class="btn-sm">Atualizar</button>
+  </div>
+
+  <header>
+    <div class="brand"><img class="brand-ico" src="pesoicon192.png" alt=""> Peso</div>
+    <div class="header-right">
+      <span class="sub" id="headerSub">controlo diário</span>
+      <button id="btnTheme" class="icon-btn" aria-pressed="false" aria-label="Alternar modo noturno">
+        <svg id="iconMoon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79Z"/></svg>
+        <svg id="iconSun" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="hidden" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></svg>
+      </button>
+    </div>
+  </header>
+
+  <div id="authArea">
+    <img class="auth-ico" src="pesoicon192.png" alt="">
+    <h1>Controlo de peso</h1>
+    <p>Inicia sessão para aceder aos teus registos, guardados em folha de cálculo Google Sheets.</p>
+    <button id="signinBtn" class="btn btn-primary">Iniciar sessão com Google</button>
+  </div>
+
+  <div id="app" class="hidden">
+    <div id="loadingOverlay">
+      <img src="pesoicon192.png" alt="" class="loading-icon">
+      <div class="loading-spinner"></div>
+      <div class="loading-text">A carregar dados…</div>
+    </div>
+    <div id="offlineBanner" class="hidden" role="status">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 1l22 22"/><path d="M16.72 11.06A10.94 10.94 0 0 1 19 12.55"/><path d="M5 12.55a10.94 10.94 0 0 1 5.17-2.39"/><path d="M10.71 5.05A16 16 0 0 1 22.58 9"/><path d="M1.42 9a15.91 15.91 0 0 1 4.7-2.88"/><path d="M8.53 16.11a6 6 0 0 1 6.95 0"/><path d="M12 20h.01"/></svg>
+      <span>Sem ligação — a mostrar os últimos dados sincronizados.</span>
+    </div>
+    <div id="statusBar" role="status" aria-live="polite"></div>
+
+    <div id="tabContent">
+
+      <!-- ===== RESUMO ===== -->
+      <section id="tabResumo" class="tabPanel" role="tabpanel" aria-labelledby="tabBtnResumo" tabindex="0">
+
+        <div class="status-head">
+          <div class="status-eyebrow">Peso atual</div>
+          <div class="status-weight"><span id="statusWeightVal">—</span><span class="unit">kg</span></div>
+          <p class="status-line" id="statusLine"></p>
+          <div class="status-tags" id="statusTags"></div>
+        </div>
+
+        <form class="card card-add" id="formAdd" novalidate>
+          <div class="card-title">Registar peso de hoje</div>
+          <div class="add-row">
+            <div class="field">
+              <label for="novoPeso">Peso (kg)</label>
+              <input type="number" step="0.1" id="novoPeso" placeholder="0.0" inputmode="decimal" autocomplete="off" required>
+            </div>
+            <span class="unit-label">kg</span>
+          </div>
+          <button type="button" class="add-toggle-nota" id="btnToggleNota" aria-expanded="false" aria-controls="notaField">+ nota</button>
+          <div class="field hidden" id="notaField">
+            <label for="novaNota">Nota (opcional)</label>
+            <input type="text" id="novaNota" placeholder="ex.: em jejum, depois do treino…" autocomplete="off">
+          </div>
+          <p class="field-error hidden" id="addError" role="alert"></p>
+          <button type="submit" class="btn btn-primary btn-block" id="btnRegistar">Registar peso</button>
+        </form>
+
+        <div class="card card-evolucao">
+          <div class="card-title">Evolução <button class="hint-btn" data-hint="objetivo" aria-label="Explicação: Evolução">ⓘ</button></div>
+          <div id="progressWrap">
+            <div class="progress-track"><div class="progress-fill" id="progressFill"></div></div>
+            <div class="progress-foot"><span id="progLeft"></span><span id="progPctLabel"></span><span id="progRight"></span></div>
+          </div>
+          <p class="progress-empty hidden" id="progressEmpty"></p>
+          <div class="stat-row" id="statRow">
+            <div class="stat-cell"><div class="lbl">Total perdido <button class="hint-btn" data-hint="total" aria-label="Explicação: Total perdido">ⓘ</button></div><div class="val" id="statTotalVal">—</div></div>
+            <div class="stat-cell"><div class="lbl">Ritmo semanal <button class="hint-btn" data-hint="ritmo" aria-label="Explicação: Ritmo semanal">ⓘ</button></div><div class="val" id="statRitmoVal">—</div><div class="val-sub" id="statRitmoSub"></div></div>
+            <div class="stat-cell"><div class="lbl">Faltam</div><div class="val" id="statFaltamVal">—</div></div>
+          </div>
+        </div>
+
+        <div class="card card-corpo">
+          <div class="card-title">Referência corporal</div>
+          <div class="body-row">
+            <div class="body-cell">
+              <div class="lbl">IMC <button class="hint-btn" data-hint="imc" aria-label="Explicação: IMC">ⓘ</button></div>
+              <div class="val" id="imcValue">—</div>
+              <div id="imcClasse"></div>
+            </div>
+            <div class="body-cell">
+              <div class="lbl">Gasto diário <button class="hint-btn" data-hint="kcal" aria-label="Explicação: Gasto diário">ⓘ</button></div>
+              <div class="val" id="kcalValue">—</div>
+              <div class="sub">TDEE estimado</div>
+            </div>
+            <div class="body-cell">
+              <div class="lbl">Mín / Máx <button class="hint-btn" data-hint="minmax" aria-label="Explicação: Mínimo e máximo">ⓘ</button></div>
+              <div class="val" id="minMaxValue">—</div>
+              <div class="sub">desde o início</div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ===== GRÁFICO ===== -->
+      <section id="tabGrafico" class="tabPanel flex-col hidden" role="tabpanel" aria-labelledby="tabBtnGrafico" tabindex="0">
+        <div class="segmented" id="periodBar" role="group" aria-label="Período do gráfico">
+          <button class="periodBtn" data-period="7d" aria-pressed="false">7D</button>
+          <button class="periodBtn" data-period="30d" aria-pressed="false">30D</button>
+          <button class="periodBtn" data-period="90d" aria-pressed="false">90D</button>
+          <button class="periodBtn" data-period="6m" aria-pressed="false">6M</button>
+          <button class="periodBtn" data-period="1y" aria-pressed="false">1A</button>
+          <button class="periodBtn active" data-period="all" aria-pressed="true">Tudo</button>
+        </div>
+        <p id="forecastBar"></p>
+        <div class="chart-wrap">
+          <canvas id="weightChart" role="img" aria-label="Gráfico de evolução do peso ao longo do tempo"></canvas>
+          <div class="chart-empty hidden" id="chartEmpty"></div>
+        </div>
+        <div class="card" id="insightsCard">
+          <div class="card-title">Análise <button class="hint-btn" data-hint="analise" aria-label="Explicação: Análise">ⓘ</button></div>
+          <div id="insightsBody"></div>
+        </div>
+      </section>
+
+      <!-- ===== REGISTOS ===== -->
+      <section id="tabRegistos" class="tabPanel flex-col hidden" role="tabpanel" aria-labelledby="tabBtnRegistos" tabindex="0">
+        <div id="regHeader">
+          <span id="regCount"></span>
+          <button class="btn btn-ghost btn-sm" id="btnExportar">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:4px;" aria-hidden="true"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M4 21h16"/></svg>Exportar
+          </button>
+        </div>
+        <div class="reg-list" id="registosList" role="list" aria-label="Lista de registos de peso"></div>
+      </section>
+
+      <!-- ===== CONFIG ===== -->
+      <section id="tabConfig" class="tabPanel" role="tabpanel" aria-labelledby="tabBtnConfig" tabindex="0">
+        <div class="card-title">Dados pessoais</div>
+        <div class="cfg-grid">
+          <div class="field"><label for="cfgAltura">Altura (cm)</label><input type="number" id="cfgAltura" placeholder="178"></div>
+          <div class="field"><label for="cfgNascimento">Nascimento</label><input type="date" id="cfgNascimento"></div>
+          <div class="field"><label for="cfgSexo">Sexo</label>
+            <select id="cfgSexo"><option value="">—</option><option value="M">M</option><option value="F">F</option></select>
+          </div>
+          <div class="field"><label for="cfgAtividade">Nível de atividade</label>
+            <select id="cfgAtividade">
+              <option value="1.2">Pouco ativo</option>
+              <option value="1.45">Moderadamente ativo</option>
+              <option value="1.7">Muito ativo</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="card-title">Objetivo de peso</div>
+        <div class="cfg-grid">
+          <div class="field full"><label for="cfgPesoAlvo">Peso alvo (kg)</label><input type="number" step="0.1" id="cfgPesoAlvo" placeholder="90"></div>
+          <div class="field"><label for="cfgPesoMin">Peso mín. desejável (kg)</label><input type="number" step="0.1" id="cfgPesoMin" placeholder="ex: 85"></div>
+          <div class="field"><label for="cfgPesoMax">Peso máx. desejável (kg)</label><input type="number" step="0.1" id="cfgPesoMax" placeholder="ex: 92"></div>
+        </div>
+
+        <div class="card-title">Preferências</div>
+        <div class="cfg-grid">
+          <div class="field full"><label for="cfgDiaControlo">Dia de controlo semanal</label>
+            <select id="cfgDiaControlo">
+              <option value="0">Domingo</option>
+              <option value="1">Segunda-feira</option>
+              <option value="2">Terça-feira</option>
+              <option value="3">Quarta-feira</option>
+              <option value="4">Quinta-feira</option>
+              <option value="5">Sexta-feira</option>
+              <option value="6">Sábado</option>
+            </select>
+          </div>
+        </div>
+
+        <button class="btn btn-primary btn-block" id="btnGuardarConfig">Guardar configuração</button>
+        <button class="btn btn-ghost btn-block" id="btnTerminarSessao" style="margin-top:8px;">Terminar sessão</button>
+
+        <div class="card-title" style="margin-top:16px;">Sobre</div>
+        <div class="about-block">
+          <img class="footer-logo" src="data:image/png;base64,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" alt="Logótipo" width="80" height="76" loading="lazy">
+          <button id="btnChangelog" class="version-link"><span id="footerVersion"></span></button>
+        </div>
+      </section>
+
+    </div>
+
+    <nav id="bottomNav" role="tablist" aria-label="Navegação principal">
+      <button class="navBtn active" id="tabBtnResumo" role="tab" aria-selected="true" aria-controls="tabResumo">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 9.5 12 3l9 6.5V21a1 1 0 0 1-1 1h-5v-7H9v7H4a1 1 0 0 1-1-1V9.5Z"/></svg>
+        <span>Resumo</span>
+      </button>
+      <button class="navBtn" id="tabBtnGrafico" role="tab" aria-selected="false" aria-controls="tabGrafico">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 3v18h18"/><path d="M18 17V9M13 17V5M8 17v-4"/></svg>
+        <span>Gráfico</span>
+      </button>
+      <button class="navBtn" id="tabBtnRegistos" role="tab" aria-selected="false" aria-controls="tabRegistos">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 6h13M8 12h13M8 18h13"/><path d="M3 6h.01M3 12h.01M3 18h.01"/></svg>
+        <span>Registos</span>
+      </button>
+      <button class="navBtn" id="tabBtnConfig" role="tab" aria-selected="false" aria-controls="tabConfig">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z"/></svg>
+        <span>Config</span>
+      </button>
+    </nav>
+  </div>
+
+  <button id="fabRegistar" class="hidden" aria-label="Registar peso">
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+  </button>
+
+  <div id="undoToast" class="hidden" role="status">
+    <span id="undoToastMsg"></span>
+    <button id="undoToastBtn">Desfazer</button>
+  </div>
+
+  <div id="confirmToast" class="hidden" role="status" aria-live="polite">
+    <span class="confirm-icon" aria-hidden="true">✓</span>
+    <span id="confirmToastMsg"></span>
+  </div>
 </div>
-
-
-<header>
-  <div class="brand"><img class="brand-ico" src="pesoicon192.png" alt="Peso"> Peso</div>
-  <div class="header-right">
-    <span class="sub" id="headerSub">controlo diário</span>
-    <button id="btnTheme" class="icon-theme" title="Alternar modo noturno">
-      <svg id="iconMoon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79Z"/></svg>
-      <svg id="iconSun" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="hidden"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></svg>
-    </button>
-  </div>
-</header>
-
-<div id="authArea">
-  <p>Inicia sessão para aceder aos teus registos.</p>
-  <button id="signinBtn" class="btn-lime">Iniciar sessão com Google</button>
-</div>
-
-<div id="app" class="hidden">
-  <div id="loadingOverlay">
-    <img src="pesoicon192.png" alt="" class="loading-icon">
-    <div class="loading-spinner"></div>
-    <div class="loading-text">A carregar dados…</div>
-  </div>
-  <div id="statusBar"></div>
-
-  <div id="tabContent">
-
-    <!-- ===== RESUMO ===== -->
-    <section id="tabResumo" class="tabPanel">
-
-      <div class="hero-add">
-        <div class="hero-label">Registar peso de hoje</div>
-        <div class="hero-input-row">
-          <input type="number" step="0.1" id="novoPeso" placeholder="0.0" inputmode="decimal">
-          <span class="hero-unit">kg</span>
-        </div>
-        <input type="text" id="novaNota" class="hero-nota" placeholder="nota (opcional)">
-      </div>
-
-      <div id="statusStrip">
-        <span class="cur-weight"><b id="lcdPeso">—</b><small>kg atual</small></span>
-        <span class="mini-badge same" id="lcdDelta">—</span>
-        <span class="mini-badge streak" id="lcdStreak"></span>
-        <span class="mini-badge record" id="lcdRecord"></span>
-        <span class="mini-badge" id="lcdControlo"></span>
-      </div>
-
-      <div class="stats-panel" id="statStrip"></div>
-
-      <div class="progress-block" id="progressCard">
-        <div class="progress-head"><span>Objetivo <button class="hint-btn" data-hint="objetivo">ⓘ</button></span><span id="progPctLabel">—</span></div>
-        <div class="progress-track"><div class="progress-fill" id="progressFill"></div></div>
-        <div class="progress-foot"><span id="progLeft"></span><span id="progRight"></span></div>
-      </div>
-
-      <div class="stats-panel chip-row">
-        <div class="chip">
-          <div class="chip-label">IMC <button class="hint-btn" data-hint="imc">ⓘ</button></div>
-          <div class="chip-value" id="imcValue">—</div>
-          <div id="imcClasse"></div>
-        </div>
-        <div class="chip">
-          <div class="chip-label">Gasto diário <button class="hint-btn" data-hint="kcal">ⓘ</button></div>
-          <div class="chip-value" id="kcalValue">—</div>
-          <div class="chip-sub">TDEE estimado</div>
-        </div>
-        <div class="chip">
-          <div class="chip-label">Mín / Máx <button class="hint-btn" data-hint="minmax">ⓘ</button></div>
-          <div class="chip-value chip-value-sm" id="minMaxValue">—</div>
-          <div class="chip-sub">desde o início</div>
-        </div>
-      </div>
-    </section>
-
-    <!-- ===== GRÁFICO ===== -->
-    <section id="tabGrafico" class="tabPanel flex-col hidden">
-      <div id="periodBar">
-        <button class="periodBtn active" data-period="all">Sempre</button>
-        <button class="periodBtn" data-period="year">Ano</button>
-        <button class="periodBtn" data-period="month">Mês</button>
-        <button class="periodBtn" data-period="week">Semana</button>
-      </div>
-      <div id="forecastBar"></div>
-      <div class="chart-wrap"><canvas id="weightChart"></canvas></div>
-    </section>
-
-    <!-- ===== REGISTOS ===== -->
-    <section id="tabRegistos" class="tabPanel flex-col hidden">
-      <div id="regHeader">
-        <span id="regCount"></span>
-        <button class="btn-ghost btn-export" id="btnExportar">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:4px;"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M4 21h16"/></svg>Excel
-        </button>
-      </div>
-      <div class="reg-list" id="registosList"></div>
-    </section>
-
-    <!-- ===== CONFIG ===== -->
-    <section id="tabConfig" class="tabPanel hidden">
-      <div class="cfg-section-label">Dados pessoais</div>
-      <div class="cfg-grid">
-        <div class="field"><label>Altura (cm)</label><input type="number" id="cfgAltura" placeholder="178"></div>
-        <div class="field"><label>Nascimento</label><input type="date" id="cfgNascimento"></div>
-        <div class="field"><label>Sexo</label>
-          <select id="cfgSexo"><option value="">—</option><option value="M">M</option><option value="F">F</option></select>
-        </div>
-        <div class="field"><label>Nível de atividade</label>
-          <select id="cfgAtividade">
-            <option value="1.2">Pouco ativo</option>
-            <option value="1.45">Moderadamente ativo</option>
-            <option value="1.7">Muito ativo</option>
-          </select>
-        </div>
-      </div>
-
-      <div class="cfg-section-label">Objetivo de peso</div>
-      <div class="cfg-grid">
-        <div class="field full"><label>Peso alvo (kg)</label><input type="number" step="0.1" id="cfgPesoAlvo" placeholder="90"></div>
-        <div class="field"><label>Peso mín. desejável (kg)</label><input type="number" step="0.1" id="cfgPesoMin" placeholder="ex: 85"></div>
-        <div class="field"><label>Peso máx. desejável (kg)</label><input type="number" step="0.1" id="cfgPesoMax" placeholder="ex: 92"></div>
-      </div>
-
-      <div class="cfg-section-label">Preferências</div>
-      <div class="cfg-grid">
-        <div class="field full"><label>Dia de controlo semanal</label>
-          <select id="cfgDiaControlo">
-            <option value="0">Domingo</option>
-            <option value="1">Segunda-feira</option>
-            <option value="2">Terça-feira</option>
-            <option value="3">Quarta-feira</option>
-            <option value="4">Quinta-feira</option>
-            <option value="5">Sexta-feira</option>
-            <option value="6">Sábado</option>
-          </select>
-        </div>
-      </div>
-
-      <button class="btn-lime" id="btnGuardarConfig" style="width:100%;">Guardar configuração</button>
-      <button class="btn-ghost" id="btnTerminarSessao" style="width:100%;margin-top:8px;">Terminar sessão</button>
-
-      <div class="cfg-section-label">Sobre</div>
-      <div class="about-block">
-        <img class="footer-logo" src="data:image/png;base64,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" alt="Claudinho" width="80" height="76">
-        <button id="btnChangelog" class="version-link"><span id="footerVersion"></span></button>
-      </div>
-
-    </section>
-
-  </div>
-
-  <div id="bottomNav">
-    <button class="navBtn active" id="tabBtnResumo">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9.5 12 3l9 6.5V21a1 1 0 0 1-1 1h-5v-7H9v7H4a1 1 0 0 1-1-1V9.5Z"/></svg>
-      <span>Resumo</span>
-    </button>
-    <button class="navBtn" id="tabBtnGrafico">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M18 17V9M13 17V5M8 17v-4"/></svg>
-      <span>Gráfico</span>
-    </button>
-    <button class="navBtn" id="tabBtnRegistos">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 6h13M8 12h13M8 18h13"/><path d="M3 6h.01M3 12h.01M3 18h.01"/></svg>
-      <span>Registos</span>
-    </button>
-    <button class="navBtn" id="tabBtnConfig">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z"/></svg>
-      <span>Config</span>
-    </button>
-  </div>
-</div>
-
-<button id="fabRegistar" title="Registar peso">
-  <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>
-</button>
 
 <div id="modalOverlay" class="hidden">
-  <div id="modalBox">
-    <h3>Editar registo</h3>
-    <div class="field"><label>Peso (kg)</label><input type="number" step="0.1" id="editPeso"></div>
-    <div class="field"><label>Nota</label><input type="text" id="editNota"></div>
+  <div id="modalBox" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+    <h3 id="modalTitle">Editar registo</h3>
+    <div class="field"><label for="editPeso">Peso (kg)</label><input type="number" step="0.1" id="editPeso"></div>
+    <div class="field"><label for="editNota">Nota</label><input type="text" id="editNota"></div>
     <div id="modalBtns">
-      <button class="btn-danger" id="btnEliminar">Eliminar</button>
-      <button class="btn-ghost" id="btnCancelarEdit">Cancelar</button>
-      <button class="btn-lime" id="btnGuardarEdit">Guardar</button>
+      <button class="btn btn-danger" id="btnEliminar">Eliminar</button>
+      <button class="btn btn-ghost" id="btnCancelarEdit">Cancelar</button>
+      <button class="btn btn-primary" id="btnGuardarEdit">Guardar</button>
     </div>
   </div>
 </div>
 
 <div id="changelogOverlay" class="hidden">
-  <div id="changelogBox">
-    <h3>Histórico de versões</h3>
+  <div id="changelogBox" role="dialog" aria-modal="true" aria-labelledby="changelogTitle" style="display:flex;flex-direction:column;">
+    <h3 id="changelogTitle">Histórico de versões</h3>
     <div id="changelogList"></div>
-    <button class="btn-ghost" id="changelogClose">Fechar</button>
+    <button class="btn btn-ghost" id="changelogClose">Fechar</button>
   </div>
 </div>
 
 <div id="hintOverlay" class="hidden">
-  <div id="hintBox">
+  <div id="hintBox" role="dialog" aria-modal="true" aria-labelledby="hintTitle">
     <div id="hintTitle"></div>
     <div id="hintText"></div>
-    <button class="btn-lime" id="hintClose">Entendi</button>
+    <button class="btn btn-primary btn-block" id="hintClose">Entendi</button>
   </div>
 </div>
 
-<div id="undoToast" class="hidden">
-  <span id="undoToastMsg"></span>
-  <button id="undoToastBtn">Desfazer</button>
-</div>
-
-<div id="confirmToast" class="hidden">
-  <span class="confirm-icon">✓</span>
-  <span id="confirmToastMsg"></span>
-</div>
-
-
 <script>
 /* ============================================================
-   CONFIGURAÇÃO
+   CONFIGURAÇÃO — não alterar CLIENT_ID / SPREADSHEET_ID / ranges:
+   é a ligação à folha de cálculo Google Sheets já em uso.
    ============================================================ */
-const APP_VERSION = 'v3.0.0';
+const APP_VERSION = 'v4.0.0 R1';
 const CLIENT_ID = '108256538530-fgunbb52s7f3s9aurfpjtaf01v8fjbph.apps.googleusercontent.com';
 const SPREADSHEET_ID = '1UzEXtl7w6jMsk-c7Pkt3kq97AXL6XIiwTrjOYUaYFLs';
 const SHEET_REGISTOS = 'Registos';
@@ -648,8 +292,8 @@ const SCOPES = 'https://www.googleapis.com/auth/spreadsheets';
 const DIAS_ABREV = ['DOM', 'SEG', 'TER', 'QUA', 'QUI', 'SEX', 'SAB'];
 const DIAS_NOMES = ['Domingo', 'Segunda-feira', 'Terça-feira', 'Quarta-feira', 'Quinta-feira', 'Sexta-feira', 'Sábado'];
 
-const ICON_EDIT = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>';
-const ICON_TRASH = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>';
+const ICON_EDIT = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>';
+const ICON_TRASH = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>';
 /* ============================================================ */
 
 let tokenClient;
@@ -660,12 +304,14 @@ let currentTab = 'resumo';
 let currentPeriod = 'all';
 let weightChart = null;
 let editingRow = null;
+let cargaComErro = false; // sinaliza se loadConfig/loadRegistos tiveram algum erro nesta sessão de carregamento
 
 function setStatus(msg, isErr=false){
   const el = document.getElementById('statusBar');
   el.textContent = msg;
   el.classList.toggle('hasmsg', !!msg);
-  el.style.color = isErr ? 'var(--danger)' : 'var(--text-dim)';
+  el.style.color = isErr ? 'var(--negative)' : 'var(--text-muted)';
+  if (isErr) cargaComErro = true;
 }
 
 let confirmToastTimeout = null;
@@ -673,17 +319,56 @@ function showConfirmToast(msg){
   const el = document.getElementById('confirmToast');
   document.getElementById('confirmToastMsg').textContent = msg;
   el.classList.remove('hidden');
-  // forçar reflow para a transição correr mesmo que já estivesse visível momentos antes
-  void el.offsetWidth;
+  void el.offsetWidth; // forçar reflow para a transição correr mesmo que já estivesse visível
   el.classList.add('show');
   if (confirmToastTimeout) clearTimeout(confirmToastTimeout);
   confirmToastTimeout = setTimeout(() => {
     el.classList.remove('show');
-    setTimeout(() => el.classList.add('hidden'), 250);
+    setTimeout(() => el.classList.add('hidden'), 220);
   }, 2200);
 }
 
-/* ---------- Auth ---------- */
+/* ---------- Rede/erros globais: uma falha inesperada não deve travar a app ---------- */
+window.addEventListener('error', (e) => {
+  console.error('Erro não tratado:', e.error || e.message);
+});
+window.addEventListener('unhandledrejection', (e) => {
+  console.error('Promessa rejeitada:', e.reason);
+});
+
+function estaOnline(){
+  return typeof navigator === 'undefined' || navigator.onLine !== false;
+}
+
+/* ---------- Carregamento de scripts pesados só quando são precisos ---------- */
+function carregarScript(src){
+  return new Promise((resolve, reject) => {
+    const existente = document.querySelector(`script[data-src="${src}"]`);
+    if (existente){
+      if (existente.dataset.loaded === '1') return resolve();
+      existente.addEventListener('load', () => resolve());
+      existente.addEventListener('error', () => reject(new Error('Falha ao carregar ' + src)));
+      return;
+    }
+    const s = document.createElement('script');
+    s.src = src;
+    s.dataset.src = src;
+    s.onload = () => { s.dataset.loaded = '1'; resolve(); };
+    s.onerror = () => reject(new Error('Falha ao carregar ' + src));
+    document.head.appendChild(s);
+  });
+}
+let chartJsPromise = null;
+function garantirChartJs(){
+  if (!chartJsPromise) chartJsPromise = carregarScript('https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.5.0/chart.umd.min.js');
+  return chartJsPromise;
+}
+let xlsxPromise = null;
+function garantirXLSX(){
+  if (!xlsxPromise) xlsxPromise = carregarScript('https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js');
+  return xlsxPromise;
+}
+
 /* ---------- Sessão persistente ---------- */
 const TOKEN_KEY = 'peso_access_token';
 const TOKEN_EXPIRY_KEY = 'peso_token_expiry';
@@ -691,7 +376,6 @@ const TOKEN_EXPIRY_KEY = 'peso_token_expiry';
 function saveToken(token, expiresInSeconds){
   try{
     localStorage.setItem(TOKEN_KEY, token);
-    // margem de 2 min de segurança antes do expirar real
     localStorage.setItem(TOKEN_EXPIRY_KEY, String(Date.now() + (expiresInSeconds || 3600) * 1000 - 120000));
   } catch(e){}
 }
@@ -710,28 +394,73 @@ function clearSavedToken(){
   } catch(e){}
 }
 
-window.onload = () => {
+/* ---------- Cópia local dos últimos dados sincronizados (só leitura, para modo offline) ---------- */
+const CACHE_KEY_REG = 'peso_cache_registos';
+const CACHE_KEY_CFG = 'peso_cache_config';
+
+function saveLocalCache(){
+  try{
+    const regsSerializaveis = registos.map(r => ({ row: r.row, date: r.date.toISOString(), peso: r.peso, nota: r.nota }));
+    localStorage.setItem(CACHE_KEY_REG, JSON.stringify(regsSerializaveis));
+    localStorage.setItem(CACHE_KEY_CFG, JSON.stringify(config));
+  } catch(e){}
+}
+function loadLocalCache(){
+  try{
+    const regsRaw = localStorage.getItem(CACHE_KEY_REG);
+    if (!regsRaw) return false;
+    const regsParsed = JSON.parse(regsRaw);
+    if (!Array.isArray(regsParsed)) return false;
+    registos = regsParsed
+      .map(r => ({ row: r.row, date: new Date(r.date), peso: Number(r.peso), nota: r.nota || '' }))
+      .filter(r => r.date instanceof Date && !isNaN(r.date.getTime()) && isFinite(r.peso));
+    registos.sort((a,b) => a.date - b.date);
+    const cfgRaw = localStorage.getItem(CACHE_KEY_CFG);
+    if (cfgRaw){
+      const c = JSON.parse(cfgRaw);
+      if (c && typeof c === 'object'){
+        config = {
+          altura: isFinite(c.altura) ? c.altura : null,
+          nascimento: c.nascimento ? new Date(c.nascimento) : null,
+          sexo: c.sexo || '',
+          pesoAlvo: isFinite(c.pesoAlvo) ? c.pesoAlvo : null,
+          atividade: normalizaAtividade(Number(c.atividade)),
+          diaControlo: Number.isInteger(c.diaControlo) ? c.diaControlo : 1,
+          pesoMin: isFinite(c.pesoMin) ? c.pesoMin : null,
+          pesoMax: isFinite(c.pesoMax) ? c.pesoMax : null,
+        };
+      }
+    }
+    return true;
+  } catch(e){ return false; }
+}
+
+window.addEventListener('load', () => {
   document.getElementById('footerVersion').textContent = APP_VERSION;
   initTheme();
   document.getElementById('btnTheme').onclick = toggleTheme;
 
-  tokenClient = google.accounts.oauth2.initTokenClient({
-    client_id: CLIENT_ID,
-    scope: SCOPES,
-    callback: (resp) => {
-      if (resp.error){
-        // uma tentativa silenciosa que falhe não deve mostrar erro — só se for um clique manual
-        if (resp.error !== 'interaction_required' && resp.error !== 'access_denied'){
-          setStatus('Falha no login: ' + resp.error, true);
+  if (!window.google || !window.google.accounts){
+    setStatus('Falha ao carregar o início de sessão do Google. Recarrega a página.', true);
+  } else {
+    tokenClient = google.accounts.oauth2.initTokenClient({
+      client_id: CLIENT_ID,
+      scope: SCOPES,
+      callback: (resp) => {
+        if (resp.error){
+          if (resp.error !== 'interaction_required' && resp.error !== 'access_denied'){
+            setStatus('Falha no login: ' + resp.error, true);
+          }
+          return;
         }
-        return;
+        accessToken = resp.access_token;
+        saveToken(accessToken, resp.expires_in);
+        onSignedIn();
       }
-      accessToken = resp.access_token;
-      saveToken(accessToken, resp.expires_in);
-      onSignedIn();
-    }
-  });
-  document.getElementById('signinBtn').onclick = () => tokenClient.requestAccessToken();
+    });
+    document.getElementById('signinBtn').onclick = () => tokenClient.requestAccessToken();
+  }
+
   document.getElementById('btnTerminarSessao').onclick = onTerminarSessao;
 
   document.getElementById('tabBtnResumo').onclick = () => showTab('resumo');
@@ -739,13 +468,23 @@ window.onload = () => {
   document.getElementById('tabBtnRegistos').onclick = () => showTab('registos');
   document.getElementById('tabBtnConfig').onclick = () => showTab('config');
 
-  document.getElementById('fabRegistar').onclick = onRegistarNovo;
+  document.getElementById('formAdd').addEventListener('submit', onRegistarNovo);
+  document.getElementById('fabRegistar').onclick = () => document.getElementById('formAdd').requestSubmit();
   document.getElementById('btnGuardarConfig').onclick = onGuardarConfig;
+  document.getElementById('btnToggleNota').onclick = () => {
+    const campo = document.getElementById('notaField');
+    const btn = document.getElementById('btnToggleNota');
+    const aberto = campo.classList.toggle('hidden') === false;
+    btn.setAttribute('aria-expanded', String(aberto));
+    btn.textContent = aberto ? '− nota' : '+ nota';
+    if (aberto) document.getElementById('novaNota').focus();
+  };
 
   document.querySelectorAll('.periodBtn').forEach(btn => {
     btn.onclick = () => {
-      document.querySelectorAll('.periodBtn').forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('.periodBtn').forEach(b => { b.classList.remove('active'); b.setAttribute('aria-pressed','false'); });
       btn.classList.add('active');
+      btn.setAttribute('aria-pressed','true');
       currentPeriod = btn.dataset.period;
       renderChart();
     };
@@ -766,15 +505,25 @@ window.onload = () => {
     if (btn) showHint(btn.dataset.hint);
   });
   document.getElementById('modalOverlay').onclick = (e) => { if (e.target.id === 'modalOverlay') closeModal(); };
+  document.addEventListener('keydown', (e) => {
+    if (e.key !== 'Escape') return;
+    if (!document.getElementById('modalOverlay').classList.contains('hidden')) closeModal();
+    else if (!document.getElementById('hintOverlay').classList.contains('hidden')) closeHint();
+    else if (!document.getElementById('changelogOverlay').classList.contains('hidden')) closeChangelog();
+  });
+
+  window.addEventListener('online', () => { atualizarOfflineBanner(); if (accessToken) setStatus(''); });
+  window.addEventListener('offline', atualizarOfflineBanner);
+  atualizarOfflineBanner();
 
   // ---- Tentar sessão persistente ----
   const savedToken = loadSavedToken();
   if (savedToken){
     accessToken = savedToken;
     onSignedIn();
-  } else {
-    // tentativa silenciosa: se a pessoa já tiver sessão Google ativa e tiver autorizado antes,
-    // isto entra sem mostrar nada; se precisar de interação, falha em silêncio e mostra o botão normal.
+  } else if (tokenClient) {
+    // tentativa silenciosa: se já houver sessão Google ativa autorizada antes, entra sem mostrar nada;
+    // se precisar de interação, falha em silêncio e mostra o botão normal.
     setTimeout(() => {
       try{ tokenClient.requestAccessToken({ prompt: '' }); } catch(e){}
     }, 150);
@@ -782,14 +531,48 @@ window.onload = () => {
 
   initPullToRefresh();
   initRipples();
-};
+  registarServiceWorker();
+  if ('requestIdleCallback' in window) requestIdleCallback(() => garantirChartJs().catch(()=>{}));
+  else setTimeout(() => garantirChartJs().catch(()=>{}), 2000);
+});
 
-/* ---------- Efeito ripple (feedback tátil ao tocar) ---------- */
+function atualizarOfflineBanner(){
+  const banner = document.getElementById('offlineBanner');
+  if (banner) banner.classList.toggle('hidden', estaOnline());
+}
+
+function registarServiceWorker(){
+  if (!('serviceWorker' in navigator)) return;
+  navigator.serviceWorker.register('./sw.js').then((reg) => {
+    reg.addEventListener('updatefound', () => {
+      const novo = reg.installing;
+      if (!novo) return;
+      novo.addEventListener('statechange', () => {
+        if (novo.state === 'installed' && navigator.serviceWorker.controller) mostrarUpdateBanner(reg);
+      });
+    });
+  }).catch(() => {});
+  let refrescando = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (refrescando) return;
+    refrescando = true;
+    location.reload();
+  });
+}
+function mostrarUpdateBanner(reg){
+  const banner = document.getElementById('updateBanner');
+  if (!banner) return;
+  banner.classList.remove('hidden');
+  document.getElementById('btnAtualizarApp').onclick = () => { if (reg.waiting) reg.waiting.postMessage('skipWaiting'); };
+}
+
+/* ---------- Efeito de toque discreto (feedback tátil) ---------- */
 function initRipples(){
-  const seletor = '.navBtn, .btn-lime, .btn-ghost, .btn-danger, #fabRegistar, .periodBtn, .icon-theme';
+  const seletor = '.navBtn, .btn, #fabRegistar, .periodBtn, .icon-btn';
   document.body.addEventListener('pointerdown', (e) => {
+    if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
     const btn = e.target.closest(seletor);
-    if (!btn) return;
+    if (!btn || btn.disabled) return;
     const rect = btn.getBoundingClientRect();
     const size = Math.max(rect.width, rect.height) * 1.4;
     const span = document.createElement('span');
@@ -802,8 +585,7 @@ function initRipples(){
   });
 }
 
-/* ---------- Pull-to-refresh personalizado (necessário em modo instalado/standalone,
-   onde o Chrome não tem barra própria nem o gesto nativo do browser) ---------- */
+/* ---------- Puxar para atualizar (necessário em modo instalado/standalone) ---------- */
 function initPullToRefresh(){
   const indicator = document.getElementById('ptrIndicator');
   const LIMIAR = 70;
@@ -815,12 +597,10 @@ function initPullToRefresh(){
   function overlayAberto(){
     const modal = document.getElementById('modalOverlay');
     const hint = document.getElementById('hintOverlay');
-    return (modal && !modal.classList.contains('hidden')) || (hint && !hint.classList.contains('hidden'));
+    const changelog = document.getElementById('changelogOverlay');
+    return !modal.classList.contains('hidden') || !hint.classList.contains('hidden') || !changelog.classList.contains('hidden');
   }
 
-  // Verifica se algum contentor com scroll próprio, entre o ponto tocado e o body
-  // (ex: a lista de Registos), já está deslocado — se estiver, o gesto é para
-  // fazer scroll dentro desse contentor, não para atualizar a página.
   function podeIniciarPTR(alvo){
     let el = alvo;
     while (el && el !== document.body){
@@ -829,7 +609,7 @@ function initPullToRefresh(){
       if (temScrollProprio && el.scrollTop > 0) return false;
       el = el.parentElement;
     }
-    return document.body.scrollTop <= 0;
+    return true;
   }
 
   document.addEventListener('touchstart', (e) => {
@@ -844,7 +624,7 @@ function initPullToRefresh(){
     const dy = e.touches[0].clientY - startY;
     if (dy <= 0 || !podeIniciarPTR(e.target)){ distancia = 0; a_puxar = false; return; }
     distancia = Math.min(dy, MAX_PULL);
-    const deslocamento = -60 + distancia;
+    const deslocamento = -58 + distancia;
     const rotacao = (distancia / LIMIAR) * 360;
     indicator.style.transform = `translate(-50%, ${deslocamento}px) rotate(${rotacao}deg)`;
     indicator.style.opacity = String(Math.min(distancia / 30, 1));
@@ -860,7 +640,7 @@ function initPullToRefresh(){
       indicator.style.transform = 'translate(-50%, 16px) rotate(0deg)';
       setTimeout(() => { location.reload(); }, 350);
     } else {
-      indicator.style.transform = 'translate(-50%, -60px) rotate(0deg)';
+      indicator.style.transform = 'translate(-50%, -58px) rotate(0deg)';
       indicator.style.opacity = '0';
     }
     distancia = 0;
@@ -873,27 +653,23 @@ const THEME_KEY = 'peso_theme';
 function initTheme(){
   let tema = null;
   try{ tema = localStorage.getItem(THEME_KEY); } catch(e){}
-  if (!tema){
-    tema = (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) ? 'dark' : 'light';
-  }
+  if (!tema) tema = (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) ? 'dark' : 'light';
   applyTheme(tema);
 }
-
 function toggleTheme(){
   const atual = document.body.classList.contains('dark') ? 'dark' : 'light';
   const novo = atual === 'dark' ? 'light' : 'dark';
   applyTheme(novo);
   try{ localStorage.setItem(THEME_KEY, novo); } catch(e){}
 }
-
 function applyTheme(tema){
   const escuro = tema === 'dark';
   document.body.classList.toggle('dark', escuro);
   document.getElementById('iconMoon').classList.toggle('hidden', escuro);
   document.getElementById('iconSun').classList.toggle('hidden', !escuro);
+  document.getElementById('btnTheme').setAttribute('aria-pressed', String(escuro));
   const metaTheme = document.querySelector('meta[name="theme-color"]');
-  if (metaTheme) metaTheme.setAttribute('content', escuro ? '#121815' : '#FAFBF8');
-  // se o gráfico já estiver desenhado, redesenha com as cores do novo tema
+  if (metaTheme) metaTheme.setAttribute('content', escuro ? '#141915' : '#F7F8F5');
   if (weightChart && currentTab === 'grafico') renderChart(true);
 }
 
@@ -901,11 +677,18 @@ function showTab(tab){
   const trocar = () => {
     currentTab = tab;
     ['resumo','grafico','registos','config'].forEach(t => {
-      document.getElementById('tab' + t.charAt(0).toUpperCase() + t.slice(1)).classList.toggle('hidden', t !== tab);
-      document.getElementById('tabBtn' + t.charAt(0).toUpperCase() + t.slice(1)).classList.toggle('active', t === tab);
+      const painel = document.getElementById('tab' + t.charAt(0).toUpperCase() + t.slice(1));
+      const botao = document.getElementById('tabBtn' + t.charAt(0).toUpperCase() + t.slice(1));
+      painel.classList.toggle('hidden', t !== tab);
+      botao.classList.toggle('active', t === tab);
+      botao.setAttribute('aria-selected', String(t === tab));
     });
     document.getElementById('fabRegistar').classList.toggle('hidden', tab !== 'resumo');
-    if (tab === 'grafico') renderChart(true);
+    if (tab === 'grafico') garantirChartJs().then(() => { renderChart(true); renderInsights(); }).catch(() => {
+      const vazio = document.getElementById('chartEmpty');
+      vazio.textContent = 'Não foi possível carregar o gráfico. Verifica a ligação e tenta novamente.';
+      vazio.classList.remove('hidden');
+    });
   };
   if (document.startViewTransition && !window.matchMedia('(prefers-reduced-motion: reduce)').matches){
     document.startViewTransition(trocar);
@@ -917,10 +700,31 @@ function showTab(tab){
 async function onSignedIn(){
   document.getElementById('authArea').classList.add('hidden');
   document.getElementById('app').classList.remove('hidden');
+  document.getElementById('fabRegistar').classList.toggle('hidden', currentTab !== 'resumo');
   const overlay = document.getElementById('loadingOverlay');
   overlay.classList.remove('hidden');
+  atualizarOfflineBanner();
+
+  if (!estaOnline()){
+    const temCache = loadLocalCache();
+    syncConfigInputs();
+    renderAll();
+    overlay.classList.add('hidden');
+    setStatus(temCache ? '' : 'Sem ligação e ainda sem dados guardados neste aparelho.', !temCache);
+    return;
+  }
+
+  cargaComErro = false;
   await loadConfig();
   await loadRegistos();
+  if (!cargaComErro){
+    saveLocalCache();
+    setStatus('');
+  } else if (registos.length === 0){
+    // a leitura falhou e ficou tudo vazio: tenta a última cópia sincronizada com sucesso
+    const temCache = loadLocalCache();
+    if (temCache){ syncConfigInputs(); setStatus('Falha a sincronizar — a mostrar os últimos dados guardados.', true); }
+  }
   animateNumbersNow = true;
   renderAll();
   animateNumbersNow = false;
@@ -931,11 +735,14 @@ async function onSignedIn(){
 let animateNumbersNow = false;
 function animateValues(el, targets, formatFn, duration = 900){
   if (!el) return;
-  if (!animateNumbersNow){ el.innerHTML = formatFn(targets); return; }
+  if (!animateNumbersNow || (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches)){
+    el.innerHTML = formatFn(targets);
+    return;
+  }
   const start = performance.now();
   function tick(now){
     const t = Math.min((now - start) / duration, 1);
-    const eased = 1 - Math.pow(1 - t, 3); // easeOutCubic
+    const eased = 1 - Math.pow(1 - t, 3);
     const current = targets.map(v => v * eased);
     el.innerHTML = formatFn(current);
     if (t < 1) requestAnimationFrame(tick);
@@ -944,16 +751,17 @@ function animateValues(el, targets, formatFn, duration = 900){
   requestAnimationFrame(tick);
 }
 
-/* ---------- Sheets API helpers ---------- */
+/* ---------- Sheets API ---------- */
 async function sheetsGet(range){
+  if (!estaOnline()) throw new Error('Sem ligação à internet');
   const url = `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/${encodeURIComponent(range)}?valueRenderOption=UNFORMATTED_VALUE`;
   const res = await fetch(url, { headers: { Authorization: 'Bearer ' + accessToken } });
   if (res.status === 401){ onSessaoExpirada(); throw new Error('Sessão expirada'); }
   if (!res.ok) throw new Error('Erro a ler a folha (' + res.status + ')');
   return res.json();
 }
-
 async function sheetsPut(range, values){
+  if (!estaOnline()) throw new Error('Sem ligação à internet');
   const url = `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/${encodeURIComponent(range)}?valueInputOption=USER_ENTERED`;
   const res = await fetch(url, {
     method: 'PUT',
@@ -964,8 +772,8 @@ async function sheetsPut(range, values){
   if (!res.ok) throw new Error('Erro a gravar (' + res.status + ')');
   return res.json();
 }
-
 async function sheetsAppend(range, values){
+  if (!estaOnline()) throw new Error('Sem ligação à internet');
   const url = `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/${encodeURIComponent(range)}:append?valueInputOption=USER_ENTERED`;
   const res = await fetch(url, {
     method: 'POST',
@@ -977,15 +785,14 @@ async function sheetsAppend(range, values){
   return res.json();
 }
 
-// token rejeitado a meio do uso: limpa a sessão guardada e volta ao ecrã de login
 function onSessaoExpirada(){
   clearSavedToken();
   accessToken = null;
   document.getElementById('app').classList.add('hidden');
+  document.getElementById('fabRegistar').classList.add('hidden');
   document.getElementById('authArea').classList.remove('hidden');
   setStatus('A sessão expirou. Inicia sessão novamente.', true);
 }
-
 function onTerminarSessao(){
   if (!confirm('Terminar sessão? Vais precisar de voltar a autenticar-te da próxima vez.')) return;
   const tokenParaRevogar = accessToken;
@@ -995,16 +802,14 @@ function onTerminarSessao(){
     try{ google.accounts.oauth2.revoke(tokenParaRevogar, () => {}); } catch(e){}
   }
   document.getElementById('app').classList.add('hidden');
+  document.getElementById('fabRegistar').classList.add('hidden');
   document.getElementById('authArea').classList.remove('hidden');
   setStatus('');
 }
 
-/* ---------- Date helpers (serial <-> Date) ---------- */
+/* ---------- Datas (serial do Sheets <-> Date) — não alterar: garante compatibilidade com o histórico ---------- */
 function serialToDate(v){
   if (typeof v === 'number') {
-    // O número de série do Sheets é "ingénuo" (sem fuso horário) — representa a data/hora
-    // exatamente como foi escrita (hora local). Construímos a data usando o construtor local
-    // com os mesmos componentes, para não introduzir nenhum desvio de fuso horário.
     const utcMillis = Date.UTC(1899, 11, 30) + Math.round(v * 86400000);
     const u = new Date(utcMillis);
     return new Date(u.getUTCFullYear(), u.getUTCMonth(), u.getUTCDate(), u.getUTCHours(), u.getUTCMinutes(), u.getUTCSeconds());
@@ -1022,14 +827,13 @@ function normalizaAtividade(raw){
   const escala = { 1: 1.2, 2: 1.45, 3: 1.7, 4: 1.7 };
   if (Number.isInteger(raw) && escala[raw]) return escala[raw];
   if (raw >= 1.2 && raw <= 1.725) {
-    // aproxima ao valor válido mais próximo da nova escala (também cobre valores antigos: 1.375/1.55/1.725)
     const validos = [1.2, 1.45, 1.7];
     return validos.reduce((a,b) => Math.abs(b-raw) < Math.abs(a-raw) ? b : a, 1.2);
   }
   return 1.2;
 }
 
-/* ---------- Load Config ---------- */
+/* ---------- Config ---------- */
 async function loadConfig(){
   try{
     const data = await sheetsGet(`${SHEET_CONFIG}!B2:B9`);
@@ -1059,6 +863,12 @@ async function loadConfig(){
   } catch(e){
     setStatus('Não foi possível ler a Config: ' + e.message, true);
   }
+  syncConfigInputs();
+}
+
+// preenche os campos do formulário de Config a partir do objeto `config` em memória —
+// usado tanto depois de ler o Sheets como depois de recuperar a cópia local (modo offline)
+function syncConfigInputs(){
   document.getElementById('cfgAltura').value = config.altura ?? '';
   document.getElementById('cfgNascimento').value = config.nascimento ? isoDateOnly(config.nascimento) : '';
   document.getElementById('cfgSexo').value = config.sexo || '';
@@ -1069,29 +879,37 @@ async function loadConfig(){
   document.getElementById('cfgPesoMax').value = config.pesoMax ?? '';
 }
 
-function isoDateOnly(d){
-  return d.getFullYear() + '-' + pad(d.getMonth()+1) + '-' + pad(d.getDate());
-}
+function isoDateOnly(d){ return d.getFullYear() + '-' + pad(d.getMonth()+1) + '-' + pad(d.getDate()); }
 function pad(n){ return n.toString().padStart(2,'0'); }
 
 async function onGuardarConfig(){
-  const altura = document.getElementById('cfgAltura').value;
+  const btn = document.getElementById('btnGuardarConfig');
+  const altura = document.getElementById('cfgAltura').value.trim();
   const nascimento = document.getElementById('cfgNascimento').value;
   const sexo = document.getElementById('cfgSexo').value;
-  const pesoAlvo = document.getElementById('cfgPesoAlvo').value;
+  const pesoAlvo = document.getElementById('cfgPesoAlvo').value.trim();
   const atividade = document.getElementById('cfgAtividade').value;
   const diaControlo = document.getElementById('cfgDiaControlo').value;
-  const pesoMin = document.getElementById('cfgPesoMin').value;
-  const pesoMax = document.getElementById('cfgPesoMax').value;
+  const pesoMin = document.getElementById('cfgPesoMin').value.trim();
+  const pesoMax = document.getElementById('cfgPesoMax').value.trim();
+
+  if (altura !== '' && (!isFinite(Number(altura)) || Number(altura) <= 0)){ setStatus('Altura inválida.', true); return; }
+  if (pesoAlvo !== '' && (!isFinite(Number(pesoAlvo)) || Number(pesoAlvo) <= 0)){ setStatus('Peso alvo inválido.', true); return; }
+  if (pesoMin !== '' && !isFinite(Number(pesoMin))){ setStatus('Peso mínimo inválido.', true); return; }
+  if (pesoMax !== '' && !isFinite(Number(pesoMax))){ setStatus('Peso máximo inválido.', true); return; }
   if (pesoMin !== '' && pesoMax !== '' && Number(pesoMin) > Number(pesoMax)){
     setStatus('O peso mínimo não pode ser maior do que o máximo.', true);
     return;
   }
+
+  btn.disabled = true;
+  const textoOriginal = btn.textContent;
+  btn.textContent = 'A guardar…';
   try{
     await sheetsPut(`${SHEET_CONFIG}!B2:B9`, [[altura],[nascimento],[sexo],[pesoAlvo],[atividade],[diaControlo],[pesoMin],[pesoMax]]);
-    // atualizar o estado local diretamente com o que acabámos de gravar, em vez de voltar a
-    // ler do Sheets: a API pode cortar células vazias no fim do intervalo pedido, o que podia
-    // fazer um campo recém-gravado (como o peso mínimo) parecer "perdido" logo a seguir a gravar
+    // atualiza o estado local diretamente com o que se acabou de gravar, em vez de reler do Sheets:
+    // a API pode cortar células vazias no fim do intervalo, o que faria um campo recém-gravado
+    // (como o peso mínimo) parecer "perdido" logo a seguir a gravar
     config.altura = altura !== '' ? Number(altura) : null;
     config.nascimento = nascimento ? new Date(nascimento) : null;
     config.sexo = sexo;
@@ -1100,15 +918,19 @@ async function onGuardarConfig(){
     config.diaControlo = Number(diaControlo);
     config.pesoMin = pesoMin !== '' ? Number(pesoMin) : null;
     config.pesoMax = pesoMax !== '' ? Number(pesoMax) : null;
-    setStatus('Configuração guardada.');
+    saveLocalCache();
+    setStatus('');
     showConfirmToast('Configuração guardada');
     renderAll();
   } catch(e){
     setStatus('Erro ao guardar configuração: ' + e.message, true);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = textoOriginal;
   }
 }
 
-/* ---------- Load Registos ---------- */
+/* ---------- Registos ---------- */
 async function loadRegistos(){
   registos = [];
   try{
@@ -1120,7 +942,7 @@ async function loadRegistos(){
       if (dateVal === undefined || dateVal === '' || pesoVal === undefined || pesoVal === '') return;
       const d = serialToDate(dateVal);
       const p = Number(pesoVal);
-      if (!d || isNaN(p)) return;
+      if (!d || isNaN(p) || !isFinite(p)) return;
       registos.push({ row: i + 2, date: d, peso: p, nota: row[2] || '' });
     });
     registos.sort((a,b) => a.date - b.date);
@@ -1129,43 +951,68 @@ async function loadRegistos(){
   }
 }
 
-/* ---------- Registar novo peso ---------- */
-async function onRegistarNovo(){
-  const pesoStr = document.getElementById('novoPeso').value;
-  const nota = document.getElementById('novaNota').value;
+async function onRegistarNovo(ev){
+  if (ev) ev.preventDefault();
+  const pesoInput = document.getElementById('novoPeso');
+  const notaInput = document.getElementById('novaNota');
+  const errEl = document.getElementById('addError');
+  const btn = document.getElementById('btnRegistar');
+  errEl.classList.add('hidden');
+  errEl.textContent = '';
+
+  const pesoStr = pesoInput.value;
   const peso = Number(pesoStr);
-  if (!pesoStr || isNaN(peso) || peso <= 0){
-    setStatus('Introduz um peso válido.', true);
+  if (!pesoStr || !isFinite(peso) || peso <= 0){
+    errEl.textContent = 'Introduz um peso válido, superior a 0.';
+    errEl.classList.remove('hidden');
+    pesoInput.focus();
     return;
   }
-  const LIMITE_AVISO = 5; // kg
-  if (registos.length > 0){
+  if (peso < 20 || peso > 400){
+    if (!confirm(`${peso} kg é um valor pouco habitual. Confirmas que está correto?`)) return;
+  } else if (registos.length > 0){
     const ultimoPeso = registos[registos.length - 1].peso;
     const diff = Math.abs(peso - ultimoPeso);
-    if (diff > LIMITE_AVISO){
-      const ok = confirm(`Este peso (${peso} kg) difere ${diff.toFixed(1)} kg do último registo (${ultimoPeso} kg). Confirmas que está correto?`);
-      if (!ok) return;
-    }
+    if (diff > 5 && !confirm(`Este peso (${peso} kg) difere ${diff.toFixed(1)} kg do último registo (${ultimoPeso} kg). Confirmas que está correto?`)) return;
   }
+
+  const nota = notaInput.value.trim();
   const now = new Date();
   const dataStr = now.getFullYear()+'-'+pad(now.getMonth()+1)+'-'+pad(now.getDate())+' '+pad(now.getHours())+':'+pad(now.getMinutes())+':00';
+  btn.disabled = true;
+  const textoOriginal = btn.textContent;
+  btn.textContent = 'A gravar…';
   try{
     setStatus('A gravar...');
     await sheetsAppend(`${SHEET_REGISTOS}!A:C`, [[dataStr, peso, nota]]);
-    document.getElementById('novoPeso').value = '';
-    document.getElementById('novaNota').value = '';
+    pesoInput.value = '';
+    notaInput.value = '';
     await loadRegistos();
-    setStatus('Registo adicionado.');
+    saveLocalCache();
+    setStatus('');
     showConfirmToast('Peso registado');
     renderAll();
   } catch(e){
     setStatus('Erro ao registar: ' + e.message, true);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = textoOriginal;
   }
 }
 
-/* ---------- Dicas explicativas ---------- */
 /* ---------- Histórico de versões (mais recente primeiro) ---------- */
 const CHANGELOG = [
+  { v:'v4.0.0 R1', itens:[
+    'Redesenho visual completo: identidade mais sóbria e editorial, menos caixas, sem gradientes nem emblemas com emoji',
+    'Nova cabeça de estado com o peso atual em destaque e uma frase de contexto, em vez de emblemas soltos',
+    'Painel de Evolução (objetivo, total perdido, ritmo semanal e distância ao objetivo) e painel de Referência corporal reorganizados',
+    'Nova aba de Análise no Gráfico: tendência por regressão (vários pontos, não só os dois últimos pesos), evolução mensal e melhor/pior semana — só aparece quando há dados suficientes',
+    'Gráfico com 6 períodos (7D / 30D / 90D / 6M / 1A / Tudo), tooltips mais claros e cores sincronizadas com o tema',
+    'PWA a sério: manifest e service worker próprios, funciona offline com os últimos dados sincronizados, e avisa quando há uma nova versão para atualizar',
+    'Mais resistente a erros: uma falha num painel deixa de travar a app inteira; proteção reforçada contra dados inválidos, localStorage corrompido e quebras de ligação a meio de um registo',
+    'Acessibilidade: navegação por separadores com semântica própria, foco visível, etiquetas associadas aos campos e áreas de toque maiores',
+    'Ecrã aumenta corretamente em tablet/desktop, com a app apresentada como um cartão centrado',
+  ]},
   { v:'v3.0.0', itens:['Reformulação visual: navegação movida para baixo com ícones, botão flutuante (FAB) para registar peso', 'Estatísticas e chips unificados em painéis com divisórias, menos "caixas"', 'Efeito de toque (ripple) e transições suaves entre abas', 'Rodapé/versão movidos para dentro de Config'] },
   { v:'v2.6.3', itens:['App agora ignora texto residual (não numérico) nas células de Altura, Peso alvo, Peso mín/máx, em vez de guardar um valor inválido'] },
   { v:'v2.6.2', itens:['Corrigido: peso mínimo desejável podia não aparecer logo a seguir a gravar a configuração'] },
@@ -1202,40 +1049,21 @@ function showChangelog(){
   lista.innerHTML = CHANGELOG.map(entry => `
     <div class="changelog-entry">
       <div class="changelog-ver">${entry.v}</div>
-      <ul>${entry.itens.map(i => `<li>${i}</li>`).join('')}</ul>
+      <ul>${entry.itens.map(i => `<li>${escapeHtml(i)}</li>`).join('')}</ul>
     </div>
   `).join('');
   document.getElementById('changelogOverlay').classList.remove('hidden');
 }
-function closeChangelog(){
-  document.getElementById('changelogOverlay').classList.add('hidden');
-}
+function closeChangelog(){ document.getElementById('changelogOverlay').classList.add('hidden'); }
 
 const HINTS = {
-  total: {
-    titulo: 'Total perdido',
-    texto: 'Diferença entre o teu primeiro registo e o mais recente. Um valor positivo significa que perdeste peso desde que começaste.'
-  },
-  ritmo: {
-    titulo: 'Ritmo semanal',
-    texto: 'Perda média por semana, calculada a partir da tendência dos últimos 30 dias (ou de todo o histórico, se ainda não tiveres 30 dias de registos). O valor pequeno por baixo é a mesma tendência, mas por dia.'
-  },
-  objetivo: {
-    titulo: 'Objetivo',
-    texto: 'Percentagem de progresso entre o teu primeiro peso registado e o peso alvo definido em Config. 100% significa que atingiste o objetivo.'
-  },
-  imc: {
-    titulo: 'IMC — Índice de Massa Corporal',
-    texto: 'Peso ÷ altura². É uma referência geral e rápida de calcular, mas não distingue massa muscular de gordura, nem tem em conta idade, sexo ou composição corporal — usa-o como indicação, não como diagnóstico.'
-  },
-  kcal: {
-    titulo: 'Gasto diário estimado (TDEE)',
-    texto: 'Taxa Metabólica Basal (fórmula de Mifflin-St Jeor, a partir do teu peso, altura, idade e sexo) multiplicada pelo nível de atividade definido em Config. É uma estimativa aproximada, não uma medição real — serve como referência para o balanço calórico.'
-  },
-  minmax: {
-    titulo: 'Mín / Máx',
-    texto: 'O peso mais baixo e o mais alto que já registaste desde que começaste a usar a app.'
-  },
+  total: { titulo: 'Total perdido', texto: 'Diferença entre o teu primeiro registo e o mais recente. Um valor positivo significa que perdeste peso desde que começaste.' },
+  ritmo: { titulo: 'Ritmo semanal', texto: 'Perda média por semana, calculada a partir da tendência dos últimos 30 dias (ou de todo o histórico, se ainda não tiveres 30 dias de registos). O valor pequeno por baixo é a mesma tendência, mas por dia.' },
+  objetivo: { titulo: 'Objetivo', texto: 'Percentagem de progresso entre o teu primeiro peso registado e o peso alvo definido em Config, e quanto falta em kg para lá chegares.' },
+  imc: { titulo: 'IMC — Índice de Massa Corporal', texto: 'Peso ÷ altura². É uma referência geral e rápida de calcular, mas não distingue massa muscular de gordura, nem tem em conta idade, sexo ou composição corporal — usa-o como indicação, não como diagnóstico.' },
+  kcal: { titulo: 'Gasto diário estimado (TDEE)', texto: 'Taxa Metabólica Basal (fórmula de Mifflin-St Jeor, a partir do teu peso, altura, idade e sexo) multiplicada pelo nível de atividade definido em Config. É uma estimativa aproximada, não uma medição real — serve como referência para o balanço calórico.' },
+  minmax: { titulo: 'Mín / Máx', texto: 'O peso mais baixo e o mais alto que já registaste desde que começaste a usar a app.' },
+  analise: { titulo: 'Análise', texto: 'Estes indicadores combinam vários pontos de dados (não apenas os dois últimos registos) para mostrar tendências mais fiáveis. Só aparecem quando existem dados suficientes para serem significativos.' },
 };
 
 function showHint(key){
@@ -1245,9 +1073,7 @@ function showHint(key){
   document.getElementById('hintText').textContent = h.texto;
   document.getElementById('hintOverlay').classList.remove('hidden');
 }
-function closeHint(){
-  document.getElementById('hintOverlay').classList.add('hidden');
-}
+function closeHint(){ document.getElementById('hintOverlay').classList.add('hidden'); }
 
 /* ---------- Editar / eliminar registo ---------- */
 let editingReg = null;
@@ -1260,6 +1086,7 @@ function openModal(reg){
   document.getElementById('editPeso').value = reg.peso;
   document.getElementById('editNota').value = reg.nota;
   document.getElementById('modalOverlay').classList.remove('hidden');
+  document.getElementById('editPeso').focus();
 }
 function closeModal(){
   editingRow = null;
@@ -1268,17 +1095,22 @@ function closeModal(){
 }
 async function onGuardarEdit(){
   const peso = Number(document.getElementById('editPeso').value);
-  const nota = document.getElementById('editNota').value;
-  if (isNaN(peso) || peso <= 0){ setStatus('Peso inválido.', true); return; }
+  const nota = document.getElementById('editNota').value.trim();
+  if (!isFinite(peso) || peso <= 0){ setStatus('Peso inválido.', true); return; }
+  const btn = document.getElementById('btnGuardarEdit');
+  btn.disabled = true;
   try{
     await sheetsPut(`${SHEET_REGISTOS}!B${editingRow}:C${editingRow}`, [[peso, nota]]);
     closeModal();
     await loadRegistos();
-    setStatus('Registo atualizado.');
+    saveLocalCache();
+    setStatus('');
     showConfirmToast('Registo atualizado');
     renderAll();
   } catch(e){
     setStatus('Erro ao atualizar: ' + e.message, true);
+  } finally {
+    btn.disabled = false;
   }
 }
 function onEliminarRegisto(){
@@ -1286,9 +1118,7 @@ function onEliminarRegisto(){
   closeModal();
   if (reg) iniciarEliminacao(reg);
 }
-function eliminarRegistoDireto(reg){
-  iniciarEliminacao(reg);
-}
+function eliminarRegistoDireto(reg){ iniciarEliminacao(reg); }
 
 // Eliminação otimista: some da lista já, e só grava a eliminação na folha
 // se a pessoa não carregar em "Desfazer" dentro de alguns segundos.
@@ -1298,17 +1128,14 @@ function iniciarEliminacao(reg){
   if (idx === -1) return;
   registos.splice(idx, 1);
   renderAll();
-  pendingDelete = { reg, timeoutId: setTimeout(commitPendingDelete, 5000) };
+  pendingDelete = { reg, timeoutId: setTimeout(commitPendingDelete, 6000) };
   showUndoToast(`Registo de ${fmtDataCurta(reg.date)} (${reg.peso.toFixed(1)} kg) eliminado.`);
 }
-
 function showUndoToast(msg){
   document.getElementById('undoToastMsg').textContent = msg;
   document.getElementById('undoToast').classList.remove('hidden');
 }
-function hideUndoToast(){
-  document.getElementById('undoToast').classList.add('hidden');
-}
+function hideUndoToast(){ document.getElementById('undoToast').classList.add('hidden'); }
 
 async function commitPendingDelete(){
   if (!pendingDelete) return;
@@ -1318,13 +1145,13 @@ async function commitPendingDelete(){
   hideUndoToast();
   try{
     await sheetsPut(`${SHEET_REGISTOS}!A${reg.row}:C${reg.row}`, [['','','']]);
+    saveLocalCache();
   } catch(e){
     setStatus('Erro ao eliminar: ' + e.message, true);
     await loadRegistos();
     renderAll();
   }
 }
-
 function undoPendingDelete(){
   if (!pendingDelete) return;
   clearTimeout(pendingDelete.timeoutId);
@@ -1337,7 +1164,7 @@ function undoPendingDelete(){
   setStatus('Eliminação desfeita.');
 }
 
-/* ---------- Cálculos ---------- */
+/* ---------- Cálculos base ---------- */
 function idadeAnos(nascimento){
   if (!nascimento) return null;
   const hoje = new Date();
@@ -1346,29 +1173,25 @@ function idadeAnos(nascimento){
   if (m < 0 || (m === 0 && hoje.getDate() < nascimento.getDate())) idade--;
   return idade;
 }
-
 function calcIMC(peso, alturaCm){
   if (!peso || !alturaCm) return null;
   const alturaM = alturaCm / 100;
   return peso / (alturaM * alturaM);
 }
-
 function classificaIMC(imc){
-  if (imc === null) return { texto:'—', cor:'var(--text-dim)', bg:'transparent' };
-  if (imc < 18.5) return { texto:'Abaixo do peso', cor:'var(--amber)', bg:'var(--amber-tint)' };
-  if (imc < 25)   return { texto:'Peso normal', cor:'var(--ok)', bg:'var(--ok-tint)' };
-  if (imc < 30)   return { texto:'Excesso de peso', cor:'var(--amber)', bg:'var(--amber-tint)' };
-  if (imc < 35)   return { texto:'Obesidade grau I', cor:'var(--danger)', bg:'var(--danger-tint)' };
-  if (imc < 40)   return { texto:'Obesidade grau II', cor:'var(--danger)', bg:'var(--danger-tint)' };
-  return { texto:'Obesidade grau III', cor:'var(--danger)', bg:'var(--danger-tint)' };
+  if (imc === null) return { texto:'—', cor:'var(--text-faint)', bg:'transparent' };
+  if (imc < 18.5) return { texto:'Abaixo do peso', cor:'var(--warning)', bg:'var(--warning-soft)' };
+  if (imc < 25)   return { texto:'Peso normal', cor:'var(--positive)', bg:'var(--positive-soft)' };
+  if (imc < 30)   return { texto:'Excesso de peso', cor:'var(--warning)', bg:'var(--warning-soft)' };
+  if (imc < 35)   return { texto:'Obesidade grau I', cor:'var(--negative)', bg:'var(--negative-soft)' };
+  if (imc < 40)   return { texto:'Obesidade grau II', cor:'var(--negative)', bg:'var(--negative-soft)' };
+  return { texto:'Obesidade grau III', cor:'var(--negative)', bg:'var(--negative-soft)' };
 }
-
 function calcTMB(peso, alturaCm, idade, sexo){
   if (!peso || !alturaCm || idade === null || !sexo) return null;
   const base = 10*peso + 6.25*alturaCm - 5*idade;
   return sexo === 'M' ? base + 5 : base - 161;
 }
-
 function mediaPerdaPeriodo(dias){
   if (registos.length < 2) return null;
   const agora = registos[registos.length - 1].date;
@@ -1381,84 +1204,6 @@ function mediaPerdaPeriodo(dias){
   if (diasDecorridos <= 0) return null;
   return (primeiro.peso - ultimo.peso) / diasDecorridos;
 }
-
-/* ---------- Render ---------- */
-function renderAll(){
-  prefillNovoPeso();
-  renderLcd();
-  renderStatsStrip();
-  renderProgress();
-  renderIMC();
-  renderKcal();
-  renderMinMax();
-  renderRegistos();
-  if (currentTab === 'grafico') renderChart();
-}
-
-function prefillNovoPeso(){
-  const campo = document.getElementById('novoPeso');
-  if (campo && campo.value === '' && registos.length > 0){
-    campo.value = registos[registos.length - 1].peso;
-  }
-}
-
-function renderLcd(){
-  if (registos.length === 0){
-    document.getElementById('lcdPeso').textContent = '—';
-    document.getElementById('lcdDelta').textContent = '—';
-    document.getElementById('lcdStreak').textContent = '';
-    document.getElementById('lcdRecord').textContent = '';
-    document.getElementById('lcdControlo').textContent = '';
-    return;
-  }
-  const ultimo = registos[registos.length - 1];
-  const anterior = registos.length > 1 ? registos[registos.length - 2] : null;
-  animateValues(document.getElementById('lcdPeso'), [ultimo.peso], arr => arr[0].toFixed(1));
-  const deltaEl = document.getElementById('lcdDelta');
-  if (anterior){
-    const diff = ultimo.peso - anterior.peso;
-    if (diff > 0.001){ deltaEl.textContent = '▲ ' + diff.toFixed(1); deltaEl.className = 'mini-badge up'; }
-    else if (diff < -0.001){ deltaEl.textContent = '▼ ' + Math.abs(diff).toFixed(1); deltaEl.className = 'mini-badge down'; }
-    else { deltaEl.textContent = '='; deltaEl.className = 'mini-badge same'; }
-  } else {
-    deltaEl.textContent = 'início'; deltaEl.className = 'mini-badge same';
-  }
-  const streak = calcStreak();
-  document.getElementById('lcdStreak').textContent = streak >= 2 ? `🔥 ${streak} dias` : '';
-  document.getElementById('lcdStreak').className = 'mini-badge streak';
-
-  const recordEl = document.getElementById('lcdRecord');
-  if (registos.length > 1){
-    const minGlobal = Math.min(...registos.map(r => r.peso));
-    recordEl.textContent = ultimo.peso <= minGlobal + 0.001 ? '🏆 mínimo' : '';
-  } else {
-    recordEl.textContent = '';
-  }
-  recordEl.className = 'mini-badge record';
-
-  const controloEl = document.getElementById('lcdControlo');
-  const controlo = calcControloStatus(ultimo.peso);
-  if (controlo){
-    controloEl.textContent = controlo.texto;
-    controloEl.className = 'mini-badge ' + controlo.classe;
-  } else {
-    controloEl.textContent = '';
-  }
-}
-
-// estado do peso face ao intervalo mín/máx desejável definido em Config
-function calcControloStatus(peso){
-  if (config.pesoMin === null && config.pesoMax === null) return null;
-  if (config.pesoMax !== null && peso > config.pesoMax){
-    return { texto: '▲ acima do controlo', classe: 'up' };
-  }
-  if (config.pesoMin !== null && peso < config.pesoMin){
-    return { texto: '▼ abaixo do controlo', classe: 'warn' };
-  }
-  return { texto: '✓ dentro do controlo', classe: 'down' };
-}
-
-// dias consecutivos (calendário) com pelo menos um registo, a contar do registo mais recente
 function calcStreak(){
   if (registos.length === 0) return 0;
   const dias = [...new Set(registos.map(r => isoDateOnly(r.date)))].sort().reverse();
@@ -1471,59 +1216,12 @@ function calcStreak(){
   }
   return streak;
 }
-
-function renderStatsStrip(){
-  const strip = document.getElementById('statStrip');
-  strip.innerHTML = '';
-  if (registos.length === 0){
-    strip.innerHTML = '<div class="stat-chip"><div class="lbl">Sem registos ainda</div></div>';
-    return;
-  }
-  const desdeInicio = mediaPerdaPeriodo(999999);
-  const mediaSemanal = desdeInicio !== null ? desdeInicio * 7 : null;
-  const totalPerdido = registos[0].peso - registos[registos.length-1].peso;
-
-  const totalDiv = document.createElement('div');
-  totalDiv.className = 'stat-chip';
-  totalDiv.innerHTML = `<div class="lbl">Total perdido <button class="hint-btn" data-hint="total">ⓘ</button></div><div class="val ${totalPerdido>=0?'loss':'gain'}" id="statTotalVal"></div>`;
-  strip.appendChild(totalDiv);
-  animateValues(document.getElementById('statTotalVal'), [totalPerdido], arr => `${arr[0].toFixed(1)} kg`);
-
-  const ritmoDiv = document.createElement('div');
-  ritmoDiv.className = 'stat-chip';
-  ritmoDiv.innerHTML = `<div class="lbl">Ritmo semanal <button class="hint-btn" data-hint="ritmo">ⓘ</button></div><div class="val" id="statRitmoVal"></div><div class="val-sub" id="statRitmoSub"></div>`;
-  strip.appendChild(ritmoDiv);
-  animateValues(document.getElementById('statRitmoVal'), [mediaSemanal ?? 0], arr =>
-    mediaSemanal === null ? '—' : (mediaSemanal >= 0 ? '−' : '+') + Math.abs(arr[0]).toFixed(2) + ' kg'
-  );
-  animateValues(document.getElementById('statRitmoSub'), [desdeInicio ?? 0], arr =>
-    desdeInicio === null ? '—' : (desdeInicio >= 0 ? '−' : '+') + Math.abs(arr[0]).toFixed(2) + ' kg/dia'
-  );
+function calcControloStatus(peso){
+  if (config.pesoMin === null && config.pesoMax === null) return null;
+  if (config.pesoMax !== null && peso > config.pesoMax) return { texto: '▲ acima do controlo', classe: 'up' };
+  if (config.pesoMin !== null && peso < config.pesoMin) return { texto: '▼ abaixo do controlo', classe: 'warn' };
+  return { texto: '✓ dentro do controlo', classe: 'down' };
 }
-
-function renderMinMax(){
-  const el = document.getElementById('minMaxValue');
-  if (!el) return;
-  if (registos.length === 0){ el.textContent = '—'; return; }
-  const pesos = registos.map(r => r.peso);
-  const min = Math.min(...pesos);
-  const max = Math.max(...pesos);
-  animateValues(el, [min, max], arr => `${arr[0].toFixed(1)} / ${arr[1].toFixed(1)} <span class="chip-unit">kg</span>`);
-}
-
-function fmtMedia(v){
-  if (v === null) return '—';
-  const sinal = v >= 0 ? '−' : '+';
-  return sinal + Math.abs(v).toFixed(2);
-}
-function fmtData(d){
-  return d.toLocaleDateString('pt-PT') + ' ' + pad(d.getHours())+':'+pad(d.getMinutes());
-}
-function fmtDataCurta(d){
-  return d.toLocaleDateString('pt-PT');
-}
-
-// percentagem de progresso até ao objetivo (0-100), ou null se não houver dados/objetivo definido
 function calcProgressPct(){
   if (registos.length === 0 || !config.pesoAlvo) return null;
   const pesoInicial = registos[0].peso;
@@ -1533,22 +1231,197 @@ function calcProgressPct(){
   if (pesoInicial !== pesoAlvo) pct = ((pesoInicial - pesoAtual) / (pesoInicial - pesoAlvo)) * 100;
   return Math.max(0, Math.min(100, pct));
 }
+function fmtData(d){ return d.toLocaleDateString('pt-PT') + ' ' + pad(d.getHours())+':'+pad(d.getMinutes()); }
+function fmtDataCurta(d){ return d.toLocaleDateString('pt-PT'); }
+function fmtDeltaKg(diff){
+  const classe = diff <= 0 ? 'loss' : 'gain';
+  const texto = (diff >= 0 ? '+' : '−') + Math.abs(diff).toFixed(1) + ' kg';
+  return { classe, texto };
+}
+function escapeHtml(s){
+  return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
 
-function renderProgress(){
-  if (registos.length === 0 || !config.pesoAlvo){
-    document.getElementById('progPctLabel').textContent = '—';
-    document.getElementById('progLeft').textContent = 'Define o peso alvo em Config';
-    document.getElementById('progRight').textContent = '';
-    document.getElementById('progressFill').style.width = '0%';
+/* ---------- Análise: tendência (regressão) + evolução mensal + melhor/pior semana ----------
+   Usa sempre o histórico completo (não o período selecionado no gráfico), e só devolve um
+   valor quando há pontos de dados suficientes para ser um indicador fiável. */
+function inicioSemana(d){
+  const dia = (d.getDay() + 6) % 7; // 0 = segunda
+  return isoDateOnly(new Date(d.getFullYear(), d.getMonth(), d.getDate() - dia));
+}
+function buildAnalysis(){
+  const out = { tendencia: null, mensal: null, melhorSemana: null, piorSemana: null };
+  if (registos.length < 5) return out;
+
+  // Tendência: regressão linear (mínimos quadrados) sobre os últimos 30 dias,
+  // ou sobre todo o histórico se ainda não houver 30 dias de dados.
+  const agora = registos[registos.length-1].date;
+  let janela = registos.filter(r => r.date >= new Date(agora.getTime() - 30*86400000));
+  if (janela.length < 5) janela = registos;
+  const diasSpan = (janela[janela.length-1].date - janela[0].date) / 86400000;
+  if (janela.length >= 5 && diasSpan >= 5){
+    const n = janela.length;
+    const xs = janela.map(r => (r.date - janela[0].date) / 86400000);
+    const ys = janela.map(r => r.peso);
+    const mediaX = xs.reduce((a,b)=>a+b,0) / n;
+    const mediaY = ys.reduce((a,b)=>a+b,0) / n;
+    let num = 0, den = 0;
+    for (let i=0;i<n;i++){ num += (xs[i]-mediaX)*(ys[i]-mediaY); den += (xs[i]-mediaX)**2; }
+    if (den > 0) out.tendencia = { kgSemana: (num/den)*7, dias: Math.round(diasSpan), pontos: n };
+  }
+
+  // Evolução mensal: média do mês corrente vs média do mês anterior
+  const porMes = new Map();
+  registos.forEach(r => {
+    const chave = r.date.getFullYear() + '-' + pad(r.date.getMonth()+1);
+    if (!porMes.has(chave)) porMes.set(chave, []);
+    porMes.get(chave).push(r.peso);
+  });
+  const mesesOrdenados = [...porMes.keys()].sort();
+  if (mesesOrdenados.length >= 2){
+    const media = (chave) => { const arr = porMes.get(chave); return arr.reduce((a,b)=>a+b,0)/arr.length; };
+    out.mensal = { diff: media(mesesOrdenados[mesesOrdenados.length-1]) - media(mesesOrdenados[mesesOrdenados.length-2]) };
+  }
+
+  // Melhor/pior semana: agrupa por semana de calendário (segunda a domingo) e compara
+  // a média de cada semana com a da semana anterior.
+  const porSemana = new Map();
+  registos.forEach(r => {
+    const chave = inicioSemana(r.date);
+    if (!porSemana.has(chave)) porSemana.set(chave, []);
+    porSemana.get(chave).push(r.peso);
+  });
+  const semanasOrdenadas = [...porSemana.keys()].sort();
+  if (semanasOrdenadas.length >= 3){
+    const media = (chave) => { const arr = porSemana.get(chave); return arr.reduce((a,b)=>a+b,0)/arr.length; };
+    let melhor = null, pior = null;
+    for (let i=1;i<semanasOrdenadas.length;i++){
+      const diff = media(semanasOrdenadas[i]) - media(semanasOrdenadas[i-1]);
+      if (!melhor || diff < melhor.diff) melhor = { diff };
+      if (!pior || diff > pior.diff) pior = { diff };
+    }
+    out.melhorSemana = melhor;
+    out.piorSemana = pior;
+  }
+  return out;
+}
+
+/* ---------- Render ----------
+   Cada secção corre isolada (safe()): um erro numa não impede as restantes. */
+function safe(fn, label){
+  try{ fn(); } catch(e){ console.error('Erro em ' + label + ':', e); }
+}
+function renderAll(){
+  safe(prefillNovoPeso, 'prefillNovoPeso');
+  safe(renderStatusHead, 'statusHead');
+  safe(renderProgress, 'progress');
+  safe(renderStatsRow, 'statsRow');
+  safe(renderIMC, 'imc');
+  safe(renderKcal, 'kcal');
+  safe(renderMinMax, 'minMax');
+  safe(renderRegistos, 'registos');
+  if (currentTab === 'grafico'){
+    safe(() => renderChart(), 'chart');
+    safe(renderInsights, 'insights');
+  }
+}
+
+function prefillNovoPeso(){
+  const campo = document.getElementById('novoPeso');
+  if (campo && campo.value === '' && registos.length > 0) campo.value = registos[registos.length - 1].peso;
+}
+
+function renderStatusHead(){
+  const valEl = document.getElementById('statusWeightVal');
+  const lineEl = document.getElementById('statusLine');
+  const tagsEl = document.getElementById('statusTags');
+  if (registos.length === 0){
+    valEl.textContent = '—';
+    lineEl.textContent = 'Ainda sem registos — regista o teu primeiro peso abaixo.';
+    tagsEl.innerHTML = '';
     return;
   }
+  const ultimo = registos[registos.length-1];
+  const anterior = registos.length > 1 ? registos[registos.length-2] : null;
+  animateValues(valEl, [ultimo.peso], arr => arr[0].toFixed(1));
+
+  if (anterior){
+    const diff = ultimo.peso - anterior.peso;
+    const dataAnt = fmtDataCurta(anterior.date);
+    if (diff > 0.001) lineEl.innerHTML = `<span class="up">↑ ${diff.toFixed(1)} kg</span> desde ${dataAnt}`;
+    else if (diff < -0.001) lineEl.innerHTML = `<span class="down">↓ ${Math.abs(diff).toFixed(1)} kg</span> desde ${dataAnt}`;
+    else lineEl.textContent = `Igual ao registo de ${dataAnt}`;
+  } else {
+    lineEl.textContent = 'Primeiro registo — bem-vindo!';
+  }
+
+  const tags = [];
+  const streak = calcStreak();
+  if (streak >= 2) tags.push(`<span class="tag neutral">Sequência de ${streak} dias</span>`);
+  const minGlobal = Math.min(...registos.map(r => r.peso));
+  if (registos.length > 1 && ultimo.peso <= minGlobal + 0.001) tags.push(`<span class="tag good">Novo mínimo</span>`);
+  const controlo = calcControloStatus(ultimo.peso);
+  if (controlo){
+    const classeTag = controlo.classe === 'down' ? 'good' : controlo.classe === 'up' ? 'bad' : 'warn';
+    tags.push(`<span class="tag ${classeTag}">${controlo.texto}</span>`);
+  }
+  tagsEl.innerHTML = tags.join('');
+}
+
+function renderProgress(){
+  const wrap = document.getElementById('progressWrap');
+  const empty = document.getElementById('progressEmpty');
+  if (registos.length === 0 || !config.pesoAlvo){
+    wrap.classList.add('hidden');
+    empty.classList.remove('hidden');
+    empty.textContent = registos.length === 0 ? 'Regista o teu primeiro peso para veres o progresso.' : 'Define um peso alvo em Config para veres o progresso.';
+    return;
+  }
+  wrap.classList.remove('hidden');
+  empty.classList.add('hidden');
   const pesoInicial = registos[0].peso;
   const pesoAlvo = config.pesoAlvo;
   const pct = calcProgressPct();
   document.getElementById('progressFill').style.width = pct + '%';
-  animateValues(document.getElementById('progPctLabel'), [pct], arr => arr[0].toFixed(0) + '%');
+  animateValues(document.getElementById('progPctLabel'), [pct], arr => Math.round(arr[0]) + '%');
   document.getElementById('progLeft').textContent = pesoInicial.toFixed(1) + ' kg';
   document.getElementById('progRight').textContent = pesoAlvo.toFixed(1) + ' kg';
+}
+
+function renderStatsRow(){
+  const totalEl = document.getElementById('statTotalVal');
+  const ritmoEl = document.getElementById('statRitmoVal');
+  const ritmoSubEl = document.getElementById('statRitmoSub');
+  const faltamEl = document.getElementById('statFaltamVal');
+  if (registos.length === 0){
+    totalEl.textContent = ritmoEl.textContent = faltamEl.textContent = '—';
+    ritmoSubEl.textContent = '';
+    return;
+  }
+  const pesoInicial = registos[0].peso;
+  const pesoAtual = registos[registos.length-1].peso;
+  const totalPerdido = pesoInicial - pesoAtual;
+  const desdeInicio = mediaPerdaPeriodo(999999);
+  const mediaSemanal = desdeInicio !== null ? desdeInicio * 7 : null;
+
+  totalEl.className = 'val ' + (totalPerdido >= 0 ? 'loss' : 'gain');
+  animateValues(totalEl, [totalPerdido], arr => `${arr[0].toFixed(1)} kg`);
+  animateValues(ritmoEl, [mediaSemanal ?? 0], arr => mediaSemanal === null ? '—' : (mediaSemanal >= 0 ? '−' : '+') + Math.abs(arr[0]).toFixed(2) + ' kg');
+  animateValues(ritmoSubEl, [desdeInicio ?? 0], arr => desdeInicio === null ? '' : (desdeInicio >= 0 ? '−' : '+') + Math.abs(arr[0]).toFixed(3) + ' kg/dia');
+
+  if (config.pesoAlvo){
+    const dist = pesoAtual - config.pesoAlvo;
+    if (Math.abs(dist) < 0.05){
+      faltamEl.className = 'val loss';
+      faltamEl.textContent = 'Atingido';
+    } else {
+      faltamEl.className = 'val';
+      animateValues(faltamEl, [Math.abs(dist)], arr => `${arr[0].toFixed(1)} kg`);
+    }
+  } else {
+    faltamEl.className = 'val';
+    faltamEl.textContent = '—';
+  }
 }
 
 function renderIMC(){
@@ -1572,12 +1445,17 @@ function renderKcal(){
   const pesoAtual = registos[registos.length-1].peso;
   const idade = idadeAnos(config.nascimento);
   const tmb = calcTMB(pesoAtual, config.altura, idade, config.sexo);
-  if (tmb === null){
-    document.getElementById('kcalValue').textContent = '—';
-    return;
-  }
+  if (tmb === null){ document.getElementById('kcalValue').textContent = '—'; return; }
   const tdee = tmb * (config.atividade || 1.2);
   animateValues(document.getElementById('kcalValue'), [tdee], arr => `${Math.round(arr[0])} <span class="chip-unit">kcal</span>`);
+}
+
+function renderMinMax(){
+  const el = document.getElementById('minMaxValue');
+  if (!el) return;
+  if (registos.length === 0){ el.textContent = '—'; return; }
+  const pesos = registos.map(r => r.peso);
+  animateValues(el, [Math.min(...pesos), Math.max(...pesos)], arr => `${arr[0].toFixed(1)} / ${arr[1].toFixed(1)}`);
 }
 
 function renderRegistos(){
@@ -1586,13 +1464,11 @@ function renderRegistos(){
   list.innerHTML = '';
   if (countEl) countEl.textContent = registos.length + (registos.length === 1 ? ' registo' : ' registos');
   if (registos.length === 0){
-    list.innerHTML = '<div style="padding:12px 0;color:var(--text-dim);">Sem registos.</div>';
+    list.innerHTML = '<div class="reg-empty">Sem registos ainda.<br>Toca em "Registar peso" para começares.</div>';
     return;
   }
   const desc = [...registos].sort((a,b) => b.date - a.date);
   const minGlobal = Math.min(...registos.map(r => r.peso));
-
-  // mapa dia -> peso, para comparar cada dia de controlo com o dia de controlo anterior (7 dias antes)
   const pesoPorDia = new Map();
   registos.forEach(r => pesoPorDia.set(isoDateOnly(r.date), r.peso));
 
@@ -1611,8 +1487,7 @@ function renderRegistos(){
 
     let weekTagHtml = '';
     if (isDiaControlo){
-      const dataSemanaAnterior = new Date(reg.date.getTime() - 7 * 86400000);
-      const pesoSemanaAnterior = pesoPorDia.get(isoDateOnly(dataSemanaAnterior));
+      const pesoSemanaAnterior = pesoPorDia.get(isoDateOnly(new Date(reg.date.getTime() - 7*86400000)));
       if (pesoSemanaAnterior !== undefined){
         const diffSemana = reg.peso - pesoSemanaAnterior;
         if (diffSemana > 0.001) weekTagHtml = `<span class="week-tag up">▲${diffSemana.toFixed(1)} kg/sem</span>`;
@@ -1623,19 +1498,21 @@ function renderRegistos(){
 
     const controloReg = calcControloStatus(reg.peso);
     const pesoClasse = controloReg && controloReg.classe !== 'down' ? ` reg-${controloReg.classe}` : '';
+    const dataFmt = escapeHtml(fmtDataCurta(reg.date));
 
     const row = document.createElement('div');
     row.className = 'regRow' + (isDiaControlo ? ' controlday' : '');
+    row.setAttribute('role', 'listitem');
     row.innerHTML = `
       <div class="regDate">
-        <div class="d1">${fmtDataCurta(reg.date)}${isDiaControlo ? `<span class="seg-tag">${DIAS_ABREV[config.diaControlo]}</span>` : ''}${weekTagHtml}${isMin ? '<span class="min-tag">🏆 MÍN</span>' : ''}</div>
+        <div class="d1">${dataFmt}${isDiaControlo ? `<span class="seg-tag">${DIAS_ABREV[config.diaControlo]}</span>` : ''}${weekTagHtml}${isMin ? '<span class="min-tag">MÍN</span>' : ''}</div>
         <div class="d2">${pad(reg.date.getHours())}:${pad(reg.date.getMinutes())}${reg.nota ? ' · ' + escapeHtml(reg.nota) : ''}</div>
       </div>
-      <div class="regPeso${pesoClasse}" title="${controloReg ? controloReg.texto : ''}">${reg.peso.toFixed(1)}</div>
+      <div class="regPeso${pesoClasse}" title="${controloReg ? escapeHtml(controloReg.texto) : ''}">${reg.peso.toFixed(1)}</div>
       ${deltaHtml}
       <div class="regActions">
-        <button class="iconBtn iconEdit" title="Editar">${ICON_EDIT}</button>
-        <button class="iconBtn iconDel" title="Eliminar">${ICON_TRASH}</button>
+        <button class="iconBtn iconEdit" title="Editar" aria-label="Editar registo de ${dataFmt}">${ICON_EDIT}</button>
+        <button class="iconBtn iconDel" title="Eliminar" aria-label="Eliminar registo de ${dataFmt}">${ICON_TRASH}</button>
       </div>`;
     row.querySelector('.iconEdit').onclick = () => openModal(reg);
     row.querySelector('.iconDel').onclick = () => eliminarRegistoDireto(reg);
@@ -1643,87 +1520,111 @@ function renderRegistos(){
   });
 }
 
-function escapeHtml(s){
-  return s.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+function renderInsights(){
+  const body = document.getElementById('insightsBody');
+  if (!body) return;
+  const a = buildAnalysis();
+  const linhas = [];
+  if (a.tendencia){
+    const t = a.tendencia;
+    const d = fmtDeltaKg(-t.kgSemana); // tendência positiva (perda) deve pintar a verde
+    linhas.push(`<div class="insight-row"><span class="insight-label">Tendência (${t.pontos} registos em ${t.dias} dias)</span><span class="insight-value ${d.classe}">${Math.abs(t.kgSemana).toFixed(2)} kg/sem de ${t.kgSemana >= 0 ? 'perda' : 'ganho'}</span></div>`);
+  }
+  if (a.mensal){
+    const d = fmtDeltaKg(a.mensal.diff);
+    linhas.push(`<div class="insight-row"><span class="insight-label">Evolução mensal</span><span class="insight-value ${d.classe}">${d.texto} vs mês anterior</span></div>`);
+  }
+  if (a.melhorSemana){
+    const d = fmtDeltaKg(a.melhorSemana.diff);
+    linhas.push(`<div class="insight-row"><span class="insight-label">Melhor semana</span><span class="insight-value ${d.classe}">${d.texto}</span></div>`);
+  }
+  if (a.piorSemana){
+    const d = fmtDeltaKg(a.piorSemana.diff);
+    linhas.push(`<div class="insight-row"><span class="insight-label">Semana mais difícil</span><span class="insight-value ${d.classe}">${d.texto}</span></div>`);
+  }
+  body.innerHTML = linhas.length ? linhas.join('') : '<p class="insight-empty">Regista pesos em pelo menos 3 semanas diferentes para veres tendências e comparações aqui.</p>';
 }
 
 /* ---------- Exportar para Excel ---------- */
-function exportarXLSX(){
-  if (typeof XLSX === 'undefined'){
-    setStatus('Biblioteca de exportação ainda não carregou. Tenta novamente em instantes.', true);
+async function exportarXLSX(){
+  if (registos.length === 0){ setStatus('Não há registos para exportar.', true); return; }
+  const btn = document.getElementById('btnExportar');
+  btn.disabled = true;
+  try{
+    await garantirXLSX();
+  } catch(e){
+    setStatus('Não foi possível carregar a biblioteca de exportação. Verifica a ligação e tenta novamente.', true);
+    btn.disabled = false;
     return;
   }
-  if (registos.length === 0){
-    setStatus('Não há registos para exportar.', true);
-    return;
+  try{
+    const wb = XLSX.utils.book_new();
+
+    const linhasRegistos = registos.map(r => ({ Data: fmtData(r.date), 'Peso (kg)': r.peso, Nota: r.nota }));
+    const wsRegistos = XLSX.utils.json_to_sheet(linhasRegistos);
+    wsRegistos['!cols'] = [{ wch: 18 }, { wch: 10 }, { wch: 30 }];
+    XLSX.utils.book_append_sheet(wb, wsRegistos, 'Registos');
+
+    const atividadeLabels = { 1.2: 'Pouco ativo', 1.45: 'Moderadamente ativo', 1.7: 'Muito ativo' };
+    const linhasConfig = [
+      { Campo: 'Altura (cm)', Valor: config.altura ?? '—' },
+      { Campo: 'Data de nascimento', Valor: config.nascimento ? isoDateOnly(config.nascimento) : '—' },
+      { Campo: 'Sexo', Valor: config.sexo || '—' },
+      { Campo: 'Peso alvo (kg)', Valor: config.pesoAlvo ?? '—' },
+      { Campo: 'Nível de atividade', Valor: atividadeLabels[config.atividade] || config.atividade || '—' },
+      { Campo: 'Dia de controlo semanal', Valor: DIAS_NOMES[config.diaControlo] ?? '—' },
+      { Campo: 'Peso mínimo desejável (kg)', Valor: config.pesoMin ?? '—' },
+      { Campo: 'Peso máximo desejável (kg)', Valor: config.pesoMax ?? '—' },
+    ];
+    const wsConfig = XLSX.utils.json_to_sheet(linhasConfig);
+    wsConfig['!cols'] = [{ wch: 22 }, { wch: 22 }];
+    XLSX.utils.book_append_sheet(wb, wsConfig, 'Config');
+
+    const pesoAtual = registos[registos.length - 1].peso;
+    const pesoInicial = registos[0].peso;
+    const totalPerdido = pesoInicial - pesoAtual;
+    const desdeInicio = mediaPerdaPeriodo(999999);
+    const mediaSemanal = desdeInicio !== null ? desdeInicio * 7 : null;
+    const pesos = registos.map(r => r.peso);
+    const pctObjetivo = calcProgressPct();
+    const imc = config.altura ? calcIMC(pesoAtual, config.altura) : null;
+    const imcClasse = imc !== null ? classificaIMC(imc).texto : '—';
+    const idade = config.nascimento ? idadeAnos(config.nascimento) : null;
+    const tmb = (config.altura && idade !== null && config.sexo) ? calcTMB(pesoAtual, config.altura, idade, config.sexo) : null;
+    const tdee = tmb !== null ? Math.round(tmb * (config.atividade || 1.2)) : null;
+    const analise = buildAnalysis();
+
+    const linhasResumo = [
+      { Métrica: 'Data de exportação', Valor: fmtData(new Date()) },
+      { Métrica: 'Peso inicial (kg)', Valor: pesoInicial.toFixed(1) },
+      { Métrica: 'Peso atual (kg)', Valor: pesoAtual.toFixed(1) },
+      { Métrica: 'Total perdido (kg)', Valor: totalPerdido.toFixed(1) },
+      { Métrica: 'Mínimo registado (kg)', Valor: Math.min(...pesos).toFixed(1) },
+      { Métrica: 'Máximo registado (kg)', Valor: Math.max(...pesos).toFixed(1) },
+      { Métrica: 'Ritmo médio (kg/dia)', Valor: desdeInicio !== null ? desdeInicio.toFixed(3) : '—' },
+      { Métrica: 'Ritmo médio (kg/semana)', Valor: mediaSemanal !== null ? mediaSemanal.toFixed(2) : '—' },
+      { Métrica: 'Tendência recente (kg/semana)', Valor: analise.tendencia ? analise.tendencia.kgSemana.toFixed(2) : '—' },
+      { Métrica: 'Progresso até ao objetivo (%)', Valor: pctObjetivo !== null ? pctObjetivo.toFixed(0) : '—' },
+      { Métrica: 'IMC', Valor: imc !== null ? imc.toFixed(1) : '—' },
+      { Métrica: 'Classificação IMC', Valor: imcClasse },
+      { Métrica: 'Gasto diário estimado (kcal)', Valor: tdee !== null ? tdee : '—' },
+      { Métrica: 'Total de registos', Valor: registos.length },
+    ];
+    const wsResumo = XLSX.utils.json_to_sheet(linhasResumo);
+    wsResumo['!cols'] = [{ wch: 30 }, { wch: 20 }];
+    XLSX.utils.book_append_sheet(wb, wsResumo, 'Resumo');
+
+    const nomeFicheiro = `peso-export-${isoDateOnly(new Date())}.xlsx`;
+    XLSX.writeFile(wb, nomeFicheiro);
+    setStatus('Ficheiro exportado: ' + nomeFicheiro);
+  } catch(e){
+    setStatus('Erro ao exportar: ' + e.message, true);
+  } finally {
+    btn.disabled = false;
   }
-  const wb = XLSX.utils.book_new();
-
-  // ---- Folha Registos ----
-  const linhasRegistos = registos.map(r => ({
-    Data: fmtData(r.date),
-    'Peso (kg)': r.peso,
-    Nota: r.nota
-  }));
-  const wsRegistos = XLSX.utils.json_to_sheet(linhasRegistos);
-  wsRegistos['!cols'] = [{ wch: 18 }, { wch: 10 }, { wch: 30 }];
-  XLSX.utils.book_append_sheet(wb, wsRegistos, 'Registos');
-
-  // ---- Folha Config ----
-  const atividadeLabels = { 1.2: 'Pouco ativo', 1.45: 'Moderadamente ativo', 1.7: 'Muito ativo' };
-  const linhasConfig = [
-    { Campo: 'Altura (cm)', Valor: config.altura ?? '—' },
-    { Campo: 'Data de nascimento', Valor: config.nascimento ? isoDateOnly(config.nascimento) : '—' },
-    { Campo: 'Sexo', Valor: config.sexo || '—' },
-    { Campo: 'Peso alvo (kg)', Valor: config.pesoAlvo ?? '—' },
-    { Campo: 'Nível de atividade', Valor: atividadeLabels[config.atividade] || config.atividade || '—' },
-    { Campo: 'Dia de controlo semanal', Valor: DIAS_NOMES[config.diaControlo] ?? '—' },
-    { Campo: 'Peso mínimo desejável (kg)', Valor: config.pesoMin ?? '—' },
-    { Campo: 'Peso máximo desejável (kg)', Valor: config.pesoMax ?? '—' },
-  ];
-  const wsConfig = XLSX.utils.json_to_sheet(linhasConfig);
-  wsConfig['!cols'] = [{ wch: 22 }, { wch: 22 }];
-  XLSX.utils.book_append_sheet(wb, wsConfig, 'Config');
-
-  // ---- Folha Resumo (estado calculado no momento da exportação) ----
-  const pesoAtual = registos[registos.length - 1].peso;
-  const pesoInicial = registos[0].peso;
-  const totalPerdido = pesoInicial - pesoAtual;
-  const desdeInicio = mediaPerdaPeriodo(999999);
-  const mediaSemanal = desdeInicio !== null ? desdeInicio * 7 : null;
-  const pesos = registos.map(r => r.peso);
-  const pctObjetivo = calcProgressPct();
-  const imc = config.altura ? calcIMC(pesoAtual, config.altura) : null;
-  const imcClasse = imc !== null ? classificaIMC(imc).texto : '—';
-  const idade = config.nascimento ? idadeAnos(config.nascimento) : null;
-  const tmb = (config.altura && idade !== null && config.sexo) ? calcTMB(pesoAtual, config.altura, idade, config.sexo) : null;
-  const tdee = tmb !== null ? Math.round(tmb * (config.atividade || 1.2)) : null;
-
-  const linhasResumo = [
-    { Métrica: 'Data de exportação', Valor: fmtData(new Date()) },
-    { Métrica: 'Peso inicial (kg)', Valor: pesoInicial.toFixed(1) },
-    { Métrica: 'Peso atual (kg)', Valor: pesoAtual.toFixed(1) },
-    { Métrica: 'Total perdido (kg)', Valor: totalPerdido.toFixed(1) },
-    { Métrica: 'Mínimo registado (kg)', Valor: Math.min(...pesos).toFixed(1) },
-    { Métrica: 'Máximo registado (kg)', Valor: Math.max(...pesos).toFixed(1) },
-    { Métrica: 'Ritmo médio (kg/dia)', Valor: desdeInicio !== null ? desdeInicio.toFixed(3) : '—' },
-    { Métrica: 'Ritmo médio (kg/semana)', Valor: mediaSemanal !== null ? mediaSemanal.toFixed(2) : '—' },
-    { Métrica: 'Progresso até ao objetivo (%)', Valor: pctObjetivo !== null ? pctObjetivo.toFixed(0) : '—' },
-    { Métrica: 'IMC', Valor: imc !== null ? imc.toFixed(1) : '—' },
-    { Métrica: 'Classificação IMC', Valor: imcClasse },
-    { Métrica: 'Gasto diário estimado (kcal)', Valor: tdee !== null ? tdee : '—' },
-    { Métrica: 'Total de registos', Valor: registos.length },
-  ];
-  const wsResumo = XLSX.utils.json_to_sheet(linhasResumo);
-  wsResumo['!cols'] = [{ wch: 30 }, { wch: 20 }];
-  XLSX.utils.book_append_sheet(wb, wsResumo, 'Resumo');
-
-  const nomeFicheiro = `peso-export-${isoDateOnly(new Date())}.xlsx`;
-  XLSX.writeFile(wb, nomeFicheiro);
-  setStatus('Ficheiro exportado: ' + nomeFicheiro);
 }
 
-// média móvel de 7 dias (janela de calendário, não apenas últimos N registos) — suaviza o ruído diário
+// média móvel de 7 dias (janela de calendário, não apenas os últimos N registos)
 function movingAverageSeries(dados, windowDays = 7){
   return dados.map((r) => {
     const inicioJanela = new Date(r.date.getTime() - (windowDays - 1) * 86400000);
@@ -1736,93 +1637,108 @@ function movingAverageSeries(dados, windowDays = 7){
 function renderForecast(){
   const el = document.getElementById('forecastBar');
   if (!el) return;
-  if (registos.length < 2){
-    el.textContent = 'Regista mais alguns pesos para veres uma previsão.';
-    return;
-  }
-  if (!config.pesoAlvo){
-    el.textContent = 'Define o peso alvo em Config para veres uma previsão de data.';
-    return;
-  }
+  if (registos.length < 2){ el.textContent = 'Regista mais alguns pesos para veres uma previsão.'; return; }
+  if (!config.pesoAlvo){ el.textContent = 'Define o peso alvo em Config para veres uma previsão de data.'; return; }
   const pesoAtual = registos[registos.length - 1].peso;
-  if (pesoAtual <= config.pesoAlvo){
-    el.innerHTML = '🎉 <b>Objetivo já atingido!</b>';
-    return;
-  }
+  if (pesoAtual <= config.pesoAlvo){ el.innerHTML = '<b>Objetivo já atingido.</b>'; return; }
   const ritmo = mediaPerdaPeriodo(30) ?? mediaPerdaPeriodo(999999);
-  if (ritmo === null || ritmo <= 0.001){
-    el.textContent = 'Sem tendência de perda clara nos últimos registos — sem previsão de data.';
-    return;
-  }
+  if (ritmo === null || ritmo <= 0.001){ el.textContent = 'Sem tendência de perda clara nos últimos registos — sem previsão de data.'; return; }
   const diasRestantes = Math.ceil((pesoAtual - config.pesoAlvo) / ritmo);
   const dataPrevista = new Date(registos[registos.length - 1].date.getTime() + diasRestantes * 86400000);
   el.innerHTML = `Ao ritmo atual (~${(ritmo*7).toFixed(2)} kg/sem): objetivo previsto para <b>${fmtDataCurta(dataPrevista)}</b>`;
 }
 
+function periodoParaDias(p){ return { '7d':7, '30d':30, '90d':90, '6m':182, '1y':365, 'all':null }[p] ?? null; }
+
+function corCSS(nome){ return getComputedStyle(document.body).getPropertyValue(nome).trim() || '#4F8D74'; }
+function hexToRgba(hex, alpha){
+  let h = hex.replace('#','');
+  if (h.length === 3) h = h.split('').map(c => c+c).join('');
+  const n = parseInt(h, 16);
+  if (isNaN(n)) return `rgba(79,141,116,${alpha})`;
+  return `rgba(${(n>>16)&255},${(n>>8)&255},${n&255},${alpha})`;
+}
+
 function renderChart(entrando = false){
-  renderForecast();
+  safe(renderForecast, 'forecast');
   const ctx = document.getElementById('weightChart');
-  if (!ctx || registos.length === 0) return;
+  const vazio = document.getElementById('chartEmpty');
+  if (!ctx || typeof Chart === 'undefined') return;
+
+  if (registos.length === 0){
+    ctx.classList.add('hidden'); vazio.classList.remove('hidden');
+    vazio.textContent = 'Sem registos para mostrar.';
+    return;
+  }
   let filtrado = registos;
   const agora = registos[registos.length-1].date;
-  if (currentPeriod === 'year'){
-    const limite = new Date(agora); limite.setFullYear(limite.getFullYear() - 1);
-    filtrado = registos.filter(r => r.date >= limite);
-  } else if (currentPeriod === 'month'){
-    const limite = new Date(agora); limite.setMonth(limite.getMonth() - 1);
-    filtrado = registos.filter(r => r.date >= limite);
-  } else if (currentPeriod === 'week'){
-    const limite = new Date(agora.getTime() - 7*86400000);
+  const dias = periodoParaDias(currentPeriod);
+  if (dias){
+    const limite = new Date(agora.getTime() - dias*86400000);
     filtrado = registos.filter(r => r.date >= limite);
   }
+  if (filtrado.length === 0){
+    ctx.classList.add('hidden'); vazio.classList.remove('hidden');
+    vazio.textContent = 'Sem registos neste período.';
+    if (weightChart){ weightChart.destroy(); weightChart = null; }
+    return;
+  }
+  ctx.classList.remove('hidden'); vazio.classList.add('hidden');
+
   const labels = filtrado.map(r => fmtDataCurta(r.date));
   const dados = filtrado.map(r => r.peso);
-
-  // média móvel calculada sobre TODO o histórico (janelas corretas), depois recortada ao período visível
   const mediasCompletas = movingAverageSeries(registos);
   const datasFiltradas = new Set(filtrado.map(r => r.date.getTime()));
   const mediasFiltradas = mediasCompletas.filter(m => datasFiltradas.has(m.date.getTime())).map(m => m.media);
 
-  const escuro = document.body.classList.contains('dark');
+  const corAccent = corCSS('--accent');
+  const corAccent2 = corCSS('--accent-2');
+  const corBorder = corCSS('--border');
+  const corFaint = corCSS('--text-faint');
 
   const canvasCtx = ctx.getContext('2d');
-  const alturaCanvas = ctx.clientHeight || 280;
+  const alturaCanvas = ctx.clientHeight || 240;
   const gradienteArea = canvasCtx.createLinearGradient(0, 0, 0, alturaCanvas);
-  if (escuro){
-    gradienteArea.addColorStop(0, 'rgba(111,175,143,0.38)');
-    gradienteArea.addColorStop(0.6, 'rgba(111,175,143,0.10)');
-    gradienteArea.addColorStop(1, 'rgba(111,175,143,0.0)');
-  } else {
-    gradienteArea.addColorStop(0, 'rgba(79,141,116,0.40)');
-    gradienteArea.addColorStop(0.6, 'rgba(79,141,116,0.10)');
-    gradienteArea.addColorStop(1, 'rgba(79,141,116,0.0)');
-  }
+  gradienteArea.addColorStop(0, hexToRgba(corAccent, 0.28));
+  gradienteArea.addColorStop(0.65, hexToRgba(corAccent, 0.06));
+  gradienteArea.addColorStop(1, hexToRgba(corAccent, 0));
 
-  const gradienteLinha = canvasCtx.createLinearGradient(0, 0, ctx.clientWidth || 300, 0);
-  if (escuro){
-    gradienteLinha.addColorStop(0, '#A8D5BA');
-    gradienteLinha.addColorStop(1, '#6FAF8F');
-  } else {
-    gradienteLinha.addColorStop(0, '#6FAF8F');
-    gradienteLinha.addColorStop(1, '#4F8D74');
-  }
+  const opcoesComuns = {
+    plugins: {
+      legend: { display: false },
+      tooltip: {
+        mode: 'index', intersect: false,
+        callbacks: { label: (item) => `${item.dataset.label}: ${item.parsed.y.toFixed(1)} kg` }
+      }
+    },
+    interaction: { mode: 'index', intersect: false },
+    scales: {
+      x: { ticks: { maxTicksLimit: 6, font: { size: 10 }, color: corFaint }, grid: { color: corBorder } },
+      y: { ticks: { font: { size: 10 }, color: corFaint }, grid: { color: corBorder } }
+    }
+  };
 
-  // ---- Já existe gráfico e não é uma entrada na aba: só atualizar dados, com transição suave ----
   if (weightChart && !entrando){
     weightChart.data.labels = labels;
     weightChart.data.datasets[0].data = dados;
-    weightChart.data.datasets[0].borderColor = gradienteLinha;
     weightChart.data.datasets[0].backgroundColor = gradienteArea;
+    weightChart.data.datasets[0].borderColor = corAccent;
+    weightChart.data.datasets[0].pointBackgroundColor = corAccent;
     weightChart.data.datasets[1].data = mediasFiltradas;
-    weightChart.options.animation = { duration: 550, easing: 'easeOutQuart' };
+    weightChart.data.datasets[1].borderColor = corAccent2;
+    weightChart.options.animation = { duration: 450, easing: 'easeOutQuart' };
+    weightChart.options.scales.x.ticks.color = corFaint;
+    weightChart.options.scales.y.ticks.color = corFaint;
+    weightChart.options.scales.x.grid.color = corBorder;
+    weightChart.options.scales.y.grid.color = corBorder;
     weightChart.update();
     return;
   }
 
-  // ---- Entrada na aba (ou primeira vez): recriar com desenho progressivo, ponto a ponto ----
   if (weightChart) weightChart.destroy();
 
-  const duracaoTotal = 1100;
+  const reduzMovimento = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const duracaoTotal = reduzMovimento ? 0 : 900;
   const atrasoPorPonto = dados.length ? duracaoTotal / dados.length : 0;
   const previousY = (context) => {
     if (context.index === 0) return context.chart.scales.y.getPixelForValue(context.dataset.data[0]);
@@ -1836,67 +1752,25 @@ function renderChart(entrando = false){
     data: {
       labels,
       datasets: [
-        {
-          label: 'Peso (kg)',
-          data: dados,
-          borderColor: gradienteLinha,
-          backgroundColor: gradienteArea,
-          borderWidth: 2.5,
-          tension: 0.25,
-          pointRadius: 2,
-          pointBackgroundColor: escuro ? '#A8D5BA' : '#4F8D74',
-          fill: true,
-          order: 2,
-        },
-        {
-          label: 'Média 7 dias',
-          data: mediasFiltradas,
-          borderColor: escuro ? '#E3B166' : '#D69E4D',
-          backgroundColor: 'transparent',
-          borderWidth: 2,
-          borderDash: [4, 3],
-          tension: 0.3,
-          pointRadius: 0,
-          fill: false,
-          order: 1,
-        }
+        { label: 'Peso', data: dados, borderColor: corAccent, backgroundColor: gradienteArea, borderWidth: 2.25, tension: 0.25, pointRadius: 2, pointBackgroundColor: corAccent, fill: true, order: 2 },
+        { label: 'Média 7 dias', data: mediasFiltradas, borderColor: corAccent2, backgroundColor: 'transparent', borderWidth: 1.75, borderDash: [4, 3], tension: 0.3, pointRadius: 0, fill: false, order: 1 },
       ]
     },
     options: {
       responsive: true,
       maintainAspectRatio: false,
       animation: {
-        x: {
-          type: 'number', easing: 'linear', duration: atrasoPorPonto,
-          from: NaN,
-          delay(context){
-            if (context.type !== 'data' || context.xStarted) return 0;
-            context.xStarted = true;
-            return context.index * atrasoPorPonto;
-          }
-        },
-        y: {
-          type: 'number', easing: 'linear', duration: atrasoPorPonto,
-          from: previousY,
-          delay(context){
-            if (context.type !== 'data' || context.yStarted) return 0;
-            context.yStarted = true;
-            return context.index * atrasoPorPonto;
-          }
-        }
+        x: { type:'number', easing:'linear', duration: atrasoPorPonto, from: NaN,
+          delay(context){ if (context.type !== 'data' || context.xStarted) return 0; context.xStarted = true; return context.index * atrasoPorPonto; } },
+        y: { type:'number', easing:'linear', duration: atrasoPorPonto, from: previousY,
+          delay(context){ if (context.type !== 'data' || context.yStarted) return 0; context.yStarted = true; return context.index * atrasoPorPonto; } }
       },
-      plugins: { legend: { display: false } },
-      scales: {
-        x: { ticks: { maxTicksLimit: 6, font: { size: 9 }, color: escuro ? '#93A69B' : '#8B979C' }, grid: { color: escuro ? '#2E3B34' : '#DCE7E0' } },
-        y: { ticks: { font: { size: 9 }, color: escuro ? '#93A69B' : '#8B979C' }, grid: { color: escuro ? '#2E3B34' : '#DCE7E0' } }
-      }
+      ...opcoesComuns
     }
   });
 }
-</script>
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.5.0/chart.umd.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+</script>
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 </body>
 </html>

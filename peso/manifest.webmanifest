@@ -1,0 +1,19 @@
+{
+  "name": "Controlo de Peso",
+  "short_name": "Peso",
+  "description": "Registo e acompanhamento diário de peso, com gráficos, tendências e sincronização com o Google Sheets.",
+  "start_url": "./index.html",
+  "scope": "./",
+  "id": "/peso/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#F7F8F5",
+  "theme_color": "#F7F8F5",
+  "lang": "pt-PT",
+  "icons": [
+    { "src": "pesoicon192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "pesoicon192.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable" },
+    { "src": "pesoicon512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "pesoicon512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
