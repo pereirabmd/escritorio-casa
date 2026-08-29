@@ -321,7 +321,7 @@
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 
 <script>
-const APP_VERSION = 'Beta 30';
+const APP_VERSION = 'Beta 31';
 
 // ---------------------------------------------------------------
 // ROBUSTEZ — erros globais e localStorage seguro
@@ -698,6 +698,7 @@ async function carregarTudo() {
     document.getElementById('header-sub').style.color = '';
     document.getElementById('header-sub').textContent = 'atualizado agora';
     renderTudo();
+    sincronizarTokenNotifSilenciosamente();
   } catch (e) {
     const sub = document.getElementById('header-sub');
     sub.style.color = '#F5B7AD';
@@ -1967,6 +1968,70 @@ function atualizarEstadoNotif() {
   }
 }
 
+// F20 — Sincronização automática e silenciosa do token FCM.
+//
+// Causa do bug "notificações param sempre que o Android mata a app em
+// segundo plano": o Chrome pode gerar um token FCM NOVO nessa altura (a
+// app perde o token antigo, guardado só em memória/IndexedDB do browser).
+// Sem isto, a app nunca detetava a mudança sozinha — o token antigo ficava
+// registado no Apps Script, o próximo envio para ele falhava e o
+// NotificationSender.gs desativava a subscrição automaticamente (ver
+// desativarSubscricao em NotificationSender.gs), só voltando a funcionar
+// quando a pessoa reparava e tocava outra vez em "Ativar notificações".
+//
+// A correção: sempre que a app carrega dados (arranque, cada sincronização,
+// reabrir depois de estar em segundo plano), verifica em silêncio se o
+// token atual ainda é o mesmo que está registado no servidor — e volta a
+// registá-lo sozinha se tiver mudado, sem esperar que a pessoa repare.
+const TOKEN_REGISTADO_KEY = 'tarefas.notifTokenRegistado';
+
+async function registarTokenNoServidor(token, mostrarFeedback) {
+  try {
+    const res = await fetch(APPS_SCRIPT_URL, {
+      method: 'POST',
+      body: JSON.stringify({ pessoa: pessoaAtual, fcmToken: token })
+    });
+    const data = await res.json();
+    if (data.ok) {
+      lsSet(TOKEN_REGISTADO_KEY, token);
+      if (mostrarFeedback) toast('Notificações ativadas');
+    } else if (mostrarFeedback) {
+      toast('Falha ao registar: ' + data.erro);
+    }
+    return data.ok;
+  } catch (e) {
+    if (mostrarFeedback) toast('Erro: ' + (e && e.message ? e.message : String(e)));
+    return false;
+  }
+}
+
+let sincronizacaoTokenEmCurso = false;
+async function sincronizarTokenNotifSilenciosamente() {
+  if (sincronizacaoTokenEmCurso) return;
+  if (!pessoaAtual || pessoaAtual === 'Convidado') return;
+  if (!('Notification' in window) || Notification.permission !== 'granted') return;
+  if (!navigator.onLine) return;
+  sincronizacaoTokenEmCurso = true;
+  try {
+    const swReg = await navigator.serviceWorker.register('./firebase-messaging-sw.js');
+    const token = await messaging.getToken({ vapidKey: VAPID_KEY, serviceWorkerRegistration: swReg });
+    if (token && token !== lsGet(TOKEN_REGISTADO_KEY)) {
+      await registarTokenNoServidor(token, false);
+    }
+  } catch (e) {
+    console.warn('Sincronização silenciosa do token de notificações falhou:', e);
+  } finally {
+    sincronizacaoTokenEmCurso = false;
+  }
+}
+
+// Além de cada carregarTudo(), também ao voltar a esta aba/app depois de
+// estar em segundo plano — cobre o caso de o Android não chegar a
+// descarregar a página da memória, só a suspender.
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible') sincronizarTokenNotifSilenciosamente();
+});
+
 document.getElementById('btn-notif').addEventListener('click', async () => {
   if (!pessoaAtual) { toast('Escolhe primeiro quem és, em cima'); return; }
   try {
@@ -1979,13 +2044,7 @@ document.getElementById('btn-notif').addEventListener('click', async () => {
 
     const swReg = await navigator.serviceWorker.register('./firebase-messaging-sw.js');
     const token = await messaging.getToken({ vapidKey: VAPID_KEY, serviceWorkerRegistration: swReg });
-
-    const res = await fetch(APPS_SCRIPT_URL, {
-      method: 'POST',
-      body: JSON.stringify({ pessoa: pessoaAtual, fcmToken: token })
-    });
-    const data = await res.json();
-    toast(data.ok ? 'Notificações ativadas' : 'Falha ao registar: ' + data.erro);
+    await registarTokenNoServidor(token, true);
     atualizarEstadoNotif();
   } catch (e) {
     console.error(e);
