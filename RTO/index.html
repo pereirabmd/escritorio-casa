@@ -76,6 +76,14 @@
 
   <div id="tabCalendario" role="tabpanel" aria-labelledby="tabBtnCal">
 
+    <div id="todayStrip" class="stat" role="status">
+      <div class="todayStripBadge" id="todayBadge">–</div>
+      <div class="todayStripText">
+        <div class="todayStripMain" id="todayMain">A verificar…</div>
+        <div class="todayStripSub" id="todaySub"></div>
+      </div>
+    </div>
+
     <button type="button" id="statSaldoBox" class="stat saldoHero">
       <div class="saldoHeroLabel">Saldo</div>
       <div class="saldoHeroValue" id="statSaldo">–</div>
@@ -108,6 +116,8 @@
       <button id="nextMonth" class="navBtn" aria-label="Mês seguinte">›</button>
       <button id="todayBtn" title="Ir para hoje">Hoje</button>
     </div>
+
+    <div id="monthCompare" class="hidden" role="status"></div>
 
     <div id="yearBanner" class="hidden"></div>
     <div id="adminBanner" class="hidden">
@@ -236,7 +246,7 @@
    CONFIGURAÇÃO — não alterar CLIENT_ID / SPREADSHEET_ID / nomes das folhas:
    é a ligação à folha de cálculo Google Sheets já em uso.
    ============================================================ */
-const APP_VERSION = 'v5.0.0';
+const APP_VERSION = 'v5.1.0';
 
 const ICON_EDIT = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>';
 const ICON_TRASH = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>';
@@ -375,7 +385,7 @@ window.onload = () => {
   document.getElementById('footerVersion').textContent = APP_VERSION;
   console.log('KLx RTO app', APP_VERSION);
   buildSkeletonGrid();
-  attachRippleAll('.btn-primary, .btn-secondary, .tabBtn, .navBtn, #todayBtn, #fabExport, .stat, .modeBtn');
+  attachRippleAll('.btn-primary, .btn-secondary, .tabBtn, .navBtn, #todayBtn, #fabExport, .stat:not(#todayStrip), .modeBtn');
   document.getElementById('changelogBtn').onclick = () => showChangelog();
   document.getElementById('genToggleBtn').onclick = () => {
     const panel = document.getElementById('genPanel');
@@ -447,7 +457,8 @@ window.onload = () => {
     themeBtn.setAttribute('aria-label', label);
     themeBtn.setAttribute('aria-pressed', String(isDark));
   }
-  const darkSaved = localStorage.getItem('rto_dark_mode') === '1';
+  let darkSaved = false;
+  try{ darkSaved = localStorage.getItem('rto_dark_mode') === '1'; }catch(err){}
   applyTheme(darkSaved);
   themeBtn.onclick = () => {
     const nowDark = !document.body.classList.contains('dark');
@@ -950,6 +961,10 @@ function renderMonth(){
         : feriasMode
           ? (() => onDayTap(dateStr, cell, toggleFeriasDay))
           : (() => onDayTap(dateStr, cell, cycleDay));
+      cell.tabIndex = 0;
+      cell.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' '){ e.preventDefault(); cell.onclick(); }
+      });
     }
     attachLongPress(cell, dateStr);
     grid.appendChild(cell);
@@ -1016,6 +1031,7 @@ function attachLongPress(cell, dateStr){
 
 /* ---------- Registo de alterações (changelog) ---------- */
 const CHANGELOG = [
+  { v:'5.1.0', c:['Faixa "Hoje: Escritório/Casa/Férias/Feriado" bem visível no topo do calendário, com o próximo feriado ou início de férias conhecido, quando aplicável', 'Comparação do mês em vista com o mês anterior (dias no escritório e em casa)', 'Calendário navegável pelo teclado (Tab + Enter/Espaço), não só por toque'] },
   { v:'5.0.0', c:['Folha de estilo e imagens (logótipos) passam a ficheiros próprios, em vez de embutidos no HTML — carregamento mais leve', 'App instalável a sério: manifest e service worker próprios, com aviso de nova versão e funcionamento offline (mostra os últimos dados sincronizados)', 'Marca de água decorativa removida; gradientes do cartão de Saldo e do botão de exportar substituídos por cor sólida', 'Proteção contra toques repetidos a marcar o mesmo dia em simultâneo', 'Acessibilidade: separadores e botões com semântica própria, foco visível, etiquetas nos campos de Notas', 'Ecrã com moldura discreta em ecrãs largos (tablet/computador)'] },
   { v:'4.0.0', c:['Redesenho visual: cartão de Saldo em destaque, sombras/elevação em vez de contornos, botão de exportar flutuante, efeito de toque (ripple), transições com mais movimento'] },
   { v:'3.10.1 – 3.10.2', c:['Botão "Gerar validações" mais evidente', 'Ícones SVG a substituir os últimos emojis (aviso, repetir, sem-rede)'] },
@@ -1488,6 +1504,114 @@ function updateTotals(){
 
   animateValue('statSaldoCond', saldoCond);
   document.getElementById('statSaldoCondBox').className = 'stat ' + saldoTier(saldoCond);
+
+  renderTodayStatus();
+  renderMonthCompare();
+}
+
+/* ---------- "Onde trabalho hoje?" — a pergunta mais imediata da app; deve
+   ser a primeira coisa percetível ao abrir. Usa cache local de feriados
+   (nunca o cache partilhado holidayNames/holidayYearCached, para não
+   interferir com o que o calendário estiver a mostrar num ano diferente
+   de hoje). ---------- */
+const holidayCacheLocal = new Map(); // ano -> Map(data->nome), só para uso fora do render do calendário
+function holidaysForYearLocal(year){
+  if (!holidayCacheLocal.has(year)) holidayCacheLocal.set(year, computeHolidays(year));
+  return holidayCacheLocal.get(year);
+}
+
+function getTodayStatus(){
+  const hoje = new Date(); hoje.setHours(0,0,0,0);
+  const iso = isoDate(hoje.getFullYear(), hoje.getMonth(), hoje.getDate());
+  const holidaysHoje = holidaysForYearLocal(hoje.getFullYear());
+  const mark = dayData[iso] || '';
+  const isWeekend = (hoje.getDay() === 0 || hoje.getDay() === 6);
+  const isAstreinte = astreinteDatesSet.has(iso);
+
+  if (mark === 'T') return { cls:'T', texto:'Escritório', sub: isAstreinte ? 'Astreinte' : '' };
+  if (mark === 'C') return { cls:'C', texto:'Casa', sub: isAstreinte ? 'Astreinte' : '' };
+  if (feriasDatesSet.has(iso)) return { cls:'F', texto:'Férias', sub:'' };
+  if (holidaysHoje.has(iso)) return { cls:'holiday', texto:'Feriado', sub: holidaysHoje.get(iso) };
+  if (isWeekend) return { cls:'', texto:'Fim de semana', sub: isAstreinte ? 'Astreinte' : '' };
+  if (isAstreinte) return { cls:'A', texto:'Astreinte', sub:'' };
+  return { cls:'', texto:'Ainda por definir', sub:'' };
+}
+
+/* Próximo dia diferente de hoje que já se sabe de antemão (feriado ou
+   início de férias já registado) — nunca inventa T/C futuros que a
+   pessoa ainda não marcou. */
+function getProximaMudanca(){
+  const hoje = new Date(); hoje.setHours(0,0,0,0);
+  const hojeIso = isoDate(hoje.getFullYear(), hoje.getMonth(), hoje.getDate());
+  const hojeEmFerias = feriasDatesSet.has(hojeIso);
+  for (let i = 1; i <= 60; i++){
+    const d = new Date(hoje); d.setDate(d.getDate() + i);
+    const iso = isoDate(d.getFullYear(), d.getMonth(), d.getDate());
+    const holidays = holidaysForYearLocal(d.getFullYear());
+    if (holidays.has(iso)){
+      return { dias: i, texto: `Feriado a ${i === 1 ? 'amanhã' : `${i} dias`} — ${holidays.get(iso)}` };
+    }
+    if (!hojeEmFerias && feriasDatesSet.has(iso)){
+      return { dias: i, texto: `Férias a começar ${i === 1 ? 'amanhã' : `daqui a ${i} dias`}` };
+    }
+  }
+  return null;
+}
+
+function renderTodayStatus(){
+  const strip = document.getElementById('todayStrip');
+  const badge = document.getElementById('todayBadge');
+  const main = document.getElementById('todayMain');
+  const sub = document.getElementById('todaySub');
+  if (!strip) return;
+
+  const status = getTodayStatus();
+  strip.className = 'stat' + (status.cls ? ' ' + status.cls : '');
+  badge.textContent = status.cls === 'holiday' ? 'f' : (status.cls || '–');
+  main.textContent = `Hoje: ${status.texto}`;
+
+  let subTexto = status.sub;
+  if (!subTexto){
+    const proxima = getProximaMudanca();
+    if (proxima) subTexto = proxima.texto;
+  }
+  sub.textContent = subTexto || '';
+}
+
+/* ---------- Comparação com o mês anterior (só mostra quando há dados no mês anterior) ---------- */
+function countTCForMonth(year, monthIndex){
+  let t = 0, c = 0;
+  const prefix = `${year}-${pad(monthIndex + 1)}-`;
+  Object.keys(dayData).forEach(date => {
+    if (!date.startsWith(prefix)) return;
+    if (feriasDatesSet.has(date)) return;
+    const v = dayData[date];
+    if (v === 'T') t++; else if (v === 'C') c++;
+  });
+  return { t, c };
+}
+
+function renderMonthCompare(){
+  const el = document.getElementById('monthCompare');
+  if (!el) return;
+  let prevMonth = currentMonth - 1, prevYear = currentYear;
+  if (prevMonth < 0){ prevMonth = 11; prevYear--; }
+  const cur = countTCForMonth(currentYear, currentMonth);
+  const prev = countTCForMonth(prevYear, prevMonth);
+  if (prev.t + prev.c === 0){ el.classList.add('hidden'); el.innerHTML = ''; return; }
+
+  const hoje = new Date();
+  const ehMesAtual = (currentYear === hoje.getFullYear() && currentMonth === hoje.getMonth());
+  const dT = cur.t - prev.t, dC = cur.c - prev.c;
+  const seta = (n) => n > 0 ? '↑' : n < 0 ? '↓' : '→';
+  const texto = (n) => n === 0 ? 'sem alteração' : `${seta(n)} ${Math.abs(n)} dia${Math.abs(n) === 1 ? '' : 's'}`;
+
+  el.classList.remove('hidden');
+  el.innerHTML = `
+    <div class="compareTitle">${ehMesAtual ? 'Este mês' : MESES[currentMonth]} vs ${MESES[prevMonth]}</div>
+    <div class="compareRow"><span>Escritório</span><span class="compareVal">${texto(dT)}</span></div>
+    <div class="compareRow"><span>Casa</span><span class="compareVal">${texto(dC)}</span></div>
+  `;
 }
 
 let lastCalc = null;
