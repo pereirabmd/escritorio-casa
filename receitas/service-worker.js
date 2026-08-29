@@ -1,4 +1,4 @@
-const CACHE_NAME = 'receitas-shell-v1';
+const CACHE_NAME = 'receitas-shell-v2';
 const SHELL_FILES = [
   './',
   './index.html',
@@ -33,13 +33,22 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
+  // Cache-first com atualização em segundo plano: o index.html embute
+  // imagens em base64 e pode passar de 600 KB — esperar sempre pela rede
+  // antes de mostrar algo (como acontecia antes) torna o arranque lento
+  // mesmo quando já existe uma cópia local válida. Uma cópia nova só
+  // substitui a cache para a PRÓXIMA visita (ver aviso "nova versão
+  // disponível" no index.html).
   event.respondWith(
-    fetch(event.request)
-      .then((response) => {
-        const copy = response.clone();
-        caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy)).catch(() => {});
+    caches.match(event.request).then((cached) => {
+      const network = fetch(event.request).then((response) => {
+        if (response && response.ok) {
+          const copy = response.clone();
+          caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy)).catch(() => {});
+        }
         return response;
-      })
-      .catch(() => caches.match(event.request))
+      }).catch(() => cached);
+      return cached || network;
+    })
   );
 });
