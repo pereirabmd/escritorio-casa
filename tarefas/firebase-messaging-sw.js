@@ -27,18 +27,25 @@ const messaging = firebase.messaging();
 // ---------------------------------------------------------------
 // PARTE 1 — Cache da app shell
 // ---------------------------------------------------------------
-const CACHE_NAME = 'tarefas-casa-v2';
+const CACHE_NAME = 'tarefas-casa-v3';
 const APP_SHELL = [
   './',
   './index.html',
+  './styles.css',
   './manifest.json',
   './icon-192.png',
-  './icon-512.png'
+  './icon-512.png',
+  './about-logo.png'
 ];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => cache.addAll(APP_SHELL))
+    caches.open(CACHE_NAME)
+      .then((cache) => cache.addAll(APP_SHELL))
+      .catch((e) => console.warn('Pré-cache do app shell falhou parcialmente:', e))
+    // Uma falha ao pré-cachear (ex: blip de rede num único ficheiro) não deve
+    // impedir a instalação do service worker — o fetch handler cache-first
+    // continua a cachear cada recurso normalmente à medida que é pedido.
   );
   self.skipWaiting();
 });
