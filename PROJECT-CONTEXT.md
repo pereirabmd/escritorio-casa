@@ -1,100 +1,142 @@
 # PROJECT-CONTEXT.md
 
-Contexto de projeto para o repositório `escritorio-casa`. Atualizado após duas sessões de trabalho de 29 de agosto de 2026: a primeira auditou e melhorou 5 das apps do repositório; a segunda (mais tarde, no mesmo dia) não alterou código deste repositório — só documenta aqui, na secção `ciclismo/`, uma integração externa nova que passou a produzir ficheiros no formato que essa app lê.
+Contexto de projeto para o repositório `escritorio-casa`. Descreve o **estado atual** de cada app e as decisões que não são óbvias a partir do código. Última alteração: 30 de agosto de 2026 — reescrita do parser e redesenho visual de `ciclismo/` (Beta 23).
 
 ## Visão geral
 
-Este repositório não é uma aplicação única — é uma coleção de **PWAs pessoais independentes**, uma por pasta, cada uma um único `index.html` autossuficiente (mais um punhado de ficheiros irmãos: CSS, service worker, manifest, ícones). Não há build, bundler nem framework: cada app é HTML/CSS/JS servido tal e qual. Deploy é feito via **GitHub Pages** (build "legacy", serve diretamente da branch `main`, sem GitHub Actions), em `https://pereirabmd.github.io/escritorio-casa/<pasta>/`.
+Este repositório não é uma aplicação única — é uma coleção de **PWAs pessoais independentes**, uma por pasta, cada uma um único `index.html` autossuficiente (mais um punhado de ficheiros irmãos: service worker, manifest, ícones). Não há build, bundler nem framework: cada app é HTML/CSS/JS servido tal e qual. O deploy é feito via **GitHub Pages** (build "legacy", diretamente da branch `main`, sem GitHub Actions), em `https://pereirabmd.github.io/escritorio-casa/<pasta>/`.
 
-Pastas com apps ativas: `peso/`, `tarefas/`, `RTO/`, `receitas/`, `ciclismo/`. Há ainda `enfermagem/`, `receitas` (duplicado histórico em `enfermagemCamila.html`), `convidados/`, `xadrez/` que não fizeram parte desta sessão.
+Apps ativas: `peso/`, `tarefas/`, `RTO/`, `receitas/`, `ciclismo/`. Existem ainda `enfermagem/`, `convidados/`, `xadrez/` e um duplicado histórico em `enfermagemCamila.html`, que não têm sido mantidos.
 
 ## Convenções partilhadas entre apps
 
-- **Autenticação Google**: `peso`, `tarefas`, `RTO`, `receitas` e `ciclismo` usam o mesmo `CLIENT_ID` OAuth (`108256538530-fgunbb52s7f3s9aurfpjtaf01v8fjbph.apps.googleusercontent.com`), via Google Identity Services (token client), sessão persistida em `localStorage`.
+- **Autenticação Google**: `peso`, `tarefas`, `RTO`, `receitas` e `ciclismo` usam o mesmo `CLIENT_ID` OAuth (`108256538530-fgunbb52s7f3s9aurfpjtaf01v8fjbph.apps.googleusercontent.com`), via Google Identity Services (token client), com a sessão persistida em `localStorage`.
 - **Versionamento**: cada app tem a sua própria convenção, propositadamente não unificada — `peso` e `RTO` usam versão semântica (ex.: `v5.1.0`); `tarefas`, `receitas` e `ciclismo` usam "Beta N". O número aparece sempre no rodapé.
-- **Service workers**: padrão estabelecido nesta sessão em todas as apps — só intercetam pedidos GET da **mesma origem** (nunca Drive/Sheets/APIs externas, que têm de ir sempre à rede), estratégia cache-first com atualização em segundo plano, e um banner "nova versão disponível" ligado ao evento `controllerchange`.
-- **`localStorage`**: sempre protegido com `try/catch`, tanto leituras como escritas (helpers `lsGet`/`lsSet`/`lsRemove` ou equivalente, consoante a app).
-- **Conteúdo importado pelo utilizador** (notas de treino, receitas em `.txt`, nomes de tarefas/pessoas) é sempre tratado como não confiável antes de ir para `innerHTML` — cada app tem a sua função `esc()`/`escapeHtml()`.
-- **`.gs` (Google Apps Script)**: só existem para `tarefas/` (`Code.gs`, `InstanciasGenerator.gs`, `Manutencao.gs`, `NotificationSender.gs`, `Triggers.gs`, `WebApp.gs`). **O repositório é só uma cópia de referência — alterações a ficheiros `.gs` não têm efeito nenhum até serem copiadas manualmente para o projeto em script.google.com e reimplementadas.**
+- **Service workers**: só intercetam pedidos GET da **mesma origem** — nunca Drive, Sheets ou APIs externas, que têm de ir sempre à rede. Estratégia cache-first com atualização em segundo plano, e um banner "nova versão disponível" ligado ao evento `controllerchange`. Sempre que o HTML muda, é preciso incrementar o `CACHE` do service worker dessa app.
+- **`localStorage`**: sempre protegido com `try/catch`, tanto em leituras como em escritas (helpers `lsGet`/`lsSet`/`lsRemove` ou equivalente).
+- **Conteúdo importado pelo utilizador** (planos de treino, receitas em `.txt`, nomes de tarefas e de pessoas) é tratado como **não confiável** antes de ir para `innerHTML` — cada app tem a sua função `esc()`/`escapeHtml()`.
+- **`.gs` (Google Apps Script)**: só existem para `tarefas/`. **O repositório é apenas uma cópia de referência — alterações a ficheiros `.gs` não têm efeito nenhum até serem copiadas manualmente para o projeto em script.google.com e reimplementadas.**
 
-## Lição já registada em memória (sessões futuras)
+## Lição registada em memória
 
-O utilizador por vezes cola um pedido escrito para o domínio de uma app enquanto nomeia outra pasta na primeira linha (aconteceu logo no início desta sessão: um pedido inteiramente sobre controlo de peso apontava para `tarefas/index.html`). Confirmar sempre que o conteúdo real da pasta nomeada corresponde ao que o resto do pedido descreve antes de começar trabalho grande — ver `repo-structure-multi-app.md` na memória.
+O utilizador por vezes escreve um pedido para o domínio de uma app enquanto nomeia outra pasta na primeira linha. Confirmar sempre que o conteúdo real da pasta nomeada corresponde ao que o resto do pedido descreve antes de começar trabalho grande — ver `repo-structure-multi-app.md` na memória.
 
 ---
 
 ## `peso/` — Controlo de peso
 
-Registo diário de peso sincronizado com Google Sheets (API direta, sem Apps Script). `SPREADSHEET_ID: 1UzEXtl7w6jMsk-c7Pkt3kq97AXL6XIiwTrjOYUaYFLs`. Versão semântica, atualmente `v4.0.0 R1`.
+Registo diário de peso sincronizado com Google Sheets (API direta, sem Apps Script). `SPREADSHEET_ID: 1UzEXtl7w6jMsk-c7Pkt3kq97AXL6XIiwTrjOYUaYFLs`. Versão `v4.0.0 R1`.
 
-Já implementado (auditado, não alterado nesta sessão): tendência por regressão linear (não só os dois últimos pesos), evolução mensal, melhor/pior semana, previsão de data ao objetivo, TDEE (Mifflin-St Jeor) e IMC classificados, sequência de dias, desfazer eliminação com undo otimista, PWA completa com changelog extenso.
-
-**Esta sessão**: só auditoria de leitura — nenhum código alterado.
+Funcionalidades: tendência por regressão linear (não apenas os dois últimos pesos), evolução mensal, melhor/pior semana, previsão de data ao objetivo, TDEE (Mifflin-St Jeor) e IMC classificados, sequência de dias, e desfazer eliminação com undo otimista.
 
 ## `tarefas/` — Tarefas de Casa
 
-Gestão de tarefas domésticas partilhada entre várias pessoas. CRUD direto à API do Google Sheets (`SHEET_ID: 1ZwA9RqwCbOlfWLmYZWFsE5iq2oUqr-XZru_HDy6NjjI`) + backend em Google Apps Script para geração agendada de instâncias recorrentes e notificações push (Firebase Cloud Messaging, projeto `bmdpereira-5a8f4`). Único service worker (`firebase-messaging-sw.js`) faz cache **e** push — nunca criar um segundo `service-worker.js` (concorreriam pelo mesmo scope). Versão "Beta N", atualmente **Beta 31**.
+Gestão de tarefas domésticas partilhada entre várias pessoas. CRUD direto à API do Google Sheets (`SHEET_ID: 1ZwA9RqwCbOlfWLmYZWFsE5iq2oUqr-XZru_HDy6NjjI`) mais um backend em Google Apps Script para geração agendada de instâncias recorrentes e notificações push (Firebase Cloud Messaging, projeto `bmdpereira-5a8f4`). Versão **Beta 32**.
 
-**Alterações desta sessão** (commits `a2d6cbe`, `52453e8`, `82d9a0e`):
-- Correção de um bloqueio real: `#login-screen` era referenciado no JS mas não existia no HTML — login silencioso falhado deixava a app presa.
-- Escaping de XSS aplicado sistematicamente a conteúdo interpolado em `innerHTML`.
-- `sheetsAppend`/`sheetsUpdate` deixaram de fingir sucesso quando a rede falha; ações otimistas (marcar feita, saltar, reagendar) revertem se a gravação falhar.
-- `LockService` à volta de `gerarInstancias()` em `InstanciasGenerator.gs`, para impedir duplicação de tarefas quando o trigger horário e o botão manual corressem em simultâneo. **⚠️ Pendente de redeploy manual no Apps Script.**
-- Filtro Todas/Minhas/pessoa e secção "Amanhã" na tab Hoje; progresso do dia; atribuição de conclusão visível.
-- Modal de reagendar substitui `prompt()` nativo; validação de recorrência incompleta.
-- Banners de "sem ligação" e "nova versão disponível"; acessibilidade (ARIA tabs, `role="dialog"`, skip-link); `localStorage` protegido.
-- **Bug de notificações resolvido**: o token FCM só era pedido ao servidor quando se clicava manualmente em "Ativar notificações" — se o Android matasse a app em segundo plano e o Chrome gerasse um token novo, a app nunca reparava sozinha, e o servidor desativava a subscrição na primeira falha de envio. Agora `sincronizarTokenNotifSilenciosamente()` corre a cada `carregarTudo()` e sempre que a app volta a primeiro plano (`visibilitychange`), renovando o token sozinha sem intervenção.
-- `NotificationSender.gs`: `registarResultadoEnvio()` só desativa uma subscrição ao fim de **2 falhas seguidas** (antes: 1), usando `PropertiesService` por endpoint. **⚠️ Pendente de redeploy manual no Apps Script.**
+Pontos a não perder de vista:
+
+- Existe **um único service worker** (`firebase-messaging-sw.js`) que faz cache **e** push. Nunca criar um segundo `service-worker.js` — competiriam pelo mesmo scope.
+- As três funções de acesso ao Sheets partilham `sheetsFetch()`, que deteta o 401, **espera** pela renovação silenciosa do token e repete o pedido uma vez. Antes disto, só a leitura recuperava de um token expirado; as escritas falhavam para sempre em sessões cujo token expirasse noutro momento que não o do dono principal.
+- O corpo das respostas de erro da API é guardado em `ultimoErroSheets` e aparece nos toasts — 401/403/400 não podem voltar a ser indistinguíveis.
+- `sincronizarTokenNotifSilenciosamente()` corre a cada `carregarTudo()` e em `visibilitychange`, renovando sozinho o token FCM. Sem isto, se o Android matasse a app em segundo plano e o Chrome gerasse um token novo, as notificações paravam em silêncio.
+- `NotificationSender.gs` só desativa uma subscrição ao fim de **2 falhas seguidas** (antes: 1), usando `PropertiesService` por endpoint.
 
 ## `RTO/` — KLx RTO (dias de escritório/casa)
 
-Calendário de dias no escritório/em casa, quota anual e saldo. API direta ao Google Sheets, sem Apps Script (`SPREADSHEET_ID: 1u4QOqKMEOe8qq_kU_Cw5c8Vj4qQ0AHE5gXj9hPood9c`). Feriados portugueses calculados dinamicamente (algoritmo da Páscoa), saldo condicional (astreinte, suspensão RTO), exportação Excel, atalhos de PWA para marcar hoje T/C diretamente do ícone instalado. Versão semântica, atualmente **v5.1.0**.
+Calendário de dias no escritório/em casa, quota anual e saldo. API direta ao Google Sheets, sem Apps Script (`SPREADSHEET_ID: 1u4QOqKMEOe8qq_kU_Cw5c8Vj4qQ0AHE5gXj9hPood9c`). Versão **v5.1.0**.
 
-**Alterações desta sessão** (commits `65fc349`, `8be8f8c`):
-- Faixa "Hoje" (estado atual + próxima mudança conhecida — feriado ou início de férias) no topo do calendário.
-- Comparação do mês em vista com o mês anterior.
-- Calendário navegável por teclado; `localStorage` do modo noturno protegido.
-- **Bug de layout corrigido**: a classe partilhada `.stat` define `width:100%`, e tanto `#todayStrip` como `.stat.saldoHero` têm margem lateral própria (16px) — a combinação fazia essas duas caixas ultrapassarem a grelha de estatísticas por baixo delas em ecrãs de telemóvel. Corrigido com `width:calc(100% - 32px)` só nesses dois seletores. Verificado numericamente (não só visualmente) com uma página de teste renderizada em Chromium headless.
+Feriados portugueses calculados dinamicamente (algoritmo da Páscoa), saldo condicional (astreinte, suspensão RTO), exportação Excel, faixa "Hoje" com a próxima mudança conhecida, comparação com o mês anterior, e atalhos de PWA para marcar hoje T/C diretamente do ícone instalado.
+
+Detalhe de CSS a não repetir: a classe partilhada `.stat` define `width:100%`, e tanto `#todayStrip` como `.stat.saldoHero` têm margem lateral própria de 16px — a combinação fazia essas caixas ultrapassarem a grelha por baixo delas em telemóvel. Ambas usam `width:calc(100% - 32px)`.
 
 ## `receitas/` — Receitas
 
-Livro de receitas pessoal. Cada receita é um ficheiro `.txt` (formato próprio `CHAVE: valor` + blocos `INGREDIENTES:`/`PASSOS:`/`NOTAS:`/`TAGS:`) guardado numa pasta "Receitas" no **Google Drive** (não Sheets). `SCOPES: drive.file`. Ficheiro grande (~640 KB) porque tem logótipos/ícones embutidos em base64. Versão "Beta N", atualmente **Beta 18**.
+Livro de receitas pessoal. Cada receita é um ficheiro `.txt` (formato próprio `CHAVE: valor` mais blocos `INGREDIENTES:`/`PASSOS:`/`NOTAS:`/`TAGS:`) guardado numa pasta "Receitas" no **Google Drive** — não em Sheets. `SCOPES: drive.file`. Ficheiro grande (~640 KB) por causa dos logótipos embutidos em base64. Versão **Beta 18**.
 
-Já implementado (auditado, não alterado): escalamento de porções com frações e decimais, modo cozinhar passo a passo, temporizador que também dispara o Relógio nativo do Android, partilha nativa, favoritos.
+Funcionalidades: escalamento de porções com frações e decimais, modo cozinhar passo a passo, temporizador que dispara o Relógio nativo do Android, partilha nativa, favoritos, e um editor dentro da própria app que faz `PATCH` ao ficheiro existente no Drive (antes, editar fora da app e voltar a carregar criava um **duplicado**, porque o upload nunca verificava nomes já existentes).
 
-**Alterações desta sessão** (commit `a2545a8`):
-- **Editor de receitas dentro da app**: antes só era possível criar (upload de `.txt`) e eliminar — editar exigia alterar o ficheiro fora da app e voltar a carregá-lo, o que criava um **duplicado** no Drive (o upload nunca verificava nomes já existentes). Agora um `<textarea>` com o mesmo texto reutiliza o parser existente e faz `PATCH` ao ficheiro já existente no Drive.
-- "Nova receita em branco" com o formato pré-preenchido como exemplo, no mesmo editor.
-- Pesquisa passa a incluir nomes de ingredientes (antes só título/descrição/categoria/tags).
-- Arranque offline-first: se a sessão falhar mas houver receitas guardadas no aparelho, mostra-as em vez de bloquear no login (cache local mudou de schema v1→v2 para guardar também o texto bruto, necessário para o editor — só limpa a cache local uma vez, o Drive é sempre a fonte de verdade).
-- `service-worker.js`: passou de network-first para cache-first com atualização em segundo plano (arranque mais rápido dado o tamanho do ficheiro), `CACHE_NAME` v2.
-- Acessibilidade: chips de categoria passam a `<button>`; cartões de receita mantidos como `<div role="button" tabindex="0">` (não podem ser `<button>` porque contêm botões de ação aninhados — inválido em HTML).
+Arranque offline-first: se a sessão falhar mas houver receitas guardadas no aparelho, mostra-as em vez de bloquear no login. O Drive é sempre a fonte de verdade.
 
-## `ciclismo/` — Plano de Treino
-
-**Importante**: esta app mostra o **plano semanal escrito pelo treinador** (dia a dia, texto livre com "Sessão N:", `Total do dia:`, toggle feito/não-feito), sincronizado com uma pasta "ciclismo" no **Google Drive** — não é um histórico de treinos realizados com métricas de GPS/potência/FC, apesar de um pedido anterior ter assumido esse formato. Também lê o Sheet do `peso` (mesmo `SPREADSHEET_ID`) para mostrar o peso mais recente na aba "Atleta" — integração cruzada deliberada entre apps. Sem Apps Script. Versão "Beta N", atualmente **Beta 22**.
-
-**Alterações desta sessão** (commit `999fd6f`):
-- **Bug de segurança/correção corrigido**: o service worker intercetava e cacheava *todos* os pedidos GET, incluindo Drive, Sheets (peso) e a API do tempo — dados privados e sempre-mutáveis a serem servidos em cache desatualizada. Restringido à mesma origem, `CACHE_NAME` v23.
-- Banner de "nova versão disponível"; `localStorage` protegido em leituras e escritas (antes só leituras); `esc()` reforçado a escapar aspas.
-- Faixa "Hoje" (só quando o plano aberto cobre mesmo a data de hoje) e tabela "Evolução do Plano" entre semanas já sincronizadas do Drive — rotulada explicitamente como volume previsto, não dados reais de treino.
-- Avisos de importação melhorados (ficheiro não reconhecível; vários ficheiros escolhidos sem Drive disponível).
-- Acessibilidade: foco visível, ARIA tabs, skip-link.
-
-**Integração externa decidida numa sessão posterior, 29 de agosto de 2026 (nenhum código deste repositório foi alterado)**:
-- Um projeto separado, `~/garmin-dashboard` (repositório git próprio, fora de `escritorio-casa`, com o seu próprio `README.md`/systemd service), ganhou um separador "Plano Semanal" que **gera** o `.txt` que esta app lê e o **envia** para a mesma pasta "ciclismo" no Google Drive.
-- Pedido inicial do utilizador era automatizar por completo (cron/systemd, todos os domingos); **decisão explícita do utilizador foi recusar essa automação** — a geração continua manual: o utilizador escolhe no dashboard os dias em que vai treinar nessa semana e só depois de rever o ficheiro (botão "Ver resumo") decide descarregar e/ou enviar para o Drive.
-- O conteúdo de cada sessão (tipo de treino, intensidade, duração) é escrito pela API da Claude a partir do histórico real de carga/volume do Garmin — o utilizador escolheu esta opção em vez de um gerador por regras fixas, quando confrontado com as duas.
-- O formato exato foi obtido por engenharia inversa do parser desta app (`parseTrainingFile`, `DAY_ORDER`, `splitByMarker`): marcadores `=====` pareados por secção, blocos de dia `--- COD DD-MM (Estado) ---` (COD = 3 letras: SEG/TER/QUA/QUI/SEX/SAB/DOM), `Sessão N:`, bullets `- `, `Total do dia:`. **Se este parser mudar no futuro, `~/garmin-dashboard/sync/plan_generator.py` tem de ser atualizado manualmente em sintonia — não há nenhuma ligação automática entre os dois repositórios.**
-- Reutiliza deliberadamente o mesmo `CLIENT_ID` OAuth desta app (ver "Convenções partilhadas" acima) em vez de criar um cliente novo, para que a pasta "ciclismo" do Drive fique visível a ambos os projetos.
+Os cartões de receita são `<div role="button" tabindex="0">` e **não** `<button>`, porque contêm botões de ação aninhados — o que seria HTML inválido.
 
 ---
 
-## Entregável desta sessão ainda por agir
+## `ciclismo/` — Plano de Treino
 
-**[Backlog das Apps](https://claude.ai/code/artifact/b9db4308-45f8-47e8-b48a-16587de08cd0)** — artifact publicado com 24 ideias de melhoria/funcionalidade organizadas pelas 5 apps, com prioridade sugerida. Nada daquilo foi implementado.
+**Importante**: esta app mostra o **plano semanal escrito pelo treinador** — não é um histórico de treinos realizados com métricas de GPS/potência/FC, apesar de um pedido anterior ter assumido esse formato. Os ficheiros `.txt` são sincronizados a partir de uma pasta "ciclismo" no **Google Drive**. A app lê também o Sheet do `peso` (mesmo `SPREADSHEET_ID`) para mostrar o peso mais recente — integração cruzada deliberada entre apps. Sem Apps Script. Versão **Beta 23**, service worker `ciclismo-shell-v24`.
+
+### Formato do ficheiro que o parser lê
+
+Há **duas** origens de ficheiros, com formas diferentes, e o parser tem de aceitar as duas:
+
+| | Ficheiros do treinador | Gerados pelo `~/garmin-dashboard` |
+|---|---|---|
+| Marcador de secção | 60 caracteres `=` | 5 caracteres `=` |
+| Cabeçalho de dia | `--- SEGUNDA 2026-09-01 (Planeado) ---` | `--- SEG 01-09 (Planeado) ---` |
+| Data | ISO completa | `DD-MM`, sem ano |
+| Corpo do dia | campos `Tipo:`, `Duracao alvo:`, `Distancia estimada:` | bullets `- ` sob `Sessão 1:` |
+
+Ambas as formas usam `Total do dia:` e podem ter várias sessões por dia. Datas `DD-MM` são normalizadas para ISO usando o ano deduzido de `Semana:`/`Ficheiro gerado em:`, com correção automática quando a semana atravessa a viragem do ano. **Internamente só circulam datas ISO** — é o formato usado para comparar com "hoje", indexar a previsão do tempo e ordenar semanas.
+
+### Bug corrigido em Beta 23 (o motivo desta reescrita)
+
+Um dia do plano aparecia cinzento, sem cartão, indistinguível de um dia marcado como `Indisponivel`, apesar de o `.txt` o descrever como treino Z2.
+
+Causa: `splitByMarker` ancorava a expressão regular do cabeçalho de dia em `^---`, na **coluna 0**. Bastava um espaço à frente da linha `--- TERCA ... ---` para o dia deixar de ser reconhecido: desaparecia do mapa de dias **e** as suas linhas eram absorvidas pelo bloco do dia anterior. Como `renderSemana` desenhava um dia ausente com uma linha cinzenta igual à de um dia de descanso, uma falha de leitura do ficheiro era indistinguível de uma decisão do treinador.
+
+Duas hipóteses que foram testadas e **descartadas**: não era o tratamento de `TERCA` sem acento (o matching usa `stripAccents`, e `TERCA`/`TERÇA`/`TER` resolvem todos para o mesmo dia), nem a quebra de linha dentro do campo `Estrutura:` da Quarta.
+
+### O que mudou no parser
+
+- Os cabeçalhos de dia passam a ser testados sobre a linha **trimada**, e o nome do dia, a data e o estado são identificados por posição relativa em vez de por uma ordem fixa. O estado é capturado com âncora no fim da linha, para não apanhar parênteses que apareçam no meio do texto.
+- As secções deixaram de ser emparelhadas por índice (marcador 0-1, 2-3, ...), que desalinhava todas as secções seguintes quando houvesse um marcador a mais ou a menos. Agora um marcador seguido de um título abre sempre uma secção, com ou sem marcador de fecho.
+- Um dia cujo nome não seja reconhecível mas que tenha data válida é atribuído ao dia da semana **deduzido da data**.
+- Os campos `Campo: valor` passam a ser itens tipados (`kv`) no momento do parse, em vez de serem redescobertos por outra expressão regular na altura de desenhar — as duas podiam discordar.
+- Continuações de linha só se juntam à linha anterior quando a própria linha não é um campo nem um bullet. Há ficheiros que indentam também os próprios campos (`  Tipo: Z2` dentro de `Sessão 1:`), por isso a indentação sozinha não chega.
+- Distância e duração vêm primeiro dos campos das sessões e só depois, se nenhuma sessão os declarar, da linha `Total do dia:`. Antes eram procurados só em texto solto, e ficavam quase sempre a zero com os ficheiros reais.
+- A classificação do dia passou a ter quatro níveis (descanso / base / moderado / intenso), com Z3 separado de Z4-Z5. Um dia só é de descanso se o ficheiro o disser — primeiro o estado do cabeçalho, depois `Total do dia:`, e só em último recurso o corpo. Menções como "sessão forte **cancelada**" já não classificam o dia como intenso.
+- **Um dia em falta deixou de ser desenhado como um dia de descanso**: aparece agora a âmbar, tracejado, com "sem bloco no ficheiro", e é contado no diagnóstico. Os avisos do parser são mostrados na aba "Mais", em vez de desaparecerem em silêncio.
+
+### O que mudou na segurança do parser
+
+O `.txt` vem do Drive ou de um ficheiro escolhido à mão: é entrada não confiável.
+
+- **Limites de tamanho** (`LIMIT`): 512 KB, 20 000 linhas, 4 000 caracteres por linha, 200 itens por sessão, 24 sessões por dia, 40 secções. O que for cortado é comunicado como aviso.
+- **Caracteres de controlo e marcas bidireccionais** (U+202A-U+202E, U+2066-U+2069, zero-width, NUL) são removidos antes de tudo o resto — impedem um ficheiro de desenhar texto que se lê ao contrário do que diz (*Trojan Source*).
+- **Poluição de protótipo**: o mapa de dias e os restantes mapas indexados por texto do ficheiro usam `Object.create(null)`, e a cache de sessões feitas rejeita as chaves `__proto__`/`constructor`/`prototype`.
+- **`sanitizePlan()`**: o que vem de `localStorage` é revalidado campo a campo antes de chegar ao render — uma cache escrita por outra versão, truncada ou adulterada não pode rebentar a app. O `renderAll` tem ainda um `try/catch` que mostra uma saída em vez de deixar o ecrã em branco.
+- **Injeção MIME no upload para o Drive**: a fronteira do corpo multipart era `'ciclismo-' + Date.now()`, perfeitamente adivinhável. Um `.txt` que a contivesse partia o pedido em partes extra. Agora é aleatória (`crypto.getRandomValues`) e verificada contra o conteúdo antes de ser usada.
+- **Coordenadas da previsão do tempo** vindas da cache são validadas como números dentro do intervalo geográfico válido antes de entrarem numa URL.
+- Sem `new RegExp` construído a partir de dados do ficheiro; a cache de textos do Drive é limitada a 24 ficheiros; só entram no parser ficheiros `.txt` de tamanho plausível.
+
+Estas mudanças estão cobertas por um conjunto de testes (XSS, poluição de protótipo, Trojan Source, ficheiros gigantes, entrada degenerada, cache adulterada, datas inválidas) corridos em Node contra as funções puras do ficheiro. Os testes não estão no repositório — o padrão do repositório é não ter infraestrutura de build nem de teste.
+
+### Redesenho visual (Beta 23)
+
+O esquema de cores foi mantido exatamente (as mesmas variáveis CSS, claro e escuro); o layout foi todo refeito:
+
+- Navegação passou de separadores no topo para uma **barra inferior** com quatro ícones, ao alcance do polegar.
+- Barra de topo compacta, com as ações em botões de ícone e o seletor de semana numa linha própria.
+- Um **cartão "Hoje"** com anel de progresso das sessões feitas, etiquetas de duração/distância/zona e o próximo treino.
+- Grelha de quatro estatísticas, **barra empilhada de carga por zona**, e previsão a 7 dias num carrossel horizontal.
+- Os dias passaram a uma **linha temporal** com carris e pontos coloridos pela intensidade; cada dia é um cartão colapsável (os dias já passados começam fechados).
+- Estados visuais distintos para dia de treino, dia de descanso e dia em falta.
+
+### Contrato com o `~/garmin-dashboard`
+
+Um projeto separado, `~/garmin-dashboard` (repositório git próprio, fora de `escritorio-casa`), tem um separador "Plano Semanal" que **gera** um `.txt` no formato que esta app lê e o envia para a mesma pasta "ciclismo" do Drive. O conteúdo de cada sessão é escrito pela API da Claude a partir do histórico real de carga e volume do Garmin.
+
+- A geração é **deliberadamente manual**. O pedido inicial era automatizá-la por cron/systemd todos os domingos; a decisão explícita do utilizador foi recusar essa automação — ele escolhe os dias em que vai treinar e só depois de rever o ficheiro decide enviá-lo.
+- Reutiliza de propósito o mesmo `CLIENT_ID` OAuth desta app, para que a pasta "ciclismo" do Drive seja visível aos dois projetos.
+- **Não há ligação automática entre os dois repositórios.** O parser da app é agora bastante mais tolerante do que era, por isso `~/garmin-dashboard/sync/plan_generator.py` continua compatível sem alterações; mas se o formato gerado mudar, é preciso confirmar manualmente contra o parser em `ciclismo/index.html`.
+
+---
 
 ## Pendências que exigem ação manual do utilizador
 
 1. **`tarefas/InstanciasGenerator.gs`** e **`tarefas/NotificationSender.gs`** — copiar o conteúdo atual para o projeto Apps Script em script.google.com e reimplementar. Sem isto, o lock contra duplicação de tarefas e a tolerância a falhas de notificação não têm efeito real, apesar de já estarem no repositório.
-2. **Cliente OAuth partilhado** (`108256538530-...apps.googleusercontent.com`) — para o novo botão "Enviar para o Drive" do `~/garmin-dashboard` (ver secção `ciclismo/` acima) funcionar, é preciso adicionar `http://127.0.0.1:8787` a "Authorized JavaScript origins" desse cliente, na Google Cloud Console. Ainda não feito; até lá, esse botão específico falha (o resto do `garmin-dashboard`, incluindo o download do ficheiro, funciona sem este passo).
+2. **Cliente OAuth partilhado** (`108256538530-...apps.googleusercontent.com`) — para o botão "Enviar para o Drive" do `~/garmin-dashboard` funcionar, é preciso adicionar `http://127.0.0.1:8787` a "Authorized JavaScript origins" desse cliente, na Google Cloud Console. Até lá, esse botão específico falha; o resto do `garmin-dashboard`, incluindo o download do ficheiro, funciona sem este passo.
+
+## Backlog
+
+**[Backlog das Apps](https://claude.ai/code/artifact/b9db4308-45f8-47e8-b48a-16587de08cd0)** — artifact com 24 ideias de melhoria organizadas pelas 5 apps, com prioridade sugerida. Nada daquilo foi implementado.
