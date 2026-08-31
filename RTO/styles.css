@@ -1,11 +1,12 @@
 /* ==========================================================================
-   KLx RTO — folha de estilos (Beta visual v6.0.0)
+   KLx RTO — folha de estilos (v7.0.0)
    Identidade azul-petróleo preservada; paleta de 5 categorias (T/C/F/A/feriado)
    preservada tal e qual — é funcional (legenda + calendário), não decorativa.
    Sem gradientes no cartão de Saldo nem no botão de exportar — decisão da
-   v5.0.0, mantida deliberadamente nesta reformulação.
-   Sistema de tokens (raio, sombra, espaçamento) redesenhado de raiz para dar
-   mais ar, hierarquia e uma sensação "elevada" em vez de plana.
+   v5.0.0, mantida deliberadamente em todas as reformulações desde então.
+   Navegação reformulada: barra principal (Hoje/Calendário/Notas) passa para
+   o fundo do ecrã, estilo app nativa; Calendário e Notas ganham cada um dois
+   subseparadores próprios (pílula) em vez de painéis a abrir/fechar.
    ========================================================================== */
 
 :root{
@@ -108,7 +109,7 @@ body{
   font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
   background:var(--paper);
   color:var(--ink);
-  padding-bottom:calc(64px + env(safe-area-inset-bottom));
+  padding-bottom:calc(82px + env(safe-area-inset-bottom));
   position:relative;
   -webkit-font-smoothing:antialiased;
 }
@@ -170,18 +171,39 @@ button{
 .btn-secondary:active{transform:scale(.97);background:var(--surface-2);}
 .btn-primary:disabled{opacity:.5;cursor:default;transform:none;}
 
-/* ---------- Barra de separadores ---------- */
-#tabBar{display:flex;gap:6px;padding:10px 16px 0;}
+/* ---------- Barra de navegação principal — fixa no fundo, estilo app nativa ---------- */
+#tabBar{
+  position:fixed;left:0;right:0;bottom:0;z-index:15;
+  max-width:480px;margin:0 auto;
+  display:flex;gap:2px;
+  padding:6px 10px calc(6px + env(safe-area-inset-bottom));
+  background:color-mix(in srgb, var(--paper) 92%, transparent);
+  backdrop-filter:blur(14px) saturate(1.4);
+  -webkit-backdrop-filter:blur(14px) saturate(1.4);
+  border-top:1px solid var(--line);
+}
 .tabBtn{
-  flex:1;background:var(--surface);border:1px solid var(--line);
-  border-radius:var(--radius-m);padding:9px 6px;font-weight:700;font-size:.83rem;
-  color:var(--muted);min-height:40px;box-shadow:var(--shadow-xs);
-  display:flex;align-items:center;justify-content:center;gap:6px;
-  transition:box-shadow .15s ease, background .15s ease, color .15s ease, border-color .15s ease;
+  flex:1;background:none;border:none;
+  border-radius:var(--radius-m);padding:7px 4px 6px;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;
+  font-weight:700;font-size:.66rem;letter-spacing:.01em;color:var(--muted2);min-height:50px;
+  transition:color .15s ease, background .15s ease;
 }
 .tabBtn svg{flex-shrink:0;opacity:.85;}
-.tabBtn.active{background:var(--brand);color:#fff;border-color:var(--brand);box-shadow:var(--shadow-md);}
+.tabBtn.active{color:var(--brand);background:var(--brand-tint);}
 .tabBtn.active svg{opacity:1;}
+
+/* ---------- Subseparadores (dentro de Calendário e de Notas) ---------- */
+#calSubBar, #notasSubBar{
+  display:flex;gap:3px;margin:14px 16px 4px;
+  background:var(--surface-2);border:1px solid var(--line);border-radius:var(--radius-m);padding:4px;
+}
+.subTabBtn{
+  flex:1;background:none;border:none;padding:9px 4px;font-size:.82rem;font-weight:700;color:var(--muted2);
+  border-radius:calc(var(--radius-m) - 4px);min-height:36px;
+  transition:color .15s ease, background .15s ease, box-shadow .15s ease;
+}
+.subTabBtn.active{color:var(--brand);background:var(--surface);box-shadow:var(--shadow-xs);}
 
 /* ---------- Estado de hoje ---------- */
 #todayStrip{
@@ -273,7 +295,7 @@ button{
 #statSaldoBox, #statSaldoCondBox{cursor:pointer;}
 
 /* ---------- Navegação de mês ---------- */
-#monthNav{flex-shrink:0;display:flex;align-items:center;justify-content:space-between;gap:8px;padding:14px 16px 4px;}
+#monthNav{flex-shrink:0;display:flex;align-items:center;justify-content:space-between;gap:8px;padding:4px 16px 4px;}
 #monthLabel{font-size:1rem;font-weight:800;flex:1;text-align:center;letter-spacing:-.01em;}
 .navBtn{
   background:var(--surface);border:1px solid var(--line);color:var(--brand);
@@ -399,7 +421,7 @@ body.dark #offlineBanner{color:#f0a89e;}
 .linkBtn:active{color:var(--bad);}
 
 /* ---------- Visão do ano ---------- */
-#anoHeader{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:14px 16px 4px;}
+#anoHeader{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:4px 16px 4px;}
 #anoYearLabel{font-size:1rem;font-weight:800;flex:1;text-align:center;}
 #anoLegend{display:flex;flex-wrap:wrap;justify-content:center;gap:6px;padding:10px 16px 8px;}
 #anoLegend span{
@@ -476,11 +498,11 @@ body.dark #offlineBanner{color:#f0a89e;}
 #fabExport{
   position:fixed;
   right:calc(18px + (100vw - 480px) / 2);
-  bottom:calc(26px + env(safe-area-inset-bottom));
-  width:58px;height:58px;border-radius:var(--radius-pill);
+  bottom:calc(84px + env(safe-area-inset-bottom));
+  width:54px;height:54px;border-radius:var(--radius-pill);
   background:var(--brand);color:#fff;border:none;
   display:flex;align-items:center;justify-content:center;
-  box-shadow:var(--shadow-lg);z-index:12;
+  box-shadow:var(--shadow-lg);z-index:16;
   transition:transform .12s ease, box-shadow .12s ease;
 }
 #fabExport:active{transform:scale(.9);box-shadow:var(--shadow-md);}
@@ -488,7 +510,7 @@ body.dark #offlineBanner{color:#f0a89e;}
 
 /* ---------- Notificações flutuantes ---------- */
 #undoToast{
-  position:fixed;left:16px;right:16px;bottom:calc(18px + env(safe-area-inset-bottom));
+  position:fixed;left:16px;right:16px;bottom:calc(78px + env(safe-area-inset-bottom));
   max-width:448px;margin:0 auto;background:var(--ink);color:var(--paper);border-radius:var(--radius-m);
   padding:13px 16px;display:flex;align-items:center;justify-content:space-between;gap:12px;
   font-size:.85rem;font-weight:600;z-index:30;box-shadow:var(--shadow-lg);
@@ -522,7 +544,7 @@ body.dark #offlineBanner{color:#f0a89e;}
 #dayInfoClose{margin-top:16px;}
 
 /* ---------- Notas ---------- */
-#notasSection{padding:20px 18px;border-top:1px solid var(--line);margin-top:8px;}
+#notasSection{padding:16px 18px 20px;}
 .notasSub{font-size:.79rem;color:var(--muted);margin-top:2px;margin-bottom:16px;}
 .notaCard{
   background:var(--surface);border:1px solid var(--line);border-radius:var(--radius-m);padding:13px 15px;margin-bottom:9px;
@@ -548,7 +570,7 @@ body.dark #offlineBanner{color:#f0a89e;}
 }
 #notaForm input:focus{outline:none;border-color:var(--brand);box-shadow:var(--focus-ring);}
 #notaFormBtns, #genFormBtns{display:flex;gap:8px;}
-#genPanel{margin-top:12px;display:flex;flex-direction:column;gap:9px;padding-top:12px;border-top:1px dashed var(--line);}
+#genPanel{padding:16px 18px 20px;display:flex;flex-direction:column;gap:9px;}
 #genPanel .notaRow2{display:flex;gap:8px;}
 #genPanel .notaRow2 input, #genPanel .notaRow2 select{flex:1;min-width:0;}
 #notaFormBtns button, #genFormBtns button{flex:1;}

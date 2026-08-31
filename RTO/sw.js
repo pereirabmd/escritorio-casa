@@ -7,7 +7,7 @@
    escrita de volta na folha a partir daqui).
    ========================================================================== */
 
-const CACHE_VERSION = 'rto-v6.0.0';
+const CACHE_VERSION = 'rto-v7.0.0';
 const SHELL_CACHE = CACHE_VERSION + '-shell';
 
 const SHELL_ASSETS = [

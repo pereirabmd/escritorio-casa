@@ -1,6 +1,6 @@
 # PROJECT-CONTEXT.md
 
-Contexto de projeto para o repositório `escritorio-casa`. Descreve o **estado atual** de cada app e as decisões que não são óbvias a partir do código. Última alteração: 31 de agosto de 2026 — reformulação visual de `RTO/` (v6.0.0) e script `push.sh` na raiz, com pedido automático de reconstrução do GitHub Pages.
+Contexto de projeto para o repositório `escritorio-casa`. Descreve o **estado atual** de cada app e as decisões que não são óbvias a partir do código. Última alteração: 31 de agosto de 2026 — reformulação da navegação de `RTO/` (v7.0.0: separador "Hoje", subseparadores Mês/Ano e Notas/Gerador, barra principal no fundo do ecrã).
 
 ## Visão geral
 
@@ -45,9 +45,11 @@ Pontos a não perder de vista:
 
 ## `RTO/` — KLx RTO (dias de escritório/casa)
 
-Calendário de dias no escritório/em casa, quota anual e saldo. API direta ao Google Sheets, sem Apps Script (`SPREADSHEET_ID: 1u4QOqKMEOe8qq_kU_Cw5c8Vj4qQ0AHE5gXj9hPood9c`). Versão **v6.0.0**.
+Calendário de dias no escritório/em casa, quota anual e saldo. API direta ao Google Sheets, sem Apps Script (`SPREADSHEET_ID: 1u4QOqKMEOe8qq_kU_Cw5c8Vj4qQ0AHE5gXj9hPood9c`). Versão **v7.0.0**.
 
 Feriados portugueses calculados dinamicamente (algoritmo da Páscoa), saldo condicional (astreinte, suspensão RTO), exportação Excel, faixa "Hoje" com a próxima mudança conhecida, comparação com o mês anterior, e atalhos de PWA para marcar hoje T/C diretamente do ícone instalado.
+
+Navegação (desde v7.0.0): três separadores principais numa barra fixa no fundo do ecrã — **Hoje** (estado do dia + saldo + estatísticas), **Calendário** (subseparadores Mês/Ano) e **Notas** (subseparadores Notas/Gerador de validações). Ver detalhe abaixo.
 
 Detalhe de CSS a não repetir: a classe partilhada `.stat` define `width:100%`, e tanto `#todayStrip` como `.stat.saldoHero` têm margem lateral própria de 16px — a combinação fazia essas caixas ultrapassarem a grelha por baixo delas em telemóvel. Ambas usam `width:calc(100% - 32px)`.
 
@@ -60,6 +62,17 @@ Pedido do utilizador: reformular o design por inteiro, à descrição da IA, man
 - **Risco controlado**: como o JavaScript lê/escreve classes por `id` (ex.: `document.getElementById('statSaldoBox').className = 'stat saldoHero ' + saldoTier(...)`), o redesenho não podia renomear nenhum `id` nem nenhuma classe manipulada dinamicamente (`day`, `stat`, `saldoHero`, `saldo-ok/-warn/-bad`, `T/C/F/A/holiday`, `active`, `hidden`, `modeBtn`, `tabBtn`, etc.) — só CSS novo sobre o mesmo vocabulário, mais ícones estáticos em elementos que o JS nunca reescreve por inteiro.
 - **Teste feito sem OAuth real** (a app exige login Google, que não está disponível neste ambiente): servida localmente (`python3 -m http.server`), pilotada por CDP (`chromium --headless=new --remote-debugging-port`) com dados sintéticos injetados diretamente nas variáveis globais do próprio script (`dayData`, `notasData`, chamando `renderMonth()`/`updateTotals()`/`renderNotes()`) para validar visualmente todos os ecrãs (calendário, ano, notas, modais, claro/escuro). JS e CSS também validados por sintaxe (balanceamento de chavetas/parênteses, `new Function()` sobre o script inline).
 - Nota de ferramenta: capturar screenshots via `chromium --screenshot=...` com `--window-size` deu resultados inconsistentes neste ambiente (viewport não respeitado de forma fiável); a abordagem que funcionou de forma reprodutível foi abrir uma sessão CDP persistente e usar `Emulation.setDeviceMetricsOverride` + `Page.captureScreenshot`.
+
+### Reformulação da navegação (v7.0.0)
+
+Pedido do utilizador, explicitamente mais fundo que a v6.0.0: "a ideia é reformular mesmo", com liberdade dada para dividir por separadores/subseparadores. Desta vez mexeu-se também na arquitetura de informação, não só no CSS — mas a lógica de negócio (Sheets, saldo, notas, undo) continuou intocada; só a "casca" de navegação mudou.
+
+- **Antes**: 3 separadores irmãos no topo — Calendário (que já continha o painel de estado/saldo/estatísticas em cima da grelha), Ano, Notas (com o gerador de validações num painel a abrir/fechar por baixo do formulário).
+- **Agora**: 3 separadores — **Hoje** (painel de estado/saldo/estatísticas, isolado da grelha, é o ecrã de entrada), **Calendário** (a grelha + navegação de mês, agora com subseparador **Mês/Ano** — "Ano" deixou de ser separador de topo), **Notas** (subseparador **Notas/Gerador** — o gerador deixou de ser um painel escondido). A barra principal passou do topo para **fixa no fundo do ecrã**, ao alcance do polegar, padrão de app nativa. O botão de exportar (FAB) deixou de estar só na aba Calendário e passou a flutuar sobre qualquer separador.
+- **Mapeamento de `id`s que mudaram** (para quem for mexer no JS depois): `tabAno`/`tabBtnAno` deixaram de existir — o conteúdo do ano vive agora em `calSubAno`, comutado por `calSubBtnAno` via `showCalSub('ano')`. `genToggleBtn` (botão que abria/fechava o painel do gerador) foi removido — o painel `genPanel` vive agora sempre visível dentro de `notasSubGerador`, comutado por `notasSubBtnGerador` via `showNotasSub('gerador')`. Todos os outros `id`s (`statSaldoBox`, `statT`, `grid`, `notasList`, `notaForm`, etc.) mantiveram-se exatamente iguais.
+- `showTab()` ganhou dois irmãos, `showCalSub()` e `showNotasSub()`, com a mesma forma (`classList.toggle('hidden', ...)` + `aria-selected`); `showSkeleton()` foi ajustado para esconder as três abas de topo (incluindo a nova `tabHoje`) em vez de duas.
+- **Validação estática antes de testar visualmente**: um script Node percorreu o HTML à procura de todo `getElementById('...')` chamado pelo JS e confirmou que cada um desses `id`s existe de facto no markup — apanhou, antes de qualquer teste manual, uma chamada esquecida a `getElementById('tabBtnAno')` (já removido) dentro do `onclick` das células da vista Ano, que teria rebentado em runtime assim que alguém tocasse num dia da vista Ano.
+- **Teste visual**: mesma abordagem CDP da v6.0.0 (dados sintéticos injetados + `Emulation.setDeviceMetricsOverride` + `Page.captureScreenshot`), desta vez também a **clicar programaticamente** nos novos botões de subseparador e a confirmar via `getBoundingClientRect`/`classList` que o subseparador certo fica visível — incluindo o caso de regressão do clique num mini-dia da vista Ano (tinha de voltar ao subseparador Mês nesse mesmo mês, e ficou confirmado que fica).
 
 ## `receitas/` — Receitas
 
@@ -148,7 +161,6 @@ Um projeto separado, `~/garmin-dashboard` (repositório git próprio, fora de `e
 
 1. **`tarefas/InstanciasGenerator.gs`** e **`tarefas/NotificationSender.gs`** — copiar o conteúdo atual para o projeto Apps Script em script.google.com e reimplementar. Sem isto, o lock contra duplicação de tarefas e a tolerância a falhas de notificação não têm efeito real, apesar de já estarem no repositório.
 2. **Cliente OAuth partilhado** (`108256538530-...apps.googleusercontent.com`) — para o botão "Enviar para o Drive" do `~/garmin-dashboard` funcionar, é preciso adicionar `http://127.0.0.1:8787` a "Authorized JavaScript origins" desse cliente, na Google Cloud Console. Até lá, esse botão específico falha; o resto do `garmin-dashboard`, incluindo o download do ficheiro, funciona sem este passo.
-3. **Reformulação visual de `RTO/` (v6.0.0) e `push.sh`** — ficam prontos na árvore de trabalho mas **por commitar e sem push**, por pedido explícito do utilizador ("a parte do GitHub será feita por mim depois"). Corre `./push.sh` na raiz quando quiseres publicar.
 
 ## Backlog
 
