@@ -1,6 +1,6 @@
 # PROJECT-CONTEXT.md
 
-Contexto de projeto para o repositório `escritorio-casa`. Descreve o **estado atual** de cada app e as decisões que não são óbvias a partir do código. Última alteração: 31 de agosto de 2026 — reformulação da navegação de `RTO/` (v7.0.0: separador "Hoje", subseparadores Mês/Ano e Notas/Gerador, barra principal no fundo do ecrã).
+Contexto de projeto para o repositório `escritorio-casa`. Descreve o **estado atual** de cada app e as decisões que não são óbvias a partir do código. Última alteração: 31 de agosto de 2026 — `RTO/` v7.0.1: legenda do calendário (Mês e Ano) com etiquetas coloridas por categoria.
 
 ## Visão geral
 
@@ -45,7 +45,7 @@ Pontos a não perder de vista:
 
 ## `RTO/` — KLx RTO (dias de escritório/casa)
 
-Calendário de dias no escritório/em casa, quota anual e saldo. API direta ao Google Sheets, sem Apps Script (`SPREADSHEET_ID: 1u4QOqKMEOe8qq_kU_Cw5c8Vj4qQ0AHE5gXj9hPood9c`). Versão **v7.0.0**.
+Calendário de dias no escritório/em casa, quota anual e saldo. API direta ao Google Sheets, sem Apps Script (`SPREADSHEET_ID: 1u4QOqKMEOe8qq_kU_Cw5c8Vj4qQ0AHE5gXj9hPood9c`). Versão **v7.0.1**.
 
 Feriados portugueses calculados dinamicamente (algoritmo da Páscoa), saldo condicional (astreinte, suspensão RTO), exportação Excel, faixa "Hoje" com a próxima mudança conhecida, comparação com o mês anterior, e atalhos de PWA para marcar hoje T/C diretamente do ícone instalado.
 
@@ -73,6 +73,8 @@ Pedido do utilizador, explicitamente mais fundo que a v6.0.0: "a ideia é reform
 - `showTab()` ganhou dois irmãos, `showCalSub()` e `showNotasSub()`, com a mesma forma (`classList.toggle('hidden', ...)` + `aria-selected`); `showSkeleton()` foi ajustado para esconder as três abas de topo (incluindo a nova `tabHoje`) em vez de duas.
 - **Validação estática antes de testar visualmente**: um script Node percorreu o HTML à procura de todo `getElementById('...')` chamado pelo JS e confirmou que cada um desses `id`s existe de facto no markup — apanhou, antes de qualquer teste manual, uma chamada esquecida a `getElementById('tabBtnAno')` (já removido) dentro do `onclick` das células da vista Ano, que teria rebentado em runtime assim que alguém tocasse num dia da vista Ano.
 - **Teste visual**: mesma abordagem CDP da v6.0.0 (dados sintéticos injetados + `Emulation.setDeviceMetricsOverride` + `Page.captureScreenshot`), desta vez também a **clicar programaticamente** nos novos botões de subseparador e a confirmar via `getBoundingClientRect`/`classList` que o subseparador certo fica visível — incluindo o caso de regressão do clique num mini-dia da vista Ano (tinha de voltar ao subseparador Mês nesse mesmo mês, e ficou confirmado que fica).
+
+**v7.0.1**: a legenda do calendário (`#legend` no Mês, `#anoLegend` no Ano) passou de etiquetas cinzentas com um pontinho colorido para etiquetas tingidas com a cor de cada categoria (fundo `-tint`, borda e texto na cor sólida), a pedido do utilizador. Cada `<span>` da legenda ganhou uma classe da categoria (`t`/`c`/`f`/`a`/`h`, o mesmo vocabulário já usado no `.dot`) só para estas duas listas estáticas — nunca escritas por JS, por isso sem risco de colisão com o resto da app.
 
 ## `receitas/` — Receitas
 

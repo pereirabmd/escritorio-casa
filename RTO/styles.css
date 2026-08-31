@@ -320,6 +320,12 @@ button{
   background:var(--surface-2);border:1px solid var(--line);border-radius:var(--radius-pill);
   padding:4px 9px 4px 6px;
 }
+/* Etiquetas tingidas com a cor da própria categoria — mesma paleta das células do calendário */
+#legend span.t, #anoLegend span.t{background:var(--t-tint);border-color:var(--t-color);color:var(--t-color);}
+#legend span.c, #anoLegend span.c{background:var(--c-tint);border-color:var(--c-color);color:var(--c-color);}
+#legend span.f, #anoLegend span.f{background:var(--f-tint);border-color:var(--f-color);color:var(--f-color);}
+#legend span.a, #anoLegend span.a{background:var(--a-tint);border-color:var(--a-color);color:var(--a-color);}
+#legend span.h, #anoLegend span.h{background:var(--h-tint);border-color:var(--h-color);color:var(--h-color);}
 .dot{width:8px;height:8px;border-radius:50%;display:inline-block;flex-shrink:0;}
 .dot.t{background:var(--t-color);}
 .dot.c{background:var(--c-color);}
