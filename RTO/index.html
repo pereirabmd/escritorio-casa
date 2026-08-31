@@ -46,21 +46,32 @@
 <div id="app" class="hidden">
 
   <div id="skeletonOverlay" class="hidden" aria-hidden="true">
-    <div class="skelTabs">
-      <div class="skelBox skelTab"></div>
-      <div class="skelBox skelTab"></div>
-      <div class="skelBox skelTab"></div>
+    <div class="skelSubBar">
+      <div class="skelBox skelSubTab"></div>
+      <div class="skelBox skelSubTab"></div>
     </div>
-    <div class="skelTotals">
-      <div class="skelBox skelCard"></div>
-      <div class="skelBox skelCard"></div>
-      <div class="skelBox skelCard"></div>
-      <div class="skelBox skelCard"></div>
-      <div class="skelBox skelCard"></div>
-      <div class="skelBox skelCard"></div>
+    <div class="skelMonthNav">
+      <div class="skelBox skelNavBtn"></div>
+      <div class="skelBox skelMonthLabel"></div>
+      <div class="skelBox skelNavBtn"></div>
+      <div class="skelBox skelTodayBtn"></div>
     </div>
-    <div class="skelBox skelNav"></div>
-    <div class="skelGrid" id="skelGrid"></div>
+    <div class="skelModeRow">
+      <div class="skelBox skelModeSeg"></div>
+    </div>
+    <div id="skelCalendar">
+      <div class="skelWeekhead">
+        <div class="skelBox"></div><div class="skelBox"></div><div class="skelBox"></div><div class="skelBox"></div><div class="skelBox"></div><div class="skelBox"></div><div class="skelBox"></div>
+      </div>
+      <div class="skelGrid" id="skelGrid"></div>
+    </div>
+    <div class="skelLegend">
+      <div class="skelBox skelPill"></div>
+      <div class="skelBox skelPill"></div>
+      <div class="skelBox skelPill"></div>
+      <div class="skelBox skelPill"></div>
+      <div class="skelBox skelPill"></div>
+    </div>
     <div id="skelLoadingText">A carregar dados</div>
   </div>
 
@@ -70,12 +81,12 @@
   </div>
 
   <div id="tabBar" role="tablist" aria-label="Secções">
-    <button id="tabBtnHoje" class="tabBtn active" role="tab" aria-selected="true" aria-controls="tabHoje"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>Hoje</button>
-    <button id="tabBtnCal" class="tabBtn" role="tab" aria-selected="false" aria-controls="tabCalendario"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>Calendário</button>
+    <button id="tabBtnCal" class="tabBtn active" role="tab" aria-selected="true" aria-controls="tabCalendario"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>Calendário</button>
+    <button id="tabBtnHoje" class="tabBtn" role="tab" aria-selected="false" aria-controls="tabHoje"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>Hoje</button>
     <button id="tabBtnNotas" class="tabBtn" role="tab" aria-selected="false" aria-controls="tabNotas"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="16" y2="17"/></svg>Notas</button>
   </div>
 
-  <div id="tabHoje" role="tabpanel" aria-labelledby="tabBtnHoje">
+  <div id="tabHoje" class="hidden" role="tabpanel" aria-labelledby="tabBtnHoje">
 
     <div id="todayStrip" class="stat" role="status">
       <div class="todayStripBadge" id="todayBadge">–</div>
@@ -117,7 +128,7 @@
 
   </div>
 
-  <div id="tabCalendario" class="hidden" role="tabpanel" aria-labelledby="tabBtnCal">
+  <div id="tabCalendario" role="tabpanel" aria-labelledby="tabBtnCal">
 
     <div id="calSubBar" role="tablist" aria-label="Vista do calendário">
       <button id="calSubBtnMes" class="subTabBtn active" role="tab" aria-selected="true" aria-controls="calSubMes">Mês</button>
@@ -269,7 +280,7 @@
    CONFIGURAÇÃO — não alterar CLIENT_ID / SPREADSHEET_ID / nomes das folhas:
    é a ligação à folha de cálculo Google Sheets já em uso.
    ============================================================ */
-const APP_VERSION = 'v7.0.1';
+const APP_VERSION = 'v7.1.0';
 
 const ICON_EDIT = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>';
 const ICON_TRASH = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>';
@@ -444,8 +455,8 @@ window.onload = () => {
   document.getElementById('undoBtn').onclick = () => performUndo();
   document.getElementById('notaSaveBtn').onclick = onNotaSave;
   document.getElementById('notaCancelBtn').onclick = cancelNotaEdit;
-  document.getElementById('tabBtnHoje').onclick = () => showTab('hoje');
   document.getElementById('tabBtnCal').onclick = () => showTab('cal');
+  document.getElementById('tabBtnHoje').onclick = () => showTab('hoje');
   document.getElementById('tabBtnNotas').onclick = () => showTab('notas');
   document.getElementById('calSubBtnMes').onclick = () => showCalSub('mes');
   document.getElementById('calSubBtnAno').onclick = () => showCalSub('ano');
@@ -525,9 +536,10 @@ function mostrarUpdateBanner(reg){
   document.getElementById('btnAtualizarApp').onclick = () => { if (reg.waiting) reg.waiting.postMessage('skipWaiting'); };
 }
 
-/* ---------- Navegação: 3 separadores principais (Hoje / Calendário / Notas);
-   Calendário e Notas têm cada um dois subseparadores próprios. ---------- */
-let currentTab = 'hoje';
+/* ---------- Navegação: 3 separadores principais (Calendário / Hoje / Notas);
+   Calendário e Notas têm cada um dois subseparadores próprios.
+   Calendário é a aba principal (ecrã de entrada). ---------- */
+let currentTab = 'cal';
 let currentCalSub = 'mes';
 let currentNotasSub = 'notas';
 
@@ -1077,6 +1089,7 @@ function attachLongPress(cell, dateStr){
 
 /* ---------- Registo de alterações (changelog) ---------- */
 const CHANGELOG = [
+  { v:'7.1.0', c:['"Calendário" passa a ser a aba principal (ecrã de entrada da app), à frente de "Hoje"', 'Animação de carregamento (skeleton) refeita para espelhar a estrutura real da aba Calendário — subseparadores Mês/Ano, navegação de mês, seletor de modo, grelha e legenda — em vez de um layout genérico desalinhado com o que aparece a seguir'] },
   { v:'7.0.1', c:['Legenda do calendário (Mês e Ano) passa a ter etiquetas coloridas com a cor de cada categoria, em vez de etiquetas cinzentas com um pontinho — mais fácil de ler o calendário à distância'] },
   { v:'7.0.0', c:['Reformulação da navegação: nova aba "Hoje" com o estado do dia e o resumo de saldo/estatísticas, separada da grelha de marcação', '"Calendário" passa a ter dois subseparadores — Mês e Ano — em vez de serem separadores independentes', '"Notas" passa a ter dois subseparadores — Notas e Gerador de validações — em vez de um painel a abrir/fechar', 'Barra de navegação principal move-se para o fundo do ecrã, ao alcance do polegar', 'Botão de exportar para Excel disponível em qualquer separador', 'Paleta de cores (marca + categorias T/C/F/A/feriado) mantida sem alterações — é funcional, não decorativa'] },
   { v:'6.0.0', c:['Reformulação visual completa: novos tokens de espaçamento, raio e sombra, cabeçalho com efeito de vidro fosco, ícones em todos os separadores, cartões de estatística e modo de calendário', 'Paleta de cores (marca + categorias T/C/F/A/feriado) mantida sem alterações — é funcional, não decorativa', 'Legenda e visão do ano redesenhadas como etiquetas arredondadas', 'Ficha de detalhe do dia e registo de alterações com aspeto de folha (bottom sheet) com pega'] },

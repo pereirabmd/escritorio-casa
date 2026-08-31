@@ -1,6 +1,6 @@
 # PROJECT-CONTEXT.md
 
-Contexto de projeto para o repositório `escritorio-casa`. Descreve o **estado atual** de cada app e as decisões que não são óbvias a partir do código. Última alteração: 31 de agosto de 2026 — `RTO/` v7.0.1: legenda do calendário (Mês e Ano) com etiquetas coloridas por categoria.
+Contexto de projeto para o repositório `escritorio-casa`. Descreve o **estado atual** de cada app e as decisões que não são óbvias a partir do código. Última alteração: 1 de setembro de 2026 — `RTO/` v7.1.0: Calendário passa a aba principal e skeleton de carregamento refeito para espelhar essa aba.
 
 ## Visão geral
 
@@ -45,11 +45,11 @@ Pontos a não perder de vista:
 
 ## `RTO/` — KLx RTO (dias de escritório/casa)
 
-Calendário de dias no escritório/em casa, quota anual e saldo. API direta ao Google Sheets, sem Apps Script (`SPREADSHEET_ID: 1u4QOqKMEOe8qq_kU_Cw5c8Vj4qQ0AHE5gXj9hPood9c`). Versão **v7.0.1**.
+Calendário de dias no escritório/em casa, quota anual e saldo. API direta ao Google Sheets, sem Apps Script (`SPREADSHEET_ID: 1u4QOqKMEOe8qq_kU_Cw5c8Vj4qQ0AHE5gXj9hPood9c`). Versão **v7.1.0**.
 
 Feriados portugueses calculados dinamicamente (algoritmo da Páscoa), saldo condicional (astreinte, suspensão RTO), exportação Excel, faixa "Hoje" com a próxima mudança conhecida, comparação com o mês anterior, e atalhos de PWA para marcar hoje T/C diretamente do ícone instalado.
 
-Navegação (desde v7.0.0): três separadores principais numa barra fixa no fundo do ecrã — **Hoje** (estado do dia + saldo + estatísticas), **Calendário** (subseparadores Mês/Ano) e **Notas** (subseparadores Notas/Gerador de validações). Ver detalhe abaixo.
+Navegação (desde v7.0.0, ordem alterada em v7.1.0): três separadores principais numa barra fixa no fundo do ecrã — **Calendário** (subseparadores Mês/Ano; é a **aba principal**, ecrã de entrada da app desde a v7.1.0), **Hoje** (estado do dia + saldo + estatísticas) e **Notas** (subseparadores Notas/Gerador de validações). Ver detalhe abaixo.
 
 Detalhe de CSS a não repetir: a classe partilhada `.stat` define `width:100%`, e tanto `#todayStrip` como `.stat.saldoHero` têm margem lateral própria de 16px — a combinação fazia essas caixas ultrapassarem a grelha por baixo delas em telemóvel. Ambas usam `width:calc(100% - 32px)`.
 
@@ -75,6 +75,11 @@ Pedido do utilizador, explicitamente mais fundo que a v6.0.0: "a ideia é reform
 - **Teste visual**: mesma abordagem CDP da v6.0.0 (dados sintéticos injetados + `Emulation.setDeviceMetricsOverride` + `Page.captureScreenshot`), desta vez também a **clicar programaticamente** nos novos botões de subseparador e a confirmar via `getBoundingClientRect`/`classList` que o subseparador certo fica visível — incluindo o caso de regressão do clique num mini-dia da vista Ano (tinha de voltar ao subseparador Mês nesse mesmo mês, e ficou confirmado que fica).
 
 **v7.0.1**: a legenda do calendário (`#legend` no Mês, `#anoLegend` no Ano) passou de etiquetas cinzentas com um pontinho colorido para etiquetas tingidas com a cor de cada categoria (fundo `-tint`, borda e texto na cor sólida), a pedido do utilizador. Cada `<span>` da legenda ganhou uma classe da categoria (`t`/`c`/`f`/`a`/`h`, o mesmo vocabulário já usado no `.dot`) só para estas duas listas estáticas — nunca escritas por JS, por isso sem risco de colisão com o resto da app.
+
+**v7.1.0**: dois pedidos do utilizador — Calendário como aba principal, e corrigir o desfasamento do skeleton de carregamento.
+- **Calendário como aba principal**: o botão `tabBtnCal`/painel `tabCalendario` passaram a vir primeiro na barra de separadores e no HTML (antes de `tabBtnHoje`/`tabHoje`), e `let currentTab` arranca em `'cal'` em vez de `'hoje'`. Os `id`s não mudaram — só a ordem no DOM e o estado inicial de `class="hidden"`/`active`/`aria-selected`. Nenhuma outra lógica dependia da ordem dos separadores (sem gestos de swipe, sem seletores `nth-child` sobre `.tabBtn`).
+- **Skeleton desfasado do layout real**: o skeleton (`#skeletonOverlay`, mostrado por `showSkeleton(true)` enquanto `loadData()`/`loadNotes()` correm) tinha ficado da v6.0.0 — 3 abas falsas cheias de largura + grelha 2×3 de "cartões" — e nunca foi atualizado quando a v7.0.0 mudou a arquitetura de navegação; não batia certo nem com a antiga aba Hoje (4 cartões desiguais, não 6 uniformes) nem, agora, com a aba Calendário que passou a ser a primeira coisa que aparece. Foi reconstruído para espelhar exatamente a estrutura real da aba Calendário, pela mesma ordem: pílula de subseparadores Mês/Ano (`.skelSubBar`), navegação de mês com setas + rótulo + botão "Hoje" (`.skelMonthNav`), seletor de modo Normal/Férias/Administrador (`.skelModeRow`), cabeçalho de dias da semana + grelha 7×5 (`#skelCalendar`), e legenda de categorias (`.skelLegend`) — reutilizando os mesmos valores de margem/padding/altura das regras CSS reais (`#calSubBar`, `#monthNav`, `.navBtn`, `#todayBtn`, `#modeRow`, `#calendar`, `#legend`), para não haver salto de layout quando os dados chegam e o conteúdo verdadeiro substitui o skeleton. As classes antigas (`.skelTabs`/`.skelTab`/`.skelTotals`/`.skelCard`/`.skelNav`) foram removidas por inteiro — não eram usadas em mais lado nenhum.
+- **Teste**: sem OAuth disponível neste ambiente, o skeleton foi validado isoladamente — uma página de teste local só com o `styles.css` real e o markup do `#skeletonOverlay`, servida por `python3 -m http.server` e capturada com `chromium --headless=new --screenshot=... --window-size=480,900` (mais simples que a via CDP das reformulações anteriores porque não há JavaScript de app nem autenticação a simular) — em claro e escuro, confirmando visualmente a ordem e o alinhamento dos blocos. Confirmado também por script Node que todo `getElementById('...')` chamado pelo JS continua a apontar para um `id` existente no HTML e que não ficaram `id`s duplicados após mover o painel Calendário para a frente do Hoje.
 
 ## `receitas/` — Receitas
 
