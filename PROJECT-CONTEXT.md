@@ -1,12 +1,14 @@
 # PROJECT-CONTEXT.md
 
-Contexto de projeto para o repositório `escritorio-casa`. Descreve o **estado atual** de cada app e as decisões que não são óbvias a partir do código. Última alteração: 30 de agosto de 2026 — reescrita do parser e redesenho visual de `ciclismo/` (Beta 23).
+Contexto de projeto para o repositório `escritorio-casa`. Descreve o **estado atual** de cada app e as decisões que não são óbvias a partir do código. Última alteração: 31 de agosto de 2026 — reformulação visual de `RTO/` (v6.0.0) e script `push.sh` na raiz, com pedido automático de reconstrução do GitHub Pages.
 
 ## Visão geral
 
 Este repositório não é uma aplicação única — é uma coleção de **PWAs pessoais independentes**, uma por pasta, cada uma um único `index.html` autossuficiente (mais um punhado de ficheiros irmãos: service worker, manifest, ícones). Não há build, bundler nem framework: cada app é HTML/CSS/JS servido tal e qual. O deploy é feito via **GitHub Pages** (build "legacy", diretamente da branch `main`, sem GitHub Actions), em `https://pereirabmd.github.io/escritorio-casa/<pasta>/`.
 
 Apps ativas: `peso/`, `tarefas/`, `RTO/`, `receitas/`, `ciclismo/`. Existem ainda `enfermagem/`, `convidados/`, `xadrez/` e um duplicado histórico em `enfermagemCamila.html`, que não têm sido mantidos.
+
+Na raiz existe também **`push.sh`** (não pertence a nenhuma app): adiciona, comita e faz push de todo o repositório para `main`, com uma guarda contra ficheiros que pareçam credenciais (`.env`, `.pem`, `.key`, `credentials.json`, etc.). Depois do push — e também no caminho em que não há nada para commitar, para permitir forçar um redeploy sem alterar ficheiros — pede explicitamente ao GitHub, via `gh api POST .../pages/builds`, que reconstrua o GitHub Pages, e espera até ~40s a reportar se ficou `built`/`errored`/ainda em curso. É um pedido explícito por cima do que já acontece sozinho (ver nota sobre o build "legacy" acima); exige a CLI `gh` instalada e autenticada, e falha em aviso (não em erro) se não estiver.
 
 ## Convenções partilhadas entre apps
 
@@ -146,6 +148,7 @@ Um projeto separado, `~/garmin-dashboard` (repositório git próprio, fora de `e
 
 1. **`tarefas/InstanciasGenerator.gs`** e **`tarefas/NotificationSender.gs`** — copiar o conteúdo atual para o projeto Apps Script em script.google.com e reimplementar. Sem isto, o lock contra duplicação de tarefas e a tolerância a falhas de notificação não têm efeito real, apesar de já estarem no repositório.
 2. **Cliente OAuth partilhado** (`108256538530-...apps.googleusercontent.com`) — para o botão "Enviar para o Drive" do `~/garmin-dashboard` funcionar, é preciso adicionar `http://127.0.0.1:8787` a "Authorized JavaScript origins" desse cliente, na Google Cloud Console. Até lá, esse botão específico falha; o resto do `garmin-dashboard`, incluindo o download do ficheiro, funciona sem este passo.
+3. **Reformulação visual de `RTO/` (v6.0.0) e `push.sh`** — ficam prontos na árvore de trabalho mas **por commitar e sem push**, por pedido explícito do utilizador ("a parte do GitHub será feita por mim depois"). Corre `./push.sh` na raiz quando quiseres publicar.
 
 ## Backlog
 
