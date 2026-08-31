@@ -43,11 +43,21 @@ Pontos a não perder de vista:
 
 ## `RTO/` — KLx RTO (dias de escritório/casa)
 
-Calendário de dias no escritório/em casa, quota anual e saldo. API direta ao Google Sheets, sem Apps Script (`SPREADSHEET_ID: 1u4QOqKMEOe8qq_kU_Cw5c8Vj4qQ0AHE5gXj9hPood9c`). Versão **v5.1.0**.
+Calendário de dias no escritório/em casa, quota anual e saldo. API direta ao Google Sheets, sem Apps Script (`SPREADSHEET_ID: 1u4QOqKMEOe8qq_kU_Cw5c8Vj4qQ0AHE5gXj9hPood9c`). Versão **v6.0.0**.
 
 Feriados portugueses calculados dinamicamente (algoritmo da Páscoa), saldo condicional (astreinte, suspensão RTO), exportação Excel, faixa "Hoje" com a próxima mudança conhecida, comparação com o mês anterior, e atalhos de PWA para marcar hoje T/C diretamente do ícone instalado.
 
 Detalhe de CSS a não repetir: a classe partilhada `.stat` define `width:100%`, e tanto `#todayStrip` como `.stat.saldoHero` têm margem lateral própria de 16px — a combinação fazia essas caixas ultrapassarem a grelha por baixo delas em telemóvel. Ambas usam `width:calc(100% - 32px)`.
+
+### Reformulação visual completa (v6.0.0)
+
+Pedido do utilizador: reformular o design por inteiro, à descrição da IA, mantendo apenas o objetivo/funcionalidades e o esquema de cores. Só `styles.css`, os `id`/classes estáticos manipulados pelo JavaScript no `index.html` (ícones adicionados, nenhum removido/renomeado) e o `CACHE_VERSION` do `sw.js` foram tocados — a lógica de negócio (autenticação, leitura/escrita no Sheets, cálculo de saldo, notas, undo, exportação) ficou intocada.
+
+- **Paleta preservada ao byte**: todas as variáveis de cor (`--brand`, `--t/c/f/a/h-color` e os respetivos `-tint`, `--ok`/`--bad`) mantiveram exatamente os mesmos valores hex, claro e escuro — só os tokens estruturais (raio, sombra, espaçamento) foram redesenhados. Também se manteve a decisão histórica da v5.0.0 de **não usar gradientes** no cartão de Saldo nem no botão de exportar.
+- Cabeçalho com efeito de vidro fosco (`backdrop-filter`), ícones SVG novos nos separadores, no seletor de modo (Normal/Férias/Administrador) e nos quatro cartões de estatística, legenda e visão do ano redesenhadas como etiquetas arredondadas, e a ficha de detalhe do dia / registo de alterações passaram a ter aspeto de folha (bottom sheet) com pega no topo.
+- **Risco controlado**: como o JavaScript lê/escreve classes por `id` (ex.: `document.getElementById('statSaldoBox').className = 'stat saldoHero ' + saldoTier(...)`), o redesenho não podia renomear nenhum `id` nem nenhuma classe manipulada dinamicamente (`day`, `stat`, `saldoHero`, `saldo-ok/-warn/-bad`, `T/C/F/A/holiday`, `active`, `hidden`, `modeBtn`, `tabBtn`, etc.) — só CSS novo sobre o mesmo vocabulário, mais ícones estáticos em elementos que o JS nunca reescreve por inteiro.
+- **Teste feito sem OAuth real** (a app exige login Google, que não está disponível neste ambiente): servida localmente (`python3 -m http.server`), pilotada por CDP (`chromium --headless=new --remote-debugging-port`) com dados sintéticos injetados diretamente nas variáveis globais do próprio script (`dayData`, `notasData`, chamando `renderMonth()`/`updateTotals()`/`renderNotes()`) para validar visualmente todos os ecrãs (calendário, ano, notas, modais, claro/escuro). JS e CSS também validados por sintaxe (balanceamento de chavetas/parênteses, `new Function()` sobre o script inline).
+- Nota de ferramenta: capturar screenshots via `chromium --screenshot=...` com `--window-size` deu resultados inconsistentes neste ambiente (viewport não respeitado de forma fiável); a abordagem que funcionou de forma reprodutível foi abrir uma sessão CDP persistente e usar `Emulation.setDeviceMetricsOverride` + `Page.captureScreenshot`.
 
 ## `receitas/` — Receitas
 
