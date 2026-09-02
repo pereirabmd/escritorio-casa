@@ -1,6 +1,6 @@
 # PROJECT-CONTEXT.md
 
-Contexto de projeto para o repositório `escritorio-casa`. Descreve o **estado atual** de cada app e as decisões que não são óbvias a partir do código. Última alteração: 2 de setembro de 2026 — `tarefas/` Beta 33: novas recorrências Trimestral/Semestral.
+Contexto de projeto para o repositório `escritorio-casa`. Descreve o **estado atual** de cada app e as decisões que não são óbvias a partir do código. Última alteração: 2 de setembro de 2026 — `receitas/` Beta 19: layout reformulado por inteiro (mesmo ícone e cores).
 
 ## Visão geral
 
@@ -85,13 +85,23 @@ Pedido do utilizador, explicitamente mais fundo que a v6.0.0: "a ideia é reform
 
 ## `receitas/` — Receitas
 
-Livro de receitas pessoal. Cada receita é um ficheiro `.txt` (formato próprio `CHAVE: valor` mais blocos `INGREDIENTES:`/`PASSOS:`/`NOTAS:`/`TAGS:`) guardado numa pasta "Receitas" no **Google Drive** — não em Sheets. `SCOPES: drive.file`. Ficheiro grande (~640 KB) por causa dos logótipos embutidos em base64. Versão **Beta 18**.
+Livro de receitas pessoal. Cada receita é um ficheiro `.txt` (formato próprio `CHAVE: valor` mais blocos `INGREDIENTES:`/`PASSOS:`/`NOTAS:`/`TAGS:`) guardado numa pasta "Receitas" no **Google Drive** — não em Sheets. `SCOPES: drive.file`. Ficheiro grande (~640 KB) por causa dos logótipos embutidos em base64. Versão **Beta 19**.
 
 Funcionalidades: escalamento de porções com frações e decimais, modo cozinhar passo a passo, temporizador que dispara o Relógio nativo do Android, partilha nativa, favoritos, e um editor dentro da própria app que faz `PATCH` ao ficheiro existente no Drive (antes, editar fora da app e voltar a carregar criava um **duplicado**, porque o upload nunca verificava nomes já existentes).
 
 Arranque offline-first: se a sessão falhar mas houver receitas guardadas no aparelho, mostra-as em vez de bloquear no login. O Drive é sempre a fonte de verdade.
 
 Os cartões de receita são `<div role="button" tabindex="0">` e **não** `<button>`, porque contêm botões de ação aninhados — o que seria HTML inválido.
+
+### Reformulação visual completa (Beta 19)
+
+Pedido do utilizador: refazer o layout por inteiro para encaixar melhor no tema, com liberdade total sobre estrutura/abas, sujeito só a duas constraints — manter o mesmo ícone e o mesmo esquema de cores. Seguiu o mesmo princípio das reformulações da `RTO/`: só CSS e estrutura visual foram tocados; a lógica de negócio (Drive, parser `.txt`, favoritos, escalamento, temporizador, PATCH do editor) ficou intocada.
+
+- **Cores e ícone preservados ao byte**: todas as variáveis de `:root`/`html.dark` (terracota, creme, oliva, carvão, etc.) mantiveram exatamente os mesmos valores; o PNG do ícone embutido em base64 (favicon, apple-touch-icon, marca de água de fundo, ecrã de login) não foi alterado.
+- **Filtros passaram de uma única fila de chips para separador + subseparador**: "Todas"/"Favoritas" tornou-se um controlo segmentado (`.tabs-row`/`.tab-btn`) no topo, com as categorias como subseparador de chips por baixo (`#catSubRow`). `renderCategoryChips()` foi reescrita para emitir esta estrutura, mas manteve o mesmo mecanismo de filtragem (`data-cat`, `#favToggleChip`, `state.filterCategoria`/`state.showFavoritesOnly` compõem-se como antes).
+- **Cartões e receita aberta ganharam ar de fichário de receitas**: tira de "fita" (`::before`) e canto dobrado (`::after`) nos cartões da grelha, a mesma tira e os furos de dossier (`.detail-holes`, já existente) na receita aberta, linha de meta separada por traço serrilhado.
+- **Armadilha de CSS Grid encontrada e corrigida**: dar `white-space:nowrap` + `text-overflow:ellipsis` ao `.eyebrow` (para truncar categorias longas em vez de sobrepor os ícones de ação do cartão) alargava a coluna da grelha inteira, porque um item de CSS Grid sem `min-width:0` assume como largura mínima automática o `max-content` do texto por quebrar — mesmo com `overflow:hidden`. Corrigido com `min-width:0` no `.card` (o item de grid). Vale a pena lembrar sempre que texto com `nowrap`+ellipsis aparecer dentro de um item de grid/flex.
+- **Teste sem OAuth** (a app exige login Google): grelha e receita aberta validadas via CDP (`chromium --headless=new --remote-debugging-port` com `--remote-allow-origins=*`, sessão `websocket-client` instalada com `pip install --break-system-packages`), com dados sintéticos semeados diretamente em `localStorage` (`receitas.cache.v1`/`receitas.favorites`) antes da navegação via `Page.addScriptToEvaluateOnNewDocument` — mais simples que injetar em variáveis JS globais porque o `boot()` desta app já lê a cache diretamente do `localStorage`. **Cuidado com o service worker**: depois da primeira navegação bem-sucedida, o `service-worker.js` (cache-first) passa a servir HTML antigo em recargas seguintes mesmo com o ficheiro em disco já alterado — só se resolveu com um perfil de browser novo (`--user-data-dir` limpo) a cada iteração de teste.
 
 ---
 

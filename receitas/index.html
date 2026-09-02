@@ -73,25 +73,33 @@
   .bg-watermark{
     position:absolute; z-index:0; pointer-events:none;
     bottom:-70px; right:-110px;
-    width:420px; opacity:.06; transform:rotate(-6deg);
+    width:420px; opacity:.05; transform:rotate(-6deg);
   }
-  html.dark .bg-watermark{ opacity:.05; }
+  html.dark .bg-watermark{ opacity:.04; }
   .bg-watermark img{ width:100%; height:auto; display:block; }
 
-  /* Header */
+  /* Header — faixa em "kraft paper": leve textura ondulada no rodapé, à
+     imagem de um separador de receitas colado no topo do caderno. */
   header.topbar{
-    position:relative; z-index:1; flex-shrink:0;
+    position:relative; z-index:2; flex-shrink:0;
     display:flex; align-items:center; gap:10px;
-    padding:14px 16px 10px;
+    padding:16px 16px 14px;
     background:var(--bg);
   }
-  header.topbar img.brand{width:34px; height:34px; border-radius:9px; flex-shrink:0;}
-  header.topbar h1{font-family:var(--font-display); font-size:22px; margin:0; flex:1; letter-spacing:.2px;}
+  header.topbar::after{
+    content:""; position:absolute; left:0; right:0; bottom:-1px; height:1px;
+    background:linear-gradient(90deg, transparent, var(--border) 15%, var(--border) 85%, transparent);
+  }
+  header.topbar img.brand{width:36px; height:36px; border-radius:10px; flex-shrink:0; box-shadow:var(--shadow);}
+  header.topbar .heading{flex:1; min-width:0;}
+  header.topbar h1{font-family:var(--font-display); font-size:21px; margin:0; letter-spacing:.2px; line-height:1.1;}
+  header.topbar .tagline{display:block; font-size:11px; color:var(--text-muted); margin-top:2px; letter-spacing:.02em;}
   .icon-btn{
     background:var(--surface); border:1px solid var(--border); color:var(--text);
     width:38px; height:38px; border-radius:12px; display:flex; align-items:center; justify-content:center;
-    cursor:pointer; flex-shrink:0;
+    cursor:pointer; flex-shrink:0; transition:transform .15s ease, border-color .15s ease;
   }
+  .icon-btn:active{transform:scale(0.92);}
   .icon-btn svg{width:19px; height:19px;}
 
   /* Screens wrapper: each child screen owns its own independent scroll */
@@ -114,39 +122,66 @@
   }
   .pull-spinner.spin{ animation: spin .7s linear infinite; }
 
-  /* Search + filters */
-  .controls{padding: 2px 16px 10px;}
+  /* Search + filtros: separador "Todas / Favoritas" acima, subseparador de
+     categorias por baixo — antes eram chips soltos na mesma fila. */
+  .controls{padding: 10px 16px 12px;}
   .search-box{
     display:flex; align-items:center; gap:8px;
     background:var(--surface); border:1px solid var(--border); border-radius:14px;
-    padding:10px 14px; margin-bottom:10px;
+    padding:11px 14px; margin-bottom:12px; box-shadow:var(--shadow);
   }
   .search-box svg{width:16px; height:16px; color:var(--text-muted); flex-shrink:0;}
   .search-box input{
     border:none; outline:none; background:transparent; color:var(--text);
     font-size:15px; width:100%; font-family:var(--font-body);
   }
+  #categoryChips{display:flex; flex-direction:column; gap:10px;}
+
+  .tabs-row{
+    display:flex; gap:6px; background:var(--surface-2); padding:4px; border-radius:14px;
+  }
+  .tab-btn{
+    flex:1; display:flex; align-items:center; justify-content:center; gap:6px;
+    padding:9px 10px; border-radius:11px; border:none; background:transparent;
+    color:var(--text-muted); font-family:inherit; font-size:13.5px; font-weight:700;
+    cursor:pointer; transition:background .15s ease, color .15s ease; white-space:nowrap;
+  }
+  .tab-btn.active{background:var(--surface); color:var(--accent); box-shadow:var(--shadow);}
+  .tab-btn.tab-fav svg{width:13px; height:13px;}
+
   .chip-row{display:flex; gap:8px; overflow-x:auto; padding-bottom:2px; scrollbar-width:none;}
   .chip-row::-webkit-scrollbar{display:none;}
   .chip{
-    flex-shrink:0; padding:6px 14px; border-radius:999px; font-size:13px; font-weight:600;
-    background:var(--surface); border:1px solid var(--border); color:var(--text-muted);
-    cursor:pointer; white-space:nowrap; transition:.15s;
+    flex-shrink:0; padding:6px 14px; border-radius:999px; font-size:12.5px; font-weight:600;
+    background:transparent; border:1px solid var(--border); color:var(--text-muted);
+    cursor:pointer; white-space:nowrap; transition:.15s; font-family:inherit;
   }
-  .chip.active{background:var(--accent); border-color:var(--accent); color:#fff;}
-  .chip.fav-chip{display:flex; align-items:center; gap:5px;}
-  .chip.fav-chip svg{width:12px; height:12px;}
+  .chip.active{background:var(--accent-2); border-color:var(--accent-2); color:#fff;}
 
-  /* Grid */
-  main{flex:1; padding: 4px 16px 100px; position:relative;}
+  /* Grid — cartões à imagem de fichas de receitas: tira de "fita" no topo,
+     canto direito dobrado, e uma pequena perfuração acima da linha de meta. */
+  main{flex:1; padding: 6px 16px 100px; position:relative;}
   .grid{
-    display:grid; grid-template-columns: 1fr 1fr; gap:14px;
+    display:grid; grid-template-columns: 1fr; gap:14px;
+  }
+  @media (min-width:380px){
+    .grid{grid-template-columns: 1fr 1fr;}
   }
   .card{
-    background:var(--surface); border:1px solid var(--border); border-radius: 16px;
-    padding:14px 14px 12px; cursor:pointer; box-shadow:var(--shadow);
-    display:flex; flex-direction:column; min-height:132px; position:relative;
+    background:var(--surface); border:1px solid var(--border); border-radius: 14px;
+    padding:16px 14px 12px; cursor:pointer; box-shadow:var(--shadow);
+    display:flex; flex-direction:column; min-height:136px; min-width:0; position:relative;
     transition: transform .15s ease;
+  }
+  .card::before{
+    content:""; position:absolute; top:-5px; left:16px; width:34px; height:12px;
+    background:var(--accent-2); opacity:.85; border-radius:2px;
+    transform:rotate(-2deg); box-shadow:0 1px 2px rgba(36,35,31,.18);
+  }
+  .card::after{
+    content:""; position:absolute; right:0; bottom:0; width:0; height:0;
+    border-style:solid; border-width:0 0 16px 16px; border-color:transparent transparent var(--bg) transparent;
+    border-top-left-radius:2px; filter:drop-shadow(-1px -1px 1px rgba(36,35,31,.12));
   }
   .card:active{transform:scale(0.97);}
   .card-actions{
@@ -162,16 +197,22 @@
   .card-icon-btn.danger:active{color:var(--error); border-color:var(--error);}
   .card-icon-btn.fav.active{ color:var(--accent); border-color:var(--accent); opacity:1; }
   .card-icon-btn svg{width:13px; height:13px;}
-  .card .eyebrow{font-size:10.5px; text-transform:uppercase; letter-spacing:.06em; color:var(--accent-2); font-weight:700; margin-bottom:6px;}
-  .card .rule{height:2px; width:30px; background:var(--accent); border-radius:2px; margin-bottom:8px;}
+  .card .eyebrow{
+    font-size:10.5px; text-transform:uppercase; letter-spacing:.06em; color:var(--accent-2); font-weight:700;
+    margin:0 76px 5px 0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+  }
+  .card .rule{height:2px; width:26px; background:var(--accent); border-radius:2px; margin-bottom:8px;}
   .card h3{font-family:var(--font-display); font-size:16.5px; line-height:1.25; margin:0 0 6px; font-weight:700;}
   .card p.desc{font-size:12px; color:var(--text-muted); margin:0; line-height:1.4; flex:1; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden;}
-  .card .meta-row{display:flex; gap:8px; margin-top:8px; font-size:11px; color:var(--text-muted); font-family:var(--font-mono);}
+  .card .meta-row{
+    display:flex; gap:8px; margin-top:9px; padding-top:8px; font-size:11px; color:var(--text-muted);
+    font-family:var(--font-mono); border-top:1px dashed var(--border);
+  }
 
   /* Skeleton */
   .skeleton{
     background:linear-gradient(90deg, var(--surface-2) 25%, var(--border) 37%, var(--surface-2) 63%);
-    background-size:400% 100%; animation:shimmer 1.4s ease infinite; border-radius:16px; height:132px;
+    background-size:400% 100%; animation:shimmer 1.4s ease infinite; border-radius:14px; height:136px;
   }
   @keyframes shimmer{0%{background-position:100% 50%;}100%{background-position:0 50%;}}
 
@@ -249,26 +290,32 @@
   html.dark #toast{background:var(--surface-2); color:var(--text); border:1px solid var(--border);}
   #toast.show{opacity:1; transform:translateX(-50%) translateY(0);}
 
-  /* Detail view */
+  /* Detail view — a "ficha" aberta: pauta com furos de dossier à esquerda,
+     tira de fita a marcar o topo, tal como nos cartões da grelha. */
   .detail-top{
     display:flex; align-items:center; gap:10px; padding:14px 16px; position:sticky; top:0; background:var(--bg); z-index:10;
   }
   .detail-top .spacer{flex:1;}
   .detail-card{
-    margin:0 16px 24px; background:var(--surface); border-radius:20px; box-shadow:var(--shadow);
+    margin:0 16px 24px; background:var(--surface); border-radius:18px; box-shadow:var(--shadow);
     border:1px solid var(--border); overflow:hidden; position:relative;
+  }
+  .detail-card::before{
+    content:""; position:absolute; top:-6px; left:38px; width:52px; height:16px;
+    background:var(--accent-2); opacity:.85; border-radius:2px; transform:rotate(-1.5deg);
+    box-shadow:0 1px 3px rgba(36,35,31,.2);
   }
   .detail-holes{
     position:absolute; left:10px; top:0; bottom:0; width:14px;
     display:flex; flex-direction:column; justify-content:space-evenly; padding:20px 0;
   }
   .detail-holes span{width:10px; height:10px; border-radius:50%; background:var(--bg); border:1px solid var(--border);}
-  .detail-inner{padding:26px 22px 26px 40px;}
+  .detail-inner{padding:28px 22px 26px 40px;}
   .detail-eyebrow{font-size:11px; text-transform:uppercase; letter-spacing:.07em; color:var(--accent-2); font-weight:700; margin-bottom:8px;}
   .detail-title{font-family:var(--font-display); font-size:25px; line-height:1.25; margin:0 0 8px; font-weight:700;}
   .detail-rule{height:3px; width:44px; background:var(--accent); border-radius:2px; margin-bottom:12px;}
   .detail-desc{font-size:14px; color:var(--text-muted); line-height:1.5; margin:0 0 16px;}
-  .meta-chips{display:flex; flex-wrap:wrap; gap:8px; margin-bottom:20px;}
+  .meta-chips{display:grid; grid-template-columns:repeat(auto-fill, minmax(78px, 1fr)); gap:8px; margin-bottom:20px;}
   .meta-chip{
     background:var(--surface-2); border-radius:10px; padding:7px 11px; font-size:12px;
     font-family:var(--font-mono); color:var(--text); display:flex; flex-direction:column; gap:1px; min-width:64px;
@@ -375,9 +422,9 @@
 
   /* Footer */
   footer.appfooter{
-    text-align:center; padding:28px 16px calc(20px + env(safe-area-inset-bottom)); color:var(--text-muted); font-size:11.5px;
+    text-align:center; padding:26px 16px calc(20px + env(safe-area-inset-bottom)); color:var(--text-muted); font-size:11.5px;
   }
-  footer.appfooter img{width:110px; height:auto; opacity:.85; display:block; margin:0 auto 8px;}
+  footer.appfooter img{width:88px; height:auto; opacity:.7; display:block; margin:0 auto 6px;}
   footer.appfooter .ver{
     font-family:var(--font-mono); letter-spacing:.03em; background:transparent; border:none;
     color:var(--text-muted); font-size:11.5px; cursor:pointer; padding:4px 10px; border-radius:999px;
@@ -395,15 +442,10 @@
 
   input[type=file]{display:none;}
 
-  @media (min-width:420px){
-    .grid{grid-template-columns: 1fr 1fr;}
-  }
-
-  /* ---------- Adição: acessibilidade por teclado nos cartões/chips ---------- */
-  .card:focus-visible, .chip:focus-visible, .card-icon-btn:focus-visible{
+  /* ---------- Adição: acessibilidade por teclado nos cartões/chips/separadores ---------- */
+  .card:focus-visible, .chip:focus-visible, .tab-btn:focus-visible, .card-icon-btn:focus-visible{
     outline:2px solid var(--accent); outline-offset:2px;
   }
-  .chip{font-family:inherit;}
 
   /* ---------- Adição: aviso de sem ligação ---------- */
   .offline-banner{
@@ -457,7 +499,10 @@
 
   <header class="topbar">
     <img class="brand" src="data:image/png;base64,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" alt="Receitas">
-    <h1>Receitas</h1>
+    <div class="heading">
+      <h1>Receitas</h1>
+      <span class="tagline">O teu caderno de cozinha</span>
+    </div>
     <button class="icon-btn" id="themeToggle" title="Alternar tema" aria-label="Alternar tema">
       <svg id="themeIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"></path></svg>
     </button>
@@ -482,7 +527,7 @@
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><path d="M21 21l-4.35-4.35"></path></svg>
           <input type="text" id="searchInput" placeholder="Procurar receitas ou tags...">
         </div>
-        <div class="chip-row" id="categoryChips"></div>
+        <div id="categoryChips"></div>
       </div>
       <main>
         <div class="grid" id="grid"></div>
@@ -605,7 +650,7 @@
   "use strict";
 
   /* ===================== CONFIG ===================== */
-  var APP_VERSION = "Beta 18";
+  var APP_VERSION = "Beta 19";
   var CLIENT_ID = "108256538530-fgunbb52s7f3s9aurfpjtaf01v8fjbph.apps.googleusercontent.com";
   var SCOPES = "https://www.googleapis.com/auth/drive.file";
   var CACHE_KEY = "receitas.cache.v1";
@@ -1001,6 +1046,11 @@
     });
   }
 
+  // Separador principal (Todas / Favoritas) + subseparador de categorias por
+  // baixo — antes eram todos chips soltos numa única fila. Os dois grupos
+  // continuam a partilhar o mesmo mecanismo de filtragem (state.filterCategoria
+  // e state.showFavoritesOnly já existiam e compõem-se livremente, ex.: ver
+  // só as Favoritas dentro de "Sobremesas" continua possível).
   function renderCategoryChips(){
     var all = getAllRecipes();
     var cats = {};
@@ -1009,13 +1059,20 @@
       cats[c] = true;
     });
     var list = Object.keys(cats).sort(function(a,b){ return a.localeCompare(b, "pt"); });
-    var html = '<button type="button" class="chip fav-chip' + (state.showFavoritesOnly ? " active" : "") + '" id="favToggleChip" aria-pressed="' + state.showFavoritesOnly + '">' + heartSvg(state.showFavoritesOnly) + ' Favoritas</button>';
-    html += '<button type="button" class="chip' + (state.filterCategoria === "Todas" ? " active" : "") + '" data-cat="Todas" aria-pressed="' + (state.filterCategoria === "Todas") + '">Todas</button>';
-    list.forEach(function(c){
-      html += '<button type="button" class="chip' + (state.filterCategoria === c ? " active" : "") + '" data-cat="' + escapeHtml(c) + '" aria-pressed="' + (state.filterCategoria === c) + '">' + escapeHtml(c) + '</button>';
-    });
+
+    var html = '<div class="tabs-row" role="tablist">' +
+      '<button type="button" class="tab-btn' + (state.filterCategoria === "Todas" ? " active" : "") + '" data-cat="Todas" aria-pressed="' + (state.filterCategoria === "Todas") + '">Todas</button>' +
+      '<button type="button" class="tab-btn tab-fav' + (state.showFavoritesOnly ? " active" : "") + '" id="favToggleChip" aria-pressed="' + state.showFavoritesOnly + '">' + heartSvg(state.showFavoritesOnly) + ' Favoritas</button>' +
+    '</div>';
+    if(list.length){
+      html += '<div class="chip-row" id="catSubRow">';
+      list.forEach(function(c){
+        html += '<button type="button" class="chip' + (state.filterCategoria === c ? " active" : "") + '" data-cat="' + escapeHtml(c) + '" aria-pressed="' + (state.filterCategoria === c) + '">' + escapeHtml(c) + '</button>';
+      });
+      html += '</div>';
+    }
     $("categoryChips").innerHTML = html;
-    Array.prototype.forEach.call($("categoryChips").querySelectorAll(".chip[data-cat]"), function(el){
+    Array.prototype.forEach.call($("categoryChips").querySelectorAll("[data-cat]"), function(el){
       el.addEventListener("click", function(){
         state.filterCategoria = el.getAttribute("data-cat");
         renderCategoryChips();
@@ -1494,6 +1551,10 @@
 
   /* ===================== CHANGELOG ===================== */
   var CHANGELOG = [
+    { version: "Beta 19", changes: [
+      "Layout reformulado por inteiro: cartões e receita aberta com ar de fichas de receitas (fita e canto dobrado), \"Todas\"/\"Favoritas\" passam a separador no topo dos filtros e as categorias a subseparador por baixo",
+      "Mesmas cores, ícone e funcionalidades de sempre — só a apresentação mudou"
+    ]},
     { version: "Beta 18", changes: [
       "Editar receita: toca no lápis na receita aberta para editares o texto diretamente na app, sem teres de voltar ao ficheiro original",
       "Nova receita em branco, com o formato já preenchido como exemplo, sem precisar de carregar um ficheiro",
