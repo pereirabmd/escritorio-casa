@@ -1,12 +1,12 @@
 # PROJECT-CONTEXT.md
 
-Contexto de projeto para o repositório `escritorio-casa`. Descreve o **estado atual** de cada app e as decisões que não são óbvias a partir do código. Última alteração: 2 de setembro de 2026 — `receitas/` Beta 19: layout reformulado por inteiro (mesmo ícone e cores).
+Contexto de projeto para o repositório `escritorio-casa`. Descreve o **estado atual** de cada app e as decisões que não são óbvias a partir do código. Última alteração: 2 de setembro de 2026 — `convidados/` v1.1.0: campo Mesa (1-10) e monograma real do casamento.
 
 ## Visão geral
 
 Este repositório não é uma aplicação única — é uma coleção de **PWAs pessoais independentes**, uma por pasta, cada uma um único `index.html` autossuficiente (mais um punhado de ficheiros irmãos: service worker, manifest, ícones). Não há build, bundler nem framework: cada app é HTML/CSS/JS servido tal e qual. O deploy é feito via **GitHub Pages** (build "legacy", diretamente da branch `main`, sem GitHub Actions), em `https://pereirabmd.github.io/escritorio-casa/<pasta>/`.
 
-Apps ativas: `peso/`, `tarefas/`, `RTO/`, `receitas/`, `ciclismo/`. Existem ainda `enfermagem/`, `convidados/`, `xadrez/` e um duplicado histórico em `enfermagemCamila.html`, que não têm sido mantidos.
+Apps ativas: `peso/`, `tarefas/`, `RTO/`, `receitas/`, `ciclismo/`, `convidados/` (a lista de convidados do casamento real do utilizador — ver secção própria abaixo, é a exceção às apps "não mantidas"). Existem ainda `enfermagem/`, `xadrez/` e um duplicado histórico em `enfermagemCamila.html`, que continuam sem manutenção.
 
 Na raiz existe também **`push.sh`** (não pertence a nenhuma app): adiciona, comita e faz push de todo o repositório para `main`, com uma guarda contra ficheiros que pareçam credenciais (`.env`, `.pem`, `.key`, `credentials.json`, etc.). Depois do push — e também no caminho em que não há nada para commitar, para permitir forçar um redeploy sem alterar ficheiros — pede explicitamente ao GitHub, via `gh api POST .../pages/builds`, que reconstrua o GitHub Pages, e espera até ~40s a reportar se ficou `built`/`errored`/ainda em curso. É um pedido explícito por cima do que já acontece sozinho (ver nota sobre o build "legacy" acima); exige a CLI `gh` instalada e autenticada, e falha em aviso (não em erro) se não estiver.
 
@@ -173,6 +173,27 @@ Um projeto separado, `~/garmin-dashboard` (repositório git próprio, fora de `e
 - A geração é **deliberadamente manual**. O pedido inicial era automatizá-la por cron/systemd todos os domingos; a decisão explícita do utilizador foi recusar essa automação — ele escolhe os dias em que vai treinar e só depois de rever o ficheiro decide enviá-lo.
 - Reutiliza de propósito o mesmo `CLIENT_ID` OAuth desta app, para que a pasta "ciclismo" do Drive seja visível aos dois projetos.
 - **Não há ligação automática entre os dois repositórios.** O parser da app é agora bastante mais tolerante do que era, por isso `~/garmin-dashboard/sync/plan_generator.py` continua compatível sem alterações; mas se o formato gerado mudar, é preciso confirmar manualmente contra o parser em `ciclismo/index.html`.
+
+## `convidados/` — Convidados (casamento)
+
+Gestão da lista de convidados do casamento real do utilizador (Camila & Bruno). CRUD direto à API do Google Sheets (`SHEET_ID: 1UcjSO3P7RbreTtKeg4T8jsoRa2KwzTEPE4Wsrkf2Eos`), sem Apps Script, sem manifest nem service worker — a mais simples das apps do repositório, só `index.html`. Versão **v1.1.0**.
+
+Há um projeto **separado e maior** para o próprio casamento em `~/casamento` (fora deste repositório, com o seu próprio `PROJECT-CONTEXT.md`/`CLAUDE.md`), que inclui a pasta `Mesas/` com o plano de lugares "a sério" (`mesas.csv`, scripts de geração). Esta app (`convidados/`) é só a PWA de acompanhamento de RSVPs — os dois não estão ligados automaticamente.
+
+Colunas da sheet `Convidados!A2:F1000` (modelo de dados, propositadamente não alterado): `Nome, Nº Pessoas, Nº Confirmados, Fase, Estado, Notas`. `Fase` e `Estado` são listas configuráveis via a sheet `Config!A2:B50`.
+
+### Campo "Mesa" (v1.1.0)
+
+Pedido do utilizador: organizar os convidados por mesa (1 a 10, fixo por agora), **sem acrescentar coluna à Sheet**. Como todas as 6 colunas já tinham uso próprio (ao contrário do `tarefas/`, onde `DiasSemana` ficava livre para `Mensal`/`Trimestral`/`Semestral`), a mesa vai embutida dentro do texto de **Notas**, como um marcador invisível ao utilizador: `Alergia a marisco #mesa:7`.
+
+- `extractMesa()`/`stripMesa()`/`combineNotas()` (`convidados/index.html`) fazem a leitura/escrita deste marcador. `guests[].notas` é sempre o texto **limpo** (sem o marcador) — é o que aparece no cartão e no textarea de edição. `guests[].notasRaw` é o valor tal como está na Sheet, com o marcador lá dentro.
+- **Armadilha a não repetir**: a gravação rápida de estado (modal "Confirmar presença", que reescreve a linha A:F inteira só para mudar Estado/Nº Confirmados) tem de escrever `g.notasRaw`, nunca `g.notas` — escrever `g.notas` apagaria silenciosamente a mesa do convidado a cada confirmação rápida.
+- `MESAS = ["1",...,"10"]` está hardcoded no JS (não vem do `Config`, ao contrário de Fase/Estado) — é a lista fixa pedida pelo utilizador; se o número de mesas mudar, é aqui que se edita.
+- Mesa aparece como filtro (`#filterMesa`, terceiro chip da toolbar), campo no modal de edição, badge dourado no cartão (reaproveita `.status-badge`/`.status-dot` existentes, sem CSS novo), secção "Por Mesa" no separador Resumo, e coluna extra na lista exportada/impressa.
+
+### Monograma (v1.1.0)
+
+O logótipo no cabeçalho e no rodapé era um placeholder gerado ("C·B" em círculo). Substituído pelo monograma real do casamento, recortado a partir de `~/casamento/Mesas/monogram_circle.png` (700×700, fundo transparente) e reduzido para 160×160 antes de embutir em base64 — mais pequeno do que o placeholder que substituiu. O favicon (ícone "Claudinho", partilhado com as outras apps da família) não foi tocado — é intencionalmente diferente do logótipo do casamento.
 
 ---
 
