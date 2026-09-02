@@ -1,6 +1,6 @@
 # PROJECT-CONTEXT.md
 
-Contexto de projeto para o repositório `escritorio-casa`. Descreve o **estado atual** de cada app e as decisões que não são óbvias a partir do código. Última alteração: 2 de setembro de 2026 — `convidados/` v1.1.0: campo Mesa (1-10) e monograma real do casamento.
+Contexto de projeto para o repositório `escritorio-casa`. Descreve o **estado atual** de cada app e as decisões que não são óbvias a partir do código. Última alteração: 2 de setembro de 2026 — `convidados/` v1.2.0: a coluna Mesa passa a ser criada automaticamente na Sheet, só convidados Confirmados podem ter mesa, e aviso (não bloqueante) de mesa cheia.
 
 ## Visão geral
 
@@ -176,20 +176,21 @@ Um projeto separado, `~/garmin-dashboard` (repositório git próprio, fora de `e
 
 ## `convidados/` — Convidados (casamento)
 
-Gestão da lista de convidados do casamento real do utilizador (Camila & Bruno). CRUD direto à API do Google Sheets (`SHEET_ID: 1UcjSO3P7RbreTtKeg4T8jsoRa2KwzTEPE4Wsrkf2Eos`), sem Apps Script, sem manifest nem service worker — a mais simples das apps do repositório, só `index.html`. Versão **v1.1.0**.
+Gestão da lista de convidados do casamento real do utilizador (Camila & Bruno). CRUD direto à API do Google Sheets (`SHEET_ID: 1UcjSO3P7RbreTtKeg4T8jsoRa2KwzTEPE4Wsrkf2Eos`), sem Apps Script, sem manifest nem service worker — a mais simples das apps do repositório, só `index.html`. Versão **v1.2.0**.
 
 Há um projeto **separado e maior** para o próprio casamento em `~/casamento` (fora deste repositório, com o seu próprio `PROJECT-CONTEXT.md`/`CLAUDE.md`), que inclui a pasta `Mesas/` com o plano de lugares "a sério" (`mesas.csv`, scripts de geração). Esta app (`convidados/`) é só a PWA de acompanhamento de RSVPs — os dois não estão ligados automaticamente.
 
-Colunas da sheet `Convidados!A2:F1000` (modelo de dados, propositadamente não alterado): `Nome, Nº Pessoas, Nº Confirmados, Fase, Estado, Notas`. `Fase` e `Estado` são listas configuráveis via a sheet `Config!A2:B50`.
+Colunas da sheet `Convidados!A2:G1000`: `Nome, Nº Pessoas, Nº Confirmados, Fase, Estado, Notas, Mesa`. `Fase` e `Estado` são listas configuráveis via a sheet `Config!A2:B50`; `Mesa` é fixa no código (ver abaixo).
 
-### Campo "Mesa" (v1.1.0)
+### Campo "Mesa" (v1.1.0, corrigido em v1.2.0)
 
-Pedido do utilizador: organizar os convidados por mesa (1 a 10, fixo por agora), **sem acrescentar coluna à Sheet**. Como todas as 6 colunas já tinham uso próprio (ao contrário do `tarefas/`, onde `DiasSemana` ficava livre para `Mensal`/`Trimestral`/`Semestral`), a mesa vai embutida dentro do texto de **Notas**, como um marcador invisível ao utilizador: `Alergia a marisco #mesa:7`.
+Pedido do utilizador: organizar os convidados por mesa (1 a 10, fixo por agora). O pedido inicial era não alterar o modelo de dados, e a v1.1.0 cumpriu isso à letra embutindo a mesa dentro de "Notas" com um marcador de texto — mas o pedido **na verdade** era só não obrigar o utilizador a editar a Sheet à mão; a app podia perfeitamente criar a coluna sozinha. A v1.2.0 corrige isto: `RANGE_GUESTS` passou a `Convidados!A2:G1000`, e `ensureMesaColumn()` (chamada uma vez no arranque, antes de carregar os convidados) lê `Convidados!G1` e escreve lá o cabeçalho `"Mesa"` se ainda estiver vazio — idempotente, nunca pisa um cabeçalho já existente. O utilizador nunca precisa de tocar na Sheet.
 
-- `extractMesa()`/`stripMesa()`/`combineNotas()` (`convidados/index.html`) fazem a leitura/escrita deste marcador. `guests[].notas` é sempre o texto **limpo** (sem o marcador) — é o que aparece no cartão e no textarea de edição. `guests[].notasRaw` é o valor tal como está na Sheet, com o marcador lá dentro.
-- **Armadilha a não repetir**: a gravação rápida de estado (modal "Confirmar presença", que reescreve a linha A:F inteira só para mudar Estado/Nº Confirmados) tem de escrever `g.notasRaw`, nunca `g.notas` — escrever `g.notas` apagaria silenciosamente a mesa do convidado a cada confirmação rápida.
-- `MESAS = ["1",...,"10"]` está hardcoded no JS (não vem do `Config`, ao contrário de Fase/Estado) — é a lista fixa pedida pelo utilizador; se o número de mesas mudar, é aqui que se edita.
-- Mesa aparece como filtro (`#filterMesa`, terceiro chip da toolbar), campo no modal de edição, badge dourado no cartão (reaproveita `.status-badge`/`.status-dot` existentes, sem CSS novo), secção "Por Mesa" no separador Resumo, e coluna extra na lista exportada/impressa.
+- **Retrocompatibilidade**: convidados gravados pela v1.1.0 ainda têm a mesa dentro de Notas (`#mesa:N`). `extractMesaLegado()`/`stripMesaLegado()` continuam a lê-la de lá como recurso de retaguarda quando a coluna G vier vazia — mas só para leitura; qualquer gravação seguinte desse convidado já escreve o número só na coluna G e limpa o marcador de Notas.
+- **Só convidados "Confirmado" podem ter mesa** (`ESTADO_COM_MESA`), outro pedido do utilizador: o campo Mesa no modal fica desativado (`updateMesaFieldState()`) enquanto o Estado não for Confirmado, e é sempre forçado a vazio no momento de gravar — tanto no modal principal como na gravação rápida de estado — se o Estado gravado não for Confirmado. Mudar o Estado de um convidado com mesa para outra coisa **larga a mesa automaticamente**, em qualquer um dos dois modais.
+- **Aviso de mesa cheia, não bloqueante**: ao escolher uma mesa no modal, `pessoasNaMesa()` soma as pessoas já atribuídas a essa mesa (excluindo a própria linha, para reedições) e, se o total chegar a `CAPACIDADE_MESA` (10), mostra um toast de aviso — mas continua a deixar guardar. Só dispara no `change` do campo Mesa, não é reverificado no momento de gravar.
+- `MESAS = ["1",...,"10"]` continua hardcoded no JS (não vem do `Config`) — é a lista fixa pedida pelo utilizador; se o número de mesas mudar, é aqui que se edita.
+- Mesa aparece como filtro (`#filterMesa`, terceiro chip da toolbar), campo no modal de edição, badge dourado no cartão (reaproveita `.status-badge`/`.status-dot` existentes, sem CSS novo), secção "Por Mesa" no separador Resumo, e coluna extra na lista exportada/impressa — como só convidados Confirmados podem ter mesa, estes contadores já refletem só gente confirmada, sem filtro extra.
 
 ### Monograma (v1.1.0)
 
