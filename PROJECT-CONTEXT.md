@@ -1,6 +1,6 @@
 # PROJECT-CONTEXT.md
 
-Contexto de projeto para o repositório `escritorio-casa`. Descreve o **estado atual** de cada app e as decisões que não são óbvias a partir do código. Última alteração: 2 de setembro de 2026 — `convidados/` v1.2.0: a coluna Mesa passa a ser criada automaticamente na Sheet, só convidados Confirmados podem ter mesa, e aviso (não bloqueante) de mesa cheia.
+Contexto de projeto para o repositório `escritorio-casa`. Descreve o **estado atual** de cada app e as decisões que não são óbvias a partir do código. Última alteração: 3 de setembro de 2026 — `convidados/` v1.3.0: clicar numa mesa no Resumo mostra quem lá está sentado, com opção de os retirar.
 
 ## Visão geral
 
@@ -176,7 +176,7 @@ Um projeto separado, `~/garmin-dashboard` (repositório git próprio, fora de `e
 
 ## `convidados/` — Convidados (casamento)
 
-Gestão da lista de convidados do casamento real do utilizador (Camila & Bruno). CRUD direto à API do Google Sheets (`SHEET_ID: 1UcjSO3P7RbreTtKeg4T8jsoRa2KwzTEPE4Wsrkf2Eos`), sem Apps Script, sem manifest nem service worker — a mais simples das apps do repositório, só `index.html`. Versão **v1.2.0**.
+Gestão da lista de convidados do casamento real do utilizador (Camila & Bruno). CRUD direto à API do Google Sheets (`SHEET_ID: 1UcjSO3P7RbreTtKeg4T8jsoRa2KwzTEPE4Wsrkf2Eos`), sem Apps Script, sem manifest nem service worker — a mais simples das apps do repositório, só `index.html`. Versão **v1.3.0**.
 
 Há um projeto **separado e maior** para o próprio casamento em `~/casamento` (fora deste repositório, com o seu próprio `PROJECT-CONTEXT.md`/`CLAUDE.md`), que inclui a pasta `Mesas/` com o plano de lugares "a sério" (`mesas.csv`, scripts de geração). Esta app (`convidados/`) é só a PWA de acompanhamento de RSVPs — os dois não estão ligados automaticamente.
 
@@ -191,6 +191,14 @@ Pedido do utilizador: organizar os convidados por mesa (1 a 10, fixo por agora).
 - **Aviso de mesa cheia, não bloqueante**: ao escolher uma mesa no modal, `pessoasNaMesa()` soma as pessoas já atribuídas a essa mesa (excluindo a própria linha, para reedições) e, se o total chegar a `CAPACIDADE_MESA` (10), mostra um toast de aviso — mas continua a deixar guardar. Só dispara no `change` do campo Mesa, não é reverificado no momento de gravar.
 - `MESAS = ["1",...,"10"]` continua hardcoded no JS (não vem do `Config`) — é a lista fixa pedida pelo utilizador; se o número de mesas mudar, é aqui que se edita.
 - Mesa aparece como filtro (`#filterMesa`, terceiro chip da toolbar), campo no modal de edição, badge dourado no cartão (reaproveita `.status-badge`/`.status-dot` existentes, sem CSS novo), secção "Por Mesa" no separador Resumo, e coluna extra na lista exportada/impressa — como só convidados Confirmados podem ter mesa, estes contadores já refletem só gente confirmada, sem filtro extra.
+
+### Detalhe da mesa: ver e retirar convidados (v1.3.0)
+
+Pedido do utilizador: clicar numa linha de mesa no "Por Mesa" do Resumo mostra quem lá está sentado, com opção de os retirar da mesa (não de os apagar da lista). `breakdownRow()` ganhou um 4º parâmetro opcional `mesa` — só as 10 linhas de mesa o recebem (não "Sem mesa", nem as linhas de Por Estado/Por Fase, que continuam sem serem clicáveis) — e passa a ter `data-mesa`/`role="button"`/`tabindex`. Um clique chama `openMesaDetail(mesa)`, que abre um `.modal-overlay` novo (`#mesaDetailOverlay`, mesmo padrão visual dos outros modais da app) listando os convidados dessa mesa por ordem alfabética, cada um com um botão "Remover da mesa".
+
+- `removeGuestFromMesa()` escreve só a célula `Convidados!G{row}` (não a linha inteira A:G) — mantém tudo o resto do convidado intacto (Estado continua Confirmado, Notas não muda) — e chama `refreshAll()` a seguir, o mesmo padrão de "recarregar da fonte de verdade depois de escrever" usado no resto da app.
+- O modal fica aberto depois de remover alguém (a lista lá dentro atualiza-se sozinha, para permitir tirar vários convidados seguidos sem reabrir); `renderResumo()` volta a chamar `renderMesaDetail()` no fim sempre que o modal estiver aberto, para os números da mesa e a lista nunca ficarem dessincronizados de um refresh (manual, pull-to-refresh, ou depois de uma remoção).
+- **Testado com o código real da app**, não só visualmente: `window.fetch` foi substituído antes da navegação por um mock que intercepta os pedidos ao Sheets API (`ensureMesaColumn`, `loadConfig`, `loadGuests`, `loadSheetMeta`, e o `PUT` de remoção) com dados sintéticos com estado próprio, deixando todo o resto do código da app (incluindo `openMesaDetail`/`removeGuestFromMesa`/`refreshAll`) correr sem alterações — confirmou a mesa a abrir com os 4 convidados certos e a lista a atualizar-se de imediato ao remover um deles. **Cuidado ao repetir**: `encodeURIComponent` escreve `:` como `%3A` nos URLs pedidos (ex. `Convidados!A2:G1000` → `...A2%3AG1000`); o mock de fetch tem de fazer `decodeURIComponent(url)` antes de comparar por `includes(...)`, senão os padrões com `:` nunca combinam e cai sempre no `fetch` real (que devolve 401 com um token falso).
 
 ### Monograma (v1.1.0)
 
