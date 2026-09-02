@@ -1,6 +1,6 @@
 # PROJECT-CONTEXT.md
 
-Contexto de projeto para o repositório `escritorio-casa`. Descreve o **estado atual** de cada app e as decisões que não são óbvias a partir do código. Última alteração: 3 de setembro de 2026 — `convidados/` v1.4.0: passa a PWA instalável a sério (manifest, service worker, ícones próprios), como as restantes apps do repositório.
+Contexto de projeto para o repositório `escritorio-casa`. Descreve o **estado atual** de cada app e as decisões que não são óbvias a partir do código. Última alteração: 3 de setembro de 2026 — `convidados/` v1.5.0: aviso de mesa cheia também no Resumo e ao editar, e atribuição de mesa direto do cartão (confirma automaticamente).
 
 ## Visão geral
 
@@ -176,7 +176,7 @@ Um projeto separado, `~/garmin-dashboard` (repositório git próprio, fora de `e
 
 ## `convidados/` — Convidados (casamento)
 
-Gestão da lista de convidados do casamento real do utilizador (Camila & Bruno). CRUD direto à API do Google Sheets (`SHEET_ID: 1UcjSO3P7RbreTtKeg4T8jsoRa2KwzTEPE4Wsrkf2Eos`), sem Apps Script. Versão **v1.4.0**.
+Gestão da lista de convidados do casamento real do utilizador (Camila & Bruno). CRUD direto à API do Google Sheets (`SHEET_ID: 1UcjSO3P7RbreTtKeg4T8jsoRa2KwzTEPE4Wsrkf2Eos`), sem Apps Script. Versão **v1.5.0**.
 
 Há um projeto **separado e maior** para o próprio casamento em `~/casamento` (fora deste repositório, com o seu próprio `PROJECT-CONTEXT.md`/`CLAUDE.md`), que inclui a pasta `Mesas/` com o plano de lugares "a sério" (`mesas.csv`, scripts de geração). Esta app (`convidados/`) é só a PWA de acompanhamento de RSVPs — os dois não estão ligados automaticamente.
 
@@ -214,6 +214,15 @@ Pedido do utilizador: transformar numa PWA a sério. Até aqui `convidados/` era
 - `theme-color` passa a mudar dinamicamente com o tema claro/escuro (`applyDark()`), como as outras apps já faziam — esta app tinha ficado para trás nisso.
 - Atalho da PWA "Novo Convidado" (`manifest.json` → `shortcuts`) abre a app já com o formulário de novo convidado aberto (`?novo=1`, lido uma vez em `startApp()` e limpo da URL com `history.replaceState`).
 - **Testado a sério, não só visualmente**: servido por `python3 -m http.server`, carregado em `chromium --headless=new` via CDP — confirmado por `fetch('manifest.json')` que o manifesto é servido e é JSON válido, que o `<link rel="icon">` aponta para um ficheiro real (200, não mais um `data:` URI), e que `navigator.serviceWorker.getRegistrations()` mostra o `sw.js` registado com o scope certo.
+
+### Aviso de mesa cheia por todo o lado, e atalho no cartão (v1.5.0)
+
+O aviso de `CAPACIDADE_MESA` (10) só disparava ao mudar o `<select>` Mesa no formulário — faltava no Resumo e ao simplesmente abrir a edição de alguém já numa mesa cheia. Corrigido:
+
+- **Resumo, "Por Mesa"**: `breakdownRow()` marca a linha como "cheia" quando `pessoas >= CAPACIDADE_MESA` — barra e número a vermelho (`--danger`), mais um "⚠" a seguir ao número. Só as linhas de mesa (não "Sem mesa", nem Por Estado/Por Fase) podem ficar assim.
+- **Ao abrir a edição**: a lógica do aviso foi extraída para `avisarSeMesaCheia()` (antes só vivia dentro do listener de `change` do `<select>` Mesa) — `openEdit()` chama-a mesmo depois de preencher o formulário, por isso abrir alguém já sentado numa mesa cheia mostra logo o aviso, sem ser preciso tocar em nada. `f_pessoas` também passou a ter o mesmo aviso no seu próprio `change`, para quando o número de pessoas é o que empurra a mesa para a capacidade.
+- **Atribuir mesa direto do cartão**: novo botão de ação no cartão (ícone de grelha 2×2, fica dourado quando o convidado já tem mesa) abre um modal curto (`#quickMesaOverlay`) só com o `<select>` Mesa — ao contrário do campo Mesa do formulário completo, que só se liberta depois de o Estado já ser "Confirmado", este atalho faz o inverso: **escolher uma mesa aqui confirma o convidado automaticamente** (Estado → Confirmado, Nº Confirmados → igual a Nº Pessoas), não é preciso passar primeiro pela confirmação de presença. Também tem o aviso de mesa cheia, no `change` do próprio `<select>`.
+- **Testado com o código real da app** (mesmo mock de `fetch` das secções anteriores): confirmado o aviso a aparecer ao abrir a edição de um convidado já numa mesa com 12 pessoas, o aviso a atualizar-se ao escolher essa mesa no atalho do cartão para outro convidado ("vai ficar com 14 pessoas"), e o convidado a sair da modal já como Confirmado com Nº Confirmados = Nº Pessoas.
 
 ---
 
