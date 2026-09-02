@@ -1,0 +1,23 @@
+{
+  "name": "Convidados - Camila & Bruno",
+  "short_name": "Convidados",
+  "description": "Lista de convidados do casamento, sincronizada com o Google Sheets",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#FAF6EA",
+  "theme_color": "#F1E9D3",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ],
+  "shortcuts": [
+    {
+      "name": "Novo Convidado",
+      "short_name": "Novo",
+      "description": "Adicionar um convidado diretamente",
+      "url": "./?novo=1",
+      "icons": [{ "src": "icon-192.png", "sizes": "192x192", "type": "image/png" }]
+    }
+  ]
+}

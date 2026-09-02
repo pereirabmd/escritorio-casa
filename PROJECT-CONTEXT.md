@@ -1,6 +1,6 @@
 # PROJECT-CONTEXT.md
 
-Contexto de projeto para o repositório `escritorio-casa`. Descreve o **estado atual** de cada app e as decisões que não são óbvias a partir do código. Última alteração: 3 de setembro de 2026 — `convidados/` v1.3.0: clicar numa mesa no Resumo mostra quem lá está sentado, com opção de os retirar.
+Contexto de projeto para o repositório `escritorio-casa`. Descreve o **estado atual** de cada app e as decisões que não são óbvias a partir do código. Última alteração: 3 de setembro de 2026 — `convidados/` v1.4.0: passa a PWA instalável a sério (manifest, service worker, ícones próprios), como as restantes apps do repositório.
 
 ## Visão geral
 
@@ -176,7 +176,7 @@ Um projeto separado, `~/garmin-dashboard` (repositório git próprio, fora de `e
 
 ## `convidados/` — Convidados (casamento)
 
-Gestão da lista de convidados do casamento real do utilizador (Camila & Bruno). CRUD direto à API do Google Sheets (`SHEET_ID: 1UcjSO3P7RbreTtKeg4T8jsoRa2KwzTEPE4Wsrkf2Eos`), sem Apps Script, sem manifest nem service worker — a mais simples das apps do repositório, só `index.html`. Versão **v1.3.0**.
+Gestão da lista de convidados do casamento real do utilizador (Camila & Bruno). CRUD direto à API do Google Sheets (`SHEET_ID: 1UcjSO3P7RbreTtKeg4T8jsoRa2KwzTEPE4Wsrkf2Eos`), sem Apps Script. Versão **v1.4.0**.
 
 Há um projeto **separado e maior** para o próprio casamento em `~/casamento` (fora deste repositório, com o seu próprio `PROJECT-CONTEXT.md`/`CLAUDE.md`), que inclui a pasta `Mesas/` com o plano de lugares "a sério" (`mesas.csv`, scripts de geração). Esta app (`convidados/`) é só a PWA de acompanhamento de RSVPs — os dois não estão ligados automaticamente.
 
@@ -200,9 +200,20 @@ Pedido do utilizador: clicar numa linha de mesa no "Por Mesa" do Resumo mostra q
 - O modal fica aberto depois de remover alguém (a lista lá dentro atualiza-se sozinha, para permitir tirar vários convidados seguidos sem reabrir); `renderResumo()` volta a chamar `renderMesaDetail()` no fim sempre que o modal estiver aberto, para os números da mesa e a lista nunca ficarem dessincronizados de um refresh (manual, pull-to-refresh, ou depois de uma remoção).
 - **Testado com o código real da app**, não só visualmente: `window.fetch` foi substituído antes da navegação por um mock que intercepta os pedidos ao Sheets API (`ensureMesaColumn`, `loadConfig`, `loadGuests`, `loadSheetMeta`, e o `PUT` de remoção) com dados sintéticos com estado próprio, deixando todo o resto do código da app (incluindo `openMesaDetail`/`removeGuestFromMesa`/`refreshAll`) correr sem alterações — confirmou a mesa a abrir com os 4 convidados certos e a lista a atualizar-se de imediato ao remover um deles. **Cuidado ao repetir**: `encodeURIComponent` escreve `:` como `%3A` nos URLs pedidos (ex. `Convidados!A2:G1000` → `...A2%3AG1000`); o mock de fetch tem de fazer `decodeURIComponent(url)` antes de comparar por `includes(...)`, senão os padrões com `:` nunca combinam e cai sempre no `fetch` real (que devolve 401 com um token falso).
 
-### Monograma (v1.1.0)
+### Monograma (v1.1.0, favicon corrigido em v1.4.0)
 
-O logótipo no cabeçalho e no rodapé era um placeholder gerado ("C·B" em círculo). Substituído pelo monograma real do casamento, recortado a partir de `~/casamento/Mesas/monogram_circle.png` (700×700, fundo transparente) e reduzido para 160×160 antes de embutir em base64 — mais pequeno do que o placeholder que substituiu. O favicon (ícone "Claudinho", partilhado com as outras apps da família) não foi tocado — é intencionalmente diferente do logótipo do casamento.
+O logótipo no cabeçalho e no rodapé era um placeholder gerado ("C·B" em círculo). Substituído pelo monograma real do casamento, recortado a partir de `~/casamento/Mesas/monogram_circle.png` (700×700, fundo transparente) e reduzido para 160×160 antes de embutir em base64 — mais pequeno do que o placeholder que substituiu. Na v1.1.0 o favicon (ícone "Claudinho", partilhado com as outras apps da família) tinha ficado por tocar; a v1.4.0 corrige isso — ver secção da PWA logo abaixo, é o mesmo ficheiro `icon-192.png` das duas coisas. O pequeno "Claudinho" no rodapé (crédito pessoal, 26px, distinto do ícone da app) continua lá, tal como no `receitas/`.
+
+### PWA instalável (v1.4.0)
+
+Pedido do utilizador: transformar numa PWA a sério. Até aqui `convidados/` era só um `index.html` sem manifest nem service worker — a única app do repositório nessa situação. Passou a seguir exatamente o padrão das outras (`peso/`, `RTO/`, `ciclismo/`): `manifest.json` e `sw.js` como ficheiros próprios (não embutidos em base64 no HTML, ao contrário do `receitas/`, que é a exceção nesse aspeto), com `icon-192.png`/`icon-512.png` gerados a partir do mesmo monograma do casamento — com padding para servirem de ícone "maskable" (o SO pode recortá-los em círculo/squircle sem cortar o desenho).
+
+- **O favicon deixou de ser o "Claudinho"** e passa a ser o mesmo `icon-192.png` usado no manifest — como em `peso/RTO/ciclismo`, onde o ícone da aba do browser e o ícone instalado são sempre o mesmo ficheiro. O pequeno "Claudinho" do rodapé mantém-se, é um crédito diferente do ícone da app.
+- `sw.js` — cache-first da app shell (`./`, `index.html`, `manifest.json`, os dois ícones), nunca intercepta pedidos a outra origem (Google Sheets, autenticação) — mesmo código dos outros `sw.js`/`service-worker.js` da família, `CACHE = 'convidados-shell-v1'`.
+- Banner "Nova versão disponível" (`#updateBanner`) ligado ao evento `controllerchange`, mesmo padrão das outras apps — **lembrete já registado nas convenções partilhadas**: sempre que o HTML mudar, subir a versão do `CACHE` em `sw.js`.
+- `theme-color` passa a mudar dinamicamente com o tema claro/escuro (`applyDark()`), como as outras apps já faziam — esta app tinha ficado para trás nisso.
+- Atalho da PWA "Novo Convidado" (`manifest.json` → `shortcuts`) abre a app já com o formulário de novo convidado aberto (`?novo=1`, lido uma vez em `startApp()` e limpo da URL com `history.replaceState`).
+- **Testado a sério, não só visualmente**: servido por `python3 -m http.server`, carregado em `chromium --headless=new` via CDP — confirmado por `fetch('manifest.json')` que o manifesto é servido e é JSON válido, que o `<link rel="icon">` aponta para um ficheiro real (200, não mais um `data:` URI), e que `navigator.serviceWorker.getRegistrations()` mostra o `sw.js` registado com o scope certo.
 
 ---
 
