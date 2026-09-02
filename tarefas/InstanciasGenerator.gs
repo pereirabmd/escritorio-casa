@@ -122,6 +122,18 @@ function ocorreNestaData(tarefa, data, diaSemana, diaMes) {
     }
     case 'Mensal':
       return diaMes === Number(tarefa.DiaMes);
+    case 'Trimestral':
+    case 'Semestral': {
+      // Reaproveita a coluna DiasSemana (tal como 'Pontual') para guardar a
+      // data de início (YYYY-MM-DD) a partir da qual a periodicidade conta.
+      const inicio = tarefa.DiasSemana ? new Date(tarefa.DiasSemana) : null;
+      if (!inicio || isNaN(inicio.getTime())) return false;
+      if (data < inicio) return false;
+      if (diaMes !== inicio.getDate()) return false;
+      const intervaloMeses = tarefa.Recorrencia === 'Trimestral' ? 3 : 6;
+      const diffMeses = (data.getFullYear() - inicio.getFullYear()) * 12 + (data.getMonth() - inicio.getMonth());
+      return diffMeses % intervaloMeses === 0;
+    }
     case 'Pontual':
       // Ocorrências pontuais são criadas diretamente pela PWA, não geradas aqui.
       return false;

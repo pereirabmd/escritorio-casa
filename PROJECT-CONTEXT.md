@@ -1,6 +1,6 @@
 # PROJECT-CONTEXT.md
 
-Contexto de projeto para o repositório `escritorio-casa`. Descreve o **estado atual** de cada app e as decisões que não são óbvias a partir do código. Última alteração: 1 de setembro de 2026 — `RTO/` v7.1.0: Calendário passa a aba principal e skeleton de carregamento refeito para espelhar essa aba.
+Contexto de projeto para o repositório `escritorio-casa`. Descreve o **estado atual** de cada app e as decisões que não são óbvias a partir do código. Última alteração: 2 de setembro de 2026 — `tarefas/` Beta 33: novas recorrências Trimestral/Semestral.
 
 ## Visão geral
 
@@ -33,7 +33,9 @@ Funcionalidades: tendência por regressão linear (não apenas os dois últimos 
 
 ## `tarefas/` — Tarefas de Casa
 
-Gestão de tarefas domésticas partilhada entre várias pessoas. CRUD direto à API do Google Sheets (`SHEET_ID: 1ZwA9RqwCbOlfWLmYZWFsE5iq2oUqr-XZru_HDy6NjjI`) mais um backend em Google Apps Script para geração agendada de instâncias recorrentes e notificações push (Firebase Cloud Messaging, projeto `bmdpereira-5a8f4`). Versão **Beta 32**.
+Gestão de tarefas domésticas partilhada entre várias pessoas. CRUD direto à API do Google Sheets (`SHEET_ID: 1ZwA9RqwCbOlfWLmYZWFsE5iq2oUqr-XZru_HDy6NjjI`) mais um backend em Google Apps Script para geração agendada de instâncias recorrentes e notificações push (Firebase Cloud Messaging, projeto `bmdpereira-5a8f4`). Versão **Beta 33**.
+
+**Recorrências Trimestral/Semestral (Beta 33)**: pedido do utilizador — periodicidade a cada 3 ou 6 meses, ancorada numa **data de início à escolha**, sem criar nenhuma coluna nova em `Tarefas`. Reaproveita a coluna `DiasSemana` para guardar essa data de início (`YYYY-MM-DD`), exatamente o mesmo truque que `Pontual` já usava para guardar a sua data única; `DiaMes` fica vazio para estes dois tipos. O campo "Data" do formulário (antes só para Pontual) passa a mudar de label para "Data de início" quando o tipo é Trimestral/Semestral. A recorrência é calculada em `InstanciasGenerator.gs` → `ocorreNestaData()`: mesmo dia-do-mês da data de início, e diferença em meses múltipla de 3 ou 6 — por isso esta funcionalidade **não funciona só com o HTML**, depende do `case 'Trimestral'/'Semestral'` já copiado para o projeto Apps Script (ver aviso geral sobre `.gs` acima).
 
 Pontos a não perder de vista:
 

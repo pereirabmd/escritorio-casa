@@ -211,6 +211,8 @@
         <option value="Semanal">Semanal (1 dia)</option>
         <option value="Dias especificos">Vários dias por semana</option>
         <option value="Mensal">Mensal</option>
+        <option value="Trimestral">Trimestral</option>
+        <option value="Semestral">Semestral</option>
         <option value="Pontual">Pontual (uma vez)</option>
       </select>
     </div>
@@ -223,7 +225,7 @@
       <input type="number" id="f-diames" min="1" max="31" value="1">
     </div>
     <div class="field" id="f-datapontual-wrap" style="display:none">
-      <label>Data</label>
+      <label id="f-datapontual-label">Data</label>
       <input type="date" id="f-datapontual">
     </div>
     <div class="field">
@@ -321,7 +323,7 @@
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 
 <script>
-const APP_VERSION = 'Beta 32';
+const APP_VERSION = 'Beta 33';
 
 // ---------------------------------------------------------------
 // ROBUSTEZ — erros globais e localStorage seguro
@@ -1252,11 +1254,13 @@ function duplicarTarefa(t) {
   document.getElementById('f-recorrencia').dispatchEvent(new Event('change'));
   document.getElementById('f-diames').value = t.DiaMes || '1';
   document.getElementById('f-hora').value = t.HoraNotificacao || '08:00';
+  const ehDataUnica = t.Recorrencia === 'Pontual' || t.Recorrencia === 'Trimestral' || t.Recorrencia === 'Semestral';
+  document.getElementById('f-datapontual').value = ehDataUnica ? (t.DiasSemana || '') : '';
 
   const catWrap = document.getElementById('f-categorias');
   catWrap.querySelectorAll('.chip').forEach(c => c.classList.toggle('selected', c.dataset.cat === t.Categoria));
   const diasWrap = document.getElementById('f-dias');
-  const diasTarefa = (t.DiasSemana || '').split(',');
+  const diasTarefa = ehDataUnica ? [] : (t.DiasSemana || '').split(',');
   diasWrap.querySelectorAll('.chip').forEach(c => c.classList.toggle('selected', diasTarefa.includes(c.dataset.dia)));
   document.getElementById('f-pessoa').value = t.PessoaPadrao;
 }
@@ -1265,6 +1269,11 @@ function resumoRecorrencia(t) {
   if (t.Recorrencia === 'Diaria') return 'Todos os dias';
   if (t.Recorrencia === 'Semanal' || t.Recorrencia === 'Dias especificos') return t.DiasSemana || '';
   if (t.Recorrencia === 'Mensal') return 'Dia ' + t.DiaMes + ' de cada mês';
+  if (t.Recorrencia === 'Trimestral' || t.Recorrencia === 'Semestral') {
+    const meses = t.Recorrencia === 'Trimestral' ? '3' : '6';
+    const inicio = t.DiasSemana ? new Date(t.DiasSemana + 'T00:00:00').toLocaleDateString('pt-PT') : '?';
+    return 'A cada ' + meses + ' meses, desde ' + inicio;
+  }
   if (t.Recorrencia === 'Pontual') return 'Uma vez, ' + (t.DiasSemana || '');
   return t.Recorrencia;
 }
@@ -1312,9 +1321,12 @@ function renderFormOpcoes() {
 }
 
 document.getElementById('f-recorrencia').addEventListener('change', (e) => {
-  document.getElementById('f-dias-wrap').style.display = (e.target.value === 'Semanal' || e.target.value === 'Dias especificos') ? 'block' : 'none';
-  document.getElementById('f-diames-wrap').style.display = e.target.value === 'Mensal' ? 'block' : 'none';
-  document.getElementById('f-datapontual-wrap').style.display = e.target.value === 'Pontual' ? 'block' : 'none';
+  const v = e.target.value;
+  const ehPeriodica = v === 'Trimestral' || v === 'Semestral';
+  document.getElementById('f-dias-wrap').style.display = (v === 'Semanal' || v === 'Dias especificos') ? 'block' : 'none';
+  document.getElementById('f-diames-wrap').style.display = v === 'Mensal' ? 'block' : 'none';
+  document.getElementById('f-datapontual-wrap').style.display = (v === 'Pontual' || ehPeriodica) ? 'block' : 'none';
+  document.getElementById('f-datapontual-label').textContent = ehPeriodica ? 'Data de início' : 'Data';
 });
 
 let tarefaEmEdicaoId = null;
@@ -1356,7 +1368,8 @@ function abrirModalEdicaoTarefa(t) {
   document.getElementById('f-recorrencia').value = t.Recorrencia;
   document.getElementById('f-recorrencia').dispatchEvent(new Event('change'));
   document.getElementById('f-diames').value = t.DiaMes || '1';
-  document.getElementById('f-datapontual').value = t.Recorrencia === 'Pontual' ? (t.DiasSemana || '') : '';
+  const ehDataUnica = t.Recorrencia === 'Pontual' || t.Recorrencia === 'Trimestral' || t.Recorrencia === 'Semestral';
+  document.getElementById('f-datapontual').value = ehDataUnica ? (t.DiasSemana || '') : '';
   document.getElementById('f-hora').value = t.HoraNotificacao || '08:00';
   renderFormOpcoes();
 
@@ -1364,7 +1377,7 @@ function abrirModalEdicaoTarefa(t) {
   catWrap.querySelectorAll('.chip').forEach(c => c.classList.toggle('selected', c.dataset.cat === t.Categoria));
 
   const diasWrap = document.getElementById('f-dias');
-  const diasTarefa = (t.DiasSemana || '').split(',');
+  const diasTarefa = ehDataUnica ? [] : (t.DiasSemana || '').split(',');
   diasWrap.querySelectorAll('.chip').forEach(c => c.classList.toggle('selected', diasTarefa.includes(c.dataset.dia)));
 
   document.getElementById('f-pessoa').value = t.PessoaPadrao;
@@ -1427,7 +1440,11 @@ document.getElementById('btn-guardar-tarefa').addEventListener('click', async ()
   const rotacao = [...document.querySelectorAll('#f-rotacao .chip.selected')].map(c => c.dataset.rot).join(',');
   const dependeDe = document.getElementById('f-depende-de').value;
 
-  if (recorrencia === 'Pontual' && !dataPontual) { toast('Escolhe a data'); return; }
+  const ehDataUnica = recorrencia === 'Pontual' || recorrencia === 'Trimestral' || recorrencia === 'Semestral';
+  if (ehDataUnica && !dataPontual) {
+    toast(recorrencia === 'Pontual' ? 'Escolhe a data' : 'Escolhe a data de início');
+    return;
+  }
   if ((recorrencia === 'Semanal' || recorrencia === 'Dias especificos') && !diasSel) {
     toast('Escolhe pelo menos um dia da semana');
     return;
@@ -1437,13 +1454,16 @@ document.getElementById('btn-guardar-tarefa').addEventListener('click', async ()
     return;
   }
 
-  // Para tarefas Pontuais reaproveitamos a coluna DiasSemana para guardar a data (YYYY-MM-DD)
-  const diasSemanaGuardar = recorrencia === 'Pontual' ? dataPontual : diasSel;
+  // Para tarefas Pontuais, Trimestrais e Semestrais reaproveitamos a coluna
+  // DiasSemana para guardar a data (YYYY-MM-DD) — para Trimestral/Semestral
+  // é a data de início a partir da qual a periodicidade é calculada no .gs.
+  const diasSemanaGuardar = ehDataUnica ? dataPontual : diasSel;
+  const diaMesGuardar = ehDataUnica ? '' : diaMes;
 
   if (tarefaEmEdicaoId) {
     // Edição de tarefa existente
     const tarefa = state.tarefas.find(t => t.ID === tarefaEmEdicaoId);
-    const row = [nome, catChip.dataset.cat, '', recorrencia, diasSemanaGuardar, diaMes, hora, pessoa, 'TRUE', prioridade, rotacao, dependeDe];
+    const row = [nome, catChip.dataset.cat, '', recorrencia, diasSemanaGuardar, diaMesGuardar, hora, pessoa, 'TRUE', prioridade, rotacao, dependeDe];
     const ok = await sheetsUpdate(`Tarefas!B${tarefa._rowIndex}:M${tarefa._rowIndex}`, row);
     if (ok) {
       toast('Tarefa atualizada');
@@ -1460,7 +1480,7 @@ document.getElementById('btn-guardar-tarefa').addEventListener('click', async ()
     : 1;
   const novoId = 'T' + String(proximoNum).padStart(3, '0');
 
-  const row = [novoId, nome, catChip.dataset.cat, '', recorrencia, diasSemanaGuardar, diaMes, hora, pessoa, 'TRUE', prioridade, rotacao, dependeDe];
+  const row = [novoId, nome, catChip.dataset.cat, '', recorrencia, diasSemanaGuardar, diaMesGuardar, hora, pessoa, 'TRUE', prioridade, rotacao, dependeDe];
   const ok = await sheetsAppend('Tarefas!A:M', row);
   if (!ok) { toast('Falha ao guardar tarefa: ' + (ultimoErroSheets || 'erro desconhecido')); return; }
 
