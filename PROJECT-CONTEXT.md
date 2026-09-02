@@ -1,6 +1,6 @@
 # PROJECT-CONTEXT.md
 
-Contexto de projeto para o repositório `escritorio-casa`. Descreve o **estado atual** de cada app e as decisões que não são óbvias a partir do código. Última alteração: 3 de setembro de 2026 — `convidados/` v1.5.0: aviso de mesa cheia também no Resumo e ao editar, e atribuição de mesa direto do cartão (confirma automaticamente).
+Contexto de projeto para o repositório `escritorio-casa`. Descreve o **estado atual** de cada app e as decisões que não são óbvias a partir do código. Última alteração: 3 de setembro de 2026 — `convidados/` v2.0.0: layout todo refeito com a paleta oficial do casamento, e o aviso de mesa cheia passa de toast a alerta permanente.
 
 ## Visão geral
 
@@ -176,7 +176,7 @@ Um projeto separado, `~/garmin-dashboard` (repositório git próprio, fora de `e
 
 ## `convidados/` — Convidados (casamento)
 
-Gestão da lista de convidados do casamento real do utilizador (Camila & Bruno). CRUD direto à API do Google Sheets (`SHEET_ID: 1UcjSO3P7RbreTtKeg4T8jsoRa2KwzTEPE4Wsrkf2Eos`), sem Apps Script. Versão **v1.5.0**.
+Gestão da lista de convidados do casamento real do utilizador (Camila & Bruno). CRUD direto à API do Google Sheets (`SHEET_ID: 1UcjSO3P7RbreTtKeg4T8jsoRa2KwzTEPE4Wsrkf2Eos`), sem Apps Script. Versão **v2.0.0**.
 
 Há um projeto **separado e maior** para o próprio casamento em `~/casamento` (fora deste repositório, com o seu próprio `PROJECT-CONTEXT.md`/`CLAUDE.md`), que inclui a pasta `Mesas/` com o plano de lugares "a sério" (`mesas.csv`, scripts de geração). Esta app (`convidados/`) é só a PWA de acompanhamento de RSVPs — os dois não estão ligados automaticamente.
 
@@ -223,6 +223,21 @@ O aviso de `CAPACIDADE_MESA` (10) só disparava ao mudar o `<select>` Mesa no fo
 - **Ao abrir a edição**: a lógica do aviso foi extraída para `avisarSeMesaCheia()` (antes só vivia dentro do listener de `change` do `<select>` Mesa) — `openEdit()` chama-a mesmo depois de preencher o formulário, por isso abrir alguém já sentado numa mesa cheia mostra logo o aviso, sem ser preciso tocar em nada. `f_pessoas` também passou a ter o mesmo aviso no seu próprio `change`, para quando o número de pessoas é o que empurra a mesa para a capacidade.
 - **Atribuir mesa direto do cartão**: novo botão de ação no cartão (ícone de grelha 2×2, fica dourado quando o convidado já tem mesa) abre um modal curto (`#quickMesaOverlay`) só com o `<select>` Mesa — ao contrário do campo Mesa do formulário completo, que só se liberta depois de o Estado já ser "Confirmado", este atalho faz o inverso: **escolher uma mesa aqui confirma o convidado automaticamente** (Estado → Confirmado, Nº Confirmados → igual a Nº Pessoas), não é preciso passar primeiro pela confirmação de presença. Também tem o aviso de mesa cheia, no `change` do próprio `<select>`.
 - **Testado com o código real da app** (mesmo mock de `fetch` das secções anteriores): confirmado o aviso a aparecer ao abrir a edição de um convidado já numa mesa com 12 pessoas, o aviso a atualizar-se ao escolher essa mesa no atalho do cartão para outro convidado ("vai ficar com 14 pessoas"), e o convidado a sair da modal já como Confirmado com Nº Confirmados = Nº Pessoas.
+- **Correção pedida logo a seguir**: o aviso acima ainda usava `toast()` — o utilizador pediu explicitamente que não fosse um toast (desaparece sozinho), mas sim **sempre visível** enquanto a condição se mantiver. `avisarSeMesaCheia()`/`avisarQuickMesaCheia()` passaram a escrever num `<p class="mesa-aviso" hidden>` fixo junto ao campo Mesa (`#f_mesa_aviso` no formulário completo, `#qm_mesa_aviso` no atalho do cartão) em vez de chamar `toast()` — chamado sempre que o valor de Mesa ou de Nº Pessoas muda, e já ao abrir o formulário/atalho se a mesa escolhida (ou já atribuída) estiver cheia. **Armadilha de CSS a não repetir**: `hidden` é um atributo HTML com uma regra `[hidden]{display:none}` do próprio browser, especificidade (0,1,0) — exatamente a mesma de uma classe como `.mesa-aviso{display:flex}`; como as duas empatam em especificidade, quem vier depois no CSS ganha, e uma regra de classe do autor definida depois do UA stylesheet **ganha ao `[hidden]`**, fazendo o elemento aparecer na mesma (uma tira colapsada mas visível). Corrigido com uma regra extra `.mesa-aviso[hidden]{display:none}` logo a seguir.
+
+### Layout todo refeito com a paleta oficial do casamento (v2.0.0)
+
+Pedido do utilizador: liberdade total para reinventar o layout, só duas constraints — manter o monograma e usar **o esquema de cores de `~/casamento`** (não o que a app já tinha, que era só uma aproximação). `~/casamento/esquema_de_cores_camila_e_bruno.txt` é a fonte de verdade: Deep Sage `#5A6B56`, Champagne/Palha `#C8B96A`, Straw claro `#DDD080`, Dark Forest `#1A2E1C`, Sage Green `#768268` (reservada, "fora de uso ativo nas 3 páginas"), Champagne claro `#F2EAD6` (fundo), Branco quente `#FAF6EC` (cartões) — boho-chic praiano, tipografia Cormorant Garamond + **Cinzel** (destaques), que esta app ainda não carregava.
+
+- **Paleta antiga vs. oficial**: a app já usava tons sage/dourado antes, mas por aproximação (`--primary:#6E8163` em vez do Deep Sage `#5A6B56` oficial, `--gold:#A9863F` em vez do Champagne `#C8B96A`, etc.) — todos os tokens de `:root`/`html.dark` foram recalculados a partir dos hex exatos do ficheiro do casamento. `--border`/`--chip-bg`/`--header-bg` não estão no documento (é uma paleta de marca, não um design system de UI) — foram derivados por mistura de cor (`bg` com `gold`/`primary`) e verificados visualmente antes de aplicar. As 5 cores de estado (Por convidar/Convidado/Confirmado/Recusado/Sem resposta) usavam azul, que não existe na paleta do casamento — recriadas só com tons da família sage/gold/clay (`--sage-2` entra aqui para diferenciar "Convidado" de "Confirmado", que senão ficavam parecidos demais).
+- **`--danger` não está na paleta do casamento** (é um sistema de marca, não prevê estados de erro) — mantido um tom clay/terracota (`#A65A42`) que já lá estava, por combinar razoavelmente com o resto.
+- **Cabeçalho tipo convite**: medalhão do monograma maior com anel dourado duplo, título "CONVIDADOS" em versaletes Cinzel, "Camila & Bruno" por baixo em itálico dourado — a app deixa de parecer uma lista de tarefas genérica.
+- **Separadores como pastilha segmentada** (Convidados/Resumo) em vez da barra com sublinhado — mesmo padrão já usado no `receitas/` e no `tarefas/` para filtros, aplicado aqui à navegação principal.
+- **Cartões com tira dourada no topo** (gradiente `--gold` → `--gold-soft` → transparente), badges de estado em pastilha com fundo (`--chip-bg`) em vez de texto solto.
+- **Modais**: borda superior dourada mais grossa (3px), rótulos de campo em versaletes Cinzel dourados, botões em pílula (`border-radius:999px`) em vez de retângulo arredondado.
+- **Ícones da PWA regenerados** com o novo `--bg` (`#F2EAD6`) em vez do antigo — `manifest.json`/`meta theme-color`/`applyTheme()` também atualizados para os novos tokens de cabeçalho claro/escuro.
+- **Só CSS e estrutura visual foram tocados** — mesmo princípio das reformulações do `RTO/`/`receitas/`: nenhuma função de dados (Sheets, `ensureMesaColumn`, filtros, mesa, exportação) foi alterada.
+- **Testado com o mesmo mock de `fetch`** das secções anteriores, claro e escuro: cabeçalho, separadores, cartões com badges, "Por Mesa" com a linha cheia a vermelho, e o novo alerta permanente de mesa cheia dentro do modal — todos renderizados com o código real da app.
 
 ---
 

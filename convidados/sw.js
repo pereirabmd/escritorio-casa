@@ -1,4 +1,4 @@
-var CACHE = 'convidados-shell-v2';
+var CACHE = 'convidados-shell-v3';
 var SHELL = ['./', './index.html', './manifest.json', './icon-192.png', './icon-512.png'];
 
 self.addEventListener('install', function(e){
