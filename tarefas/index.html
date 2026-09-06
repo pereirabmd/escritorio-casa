@@ -338,7 +338,7 @@
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 
 <script>
-const APP_VERSION = 'Beta 35';
+const APP_VERSION = 'Beta 36';
 
 // ---------------------------------------------------------------
 // PISCINA — catálogo estático (não editável pela UI; ver PROJECT-CONTEXT.md)
@@ -933,6 +933,22 @@ function formatarDataCurta(dataStr) {
   return partes.length === 3 ? `${partes[2]}/${partes[1]}` : dataStr;
 }
 
+// Pedido do utilizador: as tarefas nunca registadas aparecem sempre no
+// topo (não há "próxima" que se possa comparar); as restantes ordenam-se
+// pela ProximaData mais próxima de vencer primeiro. ProximaData está em
+// "YYYY-MM-DD", por isso comparar como string já ordena cronologicamente.
+function piscinaOrdenarPeriodicas(items) {
+  return [...items].sort((a, b) => {
+    const linhaA = state.piscina.find(p => p.ID === a.id);
+    const linhaB = state.piscina.find(p => p.ID === b.id);
+    const feitaA = !!linhaA?.UltimaData;
+    const feitaB = !!linhaB?.UltimaData;
+    if (feitaA !== feitaB) return feitaA ? 1 : -1;
+    if (!feitaA) return 0; // nunca feitas: mantém a ordem do catálogo entre si
+    return String(linhaA.ProximaData || '').localeCompare(String(linhaB.ProximaData || ''));
+  });
+}
+
 function renderPiscina() {
   const spanEstacao = document.getElementById('piscina-estacao');
   const estacao = piscinaEstacaoAtual();
@@ -952,7 +968,7 @@ function renderPiscina() {
     return;
   }
 
-  const periodicas = PISCINA_CATALOGO.filter(i => i.tipo !== 'log');
+  const periodicas = piscinaOrdenarPeriodicas(PISCINA_CATALOGO.filter(i => i.tipo !== 'log'));
   const outras = PISCINA_CATALOGO.filter(i => i.tipo === 'log');
 
   cont.innerHTML = periodicas.map(item => renderPiscinaCard(item, estacao)).join('');

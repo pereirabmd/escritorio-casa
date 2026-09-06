@@ -1,6 +1,6 @@
 # PROJECT-CONTEXT.md
 
-Contexto de projeto para o repositório `escritorio-casa`. Descreve o **estado atual** de cada app e as decisões que não são óbvias a partir do código. Última alteração: 6 de setembro de 2026 — `tarefas/` Beta 35: corrigida uma corrida de concorrência que corrompia o seed inicial da aba "Piscina" (Beta 34).
+Contexto de projeto para o repositório `escritorio-casa`. Descreve o **estado atual** de cada app e as decisões que não são óbvias a partir do código. Última alteração: 6 de setembro de 2026 — `tarefas/` Beta 36: a lista da aba "Piscina" passa a ordenar-se por urgência (nunca feitas primeiro, depois pela próxima a vencer).
 
 ## Visão geral
 
@@ -33,7 +33,9 @@ Funcionalidades: tendência por regressão linear (não apenas os dois últimos 
 
 ## `tarefas/` — Tarefas de Casa
 
-Gestão de tarefas domésticas partilhada entre várias pessoas. CRUD direto à API do Google Sheets (`SHEET_ID: 1ZwA9RqwCbOlfWLmYZWFsE5iq2oUqr-XZru_HDy6NjjI`) mais um backend em Google Apps Script para geração agendada de instâncias recorrentes e notificações push (Firebase Cloud Messaging, projeto `bmdpereira-5a8f4`). Versão **Beta 35**.
+Gestão de tarefas domésticas partilhada entre várias pessoas. CRUD direto à API do Google Sheets (`SHEET_ID: 1ZwA9RqwCbOlfWLmYZWFsE5iq2oUqr-XZru_HDy6NjjI`) mais um backend em Google Apps Script para geração agendada de instâncias recorrentes e notificações push (Firebase Cloud Messaging, projeto `bmdpereira-5a8f4`). Versão **Beta 36**.
+
+**Ordenação da aba "Piscina" (Beta 36)**: pedido do utilizador — as tarefas periódicas (não as de "Outras ações", que não têm data prevista) ordenam-se com `piscinaOrdenarPeriodicas()`: primeiro as que nunca foram registadas (sem `UltimaData`, mantendo entre si a ordem do catálogo), depois as restantes por `ProximaData` crescente — a que está mais perto de vencer (ou já venceu há mais tempo) aparece mais acima.
 
 **Bug corrigido em Beta 35 — appends concorrentes corrompem seed inicial**: `criarTabPiscina()` populava as 13 linhas do catálogo com `Promise.all` de 13 `sheetsAppend()` em paralelo. A API do Sheets não serializa vários `values:append` simultâneos ao mesmo intervalo — cada pedido decide a "próxima linha livre" a partir do estado que via na altura, e pedidos em voo ao mesmo tempo colidem na mesma linha, escrevendo-se uns por cima dos outros. Resultado real observado: de 13 linhas só sobreviveram 3. Corrigido substituindo por `sheetsAppendVarias(range, rows)` — um único pedido `values:append` com todas as linhas, sempre atómico — e `sheetsAppend()` passou a ser um caso particular desse (uma linha só). Além disso, `carregarPiscina()` agora chama `garantirCatalogoPiscina()` sempre que a aba é lida: compara os `ID` já presentes com `PISCINA_CATALOGO` e acrescenta só os que faltam, num único pedido — repara sozinha uma sheet corrompida por este bug (sem tocar nas linhas já existentes) e também cobre o caso de, no futuro, uma tarefa nova ser acrescentada ao catálogo depois de a aba já existir. **Lição geral**: nunca disparar `Promise.all` de vários `sheetsAppend()`/`values:append` para a mesma aba — usar sempre um único pedido com todas as linhas.
 
