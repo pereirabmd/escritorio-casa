@@ -338,7 +338,7 @@
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 
 <script>
-const APP_VERSION = 'Beta 36';
+const APP_VERSION = 'Beta 37';
 
 // ---------------------------------------------------------------
 // PISCINA — catálogo estático (não editável pela UI; ver PROJECT-CONTEXT.md)
@@ -930,7 +930,7 @@ function piscinaLimiteAtraso(regime) {
 
 function formatarDataCurta(dataStr) {
   const partes = String(dataStr).split('-');
-  return partes.length === 3 ? `${partes[2]}/${partes[1]}` : dataStr;
+  return partes.length === 3 ? `${partes[2]}/${partes[1]}/${partes[0]}` : dataStr;
 }
 
 // Pedido do utilizador: as tarefas nunca registadas aparecem sempre no

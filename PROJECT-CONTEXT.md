@@ -1,6 +1,6 @@
 # PROJECT-CONTEXT.md
 
-Contexto de projeto para o repositório `escritorio-casa`. Descreve o **estado atual** de cada app e as decisões que não são óbvias a partir do código. Última alteração: 6 de setembro de 2026 — `tarefas/` Beta 36: a lista da aba "Piscina" passa a ordenar-se por urgência (nunca feitas primeiro, depois pela próxima a vencer).
+Contexto de projeto para o repositório `escritorio-casa`. Descreve o **estado atual** de cada app e as decisões que não são óbvias a partir do código. Última alteração: 6 de setembro de 2026 — `tarefas/` Beta 37: as datas da aba "Piscina" passam a mostrar o ano (dd/mm/yyyy).
 
 ## Visão geral
 
@@ -33,7 +33,9 @@ Funcionalidades: tendência por regressão linear (não apenas os dois últimos 
 
 ## `tarefas/` — Tarefas de Casa
 
-Gestão de tarefas domésticas partilhada entre várias pessoas. CRUD direto à API do Google Sheets (`SHEET_ID: 1ZwA9RqwCbOlfWLmYZWFsE5iq2oUqr-XZru_HDy6NjjI`) mais um backend em Google Apps Script para geração agendada de instâncias recorrentes e notificações push (Firebase Cloud Messaging, projeto `bmdpereira-5a8f4`). Versão **Beta 36**.
+Gestão de tarefas domésticas partilhada entre várias pessoas. CRUD direto à API do Google Sheets (`SHEET_ID: 1ZwA9RqwCbOlfWLmYZWFsE5iq2oUqr-XZru_HDy6NjjI`) mais um backend em Google Apps Script para geração agendada de instâncias recorrentes e notificações push (Firebase Cloud Messaging, projeto `bmdpereira-5a8f4`). Versão **Beta 37**.
+
+**Datas da aba "Piscina" com ano (Beta 37)**: `formatarDataCurta()` passou de `dd/mm` a `dd/mm/yyyy` — pedido do utilizador, para a data sugerida (e a última vez) não ficarem ambíguas entre anos.
 
 **Ordenação da aba "Piscina" (Beta 36)**: pedido do utilizador — as tarefas periódicas (não as de "Outras ações", que não têm data prevista) ordenam-se com `piscinaOrdenarPeriodicas()`: primeiro as que nunca foram registadas (sem `UltimaData`, mantendo entre si a ordem do catálogo), depois as restantes por `ProximaData` crescente — a que está mais perto de vencer (ou já venceu há mais tempo) aparece mais acima.
 
