@@ -1,6 +1,6 @@
 # PROJECT-CONTEXT.md
 
-Contexto de projeto para o repositório `escritorio-casa`. Descreve o **estado atual** de cada app e as decisões que não são óbvias a partir do código. Última alteração: 6 de setembro de 2026 — `tarefas/` Beta 37: as datas da aba "Piscina" passam a mostrar o ano (dd/mm/yyyy).
+Contexto de projeto para o repositório `escritorio-casa`. Descreve o **estado atual** de cada app e as decisões que não são óbvias a partir do código. Última alteração: 6 de setembro de 2026 — `tarefas/` Beta 38: "Outras ações" da aba "Piscina" passa a subseparador próprio, em vez de secção na mesma página.
 
 ## Visão geral
 
@@ -33,7 +33,9 @@ Funcionalidades: tendência por regressão linear (não apenas os dois últimos 
 
 ## `tarefas/` — Tarefas de Casa
 
-Gestão de tarefas domésticas partilhada entre várias pessoas. CRUD direto à API do Google Sheets (`SHEET_ID: 1ZwA9RqwCbOlfWLmYZWFsE5iq2oUqr-XZru_HDy6NjjI`) mais um backend em Google Apps Script para geração agendada de instâncias recorrentes e notificações push (Firebase Cloud Messaging, projeto `bmdpereira-5a8f4`). Versão **Beta 37**.
+Gestão de tarefas domésticas partilhada entre várias pessoas. CRUD direto à API do Google Sheets (`SHEET_ID: 1ZwA9RqwCbOlfWLmYZWFsE5iq2oUqr-XZru_HDy6NjjI`) mais um backend em Google Apps Script para geração agendada de instâncias recorrentes e notificações push (Firebase Cloud Messaging, projeto `bmdpereira-5a8f4`). Versão **Beta 38**.
+
+**Subseparadores da aba "Piscina" (Beta 38)**: pedido do utilizador — "Periódicas" e "Outras ações" deixam de ser duas secções na mesma página (uma abaixo da outra) e passam a subseparadores por `chip`, exatamente o mesmo padrão já usado na tab Config (`data-piscinasub`/`.piscina-subtab`, alternância por `display:none`/`block`, sem persistência entre sessões — igual ao que já acontecia nos subseparadores da Config).
 
 **Datas da aba "Piscina" com ano (Beta 37)**: `formatarDataCurta()` passou de `dd/mm` a `dd/mm/yyyy` — pedido do utilizador, para a data sugerida (e a última vez) não ficarem ambíguas entre anos.
 

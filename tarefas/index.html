@@ -99,9 +99,18 @@
         <span id="piscina-estacao" style="font-size:12px; color:var(--text-secondary);"></span>
       </div>
       <p style="font-size:12px; color:var(--text-secondary); margin:-4px 0 14px 2px;">Apoio de memória: última vez e sugestão da próxima. Sem pressão — se não der hoje, dá amanhã.</p>
-      <div id="lista-piscina"><div class="empty">A carregar...</div></div>
-      <h2 class="section-title" style="margin-top:18px">Outras ações</h2>
-      <div id="lista-piscina-outras"></div>
+
+      <div class="chip-group" style="margin-bottom:14px;">
+        <button type="button" class="chip selected" data-piscinasub="periodicas">Periódicas</button>
+        <button type="button" class="chip" data-piscinasub="outras">Outras ações</button>
+      </div>
+
+      <div class="piscina-subtab" data-sub="periodicas">
+        <div id="lista-piscina"><div class="empty">A carregar...</div></div>
+      </div>
+      <div class="piscina-subtab" data-sub="outras" style="display:none">
+        <div id="lista-piscina-outras"></div>
+      </div>
     </section>
 
     <section class="tab" id="tab-config" role="tabpanel" aria-label="Configuração" tabindex="0">
@@ -338,7 +347,7 @@
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 
 <script>
-const APP_VERSION = 'Beta 37';
+const APP_VERSION = 'Beta 38';
 
 // ---------------------------------------------------------------
 // PISCINA — catálogo estático (não editável pela UI; ver PROJECT-CONTEXT.md)
@@ -2479,6 +2488,19 @@ document.querySelectorAll('[data-configsub]').forEach(chip => {
     chip.classList.add('selected');
     document.querySelectorAll('.config-subtab').forEach(sec => {
       sec.style.display = sec.dataset.sub === chip.dataset.configsub ? 'block' : 'none';
+    });
+  });
+});
+
+// ---------------------------------------------------------------
+// SUB-SEPARADORES DA TAB PISCINA
+// ---------------------------------------------------------------
+document.querySelectorAll('[data-piscinasub]').forEach(chip => {
+  chip.addEventListener('click', () => {
+    document.querySelectorAll('[data-piscinasub]').forEach(c => c.classList.remove('selected'));
+    chip.classList.add('selected');
+    document.querySelectorAll('.piscina-subtab').forEach(sec => {
+      sec.style.display = sec.dataset.sub === chip.dataset.piscinasub ? 'block' : 'none';
     });
   });
 });
