@@ -338,7 +338,7 @@
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 
 <script>
-const APP_VERSION = 'Beta 34';
+const APP_VERSION = 'Beta 35';
 
 // ---------------------------------------------------------------
 // PISCINA — catálogo estático (não editável pela UI; ver PROJECT-CONTEXT.md)
@@ -717,19 +717,28 @@ async function sheetsGet(range) {
 // em qualquer falha (incluindo rede), quem chama já sabe: "não foi escrito
 // no Sheet" — nunca finge sucesso.
 async function sheetsAppend(range, row) {
+  return sheetsAppendVarias(range, [row]);
+}
+
+// Várias linhas num único pedido — ao contrário de várias chamadas a
+// sheetsAppend() em paralelo (Promise.all), que competem pela mesma "linha
+// livre" no fim da tabela e podem escrever-se umas por cima das outras
+// (foi o que aconteceu ao popular o catálogo da Piscina: de 13 linhas só
+// sobreviveram 3). Um único pedido com todas as linhas é sempre atómico.
+async function sheetsAppendVarias(range, rows) {
   try {
     const url = `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/${encodeURIComponent(range)}:append?valueInputOption=USER_ENTERED`;
-    const res = await sheetsFetch(url, 'POST', { values: [row] });
+    const res = await sheetsFetch(url, 'POST', { values: rows });
     if (!res.ok) {
       ultimoErroSheets = await extrairErroSheets(res);
-      console.error('sheetsAppend falhou:', ultimoErroSheets, { range, row });
+      console.error('sheetsAppendVarias falhou:', ultimoErroSheets, { range, rows });
       return false;
     }
     ultimoErroSheets = '';
     return true;
   } catch (e) {
     ultimoErroSheets = 'sem ligação à internet';
-    console.error('sheetsAppend falhou (sem ligação?):', e);
+    console.error('sheetsAppendVarias falhou (sem ligação?):', e);
     return false;
   }
 }
@@ -867,10 +876,29 @@ async function carregarPiscina() {
   try {
     const rows = await sheetsGet('Piscina!A:G');
     state.piscina = rowsToObjects(rows);
+    if (state.piscina.length) await garantirCatalogoPiscina();
   } catch (e) {
     state.piscina = []; // aba ainda não existe — normal na primeira utilização
   }
   renderPiscina();
+}
+
+// Repara a aba se faltar alguma tarefa do catálogo (ex: sequela da corrida
+// de concorrência da criação inicial, ou uma tarefa nova adicionada ao
+// PISCINA_CATALOGO depois de a aba já existir) — só acrescenta as que
+// faltam, nunca toca nas que já lá estão.
+async function garantirCatalogoPiscina() {
+  const idsExistentes = new Set(state.piscina.map(p => p.ID));
+  const faltam = PISCINA_CATALOGO.filter(item => !idsExistentes.has(item.id));
+  if (!faltam.length) return;
+
+  const ok = await sheetsAppendVarias('Piscina!A:G', faltam.map(item =>
+    [item.id, item.nome, item.avisoLongo ? 'TRUE' : 'FALSE', '', '', 'FALSE', 'FALSE']
+  ));
+  if (!ok) return;
+
+  const rows = await sheetsGet('Piscina!A:G');
+  state.piscina = rowsToObjects(rows);
 }
 
 function piscinaEstacaoAtual() {
@@ -1032,8 +1060,8 @@ async function criarTabPiscina() {
     }
 
     await sheetsAppend('Piscina!A:G', ['ID', 'Nome', 'AvisoLongo', 'UltimaData', 'ProximaData', 'NotificacaoEnviada', 'UsarIntervaloLongo']);
-    await Promise.all(PISCINA_CATALOGO.map(item =>
-      sheetsAppend('Piscina!A:G', [item.id, item.nome, item.avisoLongo ? 'TRUE' : 'FALSE', '', '', 'FALSE', 'FALSE'])
+    await sheetsAppendVarias('Piscina!A:G', PISCINA_CATALOGO.map(item =>
+      [item.id, item.nome, item.avisoLongo ? 'TRUE' : 'FALSE', '', '', 'FALSE', 'FALSE']
     ));
 
     toast('Aba Piscina criada');
