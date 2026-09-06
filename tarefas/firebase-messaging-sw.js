@@ -27,7 +27,7 @@ const messaging = firebase.messaging();
 // ---------------------------------------------------------------
 // PARTE 1 — Cache da app shell
 // ---------------------------------------------------------------
-const CACHE_NAME = 'tarefas-casa-v3';
+const CACHE_NAME = 'tarefas-casa-v4';
 const APP_SHELL = [
   './',
   './index.html',

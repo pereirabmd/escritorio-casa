@@ -1,6 +1,6 @@
 # PROJECT-CONTEXT.md
 
-Contexto de projeto para o repositório `escritorio-casa`. Descreve o **estado atual** de cada app e as decisões que não são óbvias a partir do código. Última alteração: 3 de setembro de 2026 — `convidados/` v2.0.0: layout todo refeito com a paleta oficial do casamento, e o aviso de mesa cheia passa de toast a alerta permanente.
+Contexto de projeto para o repositório `escritorio-casa`. Descreve o **estado atual** de cada app e as decisões que não são óbvias a partir do código. Última alteração: 6 de setembro de 2026 — `tarefas/` Beta 34: nova aba "Piscina", memória de última/próxima data para a manutenção da piscina, sem gerar instâncias.
 
 ## Visão geral
 
@@ -33,7 +33,17 @@ Funcionalidades: tendência por regressão linear (não apenas os dois últimos 
 
 ## `tarefas/` — Tarefas de Casa
 
-Gestão de tarefas domésticas partilhada entre várias pessoas. CRUD direto à API do Google Sheets (`SHEET_ID: 1ZwA9RqwCbOlfWLmYZWFsE5iq2oUqr-XZru_HDy6NjjI`) mais um backend em Google Apps Script para geração agendada de instâncias recorrentes e notificações push (Firebase Cloud Messaging, projeto `bmdpereira-5a8f4`). Versão **Beta 33**.
+Gestão de tarefas domésticas partilhada entre várias pessoas. CRUD direto à API do Google Sheets (`SHEET_ID: 1ZwA9RqwCbOlfWLmYZWFsE5iq2oUqr-XZru_HDy6NjjI`) mais um backend em Google Apps Script para geração agendada de instâncias recorrentes e notificações push (Firebase Cloud Messaging, projeto `bmdpereira-5a8f4`). Versão **Beta 34**.
+
+**Aba "Piscina" (Beta 34)**: pedido do utilizador — tarefas de manutenção da piscina, com intervalos muito específicos (de 2x/semana a 1x a cada 3-4 anos) e que **não devem gerar instâncias**: a ideia é ajudar a gestão, não impor prazos ("se não for medido o Ph hoje, posso medir amanhã"). Por isso o modelo é deliberadamente diferente do resto da app:
+
+- O **catálogo de tarefas é estático**, vive só em `PISCINA_CATALOGO` no `index.html` (13 tarefas, com dose/nota, e um regime por estação — `quente`/`fria`/`anoTodo` — ou `tipo:'log'` para ações condicionais/contínuas sem periodicidade real, como "choque de cloro" ou "contralavagem do filtro"). Não é editável pela UI nem pela sheet — para mudar a lista ou os intervalos é preciso editar o `index.html`.
+- A aba **`Piscina`** no Sheet guarda só **uma linha por tarefa** (`ID | Nome | AvisoLongo | UltimaData | ProximaData | NotificacaoEnviada | UsarIntervaloLongo`), atualizada in-place a cada "Marcar feita" — nunca uma linha por ocorrência. É criada pela própria PWA na primeira visita à aba "Piscina" (`criarTabPiscina()`), com o mesmo padrão que a `Auditoria` já usava (`addSheet` via `batchUpdate` + `sheetsAppend`, com o cabeçalho e depois uma linha seed por item do catálogo).
+- **Estação atual** (`piscinaEstacaoAtual()`): meses quentes/frios, por omissão maio-setembro, configurável sem tocar em código via `Config!PiscinaMesInicioQuente`/`PiscinaMesFimQuente` (número do mês, 1-12) — segue a convenção do resto da app de configuração por sheet, não por código.
+- **Intervalo alternado** (`UsarIntervaloLongo`): tarefas tipo "2x por semana" (ex: testar pH) alternam 3 e depois 4 dias — não um valor fixo — para a média ao longo do tempo não desviar de "2x/semana" para "sempre a cada 4 dias". A aba guarda qual dos dois foi usado da última vez, para saber qual usar a seguir.
+- **"Atrasada" é sempre folgado, nunca um valor único**: o limite a partir do qual uma tarefa aparece como "por fazer há X dias" é o *maior* dos intervalos possíveis (`atraso`, ou o maior entre `intervalo`/`intervaloAlt` quando não definido explicitamente) — por exemplo, testar pH tem alvo de 3 dias mas só conta como atrasado a partir do 4º. O badge usa `.badge.suave` (cores neutras da paleta, não `--urgent`), de propósito — não é um alerta, é só contexto para decidir.
+- **Notificações** reaproveitam o `jobPeriodico()` existente (`Piscina.gs` → `verificarPiscina()`, chamada a seguir a `enviarNotificacoesDoDia()`): um único aviso por ciclo (nunca escalado), disparado quando `ProximaData` é atingida — exceto tarefas com `AvisoLongo=TRUE` (só "Trocar areia do filtro", a cada 3-4 anos), que avisam com **30 dias de antecedência** e título diferente, por serem fáceis de esquecer ao longo de anos. Vai para todas as subscrições ativas (broadcast, não por pessoa responsável — a piscina não tem responsável fixo). `Piscina.gs` não conhece o catálogo nem a lógica de intervalos — só lê o que a PWA já calculou e gravou na aba.
+- Marcar uma tarefa como feita (periódica ou "log") regista também em `Auditoria!A:E` (`piscina_feita`, nome da tarefa) — reaproveita a aba já existente, sem coluna nova; se `Auditoria` ainda não existir, falha em silêncio (a atualização da aba `Piscina` já ficou gravada, o registo de auditoria é só um extra).
 
 **Recorrências Trimestral/Semestral (Beta 33)**: pedido do utilizador — periodicidade a cada 3 ou 6 meses, ancorada numa **data de início à escolha**, sem criar nenhuma coluna nova em `Tarefas`. Reaproveita a coluna `DiasSemana` para guardar essa data de início (`YYYY-MM-DD`), exatamente o mesmo truque que `Pontual` já usava para guardar a sua data única; `DiaMes` fica vazio para estes dois tipos. O campo "Data" do formulário (antes só para Pontual) passa a mudar de label para "Data de início" quando o tipo é Trimestral/Semestral. A recorrência é calculada em `InstanciasGenerator.gs` → `ocorreNestaData()`: mesmo dia-do-mês da data de início, e diferença em meses múltipla de 3 ou 6 — por isso esta funcionalidade **não funciona só com o HTML**, depende do `case 'Trimestral'/'Semestral'` já copiado para o projeto Apps Script (ver aviso geral sobre `.gs` acima).
 
@@ -243,7 +253,7 @@ Pedido do utilizador: liberdade total para reinventar o layout, só duas constra
 
 ## Pendências que exigem ação manual do utilizador
 
-1. **`tarefas/InstanciasGenerator.gs`** e **`tarefas/NotificationSender.gs`** — copiar o conteúdo atual para o projeto Apps Script em script.google.com e reimplementar. Sem isto, o lock contra duplicação de tarefas e a tolerância a falhas de notificação não têm efeito real, apesar de já estarem no repositório.
+1. **`tarefas/InstanciasGenerator.gs`**, **`tarefas/NotificationSender.gs`** e **`tarefas/Piscina.gs`** (novo, Beta 34) — copiar o conteúdo atual para o projeto Apps Script em script.google.com e reimplementar. Sem isto, o lock contra duplicação de tarefas, a tolerância a falhas de notificação e as notificações da manutenção da piscina não têm efeito real, apesar de já estarem no repositório. `Piscina.gs` só é chamado a partir de `NotificationSender.gs` (`jobPeriodico()`), por isso os dois têm de ser copiados juntos.
 2. **Cliente OAuth partilhado** (`108256538530-...apps.googleusercontent.com`) — para o botão "Enviar para o Drive" do `~/garmin-dashboard` funcionar, é preciso adicionar `http://127.0.0.1:8787` a "Authorized JavaScript origins" desse cliente, na Google Cloud Console. Até lá, esse botão específico falha; o resto do `garmin-dashboard`, incluindo o download do ficheiro, funciona sem este passo.
 
 ## Backlog

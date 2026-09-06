@@ -1,7 +1,8 @@
 /**
  * NotificationSender.gs
  * Job periódico: gera instâncias, marca atrasadas, envia notificações
- * FCM para as instâncias de hoje cuja HoraNotificacao já passou.
+ * FCM para as instâncias de hoje cuja HoraNotificacao já passou, e verifica
+ * a manutenção da piscina (ver Piscina.gs).
  *
  * Corre a cada hora (ver Triggers.gs) — a notificação chega dentro da
  * janela da hora configurada, não ao minuto exato.
@@ -13,6 +14,7 @@ function jobPeriodico() {
     gerarInstancias();
     marcarAtrasadas();
     enviarNotificacoesDoDia();
+    verificarPiscina();
     props.setProperty('ultimaExecucao', new Date().toISOString());
     props.setProperty('falhasConsecutivas', '0');
   } catch (erro) {

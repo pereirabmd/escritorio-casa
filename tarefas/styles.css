@@ -125,6 +125,7 @@ nav#tabbar svg{width:22px; height:22px;}
 .badge{font-size:10.5px; padding:2px 8px; border-radius:20px; font-weight:600;}
 .badge.atrasada{background:var(--urgent); color:#fff;}
 .badge.hoje{background:var(--warning); color:#fff;}
+.badge.suave{background:var(--primary-light); color:var(--primary-dark);}
 
 .empty{text-align:center; padding:40px 16px; color:var(--text-secondary); font-size:13.5px;}
 
