@@ -360,7 +360,7 @@
 <script src="https://cdn.jsdelivr.net/npm/animejs@4.5.0/dist/bundles/anime.umd.min.js"></script>
 
 <script>
-const APP_VERSION = 'Beta 40';
+const APP_VERSION = 'Beta 41';
 
 // ---------------------------------------------------------------
 // PISCINA — catálogo estático (não editável pela UI; ver PROJECT-CONTEXT.md)
@@ -461,7 +461,15 @@ function revelarCards(containers) {
     .filter(Boolean)
     .flatMap(c => Array.from(c.children).filter(el => el.classList.contains('card')));
   if (!els.length) return;
-  gsap.from(els, { opacity: 0, y: 14, duration: .32, ease: 'power2.out', stagger: .045, clearProps: 'all' });
+  try {
+    gsap.from(els, { opacity: 0, y: 14, duration: .32, ease: 'power2.out', stagger: .045, clearProps: 'all' });
+  } catch (e) {
+    // `.from()` já pode ter aplicado o estado inicial (opacity:0) antes de
+    // falhar a meio — nunca deixar cartões presos invisíveis por causa de
+    // um erro só de animação. Repõe o estado normal e segue em frente.
+    console.warn('Entrada animada falhou, a mostrar sem animação:', e);
+    els.forEach(el => { el.style.opacity = ''; el.style.transform = ''; });
+  }
 }
 
 // Reordenação/saída suave da lista "Hoje" ao marcar uma tarefa como feita
@@ -480,11 +488,21 @@ function comFlipHoje(fn) {
     flipEmCurso = false;
   }
   if (state) {
-    Flip.from(state, {
-      duration: .45, ease: 'power2.inOut', absolute: true,
-      onEnter: els => gsap.fromTo(els, { opacity: 0, scale: .92 }, { opacity: 1, scale: 1, duration: .3, delay: .12 }),
-      onLeave: els => gsap.to(els, { opacity: 0, scale: .92, duration: .2 })
-    });
+    try {
+      Flip.from(state, {
+        duration: .45, ease: 'power2.inOut', absolute: true,
+        onEnter: els => gsap.fromTo(els, { opacity: 0, scale: .92 }, { opacity: 1, scale: 1, duration: .3, delay: .12 }),
+        onLeave: els => gsap.to(els, { opacity: 0, scale: .92, duration: .2 })
+      });
+    } catch (e) {
+      // Mesma cautela do `revelarCards()`: o DOM já ficou correto (o `fn()`
+      // já correu), só a animação de transição é que pode ter falhado a
+      // meio — nunca deixar linhas presas com opacity/scale de transição.
+      console.warn('Flip da lista Hoje falhou, a mostrar sem animação:', e);
+      document.querySelectorAll('#tab-hoje [data-flip-id]').forEach(el => {
+        el.style.opacity = ''; el.style.transform = '';
+      });
+    }
   }
 }
 
@@ -540,12 +558,26 @@ function revelarCatalogoAoScroll(container) {
   if (!window.gsap || !window.ScrollTrigger || prefereReduzMovimento()) return;
   const cards = Array.from(container.children).filter(el => el.classList.contains('card'));
   if (!cards.length) return;
-  triggersCatalogo = ScrollTrigger.batch(cards, {
-    scroller: '#tab-tarefas',
-    start: 'top 94%',
-    once: true,
-    onEnter: batch => gsap.from(batch, { opacity: 0, y: 16, duration: .35, ease: 'power2.out', stagger: .05 })
-  });
+  try {
+    triggersCatalogo = ScrollTrigger.batch(cards, {
+      scroller: '#tab-tarefas',
+      start: 'top 94%',
+      once: true,
+      onEnter: batch => {
+        try {
+          gsap.from(batch, { opacity: 0, y: 16, duration: .35, ease: 'power2.out', stagger: .05 });
+        } catch (e) {
+          console.warn('Entrada por scroll falhou, a mostrar sem animação:', e);
+          batch.forEach(el => { el.style.opacity = ''; el.style.transform = ''; });
+        }
+      }
+    });
+  } catch (e) {
+    // Falhar a criar os triggers nunca pode deixar o catálogo sem cartões
+    // visíveis — os cartões já estão no DOM com opacidade normal, só não
+    // ganham a entrada animada.
+    console.warn('ScrollTrigger do catálogo falhou:', e);
+  }
 }
 
 // Pequena celebração (Anime.js) quando todas as tarefas de hoje ficam
@@ -2686,6 +2718,25 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
   btn.addEventListener('click', () => ativarTab(btn.dataset.tab));
 });
 
+// Cada chamada recebe um número de série; um `onComplete` só pode alterar
+// o estado "oficial" (quais separadores têm .active) se ainda for a
+// chamada mais recente. Sem isto, tocar duas vezes seguido (ex: Piscina
+// e logo a seguir Tarefas, antes da 1ª transição acabar) deixava as DUAS
+// abas com `.active` ao mesmo tempo — sobrepostas, a de baixo escondida
+// ou a aparecer por cima consoante a ordem no HTML, com a barra de
+// navegação a mostrar uma coisa e o ecrã outra completamente diferente.
+// Era exatamente isto que fazia a aba Piscina "desaparecer".
+//
+// `tabAtualNome` (e não uma pesquisa por `.tab.active` no DOM) é quem
+// decide qual era "a aba anterior": durante uma transição em curso, mais
+// do que um `.tab` pode ter a classe `.active` ao mesmo tempo (de
+// propósito, para o crossfade), por isso pesquisar por essa classe dava
+// respostas erradas a meio de trocas rápidas — esta variável representa
+// sempre a intenção lógica mais recente do utilizador, atualizada de
+// forma síncrona e imediata em cada chamada, nunca pelo estado visual
+// (ainda) a meio de animação.
+let tabAtualNome = document.querySelector('.tab.active')?.id.replace('tab-', '') || 'hoje';
+let tabTransicaoId = 0;
 function ativarTab(nomeTab, { animar = true } = {}) {
   document.querySelectorAll('.tab-btn').forEach(b => {
     const ativo = b.dataset.tab === nomeTab;
@@ -2694,9 +2745,13 @@ function ativarTab(nomeTab, { animar = true } = {}) {
   });
   lsSet('tarefas.ultimaTab', nomeTab);
 
-  const anterior = document.querySelector('.tab.active');
+  if (nomeTab === tabAtualNome) return;
+  const anteriorNome = tabAtualNome;
+  tabAtualNome = nomeTab;
+
+  const anterior = document.getElementById('tab-' + anteriorNome);
   const seguinte = document.getElementById('tab-' + nomeTab);
-  if (!seguinte || anterior === seguinte) return;
+  if (!seguinte) return;
 
   // Efeito de água da Piscina só corre enquanto essa aba está visível
   // (poupa bateria/CPU nas outras abas — ver o <script type="module"> no
@@ -2704,21 +2759,40 @@ function ativarTab(nomeTab, { animar = true } = {}) {
   if (nomeTab === 'piscina') window.PiscinaWater?.start();
   else window.PiscinaWater?.stop();
 
+  const idTransicao = ++tabTransicaoId;
+  // Estado final autoritário: independentemente de quantas transições se
+  // sobrepuseram, isto garante sempre exatamente um separador `.active`.
+  const fixarEstadoFinal = () => {
+    if (idTransicao !== tabTransicaoId) return; // já há uma troca mais recente — não mexer
+    document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t === seguinte));
+    seguinte.style.zIndex = '';
+  };
+
   if (!anterior || !animar || !window.gsap || prefereReduzMovimento()) {
-    anterior?.classList.remove('active');
-    seguinte.classList.add('active');
+    fixarEstadoFinal();
     return;
   }
 
-  gsap.to(anterior, {
-    opacity: 0, y: -6, duration: .14, ease: 'power1.in',
-    onComplete: () => {
-      anterior.classList.remove('active');
-      gsap.set(anterior, { clearProps: 'opacity,transform' });
-      seguinte.classList.add('active');
-      gsap.fromTo(seguinte, { opacity: 0, y: 8 }, { opacity: 1, y: 0, duration: .24, ease: 'power2.out' });
-    }
-  });
+  // `seguinte` fica visível já (por cima, via z-index) para o crossfade
+  // correr com as duas abas simultaneamente visíveis; só passa a ser "a"
+  // aba oficial (única com .active) quando `fixarEstadoFinal` correr.
+  seguinte.classList.add('active');
+  seguinte.style.zIndex = 2;
+
+  try {
+    gsap.killTweensOf([anterior, seguinte]);
+    gsap.to(anterior, { opacity: 0, y: -6, duration: .14, ease: 'power1.in' });
+    gsap.fromTo(seguinte, { opacity: 0, y: 8 }, {
+      opacity: 1, y: 0, duration: .24, ease: 'power2.out',
+      onComplete: () => {
+        gsap.set([anterior, seguinte], { clearProps: 'opacity,transform' });
+        fixarEstadoFinal();
+      }
+    });
+  } catch (e) {
+    console.warn('Transição de tab falhou, a mostrar sem animação:', e);
+    fixarEstadoFinal();
+  }
 }
 
 // ---------------------------------------------------------------
