@@ -360,7 +360,7 @@
 <script src="https://cdn.jsdelivr.net/npm/animejs@4.5.0/dist/bundles/anime.umd.min.js"></script>
 
 <script>
-const APP_VERSION = 'Beta 42';
+const APP_VERSION = 'Beta 43';
 
 // ---------------------------------------------------------------
 // PISCINA — catálogo estático (não editável pela UI; ver PROJECT-CONTEXT.md)
@@ -528,6 +528,29 @@ document.addEventListener('pointercancel', (e) => {
   if (alvo) Motion.animate(alvo, { scale: 1 }, { duration: .2 });
 });
 
+// O mesmo feedback, mas para quem navega só por teclado (Tab + Enter/
+// Espaço) — hoje só existia para toque/rato. O helper `press()` do
+// Motion faria isto de fábrica, mas liga-se a elementos concretos no
+// momento em que é chamado (não fica "à escuta" de elementos futuros);
+// como quase todas as listas aqui são recriadas do zero a cada render,
+// teria de ser chamado de novo em cada `renderX()` que cria botões — por
+// isso mantém-se o padrão de um único listener delegado (igual ao de
+// toque acima), só que a reagir a `keydown`/`keyup` em vez de `pointer*`.
+document.addEventListener('keydown', (e) => {
+  if (!window.Motion || prefereReduzMovimento() || e.repeat) return;
+  if (e.key !== 'Enter' && e.key !== ' ') return;
+  const alvo = document.activeElement;
+  if (!alvo?.matches?.('.chip, .btn, .fab, .tab-btn, .task-check, .person-option')) return;
+  Motion.animate(alvo, { scale: [1, .9] }, { duration: .12, ease: 'easeOut' });
+});
+document.addEventListener('keyup', (e) => {
+  if (!window.Motion || prefereReduzMovimento()) return;
+  if (e.key !== 'Enter' && e.key !== ' ') return;
+  const alvo = document.activeElement;
+  if (!alvo?.matches?.('.chip, .btn, .fab, .tab-btn, .task-check, .person-option')) return;
+  Motion.animate(alvo, { scale: [.9, 1] }, { duration: .28, ease: [.34, 1.56, .64, 1] });
+});
+
 // Desenha o ✓ em vez de o mostrar instantaneamente, só no momento em que
 // uma tarefa é marcada como concluída (não em cada render normal — uma
 // tarefa já concluída continua a aparecer com o ✓ completo de imediato).
@@ -553,6 +576,16 @@ function limparTriggersCatalogo() {
   triggersCatalogo.forEach(t => t.kill());
   triggersCatalogo = [];
 }
+// `#lista-tarefas` é uma CSS grid real (`grid-template-columns:repeat(
+// auto-fill,...)`), com o nº de colunas a variar consoante a largura do
+// ecrã — por isso lê-se o valor já resolvido pelo browser em vez de o
+// adivinhar, para o stagger em grelha (`from:'center'`) saber quantas
+// colunas há em cada momento.
+function contarColunasGrid(container) {
+  const colunas = getComputedStyle(container).gridTemplateColumns.split(' ').filter(Boolean).length;
+  return colunas || 1;
+}
+
 function revelarCatalogoAoScroll(container) {
   limparTriggersCatalogo();
   if (!window.gsap || !window.ScrollTrigger || prefereReduzMovimento()) return;
@@ -565,7 +598,11 @@ function revelarCatalogoAoScroll(container) {
       once: true,
       onEnter: batch => {
         try {
-          gsap.from(batch, { opacity: 0, y: 16, duration: .35, ease: 'power2.out', stagger: .05 });
+          const colunas = contarColunasGrid(container);
+          gsap.from(batch, {
+            opacity: 0, y: 16, duration: .35, ease: 'power2.out',
+            stagger: { each: .05, grid: [Math.ceil(batch.length / colunas), colunas], from: 'center' }
+          });
         } catch (e) {
           console.warn('Entrada por scroll falhou, a mostrar sem animação:', e);
           batch.forEach(el => { el.style.opacity = ''; el.style.transform = ''; });
@@ -664,21 +701,46 @@ document.querySelectorAll('[data-vista]').forEach(chip => {
   });
 });
 
-document.getElementById('btn-mes-anterior').addEventListener('click', () => {
-  if (vistaCalendario === 'semana') {
-    semanaInicio.setDate(semanaInicio.getDate() - 7);
-  } else {
-    calMes.setMonth(calMes.getMonth() - 1);
+// Transição direcional (GSAP) ao mudar de mês/semana: o grid antigo sai
+// para o lado oposto de para onde se está a navegar, o novo entra desse
+// lado — dá uma pista visual de "para trás"/"para a frente" que o
+// re-render instantâneo não dava. `direcao`: +1 = seguinte, -1 = anterior.
+function mudarPeriodoComAnimacao(direcao, fn) {
+  const grid = document.getElementById('cal-grid');
+  if (!window.gsap || !grid || prefereReduzMovimento()) { fn(); return; }
+  try {
+    gsap.to(grid, {
+      opacity: 0, x: -direcao * 16, duration: .12, ease: 'power1.in',
+      onComplete: () => {
+        fn();
+        gsap.fromTo(grid, { opacity: 0, x: direcao * 16 }, { opacity: 1, x: 0, duration: .22, ease: 'power2.out', clearProps: 'all' });
+      }
+    });
+  } catch (e) {
+    console.warn('Transição do calendário falhou, a mostrar sem animação:', e);
+    fn();
   }
-  renderCalendario();
+}
+
+document.getElementById('btn-mes-anterior').addEventListener('click', () => {
+  mudarPeriodoComAnimacao(-1, () => {
+    if (vistaCalendario === 'semana') {
+      semanaInicio.setDate(semanaInicio.getDate() - 7);
+    } else {
+      calMes.setMonth(calMes.getMonth() - 1);
+    }
+    renderCalendario();
+  });
 });
 document.getElementById('btn-mes-seguinte').addEventListener('click', () => {
-  if (vistaCalendario === 'semana') {
-    semanaInicio.setDate(semanaInicio.getDate() + 7);
-  } else {
-    calMes.setMonth(calMes.getMonth() + 1);
-  }
-  renderCalendario();
+  mudarPeriodoComAnimacao(1, () => {
+    if (vistaCalendario === 'semana') {
+      semanaInicio.setDate(semanaInicio.getDate() + 7);
+    } else {
+      calMes.setMonth(calMes.getMonth() + 1);
+    }
+    renderCalendario();
+  });
 });
 
 function renderTiraSemanal() {
@@ -1423,38 +1485,35 @@ function renderTaskRow(inst, index) {
 
 // F1-extra — Swipe: direita marca feita, esquerda salta. Os botões
 // continuam a existir tal e qual — isto é só um atalho adicional.
+// Usa `anime.createDraggable` (eixo X só, `y:false`) em vez do gesto
+// feito à mão que existia antes: ao desativar o eixo Y, o anime marca o
+// elemento com `touch-action:pan-y`, o que deixa o browser continuar a
+// tratar o scroll vertical da lista nativamente (como já acontecia
+// antes, mas de forma mais robusta que adivinhar `Math.abs(dx)>dy`) —
+// só o arrasto horizontal é que fica sob controlo do JS. Sem anime.js
+// carregado, a linha fica sem swipe mas os botões continuam a funcionar.
 function ativarSwipeTarefa(el, inst) {
-  let startX = null, startY = null, arrastando = false;
-
-  el.addEventListener('touchstart', (e) => {
-    startX = e.touches[0].clientX;
-    startY = e.touches[0].clientY;
-    arrastando = false;
-  }, { passive: true });
-
-  el.addEventListener('touchmove', (e) => {
-    if (startX === null) return;
-    const dx = e.touches[0].clientX - startX;
-    const dy = e.touches[0].clientY - startY;
-    if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 8) {
-      arrastando = true;
-      el.style.transition = 'none';
-      el.style.transform = `translateX(${dx}px) rotate(${dx / 45}deg)`;
-      el.style.background = dx > 0 ? 'var(--primary-light)' : 'rgba(217,120,104,.18)';
-    }
-  }, { passive: true });
-
-  el.addEventListener('touchend', (e) => {
-    if (startX === null) return;
-    const dx = e.changedTouches[0].clientX - startX;
-    el.style.transition = 'transform .25s ease, background .25s ease';
-    el.style.transform = '';
-    el.style.background = '';
-    if (arrastando && Math.abs(dx) > 90) {
-      if (dx > 0) marcarFeita(inst); else saltarTarefa(inst);
-    }
-    startX = null; startY = null; arrastando = false;
-  });
+  if (!window.anime || prefereReduzMovimento()) return;
+  let disparado = false;
+  try {
+    anime.createDraggable(el, {
+      x: true,
+      y: false,
+      snap: 0,
+      onDrag: (d) => {
+        el.style.background = d.x > 12 ? 'var(--primary-light)' : d.x < -12 ? 'rgba(217,120,104,.18)' : '';
+      },
+      onRelease: (d) => {
+        if (!disparado && Math.abs(d.x) > 90) {
+          disparado = true;
+          if (d.x > 0) marcarFeita(inst); else saltarTarefa(inst);
+        }
+      },
+      onSettle: () => { el.style.background = ''; }
+    });
+  } catch (e) {
+    console.warn('Swipe da tarefa indisponível, os botões continuam a funcionar:', e);
+  }
 }
 
 // Formato local "yyyy-MM-dd HH:mm" — igual ao que o Apps Script grava
@@ -2978,7 +3037,13 @@ window.addEventListener('load', () => {
     const uniforms = {
       uTime: { value: 0 },
       uColorA: { value: corVariavel('--primary-light', '#DCEBE5') },
-      uColorB: { value: corVariavel('--primary', '#5B8C7A') }
+      uColorB: { value: corVariavel('--primary', '#5B8C7A') },
+      // Ondulação ao toque: `uPointer` é a posição (em UV, 0-1) do último
+      // toque, `uPointerT` o instante (uTime) em que aconteceu. O shader
+      // desenha um anel a expandir-se a partir daí, que se apaga sozinho
+      // com a idade — não é preciso "limpar" nada depois.
+      uPointer: { value: new THREE.Vector2(0.5, 0.5) },
+      uPointerT: { value: -999 }
     };
 
     const material = new THREE.ShaderMaterial({
@@ -2997,19 +3062,41 @@ window.addEventListener('load', () => {
         uniform float uTime;
         uniform vec3 uColorA;
         uniform vec3 uColorB;
+        uniform vec2 uPointer;
+        uniform float uPointerT;
         varying vec2 vUv;
         void main(){
           float w1 = sin((vUv.x * 6.0 + uTime * 0.35) + sin(vUv.y * 4.0 - uTime * 0.22) * 1.5);
           float w2 = sin((vUv.y * 8.0 - uTime * 0.28) + cos(vUv.x * 5.0 + uTime * 0.3) * 1.2);
           float mistura = smoothstep(-1.0, 1.0, (w1 + w2) * 0.5);
-          vec3 cor = mix(uColorA, uColorB, mistura);
-          float alfa = 0.05 + 0.11 * mistura;
+
+          float idade = uTime - uPointerT;
+          float raio = distance(vUv, uPointer);
+          float anel = smoothstep(0.22, 0.0, abs(raio - idade * 0.6)) * smoothstep(1.4, 0.0, idade);
+
+          vec3 cor = mix(uColorA, uColorB, min(mistura + anel * 0.7, 1.0));
+          float alfa = 0.05 + 0.11 * mistura + anel * 0.22;
           gl_FragColor = vec4(cor, alfa);
         }
       `
     });
 
     scene.add(new THREE.Mesh(new THREE.PlaneGeometry(2, 2), material));
+
+    // Toca-se na água, a água ondula — o único gesto que faz sentido
+    // aqui é o toque inicial (não seguir o dedo a arrastar, que exigiria
+    // várias ondulações em simultâneo). Ouve-se em `#tab-piscina` (não no
+    // canvas, que tem `pointer-events:none` de propósito) — o evento
+    // chega por bubbling seja o toque num cartão ou no fundo.
+    document.getElementById('tab-piscina')?.addEventListener('pointerdown', (e) => {
+      const rect = canvas.getBoundingClientRect();
+      if (!rect.width || !rect.height) return;
+      uniforms.uPointer.value.set(
+        (e.clientX - rect.left) / rect.width,
+        1 - (e.clientY - rect.top) / rect.height
+      );
+      uniforms.uPointerT.value = relogio.getElapsed();
+    });
 
     function redimensionar() {
       const { clientWidth: w, clientHeight: h } = canvas;
