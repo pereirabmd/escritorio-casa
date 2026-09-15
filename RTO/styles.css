@@ -548,12 +548,30 @@ body.dark #offlineBanner{color:#f0a89e;}
 #updateBanner button{background:var(--paper);color:var(--ink);border-radius:var(--radius-pill);padding:7px 14px;font-size:.76rem;min-height:auto;}
 
 /* ---------- Ficha de detalhe do dia / registo de alterações ---------- */
-#dayInfoOverlay{position:fixed;inset:0;background:rgba(20,26,32,.45);z-index:20;}
+/* `display` fica sempre ligado nestes dois (vence o `.hidden{display:
+   none!important}` global por especificidade de ID) — opacity/visibility
+   é quem mostra/esconde de facto, para dar para transitar. */
+#dayInfoOverlay{
+  position:fixed;inset:0;background:rgba(20,26,32,.45);z-index:20;display:block!important;
+  opacity:0;visibility:hidden;pointer-events:none;transition:opacity .2s ease,visibility 0s linear .2s;
+}
+#dayInfoOverlay:not(.hidden){opacity:1;visibility:visible;pointer-events:auto;transition:opacity .2s ease;}
 #dayInfoCard{
   position:fixed;left:0;right:0;bottom:0;max-width:480px;margin:0 auto;
   background:var(--surface);border-radius:var(--radius-xl) var(--radius-xl) 0 0;
   padding:12px 20px calc(20px + env(safe-area-inset-bottom));z-index:21;
   box-shadow:0 -8px 30px rgba(0,0,0,.18);max-height:80vh;overflow-y:auto;
+  display:block!important;
+  opacity:0;visibility:hidden;pointer-events:none;
+  transform:translateY(24px);
+  transition:opacity .2s ease,transform .24s cubic-bezier(.22,.9,.3,1),visibility 0s linear .2s;
+}
+#dayInfoCard:not(.hidden){
+  opacity:1;visibility:visible;pointer-events:auto;transform:translateY(0);
+  transition:opacity .2s ease,transform .24s cubic-bezier(.22,.9,.3,1);
+}
+@media (prefers-reduced-motion: reduce){
+  #dayInfoOverlay,#dayInfoOverlay:not(.hidden),#dayInfoCard,#dayInfoCard:not(.hidden){transition:none;}
 }
 #dayInfoCard::before{
   content:"";display:block;width:36px;height:4px;border-radius:var(--radius-pill);
@@ -585,7 +603,11 @@ body.dark #offlineBanner{color:#f0a89e;}
 .notaLocked{opacity:.5;padding:4px 6px;display:inline-flex;align-items:center;color:var(--muted2);}
 .notaEmpty{font-size:.85rem;color:var(--muted2);padding:8px 0 16px;}
 
-#notaForm{display:flex;flex-direction:column;gap:9px;margin-top:12px;}
+#notaForm{display:flex;flex-direction:column;gap:9px;}
+/* O formulário passou para o topo da secção (pedido do utilizador) — o
+   espaçamento que antes separava a lista do formulário por baixo agora
+   separa o formulário da lista por baixo dele. */
+#notasList{margin-top:18px;}
 #notaForm input, #genPanel input, #genPanel select{
   font-family:inherit;font-size:16px;padding:11px 13px;border:1px solid var(--line);
   border-radius:var(--radius-s);background:var(--surface);color:var(--ink);width:100%;

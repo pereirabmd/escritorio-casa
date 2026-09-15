@@ -205,8 +205,6 @@
 
     <div id="notasSubList" role="tabpanel" aria-labelledby="notasSubBtnList">
       <div id="notasSection">
-        <div id="notasList"></div>
-
         <div id="notaForm">
           <div class="notaRow2">
             <input type="date" id="notaDataInicio" aria-label="Data início" placeholder="Data início">
@@ -224,6 +222,8 @@
             <button id="notaCancelBtn" class="btn-secondary hidden">Cancelar</button>
           </div>
         </div>
+
+        <div id="notasList"></div>
       </div>
     </div>
 
@@ -280,7 +280,7 @@
    CONFIGURAÇÃO — não alterar CLIENT_ID / SPREADSHEET_ID / nomes das folhas:
    é a ligação à folha de cálculo Google Sheets já em uso.
    ============================================================ */
-const APP_VERSION = 'v7.1.0';
+const APP_VERSION = 'v7.1.1';
 
 const ICON_EDIT = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>';
 const ICON_TRASH = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>';
@@ -1089,6 +1089,7 @@ function attachLongPress(cell, dateStr){
 
 /* ---------- Registo de alterações (changelog) ---------- */
 const CHANGELOG = [
+  { v:'7.1.1', c:['Formulário de nova nota passa para o topo da aba Notas, antes da lista — deixa de ser preciso descer até ao fim para acrescentar uma; editar uma nota existente continua a abrir o formulário junto dela', 'Ficha de detalhe do dia e registo de alterações passam a abrir/fechar com uma transição suave, em vez de aparecer/desaparecer de repente'] },
   { v:'7.1.0', c:['"Calendário" passa a ser a aba principal (ecrã de entrada da app), à frente de "Hoje"', 'Animação de carregamento (skeleton) refeita para espelhar a estrutura real da aba Calendário — subseparadores Mês/Ano, navegação de mês, seletor de modo, grelha e legenda — em vez de um layout genérico desalinhado com o que aparece a seguir'] },
   { v:'7.0.1', c:['Legenda do calendário (Mês e Ano) passa a ter etiquetas coloridas com a cor de cada categoria, em vez de etiquetas cinzentas com um pontinho — mais fácil de ler o calendário à distância'] },
   { v:'7.0.0', c:['Reformulação da navegação: nova aba "Hoje" com o estado do dia e o resumo de saldo/estatísticas, separada da grelha de marcação', '"Calendário" passa a ter dois subseparadores — Mês e Ano — em vez de serem separadores independentes', '"Notas" passa a ter dois subseparadores — Notas e Gerador de validações — em vez de um painel a abrir/fechar', 'Barra de navegação principal move-se para o fundo do ecrã, ao alcance do polegar', 'Botão de exportar para Excel disponível em qualquer separador', 'Paleta de cores (marca + categorias T/C/F/A/feriado) mantida sem alterações — é funcional, não decorativa'] },
@@ -1852,10 +1853,14 @@ function renderNotes(){
 function positionNotaForm(){
   const formEl = document.getElementById('notaForm');
   if (editingRow){
+    // A editar uma nota existente: o formulário continua a aparecer logo
+    // a seguir a essa nota (edição "in place"), não lá para cima — isto
+    // não muda com o pedido de pôr o formulário no início da página, que
+    // é só sobre o estado por omissão (a acrescentar uma nota nova).
     const card = document.querySelector(`.notaCard[data-row="${editingRow}"]`);
     if (card){ card.insertAdjacentElement('afterend', formEl); return; }
   }
-  document.getElementById('notasList').insertAdjacentElement('afterend', formEl);
+  document.getElementById('notasList').insertAdjacentElement('beforebegin', formEl);
 }
 
 function isDateBeforeToday(pt){

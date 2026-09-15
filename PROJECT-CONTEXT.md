@@ -1,6 +1,6 @@
 # PROJECT-CONTEXT.md
 
-Contexto de projeto para o repositório `escritorio-casa`. Descreve o **estado atual** de cada app e as decisões que não são óbvias a partir do código. Última alteração: 15 de setembro de 2026 — `peso/` v4.1.0: mesma análise de bibliotecas de animação feita em `tarefas/`, mas aqui só o Anime.js ganhou lugar (swipe para eliminar, celebrações de marco) — o resto já estava bem resolvido nativamente.
+Contexto de projeto para o repositório `escritorio-casa`. Descreve o **estado atual** de cada app e as decisões que não são óbvias a partir do código. Última alteração: 15 de setembro de 2026 — mesma análise de bibliotecas de animação (GSAP/Motion/Anime.js/Three.js) aplicada a `ciclismo/` (Beta 24), `convidados/` (v2.1.0) e `RTO/` (v7.1.1, que também ganhou o formulário de nova nota movido para o topo da aba Notas); cada app só ganhou as bibliotecas com uso concreto — nenhuma ganhou as 4.
 
 ## Visão geral
 
@@ -95,7 +95,14 @@ Pontos a não perder de vista:
 
 ## `RTO/` — KLx RTO (dias de escritório/casa)
 
-Calendário de dias no escritório/em casa, quota anual e saldo. API direta ao Google Sheets, sem Apps Script (`SPREADSHEET_ID: 1u4QOqKMEOe8qq_kU_Cw5c8Vj4qQ0AHE5gXj9hPood9c`). Versão **v7.1.0**.
+Calendário de dias no escritório/em casa, quota anual e saldo. API direta ao Google Sheets, sem Apps Script (`SPREADSHEET_ID: 1u4QOqKMEOe8qq_kU_Cw5c8Vj4qQ0AHE5gXj9hPood9c`). Versão **v7.1.1**.
+
+### Formulário de nota no topo + análise de bibliotecas de animação (v7.1.1)
+
+Pedido do utilizador: mover o formulário de nova nota para o início da aba Notas (antes só aparecia depois da lista, era preciso descer até ao fim para o encontrar), mais a mesma análise de bibliotecas de animação já feita nas outras apps.
+
+- **Mover o formulário não foi só trocar a ordem no HTML.** `positionNotaForm()` já reposicionava `#notaForm` no DOM a cada `renderNotes()` — `document.getElementById('notasList').insertAdjacentElement('afterend', formEl)` — por isso só editar o HTML estático teria sido desfeito no primeiro render. A função passou a usar `'beforebegin'` em vez de `'afterend'` para o caso "a acrescentar" (sem `editingRow`); o caso "a editar uma nota existente" manteve-se — o formulário continua a aparecer logo a seguir a essa nota, edição in-place, que não fazia parte do pedido. O `margin-top` que separava a lista do formulário por baixo mudou de sítio (`#notaForm` para `#notasList`), para o espaçamento continuar a fazer sentido com a ordem trocada.
+- **Análise de bibliotecas de animação**: esta app já tinha, tudo em CSS puro e bem feito, praticamente tudo o que as 4 bibliotecas costumam trazer — pulsação do dia de hoje, transição direcional ao mudar de mês (`.grid.slide-left/-right`), ripple ao tocar, esqueleto de carregamento, e uma função `animateValue()` própria para os números do saldo/estatísticas (com token de concorrência entre chamadas sobrepostas — mais cuidada até que o equivalente em `peso/`). A eliminação de notas passa por `confirm()` nativo com regras de negócio (não se apaga férias já passadas sem Modo Administrador) — um gesto de swipe não encaixava bem aí, ao contrário de `peso/`/`convidados/` (eliminação otimista com undo). **Conclusão: nenhuma das 4 bibliotecas ganhou lugar aqui** — o único gap real encontrado (a ficha de detalhe do dia/registo de alterações a abrir/fechar sem transição, só `display:none`) resolveu-se com o mesmo truque de CSS puro (opacity/visibility a vencer `.hidden{display:none!important}` por especificidade de ID) já usado nas outras apps, sem precisar de biblioteca nenhuma.
 
 Feriados portugueses calculados dinamicamente (algoritmo da Páscoa), saldo condicional (astreinte, suspensão RTO), exportação Excel, faixa "Hoje" com a próxima mudança conhecida, comparação com o mês anterior, e atalhos de PWA para marcar hoje T/C diretamente do ícone instalado.
 
@@ -155,7 +162,12 @@ Pedido do utilizador: refazer o layout por inteiro para encaixar melhor no tema,
 
 ## `ciclismo/` — Plano de Treino
 
-**Importante**: esta app mostra o **plano semanal escrito pelo treinador** — não é um histórico de treinos realizados com métricas de GPS/potência/FC, apesar de um pedido anterior ter assumido esse formato. Os ficheiros `.txt` são sincronizados a partir de uma pasta "ciclismo" no **Google Drive**. A app lê também o Sheet do `peso` (mesmo `SPREADSHEET_ID`) para mostrar o peso mais recente — integração cruzada deliberada entre apps. Sem Apps Script. Versão **Beta 23**, service worker `ciclismo-shell-v24`.
+**Importante**: esta app mostra o **plano semanal escrito pelo treinador** — não é um histórico de treinos realizados com métricas de GPS/potência/FC, apesar de um pedido anterior ter assumido esse formato. Os ficheiros `.txt` são sincronizados a partir de uma pasta "ciclismo" no **Google Drive**. A app lê também o Sheet do `peso` (mesmo `SPREADSHEET_ID`) para mostrar o peso mais recente — integração cruzada deliberada entre apps. Sem Apps Script. Versão **Beta 24**, service worker `ciclismo-shell-v25`.
+
+**Mesma análise de bibliotecas de animação feita em `tarefas/`/`peso/` (Beta 24)**: esta app é essencialmente um **visualizador de conteúdo** (o plano é escrito pelo treinador, só se lê) — sem lista com eliminar/undo, sem gráfico, sem marco a celebrar. O feedback de toque já existia via CSS puro (`:active{transform:scale(.92)}`). Por isso o alcance ficou mais estreito que noutras apps:
+- **GSAP** ganhou lugar para as duas únicas interações que eram mesmo instantâneas sem transição: expandir/colapsar um dia (`toggleDayCard()` — antes `display:none` puro, agora anima `height` usando `scrollHeight` como alvo, a técnica padrão para animar de/para "auto" sem o GSAP precisar de o resolver sozinho) e a troca de semana (`navigateWeek()` — o carregamento vem do Drive, duração imprevisível, por isso é só um esmorecer imediato ao tocar + reaparecer quando a semana nova estiver pronta, sem tentar uma transição direcional que a rede tornaria imprevisível).
+- **Anime.js** ganhou lugar só para o ✓ de "sessão feita" (`desenharCheckSessao()`) desenhar-se em vez de aparecer — mesmo padrão exato já validado em `tarefas/`.
+- **Motion e Three.js não entraram** — nada de gestos/microinterações por cobrir (o `:active` já chega) nem qualquer encaixe temático para 3D.
 
 ### Formato do ficheiro que o parser lê
 
@@ -224,7 +236,13 @@ Um projeto separado, `~/garmin-dashboard` (repositório git próprio, fora de `e
 
 ## `convidados/` — Convidados (casamento)
 
-Gestão da lista de convidados do casamento real do utilizador (Camila & Bruno). CRUD direto à API do Google Sheets (`SHEET_ID: 1UcjSO3P7RbreTtKeg4T8jsoRa2KwzTEPE4Wsrkf2Eos`), sem Apps Script. Versão **v2.0.0**.
+Gestão da lista de convidados do casamento real do utilizador (Camila & Bruno). CRUD direto à API do Google Sheets (`SHEET_ID: 1UcjSO3P7RbreTtKeg4T8jsoRa2KwzTEPE4Wsrkf2Eos`), sem Apps Script. Versão **v2.1.0**.
+
+**Mesma análise de bibliotecas de animação feita em `tarefas/`/`peso/` (v2.1.0)**: as tabs (Convidados/Resumo) trocam sem gesto complexo, e não há gráfico nem efeito 3D que se justifique. Só o **Anime.js** ganhou lugar, para o que faltava:
+- **Swipe para eliminar** um convidado da lista (`ativarSwipeEliminarConvidado()`), arrastar para a esquerda — mesmo padrão de `createDraggable` (`y:false` preserva o scroll nativo) já validado em `peso/`. Chama a eliminação otimista com undo (`deleteWithUndo`) já existente; os botões de estado/mesa/editar/eliminar continuam todos lá.
+- **Contagem animada** dos 4 números do Resumo (Previsto/Confirmado/Recusado/Sem resposta), em `contarHeadlineNums()`.
+- Os 4 overlays (`Novo Convidado`, confirmação rápida, atribuição de mesa, detalhe de mesa) partilham a classe `.modal-overlay` — passaram todos a abrir/fechar com fade+slide-up de uma vez só, mudando uma única regra CSS (mais simples que `tarefas/`/`peso/`, que tiveram de vencer um `.hidden{display:none!important}` global; aqui `.modal-overlay` já era a única coisa a controlar `display`).
+- **GSAP, Motion e Three.js não entraram** — nada por cobrir que já não estivesse bem resolvido (CSS `cardIn` na entrada dos cartões, sem gestos/microinterações nem marcos a celebrar numa lista de convidados).
 
 Há um projeto **separado e maior** para o próprio casamento em `~/casamento` (fora deste repositório, com o seu próprio `PROJECT-CONTEXT.md`/`CLAUDE.md`), que inclui a pasta `Mesas/` com o plano de lugares "a sério" (`mesas.csv`, scripts de geração). Esta app (`convidados/`) é só a PWA de acompanhamento de RSVPs — os dois não estão ligados automaticamente.
 
