@@ -360,7 +360,7 @@
 <script src="https://cdn.jsdelivr.net/npm/animejs@4.5.0/dist/bundles/anime.umd.min.js"></script>
 
 <script>
-const APP_VERSION = 'Beta 41';
+const APP_VERSION = 'Beta 42';
 
 // ---------------------------------------------------------------
 // PISCINA — catálogo estático (não editável pela UI; ver PROJECT-CONTEXT.md)
@@ -392,11 +392,11 @@ const PISCINA_CATALOGO = [
     anoTodo: { intervalo: 30 } },
   { id: 'P08', nome: 'Trocar areia do filtro', nota: '85 kg',
     anoTodo: { intervalo: 1095, atraso: 1460 }, avisoLongo: true },
-  { id: 'P14', nome: 'Verificar pressão do filtro (manómetro)', nota: 'baseline ~12 psi; contralavagem só a ~15-16 psi',
+  { id: 'P11', nome: 'Verificar pressão do filtro e contralavagem', nota: 'baseline ~12 psi',
+    notaLonga: 'Contralavagem quando o manómetro atingir ou ultrapassar ~16 psi / ~1,1 bar / ~110 kPa (~3-4 psi / ~0,2-0,3 bar / ~20-30 kPa acima da baseline de 12 psi / 0,83 bar / 83 kPa). Válvula multiport, por esta ordem: Backwash → Rinse → Filter. A bomba tem de estar sempre desligada antes de mudar a posição da válvula.',
     quente: { intervalo: 7, intervaloAlt: 14 }, fria: { intervalo: 28, intervaloAlt: 42 } },
   { id: 'P09', nome: 'Repor cloro lento (pastilhas)', tipo: 'log' },
   { id: 'P10', nome: 'Ajustar pH', nota: 'pH- ou pH+ conforme leitura', tipo: 'log' },
-  { id: 'P11', nome: 'Contralavagem do filtro', nota: 'conforme manómetro (+0,2-0,3 bar)', tipo: 'log' },
   { id: 'P12', nome: 'Floculante', nota: '230 cc, se água turva', tipo: 'log' },
   { id: 'P13', nome: 'Choque de cloro', nota: '300-450 g, se contaminação/chuva forte', tipo: 'log' }
 ];
@@ -1202,10 +1202,20 @@ function renderPiscinaCard(item, estacao) {
   }
   if (destaque) statusHtml += ` <span class="badge suave">${destaque}</span>`;
 
+  // `notaLonga` é a exceção às notas curtas de propósito (ver comentário
+  // no catálogo) — só existe quando o procedimento em si (ordem de
+  // válvula, gatilho de pressão, segurança) é informação que a pessoa
+  // precisa de ter à mão no momento de fazer a tarefa, não só um detalhe
+  // de dosagem. Fica num parágrafo próprio, não espremido no título.
+  const notaLonga = item.notaLonga
+    ? `<div class="task-nota-longa">${esc(item.notaLonga)}</div>`
+    : '';
+
   return `
     <div class="card${ehHojeOuAntes ? ' card-destaque' : ''}">
       <div class="task-nome">${esc(item.nome)}${nota}</div>
       <div class="task-meta">${statusHtml}</div>
+      ${notaLonga}
       <button type="button" class="btn secondary" id="btn-piscina-${item.id}" style="margin-top:8px; width:auto; padding:8px 14px; font-size:12.5px;">Marcar feita hoje</button>
     </div>
   `;
