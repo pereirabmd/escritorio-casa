@@ -7,7 +7,7 @@
    guardados localmente, nunca escritos por aqui).
    ========================================================================== */
 
-const CACHE_VERSION = 'peso-v4.0.0-r1';
+const CACHE_VERSION = 'peso-v4.1.0';
 const SHELL_CACHE = CACHE_VERSION + '-shell';
 
 const SHELL_ASSETS = [

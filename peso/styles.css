@@ -311,12 +311,28 @@ label{font-size:0.7rem;color:var(--text-muted);font-weight:700;text-transform:up
 .body-cell .sub{font-size:0.68rem;color:var(--text-faint);margin-top:2px;}
 .imc-badge{display:inline-block;padding:2px 8px;border-radius:999px;font-size:0.68rem;font-weight:700;margin-top:3px;}
 
-#hintOverlay,#modalOverlay,#changelogOverlay{position:fixed;inset:0;background:rgba(14,18,16,.5);display:flex;align-items:flex-end;justify-content:center;z-index:50;}
-#hintOverlay.hidden,#modalOverlay.hidden,#changelogOverlay.hidden{display:none;}
+/* `display:flex!important` fica sempre ligado nestes três (vence o
+   `.hidden{display:none!important}` global por especificidade de ID) —
+   quem trata de esconder/mostrar de facto é opacity/visibility, para dar
+   para transitar em vez de aparecer/desaparecer instantaneamente. */
+#hintOverlay,#modalOverlay,#changelogOverlay{
+  position:fixed;inset:0;background:rgba(14,18,16,.5);display:flex!important;align-items:flex-end;justify-content:center;z-index:50;
+  opacity:0;visibility:hidden;pointer-events:none;
+  transition:opacity .2s ease,visibility 0s linear .2s;
+}
+#hintOverlay:not(.hidden),#modalOverlay:not(.hidden),#changelogOverlay:not(.hidden){
+  opacity:1;visibility:visible;pointer-events:auto;
+  transition:opacity .2s ease;
+}
 #hintBox,#modalBox,#changelogBox{
   background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-l) var(--radius-l) 0 0;
   padding:20px 18px calc(18px + env(safe-area-inset-bottom));width:100%;max-width:480px;
   box-shadow:var(--shadow-sheet);
+  transform:translateY(28px);transition:transform .26s cubic-bezier(.22,.9,.3,1);
+}
+#hintOverlay:not(.hidden) #hintBox,#modalOverlay:not(.hidden) #modalBox,#changelogOverlay:not(.hidden) #changelogBox{transform:translateY(0);}
+@media (prefers-reduced-motion: reduce){
+  #hintOverlay,#modalOverlay,#changelogOverlay,#hintBox,#modalBox,#changelogBox{transition:none;}
 }
 @media (min-width:768px){
   #hintBox,#modalBox,#changelogBox{max-width:420px;border-radius:var(--radius-l);margin-bottom:20px;}

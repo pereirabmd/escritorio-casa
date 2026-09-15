@@ -1,6 +1,6 @@
 # PROJECT-CONTEXT.md
 
-Contexto de projeto para o repositório `escritorio-casa`. Descreve o **estado atual** de cada app e as decisões que não são óbvias a partir do código. Última alteração: 15 de setembro de 2026 — `tarefas/` Beta 43: mais funcionalidades das 4 bibliotecas de animação (Beta 40) já carregadas — swipe por física real, feedback de teclado, ondulação ao toque na Piscina, transições em grelha/calendário.
+Contexto de projeto para o repositório `escritorio-casa`. Descreve o **estado atual** de cada app e as decisões que não são óbvias a partir do código. Última alteração: 15 de setembro de 2026 — `peso/` v4.1.0: mesma análise de bibliotecas de animação feita em `tarefas/`, mas aqui só o Anime.js ganhou lugar (swipe para eliminar, celebrações de marco) — o resto já estava bem resolvido nativamente.
 
 ## Visão geral
 
@@ -27,9 +27,15 @@ O utilizador por vezes escreve um pedido para o domínio de uma app enquanto nom
 
 ## `peso/` — Controlo de peso
 
-Registo diário de peso sincronizado com Google Sheets (API direta, sem Apps Script). `SPREADSHEET_ID: 1UzEXtl7w6jMsk-c7Pkt3kq97AXL6XIiwTrjOYUaYFLs`. Versão `v4.0.0 R1`.
+Registo diário de peso sincronizado com Google Sheets (API direta, sem Apps Script). `SPREADSHEET_ID: 1UzEXtl7w6jMsk-c7Pkt3kq97AXL6XIiwTrjOYUaYFLs`. Versão `v4.1.0`.
 
 Funcionalidades: tendência por regressão linear (não apenas os dois últimos pesos), evolução mensal, melhor/pior semana, previsão de data ao objetivo, TDEE (Mifflin-St Jeor) e IMC classificados, sequência de dias, e desfazer eliminação com undo otimista.
+
+**Mais funcionalidades de animação (v4.1.0)**: pedido do utilizador para repetir, nesta app, a mesma análise já feita em `tarefas/` sobre o que as bibliotecas GSAP/Motion/Anime.js/Three.js podiam ainda oferecer, com liberdade para mudar o que fosse preciso (exceto o esquema de cores). Achado principal da análise: ao contrário de `tarefas/`, esta app já tinha muito bem resolvido o que essas bibliotecas normalmente trariam — as tabs já usam a **View Transitions API nativa** (`document.startViewTransition` em `showTab()`, com fallback instantâneo), o gráfico já é **Chart.js**, o toque já tem um **ripple** feito à mão (`initRipples()`) e os números já sobem com um **`animateValues()`** próprio (rAF + easing cúbico, já respeita `prefers-reduced-motion`). Por isso só o **Anime.js** ganhou lugar aqui — para as duas coisas que realmente faltavam:
+- **Swipe para eliminar** (`ativarSwipeEliminar()`, aba Registos): igual ao padrão já validado em `tarefas/` — `anime.createDraggable(row, {x:true, y:false, snap:0, ...})`, só reage a arrastar para a esquerda (convenção universal de eliminar), chama a eliminação otimista já existente (`eliminarRegistoDireto`) que já tinha undo-toast. Os botões de editar/eliminar continuam a existir tal e qual.
+- **Celebrações de marco** (`celebrarNovoMinimo()`/`celebrarObjetivoAtingido()`, chamadas em `onRegistarNovo()` comparando o estado antes/depois de gravar): um "pop" de escala contido no valor do peso atual (e nas tags, no caso do objetivo). **Sem confete nem emoji** — o próprio `CHANGELOG` da v4.0.0 R1 já documenta que o redesenho visou uma "identidade mais sóbria e editorial, [...] sem gradientes nem emblemas com emoji", por isso a celebração teve de ficar consistente com essa decisão já tomada, em vez de ser vistosa.
+- Modal/hint/changelog (`#hintOverlay`/`#modalOverlay`/`#changelogOverlay`) passaram a abrir/fechar com uma transição CSS (fade + slide-up), tal como em `tarefas/` — não precisou de nenhuma biblioteca, só o mesmo truque de opacity/visibility a substituir o `display:none` instantâneo (com `!important` na regra do ID, para vencer o `.hidden{display:none!important}` global só nestes três elementos).
+- **GSAP e Motion não entraram** — não havia nenhum uso concreto que já não estivesse coberto por algo já existente e a funcionar bem (View Transitions, ripple, `animateValues`). Trazê-los só por trazer teria sido peso morto, contra o próprio critério usado em `tarefas/`.
 
 ## `tarefas/` — Tarefas de Casa
 

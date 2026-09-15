@@ -278,12 +278,20 @@
   </div>
 </div>
 
+<!-- Anime.js — só para o swipe-to-eliminar nos registos e as celebrações
+     de marco (novo mínimo / objetivo atingido). As tabs já usam a View
+     Transitions API nativa, o gráfico é Chart.js, e o toque/contagem já
+     têm implementações próprias (ripple, animateValues) que funcionam
+     bem — não faz sentido trazer GSAP/Motion/Three.js só por trazer,
+     sem um uso concreto que já não esteja coberto. -->
+<script src="https://cdn.jsdelivr.net/npm/animejs@4.5.0/dist/bundles/anime.umd.min.js"></script>
+
 <script>
 /* ============================================================
    CONFIGURAÇÃO — não alterar CLIENT_ID / SPREADSHEET_ID / ranges:
    é a ligação à folha de cálculo Google Sheets já em uso.
    ============================================================ */
-const APP_VERSION = 'v4.0.0 R1';
+const APP_VERSION = 'v4.1.0';
 const CLIENT_ID = '108256538530-fgunbb52s7f3s9aurfpjtaf01v8fjbph.apps.googleusercontent.com';
 const SPREADSHEET_ID = '1UzEXtl7w6jMsk-c7Pkt3kq97AXL6XIiwTrjOYUaYFLs';
 const SHEET_REGISTOS = 'Registos';
@@ -979,6 +987,11 @@ async function onRegistarNovo(ev){
   const nota = notaInput.value.trim();
   const now = new Date();
   const dataStr = now.getFullYear()+'-'+pad(now.getMonth()+1)+'-'+pad(now.getDate())+' '+pad(now.getHours())+':'+pad(now.getMinutes())+':00';
+  // Capturado antes de gravar, para saber a seguir se este registo cruzou
+  // um marco (novo mínimo / objetivo atingido pela primeira vez) — ver
+  // celebrarNovoMinimo()/celebrarObjetivoAtingido() mais abaixo.
+  const minAntes = registos.length ? Math.min(...registos.map(r => r.peso)) : Infinity;
+  const atingidoAntes = !!(config.pesoAlvo && registos.length && Math.abs(registos[registos.length-1].peso - config.pesoAlvo) < 0.05);
   btn.disabled = true;
   const textoOriginal = btn.textContent;
   btn.textContent = 'A gravar…';
@@ -992,6 +1005,9 @@ async function onRegistarNovo(ev){
     setStatus('');
     showConfirmToast('Peso registado');
     renderAll();
+    const atingidoAgora = !!(config.pesoAlvo && Math.abs(peso - config.pesoAlvo) < 0.05);
+    if (atingidoAgora && !atingidoAntes) celebrarObjetivoAtingido();
+    else if (registos.length > 1 && peso <= minAntes + 0.001) celebrarNovoMinimo();
   } catch(e){
     setStatus('Erro ao registar: ' + e.message, true);
   } finally {
@@ -1002,6 +1018,11 @@ async function onRegistarNovo(ev){
 
 /* ---------- Histórico de versões (mais recente primeiro) ---------- */
 const CHANGELOG = [
+  { v:'v4.1.0', itens:[
+    'Arrastar um registo da lista para a esquerda elimina-o (com "Desfazer" como sempre) — os botões de editar/eliminar continuam lá',
+    'Ao registares um peso que bate o mínimo, ou que atinge o objetivo pela primeira vez, o valor destaca-se por instantes',
+    'As folhas de editar registo e explicações abrem e fecham com uma transição suave, em vez de aparecer/desaparecer de repente',
+  ]},
   { v:'v4.0.0 R1', itens:[
     'Redesenho visual completo: identidade mais sóbria e editorial, menos caixas, sem gradientes nem emblemas com emoji',
     'Nova cabeça de estado com o peso atual em destaque e uma frase de contexto, em vez de emblemas soltos',
@@ -1516,8 +1537,60 @@ function renderRegistos(){
       </div>`;
     row.querySelector('.iconEdit').onclick = () => openModal(reg);
     row.querySelector('.iconDel').onclick = () => eliminarRegistoDireto(reg);
+    ativarSwipeEliminar(row, reg);
     list.appendChild(row);
   });
+}
+
+// Atalho adicional — os botões de editar/eliminar continuam a existir
+// tal e qual. Só arrasto para a esquerda (convenção universal de
+// "eliminar" em listas móveis, ex: Gmail); arrastar para a direita não
+// faz nada de propósito, só volta à posição. `y:false` deixa o scroll
+// vertical da lista a funcionar nativamente (anime marca o elemento com
+// touch-action:pan-y quando o eixo Y está desativado).
+function ativarSwipeEliminar(row, reg){
+  if (!window.anime || (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches)) return;
+  let disparado = false;
+  try{
+    anime.createDraggable(row, {
+      x: true,
+      y: false,
+      snap: 0,
+      onDrag: (d) => {
+        row.style.background = d.x < -12 ? 'var(--negative-soft)' : '';
+      },
+      onRelease: (d) => {
+        if (!disparado && d.x < -90){
+          disparado = true;
+          eliminarRegistoDireto(reg);
+        }
+      },
+      onSettle: () => { row.style.background = ''; }
+    });
+  } catch(e){ /* sem swipe, os botões continuam a funcionar */ }
+}
+
+function reduzMovimentoPeso(){
+  return !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+}
+
+// Duas únicas celebrações da app, para os dois momentos que realmente
+// merecem — nunca confete/emoji, para não contrariar a identidade "mais
+// sóbria e editorial" já assumida no redesenho v4.0.0 (ver CHANGELOG
+// acima): só um "pop" contido, na mesma linguagem visual do resto.
+function celebrarNovoMinimo(){
+  if (!window.anime || reduzMovimentoPeso()) return;
+  const tag = [...document.querySelectorAll('#statusTags .tag.good')].find(t => t.textContent.includes('Novo mínimo'));
+  const alvo = tag || document.getElementById('statusWeightVal');
+  if (!alvo) return;
+  try{ anime.animate(alvo, { scale: [1, 1.18, 1] }, { duration: 550, ease: 'outElastic(1, .7)' }); } catch(e){}
+}
+function celebrarObjetivoAtingido(){
+  if (!window.anime || reduzMovimentoPeso()) return;
+  const alvo = document.getElementById('statusWeightVal');
+  if (alvo){ try{ anime.animate(alvo, { scale: [1, 1.3, 1] }, { duration: 750, ease: 'outElastic(1, .55)' }); } catch(e){} }
+  const tagsEl = document.getElementById('statusTags');
+  if (tagsEl){ try{ anime.animate(tagsEl, { scale: [1, 1.08, 1] }, { duration: 750, delay: 80, ease: 'outElastic(1, .55)' }); } catch(e){} }
 }
 
 function renderInsights(){
