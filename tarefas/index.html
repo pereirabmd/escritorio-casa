@@ -94,22 +94,25 @@
     </section>
 
     <section class="tab" id="tab-piscina" role="tabpanel" aria-label="Piscina" tabindex="0">
-      <div style="display:flex; align-items:baseline; justify-content:space-between;">
-        <h2 class="section-title">Piscina</h2>
-        <span id="piscina-estacao" style="font-size:12px; color:var(--text-secondary);"></span>
-      </div>
-      <p style="font-size:12px; color:var(--text-secondary); margin:-4px 0 14px 2px;">Apoio de memória: última vez e sugestão da próxima. Sem pressão — se não der hoje, dá amanhã.</p>
+      <canvas id="piscina-water" aria-hidden="true"></canvas>
+      <div class="piscina-conteudo">
+        <div style="display:flex; align-items:baseline; justify-content:space-between;">
+          <h2 class="section-title">Piscina</h2>
+          <span id="piscina-estacao" style="font-size:12px; color:var(--text-secondary);"></span>
+        </div>
+        <p style="font-size:12px; color:var(--text-secondary); margin:-4px 0 14px 2px;">Apoio de memória: última vez e sugestão da próxima. Sem pressão — se não der hoje, dá amanhã.</p>
 
-      <div class="chip-group" style="margin-bottom:14px;">
-        <button type="button" class="chip selected" data-piscinasub="periodicas">Periódicas</button>
-        <button type="button" class="chip" data-piscinasub="outras">Outras ações</button>
-      </div>
+        <div class="chip-group" style="margin-bottom:14px;">
+          <button type="button" class="chip selected" data-piscinasub="periodicas">Periódicas</button>
+          <button type="button" class="chip" data-piscinasub="outras">Outras ações</button>
+        </div>
 
-      <div class="piscina-subtab" data-sub="periodicas">
-        <div id="lista-piscina"><div class="empty">A carregar...</div></div>
-      </div>
-      <div class="piscina-subtab" data-sub="outras" style="display:none">
-        <div id="lista-piscina-outras"></div>
+        <div class="piscina-subtab" data-sub="periodicas">
+          <div id="lista-piscina"><div class="empty">A carregar...</div></div>
+        </div>
+        <div class="piscina-subtab" data-sub="outras" style="display:none">
+          <div id="lista-piscina-outras"></div>
+        </div>
       </div>
     </section>
 
@@ -346,8 +349,18 @@
 <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-messaging-compat.js"></script>
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 
+<!-- Animações — carregadas como scripts clássicos (sem build), tal como o
+     Firebase acima. Se algum CDN falhar (ex: primeira visita offline), a
+     app continua a funcionar: cada função de animação verifica a
+     biblioteca antes de a usar (ver secção ANIMAÇÕES mais abaixo). -->
+<script src="https://cdn.jsdelivr.net/npm/gsap@3.15.0/dist/gsap.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/gsap@3.15.0/dist/Flip.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/gsap@3.15.0/dist/ScrollTrigger.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/motion@13.3.0/dist/motion.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/animejs@4.5.0/dist/bundles/anime.umd.min.js"></script>
+
 <script>
-const APP_VERSION = 'Beta 38';
+const APP_VERSION = 'Beta 40';
 
 // ---------------------------------------------------------------
 // PISCINA — catálogo estático (não editável pela UI; ver PROJECT-CONTEXT.md)
@@ -379,6 +392,8 @@ const PISCINA_CATALOGO = [
     anoTodo: { intervalo: 30 } },
   { id: 'P08', nome: 'Trocar areia do filtro', nota: '85 kg',
     anoTodo: { intervalo: 1095, atraso: 1460 }, avisoLongo: true },
+  { id: 'P14', nome: 'Verificar pressão do filtro (manómetro)', nota: 'baseline ~12 psi; contralavagem só a ~15-16 psi',
+    quente: { intervalo: 7, intervaloAlt: 14 }, fria: { intervalo: 28, intervaloAlt: 42 } },
   { id: 'P09', nome: 'Repor cloro lento (pastilhas)', tipo: 'log' },
   { id: 'P10', nome: 'Ajustar pH', nota: 'pH- ou pH+ conforme leitura', tipo: 'log' },
   { id: 'P11', nome: 'Contralavagem do filtro', nota: 'conforme manómetro (+0,2-0,3 bar)', tipo: 'log' },
@@ -417,6 +432,133 @@ function esc(str) {
   return String(str ?? '').replace(/[&<>"']/g, (c) => ({
     '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
   }[c]));
+}
+
+// ---------------------------------------------------------------
+// ANIMAÇÕES — GSAP (transições de tab, listas, reordenação ao concluir
+// tarefas), Motion (feedback de toque em botões/chips) e Anime.js (o ✓ a
+// "desenhar-se" ao concluir, pequenas celebrações). Carregadas por CDN
+// como scripts clássicos (ver <head>/topo do body): se uma falhar (ex:
+// primeira visita offline), esta secção degrada-se sozinha — cada função
+// abaixo verifica a biblioteca antes de a usar, nunca bloqueia a app.
+// Reforça a mesma regra já seguida no resto do ficheiro: um lembrete de
+// polish visual nunca pode impedir uma ação real (marcar feita, guardar).
+// ---------------------------------------------------------------
+function prefereReduzMovimento() {
+  return window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+}
+if (window.gsap && window.Flip && window.ScrollTrigger) {
+  gsap.registerPlugin(Flip, ScrollTrigger);
+  document.body.classList.add('anim-gsap');
+}
+
+// Entrada em stagger dos cartões de uma lista recém-renderizada — substitui
+// o keyframe CSS `cardIn` quando o GSAP está disponível (ver `anim-gsap`
+// no styles.css), com o mesmo espírito: aparecer suavemente, não distrair.
+function revelarCards(containers) {
+  if (!window.gsap || prefereReduzMovimento()) return;
+  const els = containers
+    .filter(Boolean)
+    .flatMap(c => Array.from(c.children).filter(el => el.classList.contains('card')));
+  if (!els.length) return;
+  gsap.from(els, { opacity: 0, y: 14, duration: .32, ease: 'power2.out', stagger: .045, clearProps: 'all' });
+}
+
+// Reordenação/saída suave da lista "Hoje" ao marcar uma tarefa como feita
+// ou saltar — em vez de o DOM saltar instantaneamente para o novo estado.
+// Funciona por FLIP (First-Last-Invert-Play): guarda a posição atual das
+// linhas (por `data-flip-id`, estável entre re-renders porque as linhas
+// são recriadas de raiz), deixa o `fn` recriar o DOM, e anima a diferença.
+let flipEmCurso = false;
+function comFlipHoje(fn) {
+  const suportado = window.gsap && window.Flip && !prefereReduzMovimento();
+  const state = suportado ? Flip.getState('#tab-hoje [data-flip-id]') : null;
+  flipEmCurso = true;
+  try {
+    fn();
+  } finally {
+    flipEmCurso = false;
+  }
+  if (state) {
+    Flip.from(state, {
+      duration: .45, ease: 'power2.inOut', absolute: true,
+      onEnter: els => gsap.fromTo(els, { opacity: 0, scale: .92 }, { opacity: 1, scale: 1, duration: .3, delay: .12 }),
+      onLeave: els => gsap.to(els, { opacity: 0, scale: .92, duration: .2 })
+    });
+  }
+}
+
+// Feedback de toque (Motion) em qualquer botão/chip da app — um único
+// listener delegado, em vez de o acrescentar a cada handler existente.
+// É puramente visual (não faz preventDefault/stopPropagation), por isso
+// nunca interfere com a lógica de clique já existente em cada botão.
+document.addEventListener('pointerdown', (e) => {
+  if (!window.Motion || prefereReduzMovimento()) return;
+  const alvo = e.target.closest('.chip, .btn, .fab, .tab-btn, .task-check, .person-option');
+  if (!alvo) return;
+  Motion.animate(alvo, { scale: [1, .9] }, { duration: .12, ease: 'easeOut' });
+});
+document.addEventListener('pointerup', (e) => {
+  if (!window.Motion || prefereReduzMovimento()) return;
+  const alvo = e.target.closest('.chip, .btn, .fab, .tab-btn, .task-check, .person-option');
+  if (!alvo) return;
+  Motion.animate(alvo, { scale: [.9, 1] }, { duration: .28, ease: [.34, 1.56, .64, 1] });
+});
+document.addEventListener('pointercancel', (e) => {
+  if (!window.Motion) return;
+  const alvo = e.target.closest('.chip, .btn, .fab, .tab-btn, .task-check, .person-option');
+  if (alvo) Motion.animate(alvo, { scale: 1 }, { duration: .2 });
+});
+
+// Desenha o ✓ em vez de o mostrar instantaneamente, só no momento em que
+// uma tarefa é marcada como concluída (não em cada render normal — uma
+// tarefa já concluída continua a aparecer com o ✓ completo de imediato).
+function desenharCheckmark(idInstancia) {
+  if (!window.anime || prefereReduzMovimento()) return;
+  const path = document.querySelector(`.task-check[data-id="${CSS.escape(String(idInstancia))}"] svg path`);
+  if (!path) return;
+  try {
+    const [drawable] = anime.svg.createDrawable(path);
+    anime.animate(drawable, { draw: ['0 0', '0 1'], duration: 420, ease: 'outQuad' });
+  } catch (e) { /* SVG sem suporte a path.getTotalLength() nalgum navegador antigo — ignora */ }
+}
+
+// Efeito de scroll (GSAP ScrollTrigger): o catálogo de tarefas é a única
+// lista da app longa o suficiente para valer a pena revelar por scroll em
+// vez de tudo de uma vez — as restantes (Hoje, Piscina) cabem quase
+// sempre num ecrã, por isso usam só `revelarCards()` acima. Cada
+// `renderTarefas()` reconstrói a lista do zero, por isso os triggers
+// antigos (que apontam para nós já removidos) têm de ser destruídos antes
+// de criar os novos, para não acumular observers mortos.
+let triggersCatalogo = [];
+function limparTriggersCatalogo() {
+  triggersCatalogo.forEach(t => t.kill());
+  triggersCatalogo = [];
+}
+function revelarCatalogoAoScroll(container) {
+  limparTriggersCatalogo();
+  if (!window.gsap || !window.ScrollTrigger || prefereReduzMovimento()) return;
+  const cards = Array.from(container.children).filter(el => el.classList.contains('card'));
+  if (!cards.length) return;
+  triggersCatalogo = ScrollTrigger.batch(cards, {
+    scroller: '#tab-tarefas',
+    start: 'top 94%',
+    once: true,
+    onEnter: batch => gsap.from(batch, { opacity: 0, y: 16, duration: .35, ease: 'power2.out', stagger: .05 })
+  });
+}
+
+// Pequena celebração (Anime.js) quando todas as tarefas de hoje ficam
+// concluídas — dispara uma única vez por transição, não em cada render.
+let hojeEstavaCompleto = false;
+function celebrarSeCompleto(totalHoje, feitas) {
+  const completoAgora = totalHoje > 0 && feitas === totalHoje;
+  const eraCompleto = hojeEstavaCompleto;
+  hojeEstavaCompleto = completoAgora;
+  if (!completoAgora || eraCompleto || !window.anime || prefereReduzMovimento()) return;
+  const el = document.getElementById('hoje-progresso');
+  if (!el) return;
+  anime.animate(el, { scale: [1, 1.22, 1], color: ['var(--text-secondary)', 'var(--success)', 'var(--text-secondary)'] }, { duration: 700, ease: 'outElastic(1, .6)' });
 }
 
 // ---------------------------------------------------------------
@@ -991,6 +1133,8 @@ function renderPiscina() {
       document.getElementById('btn-piscina-' + item.id)?.addEventListener('click', () => piscinaRegistar(item));
     });
   }
+
+  revelarCards([cont, contOutras]);
 }
 
 function renderPiscinaCard(item, estacao) {
@@ -999,21 +1143,35 @@ function renderPiscinaCard(item, estacao) {
   const ultima = linha?.UltimaData || '';
   const proxima = linha?.ProximaData || '';
   const nota = item.nota ? ` <span style="font-weight:400; color:var(--text-secondary); font-size:11.5px;">(${esc(item.nota)})</span>` : '';
+  // Data de hoje ou já ultrapassada — mesmo dentro da folga (limiteAtraso)
+  // que evita marcar "atrasada" cedo demais, isto já merece destaque: sem
+  // ele, uma tarefa prevista para hoje aparecia igual a uma prevista daqui
+  // a duas semanas (pedido do utilizador para dar mais visibilidade).
+  const hojeStr = formatDate(new Date());
+  const ehHojeOuAntes = !!proxima && proxima <= hojeStr;
+  const textoSugerido = proxima === hojeStr ? 'sugerido para hoje' : `sugerido: ${esc(formatarDataCurta(proxima))}`;
+  let destaque = '';
 
   let statusHtml = 'Ainda não registada';
   if (ultima) {
     const diasDesde = Math.floor((Date.now() - new Date(ultima).getTime()) / 86400000);
     const atrasada = diasDesde > piscinaLimiteAtraso(regime);
     statusHtml = `Última vez: ${esc(formatarDataCurta(ultima))} (há ${diasDesde} dia${diasDesde === 1 ? '' : 's'})`;
-    statusHtml += atrasada
-      ? ` <span class="badge suave">por fazer há ${diasDesde} dias</span>`
-      : (proxima ? ` · sugerido: ${esc(formatarDataCurta(proxima))}` : '');
+    if (atrasada) {
+      destaque = `por fazer há ${diasDesde} dias`;
+    } else if (ehHojeOuAntes) {
+      destaque = textoSugerido;
+    } else if (proxima) {
+      statusHtml += ` · ${textoSugerido}`;
+    }
   } else if (proxima) {
-    statusHtml += ` · sugerido: ${esc(formatarDataCurta(proxima))}`;
+    if (ehHojeOuAntes) destaque = textoSugerido;
+    else statusHtml += ` · ${textoSugerido}`;
   }
+  if (destaque) statusHtml += ` <span class="badge suave">${destaque}</span>`;
 
   return `
-    <div class="card">
+    <div class="card${ehHojeOuAntes ? ' card-destaque' : ''}">
       <div class="task-nome">${esc(item.nome)}${nota}</div>
       <div class="task-meta">${statusHtml}</div>
       <button type="button" class="btn secondary" id="btn-piscina-${item.id}" style="margin-top:8px; width:auto; padding:8px 14px; font-size:12.5px;">Marcar feita hoje</button>
@@ -1149,6 +1307,7 @@ function renderHoje() {
   const totalHoje = doHoje.length + feitas.length;
   const progressoEl = document.getElementById('hoje-progresso');
   if (progressoEl) progressoEl.textContent = totalHoje ? `${feitas.length} de ${totalHoje} concluídas` : '';
+  celebrarSeCompleto(totalHoje, feitas.length);
 
   const listaHoje = document.getElementById('lista-hoje');
   listaHoje.innerHTML = '';
@@ -1175,12 +1334,15 @@ function renderHoje() {
       doAmanha.forEach((inst, i) => listaAmanha.appendChild(renderTaskRow(inst, i)));
     }
   }
+
+  if (!flipEmCurso) revelarCards([listaHoje, listaAtrasadas, listaAmanha]);
 }
 
 function renderTaskRow(inst, index) {
   const tarefa = tarefaPorId(inst.TarefaID);
   const div = document.createElement('div');
   div.className = 'card task-row';
+  div.dataset.flipId = 'inst-' + inst.ID; // usado só pelo GSAP Flip na aba Hoje (ver comFlipHoje)
   if (typeof index === 'number') div.style.animationDelay = Math.min(index * 40, 280) + 'ms';
   const done = inst.Estado === 'Feita';
   const saltada = inst.Estado === 'Saltada';
@@ -1279,20 +1441,18 @@ async function marcarFeita(inst) {
   const dataConclusaoAnterior = inst.DataConclusao;
   const novoEstado = inst.Estado === 'Feita' ? 'Pendente' : 'Feita';
   const agora = novoEstado === 'Feita' ? agoraLocalFormatado() : '';
+  const idInstancia = inst.ID;
   inst.Estado = novoEstado;
   inst.DataConclusao = agora;
   if (novoEstado === 'Feita' && navigator.vibrate) navigator.vibrate(15);
-  renderHoje();
-  renderCalendario();
-  renderResumo();
+  comFlipHoje(() => { renderHoje(); renderCalendario(); renderResumo(); });
+  if (novoEstado === 'Feita') desenharCheckmark(idInstancia);
   const ok = await sheetsUpdate(`Instancias!E${inst._rowIndex}:F${inst._rowIndex}`, [novoEstado, agora]);
   if (!ok) {
     // Não fingir que ficou sincronizado — reverte o estado otimista.
     inst.Estado = estadoAnterior;
     inst.DataConclusao = dataConclusaoAnterior;
-    renderHoje();
-    renderCalendario();
-    renderResumo();
+    comFlipHoje(() => { renderHoje(); renderCalendario(); renderResumo(); });
   }
   toast(ok ? (novoEstado === 'Feita' ? 'Tarefa concluída' : 'Reaberta') : 'Falha ao guardar: ' + (ultimoErroSheets || 'sem ligação?'));
 }
@@ -1300,13 +1460,11 @@ async function marcarFeita(inst) {
 async function saltarTarefa(inst) {
   const estadoAnterior = inst.Estado;
   inst.Estado = 'Saltada';
-  renderHoje();
-  renderCalendario();
+  comFlipHoje(() => { renderHoje(); renderCalendario(); });
   const ok = await sheetsUpdate(`Instancias!E${inst._rowIndex}`, ['Saltada']);
   if (!ok) {
     inst.Estado = estadoAnterior;
-    renderHoje();
-    renderCalendario();
+    comFlipHoje(() => { renderHoje(); renderCalendario(); });
   }
   toast(ok ? 'Tarefa saltada por hoje' : 'Falha ao guardar: ' + (ultimoErroSheets || 'sem ligação?'));
 }
@@ -1483,6 +1641,7 @@ function renderListaDia() {
   } else {
     doDia.forEach((inst, i) => lista.appendChild(renderTaskRow(inst, i)));
   }
+  revelarCards([lista]);
 }
 
 // ---------------------------------------------------------------
@@ -1491,6 +1650,7 @@ function renderListaDia() {
 function renderTarefas() {
   const lista = document.getElementById('lista-tarefas');
   lista.innerHTML = '';
+  limparTriggersCatalogo();
   const termo = (document.getElementById('f-pesquisa-tarefas')?.value || '').toLowerCase().trim();
   const tarefasFiltradas = termo
     ? state.tarefas.filter(t => t.Nome.toLowerCase().includes(termo) || t.Categoria.toLowerCase().includes(termo) || t.PessoaPadrao.toLowerCase().includes(termo))
@@ -1534,6 +1694,7 @@ function renderTarefas() {
     div.querySelector('.btn-duplicar-tarefa').addEventListener('click', () => duplicarTarefa(t));
     lista.appendChild(div);
   });
+  revelarCatalogoAoScroll(lista);
 }
 
 document.getElementById('f-pesquisa-tarefas').addEventListener('input', renderTarefas);
@@ -2250,7 +2411,7 @@ function renderResumo() {
   el.innerHTML = entradas.map(([pessoa, n]) => `
     <div style="margin-bottom:10px;">
       <div style="display:flex; justify-content:space-between; font-size:13px; margin-bottom:4px;">
-        <span>${esc(pessoa)}</span><span style="color:var(--text-secondary)">${n} tarefa(s)</span>
+        <span>${esc(pessoa)}</span><span style="color:var(--text-secondary)"><span class="resumo-contagem" data-valor="${n}">0</span> tarefa(s)</span>
       </div>
       <div style="background:var(--bg); border-radius:6px; height:6px; overflow:hidden;">
         <div class="resumo-bar-fill" data-width="${(n / max) * 100}" style="background:var(--primary); height:100%; width:0%; transition:width .7s cubic-bezier(.22,.9,.3,1);"></div>
@@ -2258,13 +2419,25 @@ function renderResumo() {
     </div>
   `).join('') + '<div style="font-size:11px; color:var(--text-secondary); margin-top:2px;">Últimos 7 dias</div>' + gerarAvisoDesequilibrio(entradas);
 
-  requestAnimationFrame(() => {
+  // GSAP anima a barra e o número em conjunto; sem GSAP, cai para a
+  // transição CSS pura já existente (truque do duplo rAF para garantir
+  // que o browser pintou "width:0%" antes de mudar para o valor final).
+  if (window.gsap && !prefereReduzMovimento()) {
+    gsap.to(el.querySelectorAll('.resumo-bar-fill'), {
+      width: (i, alvo) => alvo.dataset.width + '%', duration: .8, ease: 'power2.out', stagger: .05
+    });
+    el.querySelectorAll('.resumo-contagem').forEach(span => {
+      const contador = { v: 0 };
+      gsap.to(contador, { v: Number(span.dataset.valor), duration: .8, ease: 'power2.out', onUpdate: () => span.textContent = Math.round(contador.v) });
+    });
+  } else {
     requestAnimationFrame(() => {
-      el.querySelectorAll('.resumo-bar-fill').forEach(bar => {
-        bar.style.width = bar.dataset.width + '%';
+      requestAnimationFrame(() => {
+        el.querySelectorAll('.resumo-bar-fill').forEach(bar => { bar.style.width = bar.dataset.width + '%'; });
+        el.querySelectorAll('.resumo-contagem').forEach(span => { span.textContent = span.dataset.valor; });
       });
     });
-  });
+  }
 }
 
 function gerarAvisoDesequilibrio(entradas) {
@@ -2513,14 +2686,39 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
   btn.addEventListener('click', () => ativarTab(btn.dataset.tab));
 });
 
-function ativarTab(nomeTab) {
+function ativarTab(nomeTab, { animar = true } = {}) {
   document.querySelectorAll('.tab-btn').forEach(b => {
     const ativo = b.dataset.tab === nomeTab;
     b.classList.toggle('active', ativo);
     b.setAttribute('aria-selected', String(ativo));
   });
-  document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.id === 'tab-' + nomeTab));
   lsSet('tarefas.ultimaTab', nomeTab);
+
+  const anterior = document.querySelector('.tab.active');
+  const seguinte = document.getElementById('tab-' + nomeTab);
+  if (!seguinte || anterior === seguinte) return;
+
+  // Efeito de água da Piscina só corre enquanto essa aba está visível
+  // (poupa bateria/CPU nas outras abas — ver o <script type="module"> no
+  // fim do ficheiro).
+  if (nomeTab === 'piscina') window.PiscinaWater?.start();
+  else window.PiscinaWater?.stop();
+
+  if (!anterior || !animar || !window.gsap || prefereReduzMovimento()) {
+    anterior?.classList.remove('active');
+    seguinte.classList.add('active');
+    return;
+  }
+
+  gsap.to(anterior, {
+    opacity: 0, y: -6, duration: .14, ease: 'power1.in',
+    onComplete: () => {
+      anterior.classList.remove('active');
+      gsap.set(anterior, { clearProps: 'opacity,transform' });
+      seguinte.classList.add('active');
+      gsap.fromTo(seguinte, { opacity: 0, y: 8 }, { opacity: 1, y: 0, duration: .24, ease: 'power2.out' });
+    }
+  });
 }
 
 // ---------------------------------------------------------------
@@ -2643,7 +2841,7 @@ window.addEventListener('load', () => {
 
   const ultimaTab = lsGet('tarefas.ultimaTab');
   if (ultimaTab && document.getElementById('tab-' + ultimaTab)) {
-    ativarTab(ultimaTab);
+    ativarTab(ultimaTab, { animar: false });
   }
 
   if ('serviceWorker' in navigator) {
@@ -2660,6 +2858,123 @@ window.addEventListener('load', () => {
     }
   }, 100);
 });
+</script>
+
+<!--
+  Efeito de água (Three.js) atrás dos cartões da aba Piscina — é o único
+  sítio da app onde um efeito 3D/WebGL acrescenta valor real (é
+  literalmente sobre uma piscina). Carregado à parte, como módulo ES: as
+  versões atuais do Three.js já não têm build UMD/global, só ESM — por
+  isso este bloco vive isolado do script principal (não-módulo) acima e
+  comunica com ele só através de `window.PiscinaWater.start()/stop()`,
+  chamado em `ativarTab()`. Falha em silêncio (sem WebGL, sem THREE, com
+  "prefers-reduced-motion", ou offline na primeira visita): a aba Piscina
+  funciona na mesma, só sem o fundo animado.
+-->
+<script type="module">
+  const canvas = document.getElementById('piscina-water');
+  if (canvas && !window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    iniciarEfeitoAgua(canvas).catch(() => { /* sem WebGL/sem CDN — a aba fica sem o efeito, sem mais */ });
+  }
+
+  async function iniciarEfeitoAgua(canvas) {
+    const THREE = await import('https://cdn.jsdelivr.net/npm/three@0.186.0/build/three.module.js');
+
+    const renderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: false });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
+
+    const scene = new THREE.Scene();
+    const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+
+    function corVariavel(nome, fallback) {
+      const valor = getComputedStyle(document.documentElement).getPropertyValue(nome).trim();
+      return new THREE.Color(valor || fallback);
+    }
+
+    const uniforms = {
+      uTime: { value: 0 },
+      uColorA: { value: corVariavel('--primary-light', '#DCEBE5') },
+      uColorB: { value: corVariavel('--primary', '#5B8C7A') }
+    };
+
+    const material = new THREE.ShaderMaterial({
+      uniforms,
+      transparent: true,
+      depthTest: false,
+      vertexShader: `
+        varying vec2 vUv;
+        void main(){
+          vUv = uv;
+          gl_Position = vec4(position.xy, 0.0, 1.0);
+        }
+      `,
+      fragmentShader: `
+        precision mediump float;
+        uniform float uTime;
+        uniform vec3 uColorA;
+        uniform vec3 uColorB;
+        varying vec2 vUv;
+        void main(){
+          float w1 = sin((vUv.x * 6.0 + uTime * 0.35) + sin(vUv.y * 4.0 - uTime * 0.22) * 1.5);
+          float w2 = sin((vUv.y * 8.0 - uTime * 0.28) + cos(vUv.x * 5.0 + uTime * 0.3) * 1.2);
+          float mistura = smoothstep(-1.0, 1.0, (w1 + w2) * 0.5);
+          vec3 cor = mix(uColorA, uColorB, mistura);
+          float alfa = 0.05 + 0.11 * mistura;
+          gl_FragColor = vec4(cor, alfa);
+        }
+      `
+    });
+
+    scene.add(new THREE.Mesh(new THREE.PlaneGeometry(2, 2), material));
+
+    function redimensionar() {
+      const { clientWidth: w, clientHeight: h } = canvas;
+      if (w > 0 && h > 0) renderer.setSize(w, h, false);
+    }
+    redimensionar();
+    new ResizeObserver(redimensionar).observe(canvas);
+
+    let ativo = false;
+    let idFrame = null;
+    const relogio = new THREE.Timer();
+    relogio.connect(document); // evita saltos grandes de tempo ao voltar de segundo plano
+
+    function laco(timestamp) {
+      if (!ativo) return;
+      relogio.update(timestamp);
+      uniforms.uTime.value = relogio.getElapsed();
+      renderer.render(scene, camera);
+      idFrame = requestAnimationFrame(laco);
+    }
+
+    // Pausa também quando a página fica em segundo plano (troca de app,
+    // ecrã bloqueado) — não só quando se muda de aba dentro da própria app.
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) { ativo = false; cancelAnimationFrame(idFrame); }
+      else if (window.PiscinaWater?._quer) window.PiscinaWater.start();
+    });
+
+    window.PiscinaWater = {
+      _quer: false,
+      start() {
+        this._quer = true;
+        if (ativo || document.hidden) return;
+        ativo = true;
+        laco();
+      },
+      stop() {
+        this._quer = false;
+        ativo = false;
+        cancelAnimationFrame(idFrame);
+      }
+    };
+
+    // Se a aba Piscina já estava ativa quando este módulo terminou de
+    // carregar (ex: última aba guardada), arranca de imediato.
+    if (document.getElementById('tab-piscina')?.classList.contains('active')) {
+      window.PiscinaWater.start();
+    }
+  }
 </script>
 </body>
 </html>

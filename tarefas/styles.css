@@ -100,6 +100,10 @@ nav#tabbar svg{width:22px; height:22px;}
 @media (prefers-reduced-motion: reduce){
   .card{animation:none;}
 }
+/* Quando o GSAP está disponível, é ele que trata da entrada dos cartões
+   (com stagger real) — evita fazer a mesma animação duas vezes. Sem GSAP
+   (ex: falha de rede), o keyframe acima continua a ser o fallback. */
+body.anim-gsap .card{animation:none;}
 .task-row{display:flex; align-items:center; gap:10px;}
 .task-check{
   width:26px; height:26px; border-radius:8px; border:2px solid var(--border);
@@ -122,12 +126,18 @@ nav#tabbar svg{width:22px; height:22px;}
 .task-nome.done{text-decoration:line-through; color:var(--text-secondary);}
 .task-meta{font-size:11.5px; color:var(--text-secondary); margin-top:1px;}
 .cat-dot{width:9px; height:9px; border-radius:50%; display:inline-block; margin-right:5px;}
+.card-destaque{background:var(--primary-light); border-color:var(--primary);}
 .badge{font-size:10.5px; padding:2px 8px; border-radius:20px; font-weight:600;}
 .badge.atrasada{background:var(--urgent); color:#fff;}
 .badge.hoje{background:var(--warning); color:#fff;}
 .badge.suave{background:var(--primary-light); color:var(--primary-dark);}
 
 .empty{text-align:center; padding:40px 16px; color:var(--text-secondary); font-size:13.5px;}
+
+/* Efeito de água (Three.js) atrás do conteúdo da aba Piscina — subtil,
+   nunca deve competir com a leitura dos cartões por cima. */
+#piscina-water{position:absolute; inset:0; width:100%; height:100%; z-index:0; pointer-events:none;}
+#tab-piscina .piscina-conteudo{position:relative; z-index:1;}
 
 #lista-tarefas{display:grid; grid-template-columns:repeat(auto-fill, minmax(150px, 1fr)); gap:12px 10px; align-items:start;}
 #lista-tarefas .card{margin-bottom:0;}
@@ -193,13 +203,23 @@ h2.section-title::before{content:'— '; opacity:.55;}
 .fab svg{width:24px; height:24px; stroke:#fff;}
 
 .modal-backdrop{
-  position:fixed; inset:0; background:rgba(0,0,0,.4); display:none;
+  position:fixed; inset:0; background:rgba(0,0,0,.4); display:flex;
   align-items:flex-end; z-index:20;
+  opacity:0; visibility:hidden; pointer-events:none;
+  transition:opacity .2s ease, visibility 0s linear .2s;
 }
-.modal-backdrop.open{display:flex;}
+.modal-backdrop.open{
+  opacity:1; visibility:visible; pointer-events:auto;
+  transition:opacity .2s ease;
+}
 .modal{
   background:var(--surface); width:100%; border-radius:20px 20px 0 0;
   padding:18px 18px calc(18px + env(safe-area-inset-bottom)) 18px; max-height:85vh; overflow-y:auto;
+  transform:translateY(28px); transition:transform .26s cubic-bezier(.22,.9,.3,1);
+}
+.modal-backdrop.open .modal{transform:translateY(0);}
+@media (prefers-reduced-motion: reduce){
+  .modal-backdrop, .modal-backdrop.open, .modal{transition:none;}
 }
 .modal h3{margin:0 0 14px 0; font-size:19px; font-family:var(--font-display); font-weight:700; color:var(--primary-dark);}
 .field{margin-bottom:12px;}
