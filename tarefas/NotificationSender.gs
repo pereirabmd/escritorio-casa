@@ -5,7 +5,10 @@
  * a manutenção da piscina (ver Piscina.gs).
  *
  * Corre a cada hora (ver Triggers.gs) — a notificação chega dentro da
- * janela da hora configurada, não ao minuto exato.
+ * janela da hora configurada, não ao minuto exato. Um Raspberry Pi pode
+ * chamar, a cada 5 minutos, a parte leve (jobNotificacoes, via doPost
+ * tipo 'job') para apertar essa janela; o trigger horário continua a
+ * existir como reserva caso o Pi esteja em baixo.
  */
 
 function jobPeriodico() {
@@ -13,8 +16,7 @@ function jobPeriodico() {
   try {
     gerarInstancias();
     marcarAtrasadas();
-    enviarNotificacoesDoDia();
-    verificarPiscina();
+    enviarNotificacoesComLock();
     props.setProperty('ultimaExecucao', new Date().toISOString());
     props.setProperty('falhasConsecutivas', '0');
   } catch (erro) {
@@ -26,6 +28,36 @@ function jobPeriodico() {
       alertarFalhaSistema(erro.message, falhas);
     }
     throw erro; // mantém o erro visível no histórico de Execuções
+  }
+}
+
+// Parte leve do job: só envia notificações (tarefas do dia + piscina), sem
+// gerar instâncias nem marcar atrasadas. É o que o Raspberry Pi chama a cada
+// 5 minutos. Não mexe em ultimaExecucao/falhasConsecutivas (essas medem o
+// trigger horário completo e alimentam o alerta de "sistema falhou").
+function jobNotificacoes() {
+  const correu = enviarNotificacoesComLock();
+  PropertiesService.getScriptProperties().setProperty('ultimaExecucaoRapida', new Date().toISOString());
+  return { executado: correu };
+}
+
+// Serializa os envios: o trigger horário, o Pi (a cada 5 min) e execuções
+// manuais podem coincidir, e duas execuções em simultâneo leriam
+// NotificacaoEnviada=FALSE antes de qualquer uma a gravar TRUE, duplicando
+// a notificação. Se não conseguir o lock em 30 s, salta — o próximo ciclo
+// apanha o que ficou por enviar. Não aninhar: o lock não é reentrante.
+function enviarNotificacoesComLock() {
+  const lock = LockService.getUserLock();
+  if (!lock.tryLock(30000)) {
+    console.warn('enviarNotificacoesComLock: outra execução em curso, a saltar este ciclo.');
+    return false;
+  }
+  try {
+    enviarNotificacoesDoDia();
+    verificarPiscina();
+    return true;
+  } finally {
+    lock.releaseLock();
   }
 }
 

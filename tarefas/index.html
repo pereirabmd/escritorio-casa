@@ -361,7 +361,7 @@
 <script src="https://cdn.jsdelivr.net/npm/animejs@4.5.0/dist/bundles/anime.umd.min.js"></script>
 
 <script>
-const APP_VERSION = 'Beta 45';
+const APP_VERSION = 'Beta 46';
 
 // ---------------------------------------------------------------
 // PISCINA — catálogo estático (não editável pela UI; ver PROJECT-CONTEXT.md)
@@ -2867,7 +2867,9 @@ document.getElementById('btn-testar-notif').addEventListener('click', async () =
     });
     const data = await res.json();
     if (data.ok) {
-      toast(`Teste enviado (${data.enviados}/${data.total})`);
+      // versaoScript ausente = o Apps Script implementado é anterior à Beta 45
+      // (código novo copiado mas implementação não atualizada).
+      toast(`Teste enviado (${data.enviados}/${data.total}) · script ${data.versaoScript || 'desatualizado'}`);
       setTimeout(() => sincronizarTokenNotifSilenciosamente(true), 15000); // dá tempo à confirmação de receção chegar
     } else {
       toast('Falha: ' + (data.erro || 'sem detalhe'));

@@ -6,6 +6,13 @@
  * POST body esperado: { "pessoa": "Bruno", "fcmToken": "..." }
  */
 
+// Versão do código do Apps Script (acompanha a Beta da app). Aparece na
+// resposta de saúde e do teste de notificação, para a app poder mostrar se o
+// que está implementado é mesmo o código mais recente — copiar os ficheiros
+// para o editor NÃO chega, é preciso atualizar a implementação existente
+// (Implementar > Gerir implementações > editar > Nova versão).
+const VERSAO_SCRIPT = 'Beta 46';
+
 function doGet(e) {
   return jsonResponse(estadoSaude());
 }
@@ -29,6 +36,9 @@ function doPost(e) {
     }
     if (body.tipo === 'saude') {
       return jsonResponse(estadoSaude());
+    }
+    if (body.tipo === 'job') {
+      return executarJobRemoto(body.segredo);
     }
     if (body.tipo === 'recebido') {
       return registarRecebido(body);
@@ -124,6 +134,19 @@ function estadoNotificacoes(pessoa, token) {
   });
 }
 
+// Chamado pelo Raspberry Pi (cron, a cada 5 min — ver pi/tarefas-job.sh).
+// O URL da web app é público (está no index.html), por isso exige um segredo
+// guardado em Script Properties (JOB_SEGREDO); sem ele qualquer pessoa podia
+// disparar o job à vontade.
+function executarJobRemoto(segredo) {
+  const esperado = PropertiesService.getScriptProperties().getProperty('JOB_SEGREDO');
+  if (!esperado || segredo !== esperado) {
+    return jsonResponse({ ok: false, erro: 'não autorizado' });
+  }
+  const resultado = jobNotificacoes();
+  return jsonResponse({ ok: true, versaoScript: VERSAO_SCRIPT, executado: resultado.executado });
+}
+
 function marcarInstanciaFeita(instanciaId) {
   if (!instanciaId) return jsonResponse({ ok: false, erro: 'instanciaId é obrigatório' });
 
@@ -167,6 +190,8 @@ function estadoSaude() {
   const minutos = Math.round((Date.now() - new Date(ultima).getTime()) / 60000);
   return {
     ok: true,
+    versaoScript: VERSAO_SCRIPT,
+    ultimaExecucaoRapida: props.getProperty('ultimaExecucaoRapida') || null,
     ultimaExecucao: ultima,
     minutosDesde: minutos,
     saudavel: minutos < 90 && falhas < 2, // trigger corre a cada hora; > 90min sem correr ou 2+ falhas é sinal de alerta
@@ -198,7 +223,7 @@ function testarNotificacao(pessoa) {
     });
   }
 
-  return jsonResponse({ ok: true, enviados: sucesso, total: subs.length });
+  return jsonResponse({ ok: true, enviados: sucesso, total: subs.length, versaoScript: VERSAO_SCRIPT });
 }
 
 function jsonResponse(obj) {
