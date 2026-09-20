@@ -39,7 +39,9 @@ Funcionalidades: tendência por regressão linear (não apenas os dois últimos 
 
 ## `tarefas/` — Tarefas de Casa
 
-Gestão de tarefas domésticas partilhada entre várias pessoas. CRUD direto à API do Google Sheets (`SHEET_ID: 1ZwA9RqwCbOlfWLmYZWFsE5iq2oUqr-XZru_HDy6NjjI`) mais um backend em Google Apps Script para geração agendada de instâncias recorrentes e notificações push (Firebase Cloud Messaging, projeto `bmdpereira-5a8f4`). Versão **Beta 43**.
+Gestão de tarefas domésticas partilhada entre várias pessoas. CRUD direto à API do Google Sheets (`SHEET_ID: 1ZwA9RqwCbOlfWLmYZWFsE5iq2oUqr-XZru_HDy6NjjI`) mais um backend em Google Apps Script para geração agendada de instâncias recorrentes e notificações push (Firebase Cloud Messaging, projeto `bmdpereira-5a8f4`). Versão **Beta 44**.
+
+**Atrasadas agrupadas por tarefa (Beta 44)**: uma tarefa que fica por fazer vários dias acumula uma instância `Atrasada` por dia. A lista "Atrasadas" da aba Hoje mostra só a mais recente de cada tarefa (`ultimaAtrasadaPorTarefa()`, agrupada antes do filtro de pessoa) e `marcarFeita()` conclui de uma vez todas as outras `Atrasada` da mesma `TarefaID`, com a mesma `DataConclusao`. Sem alterar o modelo de dados: as instâncias antigas continuam a existir no Sheet, só passam a `Feita`. Se o Sheet falhar a escrever as extras, reverte só essas localmente e avisa. Reabrir (desmarcar) mexe apenas na instância clicada.
 
 **Mais funcionalidades das bibliotecas de animação já carregadas (Beta 43)**: pedido do utilizador para analisar (não implementar) o que mais se podia usar das 4 bibliotecas da Beta 40, depois pedido para implementar os 4 achados principais dessa análise.
 
@@ -92,6 +94,8 @@ Pontos a não perder de vista:
 - O corpo das respostas de erro da API é guardado em `ultimoErroSheets` e aparece nos toasts — 401/403/400 não podem voltar a ser indistinguíveis.
 - `sincronizarTokenNotifSilenciosamente()` corre a cada `carregarTudo()` e em `visibilitychange`, renovando sozinho o token FCM. Sem isto, se o Android matasse a app em segundo plano e o Chrome gerasse um token novo, as notificações paravam em silêncio.
 - `NotificationSender.gs` só desativa uma subscrição ao fim de **2 falhas seguidas** (antes: 1), usando `PropertiesService` por endpoint.
+- `NotificationSender.gs` só desativa uma subscrição por **token inválido** (404/`UNREGISTERED`), nunca por falha transitória (429/5xx/rede) — `enviarFCMDetalhado()` devolve `{ok, tokenInvalido}`. `NotificacaoEnviada` só passa a `TRUE` se pelo menos um envio for aceite (sem subscrição ativa a instância fica `FALSE` e é tentada de novo na execução horária seguinte), e instâncias `Feita`/`Saltada` não notificam.
+- A aba **`LogEnvios`** (criada sozinha pelo Apps Script à primeira escrita, últimas ~2000 linhas) regista cada tentativa: `enviado` (HTTP 200, o Detalhe traz o id da mensagem FCM), `token_invalido`, `falha_transitoria`, `erro_rede` e `sem_subscricao`. Se aparece `enviado` e nada chega ao telemóvel, o problema é do dispositivo, não do script.
 
 ## `RTO/` — KLx RTO (dias de escritório/casa)
 

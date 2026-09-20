@@ -51,9 +51,9 @@ function verificarPiscina() {
 
     let algumSucesso = false;
     subs.forEach(sub => {
-      const ok = enviarFCM(sub.Endpoint, titulo, corpo, '');
-      registarResultadoEnvio(sub, ok);
-      if (ok) algumSucesso = true;
+      const resultado = enviarFCMDetalhado(sub.Endpoint, titulo, corpo, '', sub.Pessoa);
+      registarResultadoEnvio(sub, resultado.ok, resultado.tokenInvalido);
+      if (resultado.ok) algumSucesso = true;
     });
 
     if (algumSucesso) {

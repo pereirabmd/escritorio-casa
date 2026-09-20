@@ -122,9 +122,9 @@ function testarNotificacao(pessoa) {
 
   let sucesso = 0;
   subs.forEach(sub => {
-    const ok = enviarFCM(sub.Endpoint, 'Teste', 'Notificação de teste — Tarefas de Casa 👋');
-    if (ok) sucesso++;
-    else desativarSubscricao(sub);
+    const resultado = enviarFCMDetalhado(sub.Endpoint, 'Teste', 'Notificação de teste — Tarefas de Casa 👋', '', pessoa);
+    if (resultado.ok) sucesso++;
+    else if (resultado.tokenInvalido) desativarSubscricao(sub); // falha transitória não desativa
   });
 
   if (sucesso === 0) {

@@ -360,7 +360,7 @@
 <script src="https://cdn.jsdelivr.net/npm/animejs@4.5.0/dist/bundles/anime.umd.min.js"></script>
 
 <script>
-const APP_VERSION = 'Beta 43';
+const APP_VERSION = 'Beta 44';
 
 // ---------------------------------------------------------------
 // PISCINA — catálogo estático (não editável pela UI; ver PROJECT-CONTEXT.md)
@@ -1394,6 +1394,20 @@ function passaFiltroPessoaHoje(inst) {
   return inst.Pessoa === filtroPessoaHoje;
 }
 
+// Uma tarefa que ficou por fazer vários dias seguidos acumula uma instância
+// Atrasada por dia — mas para a pessoa é uma só coisa por fazer. A lista de
+// atrasadas mostra por isso só a ocorrência mais recente de cada tarefa (ver
+// também marcarFeita(), que conclui as restantes de uma vez). As datas são
+// 'yyyy-MM-dd', por isso comparam-se como texto.
+function ultimaAtrasadaPorTarefa(instancias) {
+  const maisRecente = {};
+  instancias.forEach(i => {
+    const atual = maisRecente[i.TarefaID];
+    if (!atual || i.Data > atual.Data) maisRecente[i.TarefaID] = i;
+  });
+  return instancias.filter(i => maisRecente[i.TarefaID] === i);
+}
+
 function renderHoje() {
   renderFiltroPessoaHoje();
 
@@ -1405,7 +1419,11 @@ function renderHoje() {
   const instanciasValidas = state.instancias.filter(i => tarefaPorId(i.TarefaID) && passaFiltroPessoaHoje(i));
   const doHoje = instanciasValidas.filter(i => i.Data === hoje && i.Estado !== 'Feita');
   const feitas = instanciasValidas.filter(i => i.Data === hoje && i.Estado === 'Feita');
-  const atrasadas = instanciasValidas.filter(i => i.Estado === 'Atrasada');
+  // Agrupa antes de aplicar o filtro de pessoa, para a "última" ser sempre a
+  // mesma independentemente do filtro escolhido.
+  const atrasadas = ultimaAtrasadaPorTarefa(
+    state.instancias.filter(i => tarefaPorId(i.TarefaID) && i.Estado === 'Atrasada')
+  ).filter(passaFiltroPessoaHoje);
   const doAmanha = instanciasValidas.filter(i => i.Data === amanhaStr && i.Estado !== 'Feita' && i.Estado !== 'Saltada');
 
   const totalHoje = doHoje.length + feitas.length;
@@ -1543,19 +1561,42 @@ async function marcarFeita(inst) {
   const novoEstado = inst.Estado === 'Feita' ? 'Pendente' : 'Feita';
   const agora = novoEstado === 'Feita' ? agoraLocalFormatado() : '';
   const idInstancia = inst.ID;
+  // Concluir uma tarefa atrasada conclui também as outras ocorrências
+  // atrasadas da mesma tarefa (só a última aparece na lista de atrasadas).
+  const anteriores = estadoAnterior === 'Atrasada' && novoEstado === 'Feita'
+    ? state.instancias.filter(i => i !== inst && i.TarefaID === inst.TarefaID && i.Estado === 'Atrasada')
+    : [];
   inst.Estado = novoEstado;
   inst.DataConclusao = agora;
+  anteriores.forEach(i => { i.Estado = 'Feita'; i.DataConclusao = agora; });
   if (novoEstado === 'Feita' && navigator.vibrate) navigator.vibrate(15);
   comFlipHoje(() => { renderHoje(); renderCalendario(); renderResumo(); });
   if (novoEstado === 'Feita') desenharCheckmark(idInstancia);
+  const reverterAnteriores = (lista) => lista.forEach(i => { i.Estado = 'Atrasada'; i.DataConclusao = ''; });
   const ok = await sheetsUpdate(`Instancias!E${inst._rowIndex}:F${inst._rowIndex}`, [novoEstado, agora]);
   if (!ok) {
     // Não fingir que ficou sincronizado — reverte o estado otimista.
     inst.Estado = estadoAnterior;
     inst.DataConclusao = dataConclusaoAnterior;
+    reverterAnteriores(anteriores);
     comFlipHoje(() => { renderHoje(); renderCalendario(); renderResumo(); });
+    toast('Falha ao guardar: ' + (ultimoErroSheets || 'sem ligação?'));
+    return;
   }
-  toast(ok ? (novoEstado === 'Feita' ? 'Tarefa concluída' : 'Reaberta') : 'Falha ao guardar: ' + (ultimoErroSheets || 'sem ligação?'));
+  const resultados = await Promise.all(
+    anteriores.map(i => sheetsUpdate(`Instancias!E${i._rowIndex}:F${i._rowIndex}`, ['Feita', agora]))
+  );
+  const falhadas = anteriores.filter((_, idx) => !resultados[idx]);
+  if (falhadas.length) {
+    reverterAnteriores(falhadas);
+    comFlipHoje(() => { renderHoje(); renderCalendario(); renderResumo(); });
+    toast(`Concluída, mas ${falhadas.length} ocorrência(s) atrasada(s) anterior(es) não ficaram guardadas: ` + (ultimoErroSheets || 'sem ligação?'));
+    return;
+  }
+  const concluidasExtra = anteriores.length;
+  toast(novoEstado === 'Feita'
+    ? 'Tarefa concluída' + (concluidasExtra ? ` · +${concluidasExtra} atrasada${concluidasExtra > 1 ? 's' : ''} anterior${concluidasExtra > 1 ? 'es' : ''}` : '')
+    : 'Reaberta');
 }
 
 async function saltarTarefa(inst) {

@@ -40,7 +40,8 @@ function alertarFalhaSistema(mensagemErro, falhas) {
       sub.Endpoint,
       '⚠️ Tarefas de Casa',
       `O sistema falhou ${falhas}x seguidas. Pode haver tarefas por notificar.`,
-      ''
+      '',
+      sub.Pessoa
     );
   });
 }
@@ -101,6 +102,7 @@ function enviarNotificacoesDoDia() {
   instancias.forEach(inst => {
     if (formatDate(new Date(inst.Data)) !== hoje) return;
     if (String(inst.NotificacaoEnviada).toUpperCase() === 'TRUE') return;
+    if (inst.Estado === 'Feita' || inst.Estado === 'Saltada') return; // já resolvida, nada a lembrar
     if (CacheService.getScriptCache().get('snooze_' + inst.ID)) return; // ainda dentro da 1h de snooze
 
     const tarefa = tarefasMap[inst.TarefaID];
@@ -115,16 +117,37 @@ function enviarNotificacoesDoDia() {
       if (!dependencia || dependencia.Estado !== 'Feita') return;
     }
 
+    // Só marca como enviada se pelo menos um dispositivo aceitou a mensagem.
+    // Sem subscrição ativa (ex: token renovado pelo Android e ainda não
+    // re-registado pela app) ou com todos os envios falhados, a instância
+    // fica FALSE e a próxima execução horária volta a tentar — assim, quando
+    // a app re-registar o token, o aviso de hoje ainda chega em vez de se
+    // perder em silêncio.
     const destinatarios = subsPorPessoa[inst.Pessoa] || [];
+    if (!destinatarios.length) {
+      // Sem isto o motivo mais silencioso de "não recebi nada" não deixava rasto.
+      // No máx. 1 linha a cada ~6h por instância (a execução é horária).
+      const cache = CacheService.getScriptCache();
+      if (!cache.get('semsub_' + inst.ID)) {
+        registarLogEnvio('sem_subscricao', inst.Pessoa, tarefa.Nome, inst.ID, '', '', 'Nenhuma subscrição ativa para esta pessoa');
+        cache.put('semsub_' + inst.ID, '1', 21600);
+      }
+    }
+    let algumSucesso = false;
     destinatarios.forEach(sub => {
-      const ok = enviarFCM(sub.Endpoint, tarefa.Nome, 'Hoje: ' + tarefa.Nome, inst.ID);
-      registarResultadoEnvio(sub, ok);
-      if (ok && auditoriaSheet) {
-        auditoriaSheet.appendRow([new Date().toISOString(), 'notificacao_enviada', tarefa.Nome, inst.Pessoa, inst.ID]);
+      const resultado = enviarFCMDetalhado(sub.Endpoint, tarefa.Nome, 'Hoje: ' + tarefa.Nome, inst.ID, inst.Pessoa);
+      registarResultadoEnvio(sub, resultado.ok, resultado.tokenInvalido);
+      if (resultado.ok) {
+        algumSucesso = true;
+        if (auditoriaSheet) {
+          auditoriaSheet.appendRow([new Date().toISOString(), 'notificacao_enviada', tarefa.Nome, inst.Pessoa, inst.ID]);
+        }
       }
     });
 
-    instanciasSheet.getRange(inst._rowIndex, 7).setValue('TRUE'); // NotificacaoEnviada
+    if (algumSucesso) {
+      instanciasSheet.getRange(inst._rowIndex, 7).setValue('TRUE'); // NotificacaoEnviada
+    }
   });
 }
 
@@ -160,13 +183,18 @@ function desativarSubscricao(sub) {
 // sem limite de tempo entre elas.
 var FALHAS_ANTES_DE_DESATIVAR_SUBSCRICAO = 2;
 
-function registarResultadoEnvio(sub, sucesso) {
+// `tokenInvalido === false` significa falha transitória (429, 5xx, rede):
+// não conta, porque o token continua válido e desativá-lo cortaria as
+// notificações até a app o voltar a registar. Sem o 3.º argumento
+// (chamadas antigas), qualquer falha conta, como antes.
+function registarResultadoEnvio(sub, sucesso, tokenInvalido) {
   const props = PropertiesService.getScriptProperties();
   const chave = 'falhasNotif_' + sub.Endpoint;
   if (sucesso) {
     props.deleteProperty(chave);
     return;
   }
+  if (tokenInvalido === false) return;
   const falhas = Number(props.getProperty(chave) || '0') + 1;
   if (falhas >= FALHAS_ANTES_DE_DESATIVAR_SUBSCRICAO) {
     desativarSubscricao(sub);
@@ -223,7 +251,10 @@ function getAccessToken() {
   return result.access_token;
 }
 
-function enviarFCM(fcmToken, titulo, corpo, instanciaId) {
+// Devolve { ok, tokenInvalido }: tokenInvalido=true só quando o FCM diz que o
+// token deixou de existir (404 / UNREGISTERED / "registration token" inválido).
+// Qualquer outra falha (429, 5xx, erro de rede) é transitória.
+function enviarFCMDetalhado(fcmToken, titulo, corpo, instanciaId, pessoa) {
   const projectId = PropertiesService.getScriptProperties().getProperty('FCM_PROJECT_ID');
   const accessToken = getAccessToken();
   const msgId = (instanciaId || 'msg') + '-' + Date.now();
@@ -245,19 +276,84 @@ function enviarFCM(fcmToken, titulo, corpo, instanciaId) {
     }
   };
 
-  const response = UrlFetchApp.fetch(
-    'https://fcm.googleapis.com/v1/projects/' + projectId + '/messages:send',
-    {
-      method: 'post',
-      contentType: 'application/json',
-      headers: { Authorization: 'Bearer ' + accessToken },
-      payload: JSON.stringify(payload),
-      muteHttpExceptions: true
+  let response;
+  try {
+    response = UrlFetchApp.fetch(
+      'https://fcm.googleapis.com/v1/projects/' + projectId + '/messages:send',
+      {
+        method: 'post',
+        contentType: 'application/json',
+        headers: { Authorization: 'Bearer ' + accessToken },
+        payload: JSON.stringify(payload),
+        muteHttpExceptions: true
+      }
+    );
+  } catch (erro) {
+    console.error('Falha de rede a enviar FCM: ' + erro.message);
+    registarLogEnvio('erro_rede', pessoa, titulo, instanciaId, fcmToken, '', erro.message);
+    return { ok: false, tokenInvalido: false };
+  }
+
+  const codigo = response.getResponseCode();
+  if (codigo === 200) {
+    let idMensagemFcm = '';
+    try { idMensagemFcm = JSON.parse(response.getContentText()).name || ''; } catch (e) {}
+    registarLogEnvio('enviado', pessoa, titulo, instanciaId, fcmToken, codigo, idMensagemFcm);
+    return { ok: true, tokenInvalido: false };
+  }
+
+  const corpoErro = response.getContentText();
+  console.error('Falha a enviar FCM (HTTP ' + codigo + '): ' + corpoErro);
+  const tokenInvalido =
+    codigo === 404 ||
+    corpoErro.indexOf('UNREGISTERED') !== -1 ||
+    (codigo === 400 && /registration token/i.test(corpoErro));
+  registarLogEnvio(tokenInvalido ? 'token_invalido' : 'falha_transitoria', pessoa, titulo, instanciaId, fcmToken, codigo, corpoErro);
+  return { ok: false, tokenInvalido: tokenInvalido };
+}
+
+function enviarFCM(fcmToken, titulo, corpo, instanciaId, pessoa) {
+  return enviarFCMDetalhado(fcmToken, titulo, corpo, instanciaId, pessoa).ok;
+}
+
+// ---- Log de envios (aba "LogEnvios") ----
+// Uma linha por tentativa de envio, para ver depois o que realmente aconteceu:
+// 'enviado' = o FCM aceitou a mensagem (HTTP 200, a coluna Detalhe traz o id
+// dela) — se mesmo assim nada aparece no telemóvel, o problema é do lado do
+// dispositivo (service worker, bateria, permissões), não do script.
+// A aba é criada sozinha à primeira escrita e nunca deve impedir um envio:
+// qualquer erro aqui é engolido. Mantém só as últimas ~2000 linhas.
+const ABA_LOG_ENVIOS = 'LogEnvios';
+const LOG_ENVIOS_MAX_LINHAS = 2000;
+const LOG_ENVIOS_APAGAR_QUANDO_CHEIO = 500;
+const LOG_ENVIOS_CABECALHO = ['Quando', 'Resultado', 'Pessoa', 'Titulo', 'InstanciaID', 'TokenFim', 'HTTP', 'Detalhe'];
+
+function registarLogEnvio(resultado, pessoa, titulo, instanciaId, token, codigoHttp, detalhe) {
+  try {
+    const ss = SpreadsheetApp.openById(PropertiesService.getScriptProperties().getProperty('SHEET_ID'));
+    let sheet = ss.getSheetByName(ABA_LOG_ENVIOS);
+    if (!sheet) {
+      sheet = ss.insertSheet(ABA_LOG_ENVIOS);
+      // Texto simples: evita o Sheets converter a data para o fuso da folha
+      // (que aqui difere do do script) ou ler o fim do token como número.
+      sheet.getRange(1, 1, sheet.getMaxRows(), LOG_ENVIOS_CABECALHO.length).setNumberFormat('@');
+      sheet.getRange(1, 1, 1, LOG_ENVIOS_CABECALHO.length).setValues([LOG_ENVIOS_CABECALHO]).setFontWeight('bold');
+      sheet.setFrozenRows(1);
     }
-  );
-
-  if (response.getResponseCode() === 200) return true;
-
-  console.error('Falha a enviar FCM: ' + response.getContentText());
-  return false; // token provavelmente inválido/expirado -> ver registarResultadoEnvio
+    sheet.appendRow([
+      Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd HH:mm:ss'),
+      resultado,
+      pessoa || '',
+      titulo || '',
+      instanciaId || '',
+      token ? String(token).slice(-8) : '',
+      codigoHttp,
+      String(detalhe || '').replace(/\s+/g, ' ').slice(0, 300)
+    ]);
+    if (sheet.getLastRow() > LOG_ENVIOS_MAX_LINHAS) {
+      sheet.deleteRows(2, LOG_ENVIOS_APAGAR_QUANDO_CHEIO);
+    }
+  } catch (e) {
+    console.warn('registarLogEnvio falhou: ' + e.message);
+  }
 }
