@@ -27,7 +27,7 @@ const messaging = firebase.messaging();
 // ---------------------------------------------------------------
 // PARTE 1 — Cache da app shell
 // ---------------------------------------------------------------
-const CACHE_NAME = 'tarefas-casa-v14';
+const CACHE_NAME = 'tarefas-casa-v15';
 const APP_SHELL = [
   './',
   './index.html',
@@ -102,7 +102,9 @@ messaging.onBackgroundMessage((payload) => {
   const instanciaId = payload.data?.instanciaId || '';
   const idMensagem = payload.data?.msgId || instanciaId || (titulo + corpo);
 
-  self.registration.showNotification(titulo, {
+  // Devolvido para o Firebase esperar por ele: sem isso o service worker
+  // pode ser terminado antes de a confirmação de receção chegar ao servidor.
+  return self.registration.showNotification(titulo, {
     body: corpo,
     icon: './icon-192.png',
     badge: './icon-192.png',
@@ -112,8 +114,28 @@ messaging.onBackgroundMessage((payload) => {
       { action: 'concluir', title: 'Marcar feita' },
       { action: 'snooze', title: 'Daqui a 1h' }
     ] : []
-  });
+  }).then(() => confirmarRecepcao(payload.data));
 });
+
+// Diz ao Apps Script que esta notificação chegou mesmo a este dispositivo
+// (só depois de a mostrar). O FCM só garante "aceitei a mensagem", não
+// "chegou" — esta confirmação é o que permite ver no LogEnvios (e avisar na
+// app) quando os envios não estão a chegar. Falhas aqui são ignoradas: a
+// confirmação é informação, nunca pode estragar a notificação.
+function confirmarRecepcao(dados) {
+  if (!dados || !dados.msgId) return Promise.resolve();
+  return fetch(APPS_SCRIPT_URL_SW, {
+    method: 'POST',
+    body: JSON.stringify({
+      tipo: 'recebido',
+      msgId: dados.msgId,
+      pessoa: dados.pessoa || '',
+      tokenFim: dados.tokenFim || '',
+      titulo: dados.titulo || '',
+      instanciaId: dados.instanciaId || ''
+    })
+  }).catch(() => {});
+}
 
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();

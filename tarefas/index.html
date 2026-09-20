@@ -34,6 +34,7 @@
   <div id="paper-texture"></div>
   <img id="app-watermark" src="icon-192.png" alt="" aria-hidden="true">
   <div id="offline-banner" role="status">Sem ligação — a mostrar os últimos dados sincronizados.</div>
+  <div id="notif-banner" role="status"><span id="notif-banner-texto"></span><button type="button" id="notif-banner-btn"></button></div>
   <header>
     <img src="icon-192.png" alt="Tarefas de Casa" style="width:34px; height:34px; border-radius:9px; flex:0 0 auto;">
     <div style="flex:1">
@@ -360,7 +361,7 @@
 <script src="https://cdn.jsdelivr.net/npm/animejs@4.5.0/dist/bundles/anime.umd.min.js"></script>
 
 <script>
-const APP_VERSION = 'Beta 44';
+const APP_VERSION = 'Beta 45';
 
 // ---------------------------------------------------------------
 // PISCINA — catálogo estático (não editável pela UI; ver PROJECT-CONTEXT.md)
@@ -2643,6 +2644,7 @@ messaging.onMessage((payload) => {
   const instanciaId = payload.data?.instanciaId || '';
   const idMensagem = payload.data?.msgId || instanciaId || (titulo + corpo);
   toast(titulo + ': ' + corpo);
+  confirmarRecepcaoNotificacao(payload.data);
 
   if (navigator.serviceWorker) {
     navigator.serviceWorker.getRegistration('./firebase-messaging-sw.js').then((reg) => {
@@ -2693,6 +2695,11 @@ function atualizarEstadoNotif() {
 // token atual ainda é o mesmo que está registado no servidor — e volta a
 // registá-lo sozinha se tiver mudado, sem esperar que a pessoa repare.
 const TOKEN_REGISTADO_KEY = 'tarefas.notifTokenRegistado';
+const TOKEN_REGISTADO_EM_KEY = 'tarefas.notifTokenRegistadoEm';
+// Mesmo com o token igual, volta a registá-lo de tempos a tempos: se o
+// servidor desativou a subscrição por uma falha passageira, o token continua
+// válido mas a app nunca o saberia (só re-registava quando o token mudava).
+const REREGISTO_TOKEN_APOS_MS = 12 * 60 * 60 * 1000;
 
 async function registarTokenNoServidor(token, mostrarFeedback) {
   try {
@@ -2703,6 +2710,7 @@ async function registarTokenNoServidor(token, mostrarFeedback) {
     const data = await res.json();
     if (data.ok) {
       lsSet(TOKEN_REGISTADO_KEY, token);
+      lsSet(TOKEN_REGISTADO_EM_KEY, String(Date.now()));
       if (mostrarFeedback) toast('Notificações ativadas');
     } else if (mostrarFeedback) {
       toast('Falha ao registar: ' + data.erro);
@@ -2714,19 +2722,105 @@ async function registarTokenNoServidor(token, mostrarFeedback) {
   }
 }
 
+// Confirma ao servidor que uma notificação chegou a este dispositivo (versão
+// da app aberta; o service worker faz o mesmo quando a app está fechada).
+function confirmarRecepcaoNotificacao(dados) {
+  if (!dados || !dados.msgId) return;
+  fetch(APPS_SCRIPT_URL, {
+    method: 'POST',
+    body: JSON.stringify({
+      tipo: 'recebido',
+      msgId: dados.msgId,
+      pessoa: dados.pessoa || '',
+      tokenFim: dados.tokenFim || '',
+      titulo: dados.titulo || '',
+      instanciaId: dados.instanciaId || ''
+    })
+  }).catch(() => {});
+}
+
+async function consultarEstadoNotificacoes(token) {
+  try {
+    const res = await fetch(APPS_SCRIPT_URL, {
+      method: 'POST',
+      body: JSON.stringify({ tipo: 'estadoNotificacoes', pessoa: pessoaAtual, fcmToken: token })
+    });
+    const data = await res.json();
+    return data.ok ? data : null;
+  } catch (e) {
+    return null; // sem rede/servidor: não inventa um aviso, só não atualiza
+  }
+}
+
+// Aviso PERSISTENTE (não um toast): fica visível enquanto a condição se
+// mantiver e some sozinho quando ela deixa de existir. Não tem botão de
+// fechar de propósito — silenciá-lo esconderia o problema em vez de o
+// resolver. O botão aciona os botões que já existem em Configurações.
+const AVISOS_NOTIF = {
+  bloqueadas: {
+    texto: 'Notificações bloqueadas nas definições do browser — não vais receber avisos neste telemóvel.',
+    botao: null
+  },
+  naoAtivadas: {
+    texto: 'Notificações ainda não ativadas neste telemóvel.',
+    botao: 'Ativar', acao: 'btn-notif'
+  },
+  inativas: {
+    texto: 'As notificações deste telemóvel estão inativas.',
+    botao: 'Reativar', acao: 'btn-notif'
+  },
+  semConfirmacao: {
+    texto: 'O último aviso enviado ainda não foi confirmado por este telemóvel. Se não o viste, confirma que o Chrome não está com a poupança de bateria restrita.',
+    botao: 'Testar', acao: 'btn-testar-notif'
+  }
+};
+
+function atualizarAvisoNotificacoes(chave) {
+  const banner = document.getElementById('notif-banner');
+  if (!banner) return;
+  const aviso = chave ? AVISOS_NOTIF[chave] : null;
+  banner.classList.toggle('show', !!aviso);
+  if (!aviso) return;
+  document.getElementById('notif-banner-texto').textContent = aviso.texto;
+  const btn = document.getElementById('notif-banner-btn');
+  btn.style.display = aviso.botao ? '' : 'none';
+  btn.textContent = aviso.botao || '';
+  btn.onclick = aviso.acao ? () => document.getElementById(aviso.acao).click() : null;
+}
+
 let sincronizacaoTokenEmCurso = false;
-async function sincronizarTokenNotifSilenciosamente() {
+let ultimaVerificacaoNotif = 0;
+// `forcar` ignora o intervalo mínimo entre verificações (usado pelos botões);
+// sem ele, voltar várias vezes à app seguidas não multiplica pedidos ao Apps Script.
+async function sincronizarTokenNotifSilenciosamente(forcar) {
   if (sincronizacaoTokenEmCurso) return;
-  if (!pessoaAtual || pessoaAtual === 'Convidado') return;
-  if (!('Notification' in window) || Notification.permission !== 'granted') return;
+  if (!pessoaAtual || pessoaAtual === 'Convidado') { atualizarAvisoNotificacoes(null); return; }
+  if (!('Notification' in window)) return;
+  if (Notification.permission === 'denied') { atualizarAvisoNotificacoes('bloqueadas'); return; }
+  if (Notification.permission !== 'granted') { atualizarAvisoNotificacoes('naoAtivadas'); return; }
   if (!navigator.onLine) return;
+  if (!forcar && Date.now() - ultimaVerificacaoNotif < 2 * 60 * 1000) return;
   sincronizacaoTokenEmCurso = true;
   try {
+    ultimaVerificacaoNotif = Date.now();
     const swReg = await navigator.serviceWorker.register('./firebase-messaging-sw.js');
     const token = await messaging.getToken({ vapidKey: VAPID_KEY, serviceWorkerRegistration: swReg });
-    if (token && token !== lsGet(TOKEN_REGISTADO_KEY)) {
-      await registarTokenNoServidor(token, false);
+    if (!token) return;
+
+    const registadoEm = Number(lsGet(TOKEN_REGISTADO_EM_KEY) || 0);
+    const precisaRegistar = token !== lsGet(TOKEN_REGISTADO_KEY) || Date.now() - registadoEm > REREGISTO_TOKEN_APOS_MS;
+    let acabouDeRegistar = false;
+    if (precisaRegistar) acabouDeRegistar = await registarTokenNoServidor(token, false);
+
+    let estado = await consultarEstadoNotificacoes(token);
+    if (estado && (!estado.registado || !estado.ativa) && !acabouDeRegistar) {
+      // O servidor desativou este token entretanto: reativa já.
+      if (await registarTokenNoServidor(token, false)) estado = await consultarEstadoNotificacoes(token);
     }
+    if (!estado) return; // sem resposta: mantém o aviso que já estava
+    if (!estado.registado || !estado.ativa) atualizarAvisoNotificacoes('inativas');
+    else if (estado.semConfirmacao) atualizarAvisoNotificacoes('semConfirmacao');
+    else atualizarAvisoNotificacoes(null);
   } catch (e) {
     console.warn('Sincronização silenciosa do token de notificações falhou:', e);
   } finally {
@@ -2748,6 +2842,7 @@ document.getElementById('btn-notif').addEventListener('click', async () => {
     if (permission !== 'granted') {
       toast('Estado devolvido: "' + permission + '" (não é bloqueio definitivo se não for "denied")');
       atualizarEstadoNotif();
+      sincronizarTokenNotifSilenciosamente(true);
       return;
     }
 
@@ -2755,6 +2850,7 @@ document.getElementById('btn-notif').addEventListener('click', async () => {
     const token = await messaging.getToken({ vapidKey: VAPID_KEY, serviceWorkerRegistration: swReg });
     await registarTokenNoServidor(token, true);
     atualizarEstadoNotif();
+    sincronizarTokenNotifSilenciosamente(true); // atualiza o aviso persistente
   } catch (e) {
     console.error(e);
     toast('Erro: ' + (e && e.message ? e.message : String(e)));
@@ -2772,6 +2868,7 @@ document.getElementById('btn-testar-notif').addEventListener('click', async () =
     const data = await res.json();
     if (data.ok) {
       toast(`Teste enviado (${data.enviados}/${data.total})`);
+      setTimeout(() => sincronizarTokenNotifSilenciosamente(true), 15000); // dá tempo à confirmação de receção chegar
     } else {
       toast('Falha: ' + (data.erro || 'sem detalhe'));
     }

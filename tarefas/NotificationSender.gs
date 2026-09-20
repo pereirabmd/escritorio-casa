@@ -265,8 +265,11 @@ function enviarFCMDetalhado(fcmToken, titulo, corpo, instanciaId, pessoa) {
   const payload = {
     message: {
       token: fcmToken,
+      // pessoa/tokenFim voltam no "recebido" que o service worker envia ao
+      // receber a mensagem (ver registarRecebido em WebApp.gs): é assim que
+      // sabemos que a notificação chegou mesmo ao dispositivo, e a qual.
       data: Object.assign(
-        { titulo: titulo, corpo: corpo, msgId: msgId },
+        { titulo: titulo, corpo: corpo, msgId: msgId, pessoa: pessoa || '', tokenFim: String(fcmToken).slice(-8) },
         instanciaId ? { instanciaId: String(instanciaId) } : {}
       ),
       webpush: {
@@ -298,7 +301,10 @@ function enviarFCMDetalhado(fcmToken, titulo, corpo, instanciaId, pessoa) {
   if (codigo === 200) {
     let idMensagemFcm = '';
     try { idMensagemFcm = JSON.parse(response.getContentText()).name || ''; } catch (e) {}
-    registarLogEnvio('enviado', pessoa, titulo, instanciaId, fcmToken, codigo, idMensagemFcm);
+    registarLogEnvio('enviado', pessoa, titulo, instanciaId, fcmToken, codigo, msgId + ' ' + idMensagemFcm);
+    try {
+      PropertiesService.getScriptProperties().setProperty('ultimoEnvio_' + String(fcmToken).slice(-8), new Date().toISOString());
+    } catch (e) {}
     return { ok: true, tokenInvalido: false };
   }
 
@@ -318,9 +324,11 @@ function enviarFCM(fcmToken, titulo, corpo, instanciaId, pessoa) {
 
 // ---- Log de envios (aba "LogEnvios") ----
 // Uma linha por tentativa de envio, para ver depois o que realmente aconteceu:
-// 'enviado' = o FCM aceitou a mensagem (HTTP 200, a coluna Detalhe traz o id
-// dela) — se mesmo assim nada aparece no telemóvel, o problema é do lado do
-// dispositivo (service worker, bateria, permissões), não do script.
+// 'enviado' = o FCM aceitou a mensagem (HTTP 200, a coluna Detalhe traz o
+// msgId e o id do FCM). 'recebido' = o service worker do telemóvel confirmou
+// que a recebeu (mesmo msgId). Um 'enviado' sem 'recebido' correspondente
+// significa que o problema é do lado do dispositivo (service worker, bateria,
+// permissões), não do script.
 // A aba é criada sozinha à primeira escrita e nunca deve impedir um envio:
 // qualquer erro aqui é engolido. Mantém só as últimas ~2000 linhas.
 const ABA_LOG_ENVIOS = 'LogEnvios';

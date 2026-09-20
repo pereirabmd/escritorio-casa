@@ -30,6 +30,12 @@ function doPost(e) {
     if (body.tipo === 'saude') {
       return jsonResponse(estadoSaude());
     }
+    if (body.tipo === 'recebido') {
+      return registarRecebido(body);
+    }
+    if (body.tipo === 'estadoNotificacoes') {
+      return estadoNotificacoes(body.pessoa, body.fcmToken);
+    }
 
     if (!body.pessoa || !body.fcmToken) {
       return jsonResponse({ ok: false, erro: 'pessoa e fcmToken são obrigatórios' });
@@ -54,10 +60,68 @@ function doPost(e) {
       ]);
     }
 
+    limitarSubscricoesAtivas(sheet, body.pessoa, body.fcmToken);
     return jsonResponse({ ok: true });
   } catch (err) {
     return jsonResponse({ ok: false, erro: err.message });
   }
+}
+
+// Cada telemóvel/browser de uma pessoa gera o seu token; um mesmo aparelho
+// pode gerar vários ao longo do tempo (o Bruno chegou a ter 12 em 15 dias).
+// Sem limite, os antigos ficam ativos a falhar em cada envio. Mantém-se
+// só as MAX_SUBSCRICOES_ATIVAS_POR_PESSOA mais recentes (a folha está por
+// ordem de criação) — as mais antigas ficam Ativa=FALSE.
+const MAX_SUBSCRICOES_ATIVAS_POR_PESSOA = 4;
+
+function limitarSubscricoesAtivas(sheet, pessoa, tokenAtual) {
+  const outrasAtivas = sheetToObjects(sheet).filter(
+    r => r.Pessoa === pessoa && r.Endpoint !== tokenAtual && String(r.Ativa).toUpperCase() === 'TRUE'
+  );
+  const excedente = outrasAtivas.length + 1 - MAX_SUBSCRICOES_ATIVAS_POR_PESSOA;
+  for (let i = 0; i < excedente; i++) {
+    sheet.getRange(outrasAtivas[i]._rowIndex, 6).setValue('FALSE'); // Ativa
+  }
+}
+
+// O service worker chama isto quando recebe (e mostra) uma notificação —
+// fecha o circuito "enviado pelo FCM" → "chegou ao telemóvel".
+function registarRecebido(body) {
+  const fim = String(body.tokenFim || '').slice(-8);
+  if (fim) {
+    PropertiesService.getScriptProperties().setProperty('ultimoRecebido_' + fim, new Date().toISOString());
+  }
+  registarLogEnvio('recebido', body.pessoa, body.titulo, body.instanciaId, fim, '', body.msgId);
+  return jsonResponse({ ok: true });
+}
+
+// Estado de UM dispositivo (identificado pelo token), para a app mostrar um
+// aviso persistente quando as notificações deste telemóvel não estão a
+// funcionar. semConfirmacao: enviámos algo há mais de 30 min e este
+// dispositivo ainda não confirmou (mais recente que o último 'recebido').
+function estadoNotificacoes(pessoa, token) {
+  if (!pessoa || !token) return jsonResponse({ ok: false, erro: 'pessoa e fcmToken são obrigatórios' });
+
+  const linha = sheetToObjects(getSheet('Subscriptions')).find(
+    r => r.Pessoa === pessoa && r.Endpoint === token
+  );
+  const props = PropertiesService.getScriptProperties();
+  const fim = String(token).slice(-8);
+  const ultimoEnvio = props.getProperty('ultimoEnvio_' + fim) || '';
+  const ultimoRecebido = props.getProperty('ultimoRecebido_' + fim) || '';
+  const semConfirmacao =
+    !!ultimoEnvio &&
+    (!ultimoRecebido || ultimoRecebido < ultimoEnvio) &&
+    Date.now() - new Date(ultimoEnvio).getTime() > 30 * 60000;
+
+  return jsonResponse({
+    ok: true,
+    registado: !!linha,
+    ativa: !!linha && String(linha.Ativa).toUpperCase() === 'TRUE',
+    semConfirmacao: semConfirmacao,
+    ultimoEnvio: ultimoEnvio,
+    ultimoRecebido: ultimoRecebido
+  });
 }
 
 function marcarInstanciaFeita(instanciaId) {
