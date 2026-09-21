@@ -1,0 +1,56 @@
+# ntfy (bilhetes_cp) — reverse proxy para o ntfy em 127.0.0.1:8080 (PLANO.md 3.6)
+
+server {
+    listen 80;
+    listen [::]:80;
+    server_name bmdpereira.duckdns.org;
+
+    location /.well-known/acme-challenge/ {
+        root /var/www/html;
+    }
+
+    location / {
+        return 301 https://$host$request_uri;
+    }
+}
+
+server {
+    listen 443 ssl;
+    listen [::]:443 ssl;
+    http2 on;
+    server_name bmdpereira.duckdns.org;
+
+    ssl_certificate     /etc/letsencrypt/live/bmdpereira.duckdns.org/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/bmdpereira.duckdns.org/privkey.pem;
+    include /etc/letsencrypt/options-ssl-nginx.conf;
+    ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem;
+
+    add_header Strict-Transport-Security "max-age=31536000" always;
+    add_header X-Content-Type-Options "nosniff" always;
+
+    # Log próprio: é o que o fail2ban vigia (jail ntfy-auth)
+    access_log /var/log/nginx/ntfy.access.log;
+    error_log  /var/log/nginx/ntfy.error.log;
+
+    location / {
+        proxy_pass http://127.0.0.1:8080;
+        proxy_http_version 1.1;
+
+        proxy_set_header Host $http_host;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $remote_addr;
+        proxy_set_header X-Forwarded-Proto $scheme;
+
+        # ntfy usa long-polling / SSE / websocket: sem buffering e com timeouts longos
+        proxy_buffering off;
+        proxy_request_buffering off;
+        proxy_redirect off;
+        proxy_connect_timeout 3m;
+        proxy_send_timeout 3m;
+        proxy_read_timeout 3m;
+
+        client_max_body_size 1m;
+    }
+}

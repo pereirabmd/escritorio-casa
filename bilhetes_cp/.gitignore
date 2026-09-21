@@ -1,0 +1,13 @@
+# Segredos — nunca no git (ver PLANO.md secção 8)
+.env
+config/service-account.json
+token.json
+
+# Estado gerado em runtime no RPi
+config_cache.json
+locks/
+
+# Python
+__pycache__/
+*.pyc
+.venv/

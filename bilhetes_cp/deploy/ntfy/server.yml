@@ -1,0 +1,13 @@
+# ntfy self-hosted para o projeto bilhetes_cp (ver PLANO.md, secções 3.6 e 3.10.10)
+# Escuta só em localhost: o acesso externo (80/443) é feito pelo nginx.
+base-url: "https://bmdpereira.duckdns.org"
+listen-http: "127.0.0.1:8080"
+behind-proxy: true
+
+# Autenticação: sem utilizador/ACL, ninguém lê nem publica (3.10.10)
+auth-file: "/var/lib/ntfy/user.db"
+auth-default-access: "deny-all"
+
+# Cache de mensagens (permite ao telemóvel apanhar mensagens perdidas)
+cache-file: "/var/cache/ntfy/cache.db"
+cache-duration: "12h"

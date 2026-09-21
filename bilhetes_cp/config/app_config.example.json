@@ -1,0 +1,26 @@
+{
+  "timezone": "Europe/Lisbon",
+  "stations": {
+    "aveiro": "94-38000",
+    "lisboa_oriente": "94-31039"
+  },
+  "travel_class": 2,
+  "purchase": {
+    "hours_before_departure": 24,
+    "warm_process_lead_minutes": 3,
+    "attempt_offsets_seconds": [-0.3, 0.0, 0.3, 0.7],
+    "access_token_lifetime_seconds": 300,
+    "refresh_token_lifetime_seconds": 1799
+  },
+  "reminders": {
+    "config_missing_check_times": ["08:00", "12:00", "20:00"],
+    "departure_reminder_minutes_before": 30,
+    "config_reminder_day": "saturday"
+  },
+  "green_pass": {
+    "validity_days": 30,
+    "expiry_notify_days_before": [3, 1]
+  },
+  "sheets_polling_interval_minutes": 5,
+  "cp_discount_item_code": "302"
+}
