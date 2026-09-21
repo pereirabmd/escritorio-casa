@@ -1,0 +1,929 @@
+<!doctype html>
+<html lang="pt-PT">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
+<title>Bilhetes CP</title>
+<meta name="description" content="Configura a semana e acompanha a compra automática de bilhetes CP com o Passe Verde">
+<meta name="theme-color" content="#008542">
+<meta name="color-scheme" content="light">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Bilhetes CP">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="assets/favicon.ico" sizes="any">
+<link rel="icon" type="image/png" href="assets/favicon.png">
+<link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Barlow:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+<script src="https://apis.google.com/js/api.js" async defer></script>
+<style>
+:root{
+  --primary:#008542; --primary-dark:#006B35; --primary-light:#E6F4EC; --primary-hover:#00773B;
+  --bg:#F7F8F7; --card:#FFFFFF; --bg2:#F0F2F1; --line:#E1E5E3;
+  --text:#1F2925; --text2:#66736D; --text-off:#9AA49F; --on-primary:#FFFFFF;
+  --warn:#8A5A00; --warn-bg:#FFF3D6; --err:#B3261E; --err-bg:#FCE9E7;
+  --font-body:"Barlow",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  --font-num:"Barlow Condensed","Barlow",system-ui,sans-serif;
+}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{background:var(--bg);color:var(--text);font:400 16px/1.45 var(--font-body);-webkit-text-size-adjust:100%;overflow:hidden}
+button,input,select{font:inherit;color:inherit}
+button{cursor:pointer}
+[hidden]{display:none!important}
+:focus-visible{outline:3px solid #7DCBA0;outline-offset:2px}
+
+/* O contentor segue o visual viewport: com o teclado aberto, a barra de guardar
+   e o campo ativo ficam sempre acima do teclado (PLANO_FINAL.md 3.7). */
+#app{position:fixed;left:0;right:0;top:var(--vv-top,0px);height:var(--vv-h,100dvh);display:flex;flex-direction:column;overflow:hidden}
+
+/* ---------- topo e navegação (verde da CP) ---------- */
+.top{background:var(--primary);color:var(--on-primary);display:flex;align-items:center;gap:10px;padding:calc(env(safe-area-inset-top) + 10px) 14px 10px 16px;flex:none}
+.top img{width:30px;height:30px;border-radius:8px;display:block}
+.top h1{margin:0;flex:1;font:600 23px/1 var(--font-num);letter-spacing:.2px}
+.icon-btn{width:44px;height:44px;border:0;border-radius:12px;background:transparent;color:inherit;display:grid;place-items:center}
+.icon-btn:hover{background:rgba(255,255,255,.14)}
+.icon-btn svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
+.icon-btn.spin svg{animation:spin .9s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+nav.tabs{flex:none;background:var(--primary);display:flex;padding:0 6px calc(env(safe-area-inset-bottom) + 2px)}
+nav.tabs button{flex:1;border:0;background:transparent;color:rgba(255,255,255,.72);padding:9px 4px 7px;display:flex;flex-direction:column;align-items:center;gap:3px;font:500 13px/1 var(--font-body);position:relative}
+nav.tabs button svg{width:24px;height:24px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+nav.tabs button[aria-selected="true"]{color:#fff}
+nav.tabs button[aria-selected="true"]::before{content:"";position:absolute;top:0;left:22%;right:22%;height:3px;border-radius:0 0 3px 3px;background:#fff}
+body.kb-open nav.tabs{display:none}
+
+/* ---------- avisos persistentes (enquanto a condição durar) ---------- */
+#banners:empty{display:none}
+.banner{display:flex;align-items:center;gap:12px;padding:10px 14px;font-size:15px;background:var(--warn-bg);color:var(--warn);border-bottom:1px solid #F1DDA9}
+.banner.err{background:var(--err-bg);color:var(--err);border-bottom-color:#F2C6C1}
+.banner.info{background:var(--primary-light);color:var(--primary-dark);border-bottom-color:#C7E5D3}
+.banner span{flex:1}
+.banner button{border:1.5px solid currentColor;background:transparent;color:inherit;border-radius:10px;padding:7px 12px;font-weight:600;min-height:38px}
+
+/* ---------- conteúdo ---------- */
+main{flex:1;min-height:0;overflow-y:auto;overscroll-behavior:contain;padding:16px 16px 28px;scroll-behavior:smooth}
+main>*+*{margin-top:14px}
+h2{margin:0;font:600 26px/1.1 var(--font-num)}
+h3{margin:0;font:600 19px/1.15 var(--font-num)}
+.muted{color:var(--text2)}
+.small{font-size:14px}
+.section-title{display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin:22px 2px 8px}
+.section-title h2{font-size:22px}
+
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:48px;padding:0 20px;border-radius:12px;border:2px solid var(--primary);background:var(--primary);color:var(--on-primary);font-weight:600}
+.btn:hover{background:var(--primary-hover);border-color:var(--primary-hover)}
+.btn.ghost{background:transparent;color:var(--primary-dark)}
+.btn.ghost:hover{background:var(--primary-light)}
+.btn.quiet{border-color:transparent;background:var(--bg2);color:var(--text)}
+.btn.block{width:100%}
+.btn:disabled{opacity:.55;cursor:default}
+.link{border:0;background:none;color:var(--primary-dark);font-weight:600;padding:8px 0;text-decoration:underline;text-underline-offset:3px}
+
+/* o que precisa de ação agora */
+.hero{background:var(--primary);color:var(--on-primary);border-radius:20px;padding:20px 20px 18px}
+.hero h2{font-size:30px}
+.hero p{margin:8px 0 16px;color:rgba(255,255,255,.88)}
+.hero .btn{background:#fff;border-color:#fff;color:var(--primary-dark)}
+.hero .btn:hover{background:var(--primary-light)}
+.done{display:flex;align-items:center;gap:12px;background:var(--primary-light);border-radius:16px;padding:12px 14px}
+.done svg{width:26px;height:26px;flex:none;fill:none;stroke:var(--primary);stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round}
+.done div{flex:1;line-height:1.3}
+.done b{font-weight:600}
+
+/* bilhete físico: picotado a tracejado e recortes */
+.ticket{--stub:96px;position:relative;display:grid;grid-template-columns:1fr var(--stub);background:var(--card);border-radius:14px;box-shadow:0 1px 0 var(--line),0 8px 18px -12px rgba(0,50,25,.45)}
+.ticket::before,.ticket::after{content:"";position:absolute;right:calc(var(--stub) - 9px);width:18px;height:18px;border-radius:50%;background:var(--bg)}
+.ticket::before{top:-9px}.ticket::after{bottom:-9px}
+.tk-main{padding:14px 12px 14px 16px;min-width:0}
+.tk-when{font-size:14px;color:var(--text2);font-weight:500}
+.tk-time{font:600 40px/1 var(--font-num);margin:4px 0 2px;letter-spacing:.3px}
+.tk-route{font-weight:500}
+.tk-route .arrow{color:var(--text-off);margin:0 4px}
+.tk-meta{margin-top:6px;font-size:14px;color:var(--text2)}
+.tk-stub{border-left:2px dashed var(--line);padding:14px 8px;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;gap:2px}
+.tk-stub .l{font-size:12.5px;color:var(--text2)}
+.tk-stub .n{font:600 34px/1 var(--font-num);color:var(--primary-dark);margin-bottom:6px}
+.ticket.next{background:var(--primary-light)}
+.ticket.next::before,.ticket.next::after{background:var(--bg)}
+.ticket.past{opacity:.72}
+.ticket.pending .tk-stub .n{color:var(--text-off);font-size:26px}
+
+/* lista das próximas compras */
+.rows{background:var(--card);border-radius:16px;box-shadow:0 1px 0 var(--line);overflow:hidden}
+.row{display:grid;grid-template-columns:64px 1fr;gap:12px;align-items:start;padding:13px 14px}
+.row+.row{border-top:1px solid var(--line)}
+.row .t{font:600 30px/1 var(--font-num)}
+.row .d{font-size:13px;color:var(--text2);margin-top:2px}
+.row .r{font-weight:500;line-height:1.25}
+.row .m{font-size:14px;color:var(--text2);display:flex;flex-wrap:wrap;align-items:center;gap:4px 10px;margin-top:2px}
+.chip{display:inline-block;border-radius:999px;padding:3px 10px;font-size:13px;font-weight:600;background:var(--bg2);color:var(--text2);white-space:nowrap}
+.chip.ok{background:var(--primary-light);color:var(--primary-dark)}
+.chip.warn{background:var(--warn-bg);color:var(--warn)}
+.chip.err{background:var(--err-bg);color:var(--err)}
+
+/* passe */
+.pass{background:var(--card);border-radius:16px;padding:14px 16px;box-shadow:0 1px 0 var(--line)}
+.pass .top-line{display:flex;justify-content:space-between;align-items:baseline;gap:10px}
+.pass .days{font:600 30px/1 var(--font-num)}
+.meter{height:8px;border-radius:99px;background:var(--bg2);margin:10px 0 6px;overflow:hidden}
+.meter i{display:block;height:100%;background:var(--primary);border-radius:99px}
+.meter.warn i{background:#D08A00}.meter.err i{background:var(--err)}
+
+/* registo */
+.seg{display:flex;background:var(--bg2);border-radius:12px;padding:3px;gap:3px}
+.seg button{flex:1;min-height:40px;border:0;border-radius:10px;background:transparent;font-weight:600;color:var(--text2)}
+.seg button[aria-pressed="true"]{background:var(--card);color:var(--text);box-shadow:0 1px 3px rgba(0,0,0,.12)}
+.day-h{margin:18px 2px 6px;font-weight:600;color:var(--text2);font-size:14px}
+.log{display:grid;grid-template-columns:52px 1fr;gap:10px;background:var(--card);border-radius:12px;padding:10px 12px;box-shadow:0 1px 0 var(--line)}
+.log+.log{margin-top:6px}
+.log .h{font:600 20px/1.2 var(--font-num)}
+.log .tx{min-width:0;font-size:15px}
+.log .err-msg{margin-top:4px;color:var(--err);font-size:14px;word-break:break-word}
+
+.empty{background:var(--card);border-radius:16px;padding:22px 18px;text-align:center;color:var(--text2);box-shadow:0 1px 0 var(--line)}
+.skel{height:84px;border-radius:16px;background:linear-gradient(90deg,var(--bg2),#fff 50%,var(--bg2));background-size:200% 100%;animation:sh 1.3s linear infinite}
+@keyframes sh{to{background-position:-200% 0}}
+
+/* ---------- sobreposições (editor, definições, entrada) ---------- */
+.overlay{position:absolute;inset:0;background:var(--bg);z-index:20;display:flex;flex-direction:column}
+.ov-head{flex:none;display:flex;align-items:center;gap:6px;padding:calc(env(safe-area-inset-top) + 8px) 10px 8px 6px;background:var(--card);border-bottom:1px solid var(--line)}
+.ov-head h2{flex:1;font-size:22px}
+.ov-head .icon-btn{color:var(--text)}
+.ov-head .icon-btn:hover{background:var(--bg2)}
+.ov-body{flex:1;min-height:0;overflow-y:auto;overscroll-behavior:contain;padding:14px 16px 24px}
+.ov-body>*+*{margin-top:14px}
+.savebar{flex:none;background:var(--card);border-top:1px solid var(--line);padding:10px 16px calc(env(safe-area-inset-bottom) + 10px);display:flex;gap:12px;align-items:center}
+.savebar .note{flex:1;font-size:13.5px;line-height:1.25;color:var(--text2)}
+.savebar .btn{flex:none}
+
+#auth{align-items:center;justify-content:center;padding:24px;text-align:center;gap:14px}
+#auth img{width:84px;height:84px;border-radius:22px}
+#auth p{max-width:30ch;margin:0;color:var(--text2)}
+
+/* formulário */
+label.f{display:block;font-size:14px;color:var(--text2);font-weight:500}
+label.f>span{display:block;margin-bottom:4px}
+.in,select.in{width:100%;min-height:48px;border:1.5px solid var(--line);border-radius:10px;background:#fff;padding:0 12px;font-size:17px;color:var(--text);appearance:none;-webkit-appearance:none}
+select.in{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='9' viewBox='0 0 14 9'%3E%3Cpath d='M1 1l6 6 6-6' fill='none' stroke='%2366736D' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 14px center;padding-right:36px}
+.in:focus{border-color:var(--primary);outline:0;box-shadow:0 0 0 3px #CDEBD9}
+.in.bad{border-color:var(--err)}
+.in.time{font:600 22px/1 var(--font-num)}
+.in.num{font:600 22px/1 var(--font-num)}
+
+.week-seg{display:grid;grid-template-columns:1fr 1fr;gap:3px}
+.week-seg button{display:flex;flex-direction:column;align-items:center;gap:1px;padding:8px 6px;min-height:56px}
+.week-seg small{font-weight:500;font-size:13px;opacity:.85}
+
+.dayc{background:var(--card);border-radius:16px;box-shadow:0 1px 0 var(--line),0 8px 18px -14px rgba(0,50,25,.5);padding:14px}
+.dayc.off{opacity:.62}
+.dayc-head{display:grid;grid-template-columns:1fr auto 44px;gap:10px;align-items:end}
+.switch{display:flex;align-items:center;gap:8px;min-height:48px;font-weight:500}
+.switch input{appearance:none;-webkit-appearance:none;width:46px;height:28px;border-radius:99px;background:var(--line);position:relative;transition:background .15s;flex:none}
+.switch input::after{content:"";position:absolute;top:3px;left:3px;width:22px;height:22px;border-radius:50%;background:#fff;transition:transform .15s;box-shadow:0 1px 2px rgba(0,0,0,.3)}
+.switch input:checked{background:var(--primary)}
+.switch input:checked::after{transform:translateX(18px)}
+.route{display:grid;grid-template-columns:1fr 44px;gap:10px 6px;margin-top:12px}
+.route>label:first-child{grid-column:1;grid-row:1}.route>label:last-child{grid-column:1;grid-row:2}
+.swap{grid-column:2;grid-row:1/3;align-self:center;height:56px;border:0;background:transparent;color:var(--primary-dark);border-radius:10px}
+.swap:hover{background:var(--primary-light)}
+.swap svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.leg{margin-top:14px;padding-top:12px;border-top:2px dashed var(--line)}
+.leg-h{display:flex;align-items:baseline;justify-content:space-between;gap:10px}
+.leg-h .fire{font-size:13.5px;color:var(--text2)}
+.leg-row{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:8px}
+.leg select.hist{margin-top:8px;min-height:44px;font-size:15px;color:var(--text2)}
+.tt{margin:8px 0 0;font-size:14px;line-height:1.3;min-height:0}
+.tt.ok{color:var(--primary-dark)}.tt.warn{color:var(--warn)}
+.tt button{border:0;background:none;color:inherit;font-weight:600;text-decoration:underline;padding:4px 0 4px 6px}
+.check{display:flex;align-items:center;gap:10px;min-height:44px;margin-top:8px;font-weight:500}
+.check input{width:22px;height:22px;accent-color:var(--primary)}
+.errs{margin:10px 0 0;padding:10px 12px;border-radius:10px;background:var(--err-bg);color:var(--err);font-size:14px}
+.errs:empty{display:none}
+.add{display:flex;gap:10px;flex-wrap:wrap}
+
+/* toast (só para acontecimentos pontuais) */
+#toast{position:absolute;left:16px;right:16px;bottom:calc(var(--toast-b,74px));z-index:40;display:flex;justify-content:center;pointer-events:none}
+#toast div{background:var(--text);color:#fff;border-radius:12px;padding:11px 16px;font-weight:500;box-shadow:0 8px 24px rgba(0,0,0,.25);animation:pop .22s ease-out}
+@keyframes pop{from{opacity:0;transform:translateY(8px)}}
+body.kb-open #toast{--toast-b:84px}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important;scroll-behavior:auto!important}}
+@media (min-width:640px){main,.ov-body{padding-left:max(16px,calc(50% - 300px));padding-right:max(16px,calc(50% - 300px))}}
+</style>
+</head>
+<body>
+<div id="app">
+  <header class="top">
+    <img src="assets/favicon.png" alt="" width="30" height="30">
+    <h1>Bilhetes CP</h1>
+    <button class="icon-btn" id="btnRefresh" aria-label="Atualizar dados" data-act="refresh">
+      <svg viewBox="0 0 24 24"><path d="M20 12a8 8 0 1 1-2.6-5.9"/><path d="M20 4v5h-5"/></svg>
+    </button>
+    <button class="icon-btn" aria-label="Definições" data-act="open-settings">
+      <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3.2"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.9.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.9l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.9.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.9-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.9V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
+    </button>
+  </header>
+  <div id="banners" aria-live="polite"></div>
+  <main id="view" tabindex="-1"></main>
+  <nav class="tabs" id="tabs" role="tablist" aria-label="Secções">
+    <button role="tab" data-tab="semana" aria-selected="true"><svg viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="15" rx="2.5"/><path d="M3.5 10h17M8 3v4M16 3v4"/></svg>Semana</button>
+    <button role="tab" data-tab="bilhetes" aria-selected="false"><svg viewBox="0 0 24 24"><path d="M4 8a2 2 0 0 0 0 4v0a2 2 0 0 1 0 4v1a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-1a2 2 0 0 1 0-4v0a2 2 0 0 0 0-4V7a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2z" transform="translate(0 -.5)"/><path d="M14.5 6v2M14.5 11v2M14.5 16v2"/></svg>Bilhetes</button>
+    <button role="tab" data-tab="registo" aria-selected="false"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></svg>Registo</button>
+  </nav>
+
+  <section id="auth" class="overlay" hidden>
+    <img src="assets/icon-192.png" alt="">
+    <h2>Bilhetes CP</h2>
+    <p id="authMsg">Entra com a conta Google que tem acesso à Sheet.</p>
+    <button class="btn" id="btnSignIn" data-act="sign-in">Entrar com Google</button>
+  </section>
+
+  <section id="editor" class="overlay" role="dialog" aria-modal="true" aria-labelledby="edTitle" hidden></section>
+  <section id="settings" class="overlay" role="dialog" aria-modal="true" aria-labelledby="stTitle" hidden></section>
+  <div id="toast" role="status" aria-live="polite"></div>
+</div>
+
+<script>
+'use strict';
+/* =====================================================================
+   Bilhetes CP — PWA (PLANO_FINAL.md 3.7 e 5)
+   Google Identity Services (login) + gapi client (Sheets). Sem backend.
+   Nenhuma credencial neste ficheiro: as chaves da CP (só para preencher
+   horários) ficam no localStorage do telemóvel, importadas por um link.
+   ===================================================================== */
+const VERSION = 'v1.0.1';
+const CLIENT_ID = '108256538530-fgunbb52s7f3s9aurfpjtaf01v8fjbph.apps.googleusercontent.com';
+const SHEET_ID = '1PNY134CrkxVhcpKHjTDZMYqYv3q-_oeDusJ-hgLRMBk';
+const SCOPE = 'https://www.googleapis.com/auth/spreadsheets';
+const TOKEN_KEY = 'bilhetes_cp.token';
+const KEYS_KEY = 'bilhetes_cp.cpkeys';
+const TZ = 'Europe/Lisbon';
+const CP_API = 'https://api-gateway.cp.pt/cp/services';
+/* Cabeçalhos da aba Config, procurados pelo NOME (PLANO_FINAL secção 4): inserir linhas na
+   Sheet não pode desalinhar leituras nem escritas. */
+const HEAD_PASSE = ['Data_Ultima_Compra', 'Validade_Dias', 'Data_Expira', 'Dias_Restantes'];
+const HEAD_WEEK = ['Data', 'Origem', 'Destino', 'Comboio_Ida', 'Hora_Ida', 'Comboio_Volta', 'Hora_Volta', 'Ativo'];
+const hnorm = (c) => String(c ?? '').toLowerCase().replace(/[^a-z0-9]/g, '');
+function locateConfig(values) {
+  const find = (heads) => {
+    const hs = heads.map(hnorm);
+    for (let i = 0; i < values.length; i++) {
+      const cells = (values[i] || []).map(hnorm);
+      if (hs.every(h => cells.includes(h))) return { row: i, idx: hs.map(h => cells.indexOf(h)) };
+    }
+    return null;
+  };
+  const p = find(HEAD_PASSE), w = find(HEAD_WEEK);
+  if (!p || !w) throw new Error('Não encontrei os cabeçalhos da aba Config (' + [!p && 'passe', !w && 'semana'].filter(Boolean).join(' e ') + ').');
+  const prow = values[p.row + 1] || [];
+  return {
+    passe: p.idx.map(i => prow[i] ?? ''),
+    weekly: values.slice(w.row + 1).map(r => w.idx.map(i => (r || [])[i] ?? '')),
+    firstRow: w.row + 2, colStart: w.idx[0], contiguous: w.idx.every((v, k) => v === w.idx[0] + k),
+  };
+}
+const colLetter = (i) => String.fromCharCode(65 + i);
+
+/* ---------- utilitários ---------- */
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const lsGet = (k) => { try { return localStorage.getItem(k); } catch { return null; } };
+const lsSet = (k, v) => { try { localStorage.setItem(k, v); } catch { /* modo privado */ } };
+const lsDel = (k) => { try { localStorage.removeItem(k); } catch { /* idem */ } };
+const pad2 = (n) => String(n).padStart(2, '0');
+const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+const WD = ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sáb'];
+
+/* ---------- datas (ISO 'AAAA-MM-DD'; aritmética em UTC, sem surpresas de fuso) ---------- */
+const isoToUTC = (iso) => { const [y, m, d] = iso.split('-').map(Number); return Date.UTC(y, m - 1, d); };
+const utcToISO = (ms) => { const t = new Date(ms); return `${t.getUTCFullYear()}-${pad2(t.getUTCMonth() + 1)}-${pad2(t.getUTCDate())}`; };
+const addDays = (iso, n) => utcToISO(isoToUTC(iso) + n * 86400000);
+const dow = (iso) => new Date(isoToUTC(iso)).getUTCDay();
+const mondayOf = (iso) => { const d = dow(iso); return addDays(iso, d === 0 ? -6 : 1 - d); };
+const validISO = (iso) => /^\d{4}-\d{2}-\d{2}$/.test(iso) && utcToISO(isoToUTC(iso)) === iso;
+const todayISO = () => new Intl.DateTimeFormat('en-CA', { timeZone: TZ }).format(new Date());
+const fmtDay = (iso) => `${WD[dow(iso)]} ${iso.slice(8)}/${iso.slice(5, 7)}`;
+const fmtDM = (iso) => `${iso.slice(8)}/${iso.slice(5, 7)}`;
+const fmtRange = (mon) => `${fmtDM(mon)} a ${fmtDM(addDays(mon, 6))}`;
+const daysBetween = (a, b) => Math.round((isoToUTC(b) - isoToUTC(a)) / 86400000);
+
+/* instante absoluto de uma hora de relógio de Lisboa (para contagens e T-24h) */
+const _lisbon = new Intl.DateTimeFormat('en-GB', { timeZone: TZ, hourCycle: 'h23', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' });
+function lisbonWall(ms) { const p = {}; _lisbon.formatToParts(new Date(ms)).forEach(x => p[x.type] = x.value); return Date.UTC(+p.year, +p.month - 1, +p.day, +p.hour, +p.minute); }
+function lisbonInstant(iso, hhmm) {
+  const [y, m, d] = iso.split('-').map(Number), [h, mi] = hhmm.split(':').map(Number);
+  const want = Date.UTC(y, m - 1, d, h, mi); let t = want;
+  for (let i = 0; i < 3; i++) t -= (lisbonWall(t) - want);
+  return t;
+}
+/* T-24h = dia de calendário anterior, MESMA hora local (não partida - 86400 s) */
+const fireInstant = (iso, hhmm) => lisbonInstant(addDays(iso, -1), hhmm);
+
+/* ---------- valores como a Sheet os devolve (números de série, texto...) ---------- */
+function sheetDate(v) {
+  if (v === '' || v == null || typeof v === 'boolean') return null;
+  if (typeof v === 'number') return utcToISO(Date.UTC(1899, 11, 30) + Math.trunc(v) * 86400000);
+  const s = String(v).trim(); let m;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return validISO(s) ? s : null;
+  if ((m = s.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})$/))) {
+    let y = +m[3]; if (y < 100) y += 2000;
+    const iso = `${y}-${pad2(m[2])}-${pad2(m[1])}`; return validISO(iso) ? iso : null;
+  }
+  return null;
+}
+function sheetTime(v) {
+  if (v === '' || v == null || typeof v === 'boolean') return null;
+  if (typeof v === 'number') { if (v < 0 || v >= 1) return null; const mins = Math.round(v * 1440); return mins >= 1440 ? null : `${pad2(Math.floor(mins / 60))}:${pad2(mins % 60)}`; }
+  const m = String(v).trim().match(/^(\d{1,2}):(\d{2})(?::\d{2})?$/);
+  if (!m || +m[1] > 23 || +m[2] > 59) return null;
+  return `${pad2(m[1])}:${pad2(m[2])}`;
+}
+const toNum = (v) => { if (v === '' || v == null || typeof v === 'boolean') return null; const n = Number(String(v).trim().replace(',', '.')); return Number.isFinite(n) && n > 0 && Number.isInteger(n) ? n : null; };
+const normStation = (s) => String(s ?? '').normalize('NFKD').replace(/[̀-ͯ]/g, '').trim().toLowerCase().replace(/[\s-]+/g, '_');
+
+/* ---------- estado ---------- */
+const S = {
+  tab: 'semana', loading: false, loaded: false, error: null, updateReady: false, logFilter: 'all',
+  cfg: { stations: {}, names: {} },
+  data: { passe: [], weekly: [], tickets: [], logs: [] },
+  editor: null, lastLoad: 0,
+};
+const stationLabel = (key) => S.cfg.names[key] || String(key || '').replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+const stationCode = (key) => S.cfg.stations[key] || (/^\d{2}-\d+$/.test(key) ? key : null);
+const stationKeys = () => Object.keys(S.cfg.stations);
+
+/* ---------- toast e avisos ---------- */
+let toastTimer;
+function toast(msg) {
+  const box = $('#toast'); box.innerHTML = `<div>${esc(msg)}</div>`;
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => { box.innerHTML = ''; }, 3200);
+}
+function renderBanners() {
+  const b = [];
+  if (S.updateReady) b.push(`<div class="banner info" role="status"><span>Nova versão da app disponível.</span><button data-act="apply-update">Atualizar</button></div>`);
+  if (S.error) b.push(`<div class="banner err" role="alert"><span>${esc(S.error)}</span><button data-act="refresh">Tentar de novo</button></div>`);
+  else if (!navigator.onLine) b.push(`<div class="banner"><span>Sem ligação: a mostrar os últimos dados carregados.</span></div>`);
+  $('#banners').innerHTML = b.join('');
+}
+
+/* ---------- viewport e teclado (PLANO_FINAL.md 3.7): o formulário nunca fica tapado ---------- */
+let baseH = 0, lastH = 0, kbWasOpen = false;
+const isEditable = (el) => !!el && /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName);
+function applyViewport(override) {
+  const vv = window.visualViewport;
+  const h = Math.round(override?.height ?? (vv ? vv.height : innerHeight));
+  const top = Math.round(override?.offsetTop ?? (vv ? vv.offsetTop : 0));
+  if (!baseH || !isEditable(document.activeElement)) baseH = h;         // altura sem teclado
+  const root = document.documentElement.style;
+  root.setProperty('--vv-h', h + 'px'); root.setProperty('--vv-top', top + 'px');
+  const open = isEditable(document.activeElement) && h < baseH - 120;
+  document.body.classList.toggle('kb-open', open);
+  // Sempre que o teclado abre ou muda de altura, trazer o campo ativo para a vista:
+  // não depender de qual evento (resize da janela, do visualViewport, focusin) chega primeiro.
+  if (open && (!kbWasOpen || h !== lastH)) setTimeout(revealFocused, 120);
+  kbWasOpen = open; lastH = h;
+}
+function revealFocused() {
+  const el = document.activeElement;
+  if (isEditable(el)) el.scrollIntoView({ block: 'center', behavior: 'smooth' });
+}
+if (window.visualViewport) {
+  visualViewport.addEventListener('resize', () => { applyViewport(); setTimeout(revealFocused, 80); });
+  visualViewport.addEventListener('scroll', () => applyViewport());
+}
+addEventListener('resize', () => applyViewport());
+addEventListener('orientationchange', () => { baseH = 0; setTimeout(applyViewport, 300); });
+document.addEventListener('focusin', (e) => { if (isEditable(e.target)) { applyViewport(); setTimeout(revealFocused, 320); } });
+document.addEventListener('focusout', () => setTimeout(applyViewport, 60));
+
+/* ---------- autenticação Google (mesmo padrão das outras apps) ---------- */
+let tokenClient = null, accessToken = null, silentTry = false;
+function cachedToken() {
+  try { const t = JSON.parse(lsGet(TOKEN_KEY) || 'null'); if (t && t.scope === SCOPE && Date.now() < t.expires_at - 60000) return t.access_token; } catch { /* ignora */ }
+  return null;
+}
+function ensureTokenClient(onOk, onFail) {
+  if (!tokenClient) {
+    tokenClient = google.accounts.oauth2.initTokenClient({ client_id: CLIENT_ID, scope: SCOPE, callback: () => { } });
+  }
+  tokenClient.callback = (resp) => {
+    if (resp.error) return onFail(resp);
+    accessToken = resp.access_token;
+    lsSet(TOKEN_KEY, JSON.stringify({ access_token: accessToken, scope: SCOPE, expires_at: Date.now() + (resp.expires_in || 3600) * 1000 }));
+    if (window.gapi?.client) gapi.client.setToken({ access_token: accessToken });
+    onOk();
+  };
+  tokenClient.error_callback = (err) => onFail(err || { error: 'popup' });
+  return tokenClient;
+}
+const requestToken = (prompt) => new Promise((res, rej) => ensureTokenClient(res, rej).requestAccessToken({ prompt }));
+function showAuth(msg) { $('#authMsg').textContent = msg || 'Entra com a conta Google que tem acesso à Sheet.'; $('#auth').hidden = false; $('#btnSignIn').disabled = false; }
+const hideAuth = () => { $('#auth').hidden = true; };
+
+async function waitFor(cond, ms = 12000) { const t0 = Date.now(); while (!cond()) { if (Date.now() - t0 > ms) return false; await sleep(80); } return true; }
+async function initGapi() {
+  if (!(await waitFor(() => window.gapi && window.google?.accounts?.oauth2))) throw new Error('Não consegui carregar os serviços Google (sem ligação?).');
+  await new Promise((res, rej) => gapi.load('client', { callback: res, onerror: rej, timeout: 10000, ontimeout: rej }));
+  await gapi.client.init({});
+  await gapi.client.load('https://sheets.googleapis.com/$discovery/rest?version=v4');
+}
+async function ensureAuth(interactive) {
+  const c = cachedToken();
+  if (c) { accessToken = c; gapi.client.setToken({ access_token: c }); return true; }
+  try { await requestToken(interactive ? (lsGet(TOKEN_KEY) ? '' : 'consent') : ''); return true; } catch { return false; }
+}
+
+/* ---------- acesso à Sheet (gapi client); tudo passa por aqui para se poder testar ---------- */
+async function gcall(fn) {
+  try { return await fn(); }
+  catch (e) {
+    const code = e?.result?.error?.code ?? e?.status;
+    if (code === 401) { lsDel(TOKEN_KEY); if (await ensureAuth(false)) return await fn(); showAuth('A sessão expirou. Entra outra vez.'); }
+    throw e;
+  }
+}
+const REAL_API = {
+  async load() {
+    const r = await gcall(() => gapi.client.sheets.spreadsheets.values.batchGet({
+      spreadsheetId: SHEET_ID, valueRenderOption: 'UNFORMATTED_VALUE', dateTimeRenderOption: 'SERIAL_NUMBER',
+      ranges: ['Config!A1:L300', 'Bilhetes!A5:H600', 'Logs!A5:I1500'],
+    }));
+    const v = r.result.valueRanges.map(x => x.values || []);
+    const cfg = locateConfig(v[0]);
+    return { passe: cfg.passe, weeklyRaw: cfg.weekly, firstRow: cfg.firstRow, ticketsRaw: v[1], logsRaw: v[2] };
+  },
+  /* lê a tabela atual, troca só as linhas da semana e escreve TUDO num único pedido (atómico) */
+  async saveWeek(weekStart, newRows) {
+    const cur = await gcall(() => gapi.client.sheets.spreadsheets.values.get({
+      spreadsheetId: SHEET_ID, range: 'Config!A1:L300', valueRenderOption: 'UNFORMATTED_VALUE', dateTimeRenderOption: 'SERIAL_NUMBER' }));
+    const loc = locateConfig(cur.result.values || []);
+    if (!loc.contiguous) throw new Error('As colunas da tabela semanal da Config estão desordenadas: não escrevo para não as trocar.');
+    const existing = loc.weekly;
+    const all = mergeWeek(existing, weekStart, newRows);
+    const n = Math.max(all.length, existing.length);
+    const values = Array.from({ length: n }, (_, i) => all[i] || ['', '', '', '', '', '', '', '']);
+    await gcall(() => gapi.client.sheets.spreadsheets.values.update({
+      spreadsheetId: SHEET_ID, range: `Config!${colLetter(loc.colStart)}${loc.firstRow}:${colLetter(loc.colStart + 7)}${loc.firstRow + n - 1}`,
+      valueInputOption: 'RAW', resource: { values } }));
+  },
+};
+const api = window.__BCP_API || REAL_API;   // (o teste injeta uma API falsa)
+
+/* junta as linhas da semana às restantes, sem tocar no que é de outras semanas */
+function mergeWeek(existing, weekStart, newRows) {
+  const end = addDays(weekStart, 6);
+  const kept = existing.filter(r => {
+    if (!r || r.every(c => c === '' || c == null)) return false;
+    const d = sheetDate(r[0]); return !(d && d >= weekStart && d <= end);
+  }).map(r => { const c = [...r]; while (c.length < 8) c.push(''); return c.slice(0, 8); });
+  const key = (r) => sheetDate(r[0]) || '9999-99-99';
+  return [...kept, ...newRows].map((r, i) => [r, i]).sort((a, b) => key(a[0]).localeCompare(key(b[0])) || a[1] - b[1]).map(x => x[0]);
+}
+
+/* ---------- interpretação dos dados ---------- */
+function parseData(raw) {
+  const weekly = raw.weeklyRaw.map((r, i) => {
+    const c = [...r]; while (c.length < 8) c.push('');
+    return { row: (raw.firstRow ?? 12) + i, date: sheetDate(c[0]), origin: normStation(c[1]), dest: normStation(c[2]),
+      trainIda: toNum(c[3]), horaIda: sheetTime(c[4]), trainVolta: toNum(c[5]), horaVolta: sheetTime(c[6]),
+      ativo: String(c[7]).trim().toUpperCase() === 'SIM', empty: c.every(x => x === '' || x == null) };
+  }).filter(r => !r.empty);
+  const tickets = raw.ticketsRaw.filter(r => r.some(c => c !== '')).map(c => ({
+    date: sheetDate(c[0]), train: toNum(c[1]), origin: String(c[2] ?? ''), dest: String(c[3] ?? ''),
+    hora: sheetTime(c[4]) || String(c[4] ?? ''), carriage: c[5] ?? '', seat: c[6] ?? '', ref: String(c[7] ?? '') }));
+  const logs = raw.logsRaw.filter(r => r.some(c => c !== '')).map(c => ({
+    ts: String(c[0] ?? ''), tipo: String(c[1] ?? ''), date: sheetDate(c[2]), leg: String(c[3] ?? ''), train: c[4] ?? '',
+    http: c[5] ?? '', result: String(c[6] ?? ''), ref: String(c[7] ?? ''), err: String(c[8] ?? '') }));
+  return { passe: raw.passe, weekly, tickets, logs };
+}
+const boughtSet = () => new Set(S.data.tickets.filter(t => t.date && t.train).map(t => `${t.date}|${t.train}`));
+
+/* pernas futuras das linhas ativas */
+function upcomingLegs() {
+  const today = todayISO(), out = [];
+  for (const r of S.data.weekly) {
+    if (!r.ativo || !r.date || r.date < today) continue;
+    if (r.trainIda && r.horaIda) out.push({ date: r.date, leg: 'ida', origin: r.origin, dest: r.dest, train: r.trainIda, hhmm: r.horaIda });
+    if (r.trainVolta && r.horaVolta) out.push({ date: r.date, leg: 'volta', origin: r.dest, dest: r.origin, train: r.trainVolta, hhmm: r.horaVolta });
+  }
+  return out.map(l => ({ ...l, fire: fireInstant(l.date, l.hhmm) })).sort((a, b) => a.fire - b.fire || a.hhmm.localeCompare(b.hhmm));
+}
+const weekActiveCount = (mon) => S.data.weekly.filter(r => r.ativo && r.date && r.date >= mon && r.date <= addDays(mon, 6)).length;
+const nextMonday = () => addDays(mondayOf(todayISO()), 7);
+
+/* histórico de comboios já usados (para o dropdown do editor) */
+function trainHistory() {
+  const map = new Map();
+  const add = (train, origin, dest, hora) => {
+    if (!train) return; const k = `${train}|${origin}|${dest}`; const e = map.get(k) || { train, origin, dest, hora: '', n: 0 };
+    e.n++; if (hora) e.hora = hora; map.set(k, e);
+  };
+  for (const r of S.data.weekly) { add(r.trainIda, r.origin, r.dest, r.horaIda); add(r.trainVolta, r.dest, r.origin, r.horaVolta); }
+  for (const t of S.data.tickets) add(t.train, normStation(t.origin), normStation(t.dest), sheetTime(t.hora));
+  return [...map.values()].sort((a, b) => b.n - a.n || a.train - b.train);
+}
+
+/* ---------- carregar ---------- */
+function explainError(e) {
+  const code = e?.result?.error?.code ?? e?.status; const msg = e?.result?.error?.message || e?.message || String(e);
+  if (code === 403 && /has not been used|disabled/i.test(msg)) return 'A API Google Sheets não está ativada no projeto Google desta app.';
+  if (code === 403) return 'Esta conta Google não tem acesso à Sheet. Entra com a conta certa.';
+  if (code === 404) return 'Não encontrei a Sheet.';
+  if (code === 400 && /parse range/i.test(msg)) return 'Falta uma aba na Sheet (Config, Bilhetes ou Logs).';
+  if (!navigator.onLine) return 'Sem ligação à internet.';
+  return 'Não consegui ler a Sheet: ' + String(msg).slice(0, 140);
+}
+async function refresh() {
+  if (S.loading) return;
+  S.loading = true; $('#btnRefresh').classList.add('spin'); renderBanners();
+  try {
+    S.data = parseData(await api.load()); S.loaded = true; S.error = null; S.lastLoad = Date.now();
+  } catch (e) { console.error(e); S.error = explainError(e); }
+  S.loading = false; $('#btnRefresh').classList.remove('spin');
+  renderBanners(); render();
+}
+
+/* ---------- ícones ---------- */
+const IC = {
+  check: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9.5"/><path d="M7.5 12.5l3 3 6-6.5"/></svg>',
+  close: '<svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg>',
+  back: '<svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg>',
+  swap: '<svg viewBox="0 0 24 24"><path d="M7 4L3.5 7.5 7 11M3.5 7.5H15M17 13l3.5 3.5L17 20M20.5 16.5H9"/></svg>',
+  trash: '<svg viewBox="0 0 24 24"><path d="M4 7h16M9.5 7V4.5h5V7M6.5 7l1 13h9l1-13M10 11v6M14 11v6"/></svg>',
+};
+
+/* ---------- vistas ---------- */
+function render() {
+  $$('#tabs button').forEach(b => b.setAttribute('aria-selected', String(b.dataset.tab === S.tab)));
+  const v = $('#view');
+  if (!S.loaded && !S.error) { v.innerHTML = '<div class="skel"></div><div class="skel"></div><div class="skel"></div>'; return; }
+  v.innerHTML = ({ semana: viewSemana, bilhetes: viewBilhetes, registo: viewRegisto }[S.tab])();
+}
+
+function ticketHtml(t, cls = '') {
+  const past = t.date && t.date < todayISO();
+  const seat = t.carriage || t.seat;
+  return `<article class="ticket ${cls} ${past ? 'past' : ''}">
+    <div class="tk-main">
+      <div class="tk-when">${t.date ? esc(fmtDay(t.date)) : 'Data por definir'}</div>
+      <div class="tk-time">${esc(t.hora || '--:--')}</div>
+      <div class="tk-route">${esc(t.origin || '—')}<span class="arrow">→</span>${esc(t.dest || '—')}</div>
+      <div class="tk-meta">Comboio ${esc(t.train ?? '—')}${t.ref ? ` · ref. ${esc(t.ref)}` : ''}</div>
+    </div>
+    <div class="tk-stub">${seat ? `<span class="l">Carruagem</span><span class="n">${esc(t.carriage || '—')}</span><span class="l">Lugar</span><span class="n">${esc(t.seat || '—')}</span>` : `<span class="l">Lugar</span><span class="n">—</span>`}</div>
+  </article>`;
+}
+
+function viewSemana() {
+  const nm = nextMonday(), n = weekActiveCount(nm), parts = [];
+  if (n === 0) {
+    parts.push(`<section class="hero"><h2>Falta configurar a semana de ${esc(fmtRange(nm))}</h2>
+      <p>Ainda não há viagens ativas para a semana que vem.</p>
+      <button class="btn block" data-act="edit-week" data-week="${nm}">Configurar semana</button></section>`);
+  }
+  const today = todayISO();
+  const next = S.data.tickets.filter(t => t.date && t.date >= today).sort((a, b) => (a.date + (a.hora || '')).localeCompare(b.date + (b.hora || '')))[0];
+  if (next) parts.push(`<div><div class="section-title" style="margin-top:0"><h2>Próximo comboio</h2></div>${ticketHtml(next, 'next')}</div>`);
+  if (n > 0) parts.push(`<div class="done">${IC.check}<div><b>Semana de ${esc(fmtRange(nm))} configurada</b><div class="muted small">${n} dia${n > 1 ? 's' : ''} de viagem</div></div><button class="link" data-act="edit-week" data-week="${nm}">Editar</button></div>`);
+
+  const legs = upcomingLegs().slice(0, 8), bought = boughtSet(), nowMs = Date.now();
+  let rows = '';
+  for (const l of legs) {
+    let chip;
+    if (bought.has(`${l.date}|${l.train}`)) chip = '<span class="chip ok">Comprado</span>';
+    else if (l.fire > nowMs) chip = `<span class="chip">Compra ${esc(fmtDay(addDays(l.date, -1)))} ${esc(l.hhmm)}</span>`;
+    else chip = '<span class="chip warn">Sem bilhete</span>';
+    rows += `<div class="row"><div><div class="t">${esc(l.hhmm)}</div><div class="d">${esc(fmtDay(l.date))}</div></div>
+      <div><div class="r">${esc(stationLabel(l.origin))} → ${esc(stationLabel(l.dest))}</div><div class="m"><span>${l.leg === 'ida' ? 'Ida' : 'Volta'} · comboio ${l.train}</span>${chip}</div></div></div>`;
+  }
+  parts.push(`<div><div class="section-title"><h2>Próximas compras</h2><button class="link" data-act="edit-week" data-week="${mondayOf(today)}">Esta semana</button></div>
+    ${rows ? `<div class="rows">${rows}</div>` : '<div class="empty">Sem viagens ativas a partir de hoje.</div>'}</div>`);
+  parts.push(passHtml());
+  return parts.join('');
+}
+
+function passHtml() {
+  const p = S.data.passe || [], last = sheetDate(p[0]), validity = toNum(p[1]) || 30;
+  /* 30 dias contando o dia do carregamento: expira a compra + 29. A coluna Data_Expira da Sheet
+     é a fonte; sem ela, compra + Validade_Dias (29), como a fórmula da Sheet. */
+  const exp = sheetDate(p[2]) || (last ? addDays(last, validity) : null);
+  if (!exp) return `<div class="pass"><h3>Passe Verde</h3><p class="muted small" style="margin:6px 0 0">Preenche a data da última compra e a validade na aba Config para receberes o aviso antes de expirar.</p></div>`;
+  const left = daysBetween(todayISO(), exp), cls = left <= 0 ? 'err' : left <= 3 ? 'warn' : '';
+  const pct = Math.max(0, Math.min(100, Math.round(left / validity * 100)));
+  const txt = left < 0 ? `Expirou a ${fmtDM(exp)}` : left === 0 ? 'Expira hoje' : `Válido até ${fmtDM(exp)}`;
+  return `<div class="pass"><div class="top-line"><h3>Passe Verde</h3><span class="days">${Math.max(0, left)} dia${left === 1 ? '' : 's'}</span></div>
+    <div class="meter ${cls}" role="img" aria-label="${esc(txt)}"><i style="width:${pct}%"></i></div>
+    <div class="muted small">${esc(txt)}${left <= 3 ? ' · renova na App CP e atualiza a data na Sheet' : ''}</div></div>`;
+}
+
+function viewBilhetes() {
+  const today = todayISO(), all = S.data.tickets.slice().sort((a, b) => ((b.date || '') + (b.hora || '')).localeCompare((a.date || '') + (a.hora || '')));
+  const up = all.filter(t => t.date && t.date >= today).reverse(), past = all.filter(t => !t.date || t.date < today).slice(0, 20);
+  if (!all.length) return '<div class="empty">Ainda não há bilhetes comprados.<br>Aparecem aqui quando o RPi os compra.</div>';
+  return (up.length ? `<div class="section-title" style="margin-top:0"><h2>Próximos</h2></div>${up.map((t, i) => `<div style="margin-top:${i ? 14 : 0}px">${ticketHtml(t, i === 0 ? 'next' : '')}</div>`).join('')}` : '')
+    + (past.length ? `<div class="section-title"><h2>Anteriores</h2></div>${past.map((t, i) => `<div style="margin-top:${i ? 14 : 0}px">${ticketHtml(t)}</div>`).join('')}` : '');
+}
+
+const LOG_RESULT = { CONFIRMED: 'Comprado', SALE_CREATED: 'Venda criada', SOLD_OUT: 'Esgotado', FAILED: 'Falhou', AMBIGUOUS: 'Estado incerto', OK: 'OK', FALHA: 'Falha', EXCECAO: 'Erro inesperado' };
+const LOG_TIPO = { COMPRA: 'Compra', ERRO: 'Erro', PREFLIGHT: 'Verificação' };
+const logClass = (r) => /^(OK|CONFIRMED|SALE_CREATED)$/i.test(r.result) ? 'ok' : /SOLD_OUT/i.test(r.result) ? 'warn' : /FAIL|FALHA|AMBIG|EXCECAO|ERRO/i.test(r.result + r.tipo) ? 'err' : '';
+function viewRegisto() {
+  let logs = S.data.logs.slice().reverse();
+  if (S.logFilter === 'buy') logs = logs.filter(l => /COMPRA/i.test(l.tipo));
+  if (S.logFilter === 'bad') logs = logs.filter(l => logClass(l) === 'err' || logClass(l) === 'warn');
+  const seg = `<div class="seg" role="group" aria-label="Filtro">${[['all', 'Tudo'], ['buy', 'Compras'], ['bad', 'Problemas']].map(([k, n]) => `<button data-act="log-filter" data-f="${k}" aria-pressed="${S.logFilter === k}">${n}</button>`).join('')}</div>`;
+  if (!logs.length) return seg + '<div class="empty">Sem registos para mostrar.</div>';
+  let html = seg, day = '';
+  for (const l of logs.slice(0, 80)) {
+    const d = new Date(l.ts), ok = !isNaN(d), dKey = ok ? new Intl.DateTimeFormat('en-CA', { timeZone: TZ }).format(d) : '';
+    if (dKey !== day) { day = dKey; html += `<div class="day-h">${dKey ? esc(fmtDay(dKey)) : 'Sem data'}</div>`; }
+    const hh = ok ? new Intl.DateTimeFormat('pt-PT', { timeZone: TZ, hour: '2-digit', minute: '2-digit' }).format(d) : '--:--';
+    const what = [l.leg && (l.leg === 'ida' ? 'Ida' : 'Volta'), l.train && `comboio ${l.train}`, l.date && fmtDM(l.date)].filter(Boolean).join(' · ');
+    html += `<div class="log"><div class="h">${esc(hh)}</div><div class="tx"><span class="chip ${logClass(l)}">${esc(LOG_RESULT[l.result] || l.result || LOG_TIPO[l.tipo] || l.tipo)}</span> <span class="muted">${esc(LOG_TIPO[l.tipo] || l.tipo)}</span>${what ? `<div class="muted small">${esc(what)}</div>` : ''}${l.err ? `<div class="err-msg">${esc(l.err)}</div>` : ''}</div></div>`;
+  }
+  return html;
+}
+
+/* ---------- editor da semana ---------- */
+const emptyLeg = () => ({ train: '', time: '' });
+function dayFromRow(r) {
+  return { date: r.date, origin: r.origin, dest: r.dest, ida: { train: r.trainIda ?? '', time: r.horaIda ?? '' },
+    volta: { train: r.trainVolta ?? '', time: r.horaVolta ?? '' }, soIda: !r.trainVolta && !r.horaVolta, ativo: r.ativo };
+}
+function rowsInWeek(mon) { return S.data.weekly.filter(r => r.date && r.date >= mon && r.date <= addDays(mon, 6)); }
+function defaultRoute() {
+  const last = S.data.weekly.filter(r => r.origin && r.dest).slice(-1)[0], ks = stationKeys();
+  return { origin: last?.origin || ks[0] || '', dest: last?.dest || ks[1] || '' };
+}
+function openEditor(mon) {
+  mon = mondayOf(mon || nextMonday());
+  S.editor = { week: mon, days: rowsInWeek(mon).map(dayFromRow), dirty: false, saving: false, tt: {} };
+  $('#editor').hidden = false; renderEditor();
+  history.replaceState(null, '', location.pathname);
+}
+function closeEditor(force) {
+  if (!force && S.editor?.dirty && !confirm('Há alterações por guardar. Sair mesmo assim?')) return;
+  S.editor = null; $('#editor').hidden = true; $('#editor').innerHTML = ''; applyViewport();
+}
+function optionsStations(sel) {
+  const ks = stationKeys(); if (sel && !ks.includes(sel)) ks.push(sel);
+  return `<option value="">Escolher…</option>` + ks.map(k => `<option value="${esc(k)}" ${k === sel ? 'selected' : ''}>${esc(stationLabel(k))}</option>`).join('');
+}
+function optionsHistory() {
+  return `<option value="">Comboios que já usei…</option>` + trainHistory().slice(0, 30).map((h, i) =>
+    `<option value="${i}">${esc(h.train)} — ${esc(stationLabel(h.origin))} → ${esc(stationLabel(h.dest))}${h.hora ? ` (${esc(h.hora)})` : ''}</option>`).join('');
+}
+function fireText(d, leg) {
+  const l = d[leg]; if (!d.date || !/^\d{2}:\d{2}$/.test(l.time)) return '';
+  return `Compra automática ${fmtDay(addDays(d.date, -1))} às ${l.time}`;
+}
+function legHtml(d, i, leg) {
+  const label = leg === 'ida' ? 'Ida' : 'Volta', l = d[leg];
+  return `<div class="leg" data-leg="${leg}">
+    <div class="leg-h"><h3>${label}</h3><span class="fire" data-fire="${leg}">${esc(fireText(d, leg))}</span></div>
+    <div class="leg-row">
+      <label class="f"><span>Comboio</span><input class="in num" inputmode="numeric" pattern="[0-9]*" autocomplete="off" data-f="${leg}.train" value="${esc(l.train)}" placeholder="524"></label>
+      <label class="f"><span>Hora de partida</span><input class="in time" type="time" data-f="${leg}.time" value="${esc(l.time)}"></label>
+    </div>
+    <select class="in hist" data-f="${leg}.hist" aria-label="Escolher um comboio já usado">${optionsHistory()}</select>
+    <p class="tt" data-tt="${leg}" aria-live="polite"></p>
+  </div>`;
+}
+function dayHtml(d, i) {
+  const wk = Array.from({ length: 7 }, (_, k) => addDays(S.editor.week, k));
+  return `<section class="dayc ${d.ativo ? '' : 'off'}" data-i="${i}">
+    <div class="dayc-head">
+      <label class="f"><span>Dia</span><select class="in" data-f="date">${d.date && !wk.includes(d.date) ? `<option value="${esc(d.date)}" selected>${esc(fmtDay(d.date))}</option>` : ''}<option value="">Escolher…</option>${wk.map(x => `<option value="${x}" ${x === d.date ? 'selected' : ''}>${esc(fmtDay(x))}</option>`).join('')}</select></label>
+      <label class="switch"><input type="checkbox" data-f="ativo" ${d.ativo ? 'checked' : ''}>Ativo</label>
+      <button class="icon-btn" style="color:var(--err)" data-act="del-day" aria-label="Remover este dia">${IC.trash}</button>
+    </div>
+    <div class="route">
+      <label class="f"><span>De</span><select class="in" data-f="origin">${optionsStations(d.origin)}</select></label>
+      <button class="swap" data-act="swap" aria-label="Trocar origem e destino">${IC.swap}</button>
+      <label class="f"><span>Para</span><select class="in" data-f="dest">${optionsStations(d.dest)}</select></label>
+    </div>
+    ${legHtml(d, i, 'ida')}
+    <label class="check"><input type="checkbox" data-f="soIda" ${d.soIda ? 'checked' : ''}>Só ida (sem volta)</label>
+    ${d.soIda ? '' : legHtml(d, i, 'volta')}
+    <div class="errs" data-errs="${i}"></div>
+  </section>`;
+}
+function renderEditor() {
+  const E = S.editor; if (!E) return; const ed = $('#editor');
+  const cur = mondayOf(todayISO()), nxt = addDays(cur, 7), prev = addDays(E.week, -7);
+  const canCopy = !E.days.length && rowsInWeek(prev).length;
+  ed.innerHTML = `
+    <div class="ov-head"><button class="icon-btn" data-act="close-editor" aria-label="Fechar">${IC.back}</button><h2 id="edTitle">Configurar semana</h2></div>
+    <div class="ov-body" id="edBody">
+      <div class="seg week-seg" role="group" aria-label="Semana">
+        <button data-act="pick-week" data-week="${cur}" aria-pressed="${E.week === cur}">Esta semana<small>${esc(fmtRange(cur))}</small></button>
+        <button data-act="pick-week" data-week="${nxt}" aria-pressed="${E.week === nxt}">Próxima semana<small>${esc(fmtRange(nxt))}</small></button>
+      </div>
+      ${E.week !== cur && E.week !== nxt ? `<p class="muted small">A editar a semana de ${esc(fmtRange(E.week))}.</p>` : ''}
+      ${E.days.map(dayHtml).join('')}
+      ${E.days.length ? '' : '<div class="empty">Ainda não há dias configurados nesta semana.</div>'}
+      <div class="add">
+        <button class="btn ghost" data-act="add-day">+ Adicionar dia</button>
+        ${canCopy ? `<button class="btn quiet" data-act="copy-prev">Repetir a semana anterior</button>` : ''}
+      </div>
+    </div>
+    <div class="savebar"><div class="note">O RPi lê a Sheet de 5 em 5 minutos e agenda as compras.</div>
+      <button class="btn" data-act="save-week" ${E.saving ? 'disabled' : ''}>${E.saving ? 'A guardar…' : 'Guardar'}</button></div>`;
+  E.days.forEach((_, i) => { refreshDayMeta(i); ['ida', 'volta'].forEach(l => scheduleVerify(i, l, 0)); });
+}
+function refreshDayMeta(i) {
+  const E = S.editor, d = E?.days[i], el = $(`.dayc[data-i="${i}"]`); if (!d || !el) return;
+  ['ida', 'volta'].forEach(l => { const f = $(`[data-fire="${l}"]`, el); if (f) f.textContent = fireText(d, l); });
+  el.classList.toggle('off', !d.ativo);
+}
+
+/* validação (espelha a do RPi, 3.10.3) */
+function validateDays(E) {
+  const errs = E.days.map(() => []), seen = new Map(), end = addDays(E.week, 6), today = todayISO();
+  E.days.forEach((d, i) => {
+    if (!d.ativo) return; const e = errs[i];
+    if (!d.date) e.push('Escolhe o dia.');
+    else {
+      if (d.date < E.week || d.date > end) e.push('O dia não pertence a esta semana.');
+      if (d.date < today) e.push('Este dia já passou.');
+      if (seen.has(d.date)) e.push(`O dia ${fmtDay(d.date)} está repetido.`); else seen.set(d.date, i);
+    }
+    if (!d.origin || !d.dest) e.push('Escolhe a origem e o destino.');
+    else if (d.origin === d.dest) e.push('A origem e o destino são iguais.');
+    const chk = (leg, name) => {
+      if (!toNum(d[leg].train)) e.push(`Comboio de ${name} inválido.`);
+      if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(d[leg].time)) e.push(`Hora de ${name} inválida.`);
+    };
+    chk('ida', 'ida'); if (!d.soIda) chk('volta', 'volta');
+    if (!d.soIda && /^\d{2}:\d{2}$/.test(d.ida.time) && /^\d{2}:\d{2}$/.test(d.volta.time) && d.volta.time <= d.ida.time) e.push('A volta tem de ser depois da ida.');
+  });
+  return errs;
+}
+const outName = (key) => S.cfg.names[key] || (S.cfg.stations[key] ? stationLabel(key) : key);
+function rowsForSheet(E) {
+  return E.days.filter(d => d.date && d.origin && d.dest).map(d => [d.date, outName(d.origin), outName(d.dest), toNum(d.ida.train) ?? '', d.ida.time,
+    d.soIda ? '' : (toNum(d.volta.train) ?? ''), d.soIda ? '' : d.volta.time, d.ativo ? 'SIM' : 'NAO']);
+}
+async function saveWeek() {
+  const E = S.editor; if (!E || E.saving) return;
+  const errs = validateDays(E); let bad = false;
+  errs.forEach((e, i) => { const box = $(`[data-errs="${i}"]`); if (box) box.innerHTML = e.map(esc).join('<br>'); if (e.length) bad = true; });
+  if (bad) { toast('Corrige os avisos a vermelho.'); $('.errs:not(:empty)')?.scrollIntoView({ block: 'center', behavior: 'smooth' }); return; }
+  E.saving = true; $('[data-act="save-week"]').disabled = true; $('[data-act="save-week"]').textContent = 'A guardar…';
+  try {
+    await api.saveWeek(E.week, rowsForSheet(E));
+    E.dirty = false; closeEditor(true); toast('Guardado. O RPi vai ler a nova configuração.'); refresh();
+  } catch (e) {
+    console.error(e); E.saving = false; renderEditor(); toast('Não consegui guardar: ' + explainError(e));
+  }
+}
+
+/* verificação do horário na CP (só se as chaves estiverem neste telemóvel) */
+const cpKeys = () => { try { const k = JSON.parse(lsGet(KEYS_KEY) || 'null'); return k && k.t && k.i && k.s ? k : null; } catch { return null; } };
+const ttCache = new Map(), ttTimers = {};
+async function fetchTimetable(train, date) {
+  const k = cpKeys(); if (!k) return { off: true };
+  const key = `${train}|${date}`; if (ttCache.has(key)) return ttCache.get(key);
+  const p = fetch(`${CP_API}/travel-api/trains/${train}/timetable/${date}`, { headers: { 'Accept': 'application/json', 'X-Api-Key': k.t, 'x-cp-connect-id': k.i, 'x-cp-connect-secret': k.s } })
+    .then(async r => r.status === 404 || r.status === 400 ? { none: true } : r.ok ? { stops: (await r.json()).trainStops || [] } : { error: r.status })
+    .catch(() => ({ error: 'rede' }));
+  ttCache.set(key, p); const res = await p; if (res.error) ttCache.delete(key); return res;
+}
+function scheduleVerify(i, leg, delay = 450) { clearTimeout(ttTimers[i + leg]); ttTimers[i + leg] = setTimeout(() => verifyLeg(i, leg), delay); }
+async function verifyLeg(i, leg) {
+  const E = S.editor, d = E?.days[i]; if (!d) return; const box = $(`.dayc[data-i="${i}"] [data-tt="${leg}"]`); if (!box) return;
+  const train = toNum(d[leg].train); box.className = 'tt'; box.textContent = '';
+  if (!train || !d.date || !cpKeys()) return;
+  const res = await fetchTimetable(train, d.date); if (S.editor !== E || !$(`.dayc[data-i="${i}"] [data-tt="${leg}"]`)) return;
+  const org = leg === 'ida' ? d.origin : d.dest, dst = leg === 'ida' ? d.dest : d.origin;
+  const set = (cls, html) => { box.className = 'tt ' + cls; box.innerHTML = html; };
+  if (res.none) return set('warn', `A CP não tem o comboio ${train} em ${esc(fmtDay(d.date))}.`);
+  if (res.error || !res.stops) return;
+  const codes = res.stops.map(s => s.station?.code), oi = codes.indexOf(stationCode(org));
+  if (oi < 0) return set('warn', `O comboio ${train} não para em ${esc(stationLabel(org))}.`);
+  const di = codes.indexOf(stationCode(dst), oi + 1);
+  if (di < 0) return set('warn', `O comboio ${train} não segue de ${esc(stationLabel(org))} para ${esc(stationLabel(dst))}.`);
+  const dep = String(res.stops[oi].departure || '').slice(0, 5), arr = String(res.stops[di].arrival || '').slice(0, 5);
+  const info = `${esc(stationLabel(org))} ${esc(dep)} → ${esc(stationLabel(dst))} ${esc(arr)}`;
+  if (!d[leg].time) { d[leg].time = dep; const inp = $(`.dayc[data-i="${i}"] [data-f="${leg}.time"]`); if (inp) inp.value = dep; refreshDayMeta(i); E.dirty = true; return set('ok', `Preenchido pela CP: ${info}`); }
+  if (d[leg].time === dep) return set('ok', `Confirmado pela CP: ${info}`);
+  set('warn', `A CP indica ${esc(dep)} (${info}).<button data-act="use-time" data-i="${i}" data-leg="${leg}" data-time="${esc(dep)}">Usar ${esc(dep)}</button>`);
+}
+
+/* ---------- definições ---------- */
+function openSettings() {
+  const keys = cpKeys();
+  const st = $('#settings'); st.hidden = false;
+  st.innerHTML = `<div class="ov-head"><button class="icon-btn" data-act="close-settings" aria-label="Fechar">${IC.back}</button><h2 id="stTitle">Definições</h2></div>
+  <div class="ov-body">
+    <div class="pass"><h3>Sessão Google</h3><p class="muted small" style="margin:6px 0 12px">A app renova a sessão sozinha. Termina-a se mudares de conta.</p>
+      <button class="btn ghost" data-act="sign-out">Terminar sessão</button></div>
+    <div class="pass"><h3>Confirmar horários na CP</h3>
+      <p class="muted small" style="margin:6px 0 12px">${keys ? 'Ligado neste telemóvel: ao escreveres o nº do comboio, a app confirma a hora e o percurso no horário oficial.'
+        : 'Desligado. Para ligar, no computador do projeto corre <b>python3 scripts/pwa_link.py</b> e abre o link que aparece neste telemóvel. As chaves ficam só aqui, nunca no código.'}</p>
+      ${keys ? '<button class="btn ghost" data-act="clear-keys">Desligar e apagar as chaves</button>' : ''}</div>
+    <div class="pass"><h3>Sheet</h3><p class="muted small" style="margin:6px 0 12px">A configuração, os registos e os bilhetes vivem numa Google Sheet.</p>
+      <a class="btn ghost" href="https://docs.google.com/spreadsheets/d/${SHEET_ID}" target="_blank" rel="noopener">Abrir a Sheet</a></div>
+    <p class="muted small" style="text-align:center">Bilhetes CP ${VERSION}</p>
+  </div>`;
+}
+
+/* ---------- ações (delegação de eventos) ---------- */
+document.addEventListener('click', async (e) => {
+  const b = e.target.closest('[data-act]'); const tab = e.target.closest('[data-tab]');
+  if (tab) { S.tab = tab.dataset.tab; render(); $('#view').scrollTop = 0; return; }
+  if (!b) return; const a = b.dataset.act, E = S.editor;
+  const di = () => +b.closest('.dayc').dataset.i;
+  switch (a) {
+    case 'refresh': refresh(); break;
+    case 'open-settings': openSettings(); break;
+    case 'close-settings': $('#settings').hidden = true; $('#settings').innerHTML = ''; break;
+    case 'edit-week': openEditor(b.dataset.week); break;
+    case 'close-editor': closeEditor(); break;
+    case 'pick-week': if (E && (!E.dirty || confirm('Há alterações por guardar. Trocar de semana?'))) openEditor(b.dataset.week); break;
+    case 'add-day': {
+      const used = new Set(E.days.map(d => d.date)), free = Array.from({ length: 7 }, (_, k) => addDays(E.week, k)).find(x => !used.has(x) && x >= todayISO()) || '';
+      const last = E.days[E.days.length - 1], r = defaultRoute();
+      E.days.push({ date: free, origin: last?.origin || r.origin, dest: last?.dest || r.dest, ida: last ? { ...last.ida } : emptyLeg(), volta: last ? { ...last.volta } : emptyLeg(), soIda: last?.soIda || false, ativo: true });
+      E.dirty = true; renderEditor(); requestAnimationFrame(() => $(`.dayc[data-i="${E.days.length - 1}"]`)?.scrollIntoView({ block: 'start', behavior: 'smooth' })); break;
+    }
+    case 'copy-prev': E.days = rowsInWeek(addDays(E.week, -7)).map(r => { const d = dayFromRow(r); return { ...d, date: d.date ? addDays(d.date, 7) : d.date }; }); E.dirty = true; renderEditor(); break;
+    case 'del-day': if (confirm('Remover este dia?')) { E.days.splice(di(), 1); E.dirty = true; renderEditor(); } break;
+    case 'swap': { const d = E.days[di()]; [d.origin, d.dest] = [d.dest, d.origin]; E.dirty = true; renderEditor(); break; }
+    case 'use-time': { const d = E.days[+b.dataset.i]; d[b.dataset.leg].time = b.dataset.time; E.dirty = true; renderEditor(); break; }
+    case 'save-week': saveWeek(); break;
+    case 'log-filter': S.logFilter = b.dataset.f; render(); break;
+    case 'sign-in': $('#btnSignIn').disabled = true; if (await ensureAuth(true)) { hideAuth(); refresh(); } else showAuth('Não foi possível entrar. Tenta outra vez.'); break;
+    case 'sign-out': { const t = accessToken; lsDel(TOKEN_KEY); accessToken = null; try { if (t) google.accounts.oauth2.revoke(t, () => { }); } catch { /* ok */ } $('#settings').hidden = true; showAuth('Sessão terminada.'); break; }
+    case 'clear-keys': lsDel(KEYS_KEY); ttCache.clear(); openSettings(); toast('Chaves da CP apagadas deste telemóvel.'); break;
+    case 'apply-update': navigator.serviceWorker.getRegistration().then(r => r?.waiting?.postMessage('skipWaiting')); break;
+  }
+});
+document.addEventListener('input', (e) => {
+  const E = S.editor, f = e.target.dataset?.f; if (!E || !f) return;
+  const i = +e.target.closest('.dayc')?.dataset.i; const d = E.days[i]; if (!d) return;
+  if (f === 'ida.train' || f === 'volta.train') { d[f.split('.')[0]].train = e.target.value.replace(/\D/g, ''); if (e.target.value !== d[f.split('.')[0]].train) e.target.value = d[f.split('.')[0]].train; scheduleVerify(i, f.split('.')[0]); }
+  else if (f === 'ida.time' || f === 'volta.time') { d[f.split('.')[0]].time = e.target.value; refreshDayMeta(i); scheduleVerify(i, f.split('.')[0]); }
+  else return; E.dirty = true;
+});
+document.addEventListener('change', (e) => {
+  const E = S.editor, f = e.target.dataset?.f; if (!E || !f) return;
+  const i = +e.target.closest('.dayc')?.dataset.i; const d = E.days[i]; if (!d) return;
+  if (f === 'date' || f === 'origin' || f === 'dest') { d[f] = e.target.value; refreshDayMeta(i); ['ida', 'volta'].forEach(l => scheduleVerify(i, l, 0)); }
+  else if (f === 'ativo') { d.ativo = e.target.checked; refreshDayMeta(i); }
+  else if (f === 'soIda') { d.soIda = e.target.checked; renderEditor(); }
+  else if (f.endsWith('.hist')) {
+    const leg = f.split('.')[0], h = trainHistory().slice(0, 30)[+e.target.value];
+    if (h) { d[leg].train = String(h.train); d[leg].time = h.hora || d[leg].time; renderEditor(); }
+  } else return;
+  E.dirty = true;
+});
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape') { if (!$('#settings').hidden) $('#settings').hidden = true; else if (S.editor) closeEditor(); } });
+
+/* ---------- arranque ---------- */
+async function loadConfig() {
+  try {
+    const r = await fetch('config/app_config.example.json', { cache: 'no-cache' }); const c = await r.json();
+    S.cfg.stations = c.stations || {}; S.cfg.names = c.station_names || {};
+  } catch { S.cfg.stations = {}; S.cfg.names = {}; S.error = null; }
+}
+function importKeysFromHash() {
+  const m = location.hash.match(/[#&]cpkeys=([A-Za-z0-9_-]+)/); if (!m) return;
+  try {
+    const j = JSON.parse(decodeURIComponent(escape(atob(m[1].replace(/-/g, '+').replace(/_/g, '/')))));
+    if (j.t && j.i && j.s) { lsSet(KEYS_KEY, JSON.stringify({ t: j.t, i: j.i, s: j.s })); setTimeout(() => toast('Chaves da CP guardadas neste telemóvel.'), 600); }
+  } catch { /* link inválido */ }
+  history.replaceState(null, '', location.pathname + location.search);
+}
+function registerSW() {
+  if (!('serviceWorker' in navigator)) return;
+  const had = !!navigator.serviceWorker.controller;
+  navigator.serviceWorker.register('sw.js').then(reg => {
+    const flag = () => { if (reg.waiting && navigator.serviceWorker.controller) { S.updateReady = true; renderBanners(); } };
+    flag(); reg.addEventListener('updatefound', () => reg.installing?.addEventListener('statechange', flag));
+  }).catch(() => { });
+  navigator.serviceWorker.addEventListener('controllerchange', () => { if (had) location.reload(); });
+}
+addEventListener('online', () => { renderBanners(); refresh(); });
+addEventListener('offline', renderBanners);
+document.addEventListener('visibilitychange', () => { if (!document.hidden && S.loaded && Date.now() - S.lastLoad > 90000 && !S.editor) refresh(); });
+
+async function boot() {
+  applyViewport(); importKeysFromHash(); registerSW(); await loadConfig(); render();
+  const wantEditor = /[?&]semana=1/.test(location.search);
+  if (window.__BCP_API) { await refresh(); if (wantEditor) openEditor(); return; }
+  try { await initGapi(); } catch (e) { S.error = String(e.message || e); renderBanners(); render(); showAuth(S.error); return; }
+  if (await ensureAuth(false)) { hideAuth(); await refresh(); if (wantEditor && S.loaded) openEditor(); }
+  else { render(); showAuth(); }
+}
+window.__BCP = { S, mergeWeek, locateConfig, validateDays, sheetDate, sheetTime, fireInstant, applyViewport, openEditor, parseData, upcomingLegs, VERSION };
+boot();
+</script>
+</body>
+</html>

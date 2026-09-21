@@ -1,29 +1,41 @@
 """
-Automação de compra de bilhetes CP (Comboios de Portugal) com Passe Ferroviário Verde.
+Cliente da API da CP (Comboios de Portugal) para compra com Passe Ferroviário Verde.
 
 Fluxo: login (Keycloak/OAuth2 PKCE) -> pesquisa -> criar venda -> preencher
 passageiro/cliente/dados fiscais -> aplicar desconto/passe -> confirmar.
 
+Este módulo é a biblioteca usada por `hot_buy.py` (o processo de compra
+agendado). Continua a poder ser corrido à mão (`python cp_ticket.py --origem ...`)
+para comprar de imediato, mas o uso normal é via Scheduler (ver PLANO_FINAL.md).
+
 IMPORTANTE:
-- Isto usa a API interna do site cp.pt, obtida a partir de um HAR capturado
-  manualmente. A CP pode alterar esta API a qualquer momento sem aviso —
-  o script pode parar de funcionar.
-- Todos os dados pessoais vêm de variáveis de ambiente (ficheiro .env),
-  nunca hardcoded aqui.
-- Usa isto apenas para a tua própria conta/passe. Uso abusivo ou em nome
-  de terceiros pode violar os Termos e Condições da Bilheteira Online da CP.
+- Usa a API interna do site cp.pt, obtida a partir de um HAR capturado
+  manualmente. A CP pode alterá-la a qualquer momento sem aviso.
+- Todos os dados pessoais vêm de variáveis de ambiente (.env), nunca hardcoded.
+- Só para a tua própria conta/passe. Uso abusivo ou em nome de terceiros pode
+  violar os Termos e Condições da Bilheteira Online da CP.
+- Nunca há retries automáticos escondidos: a sessão HTTP tem max_retries=0 e é
+  a política de 3.3.1 (em hot_buy.py) que decide se e quando repetir.
 """
+
+from __future__ import annotations
 
 import base64
 import hashlib
+import json
 import os
 import re
 import secrets
 import sys
+import time
 import urllib.parse as up
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from typing import Any
 
 import requests
+from requests.adapters import HTTPAdapter
+
+import common  # noqa: F401  (carrega o .env antes de ler os.environ)
 
 # ---------------------------------------------------------------------------
 # Configuração - lida de variáveis de ambiente (ver ficheiro .env.example)
@@ -38,11 +50,10 @@ PASSENGER_PHONE = os.environ["CP_PASSENGER_PHONE"]     # ex: PT9XXXXXXXX
 PASSENGER_NIF = os.environ["CP_PASSENGER_NIF"]
 GREEN_PASS_NUMBER = os.environ["CP_GREEN_PASS_NUMBER"]  # nº do Passe Ferroviário Verde
 
-# Estações (códigos internos CP). Ajusta conforme a tua rota.
+# Só para o uso manual (CLI). O sistema agendado lê as estações de app_config.
 STATION_CODES = {
     "aveiro": "94-38000",
     "lisboa_oriente": "94-31039",
-    # adiciona aqui outras estações que precises, com o mesmo formato "94-XXXXX"
 }
 
 TRAVEL_CLASS = 2  # 2 = 2ª classe / turística
@@ -56,9 +67,8 @@ API_BASE = "https://api-gateway.cp.pt/cp/services"
 CLIENT_ID = "websitecp"
 REDIRECT_URI = "https://cp.pt/pt/login-check"
 
-# Chaves/headers estáticos observados no tráfego do site (embutidos no
-# JS do frontend, não são segredos pessoais). Se deixarem de funcionar,
-# terás de os recapturar num novo HAR.
+# Chaves/headers estáticos observados no tráfego do site (embutidos no JS do
+# frontend, não são segredos pessoais).
 X_CP_CONNECT_ID = os.environ.get("CP_CONNECT_ID", "")
 X_CP_CONNECT_SECRET = os.environ.get("CP_CONNECT_SECRET", "")
 X_API_KEY_TRAVEL = os.environ.get("CP_API_KEY_TRAVEL", "")
@@ -68,6 +78,119 @@ USER_AGENT = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
     "(KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36"
 )
+
+# (ligar, ler) em segundos. Curtos: no caminho crítico um pedido pendurado é pior
+# do que um erro claro.
+TIMEOUT_CONNECT_READ = (4.0, 12.0)
+
+
+def make_session() -> requests.Session:
+    """Sessão com ligação reutilizável e SEM retries automáticos."""
+    s = requests.Session()
+    s.headers.update({"User-Agent": USER_AGENT})
+    adapter = HTTPAdapter(max_retries=0, pool_connections=2, pool_maxsize=2)
+    s.mount("https://", adapter)
+    return s
+
+
+# ---------------------------------------------------------------------------
+# Respostas e erros
+# ---------------------------------------------------------------------------
+
+class CPError(Exception):
+    """Falha numa chamada à CP.
+
+    kind:
+      'not_sent'  — falhou antes do pedido chegar ao servidor (retry seguro)
+      'ambiguous' — o pedido pode ter sido entregue e a resposta perdeu-se
+      'http'      — o servidor respondeu com erro (ver .response)
+    """
+
+    def __init__(self, kind: str, message: str, response: "CPResponse | None" = None):
+        super().__init__(message)
+        self.kind = kind
+        self.response = response
+
+
+@dataclass
+class CPResponse:
+    status: int
+    body: Any
+    text: str
+    date_header: str | None
+    sent_at: float          # time.time() imediatamente antes de enviar
+    received_at: float      # time.time() ao receber a resposta
+    elapsed_ms: float
+    messages: list[str] = field(default_factory=list)
+
+    @property
+    def ok(self) -> bool:
+        return 200 <= self.status < 300
+
+
+def extract_messages(body: Any) -> list[str]:
+    """Extrai o campo `messages` (a CP pode devolver 200 com avisos/erros)."""
+    if not isinstance(body, dict) or not body.get("messages"):
+        return []
+    raw = body["messages"]
+    entries = raw if isinstance(raw, list) else [raw]
+    out: list[str] = []
+    for e in entries:
+        if isinstance(e, dict):
+            parts = [str(e[k]) for k in ("type", "level", "severity", "code", "message", "text",
+                                           "description", "detail") if e.get(k)]
+            out.append(" | ".join(parts) if parts else str(e))
+        else:
+            out.append(str(e))
+    return out
+
+
+def has_error_message(messages: list[str]) -> bool:
+    return any(re.search(r"\b(error|erro|fatal|blocking)\b", m, re.I) for m in messages)
+
+
+_NOT_SENT_REASONS = ("NewConnectionError", "NameResolutionError", "ConnectTimeoutError",
+                     "SSLError", "ProtocolError")
+
+
+def _is_not_sent(exc: Exception) -> bool:
+    """True se a falha aconteceu ao estabelecer a ligação (o pedido nunca saiu)."""
+    if isinstance(exc, (requests.ConnectTimeout, requests.exceptions.SSLError)):
+        return True
+    if isinstance(exc, requests.ConnectionError):
+        reason = getattr(exc.args[0], "reason", None) if exc.args else None
+        name = type(reason).__name__ if reason is not None else ""
+        return name in ("NewConnectionError", "NameResolutionError", "ConnectTimeoutError",
+                        "SSLError")
+    return False
+
+
+SOLD_OUT_RX = re.compile(
+    r"esgotad|sem\s+lugar|n[aã]o\s+h[aá]\s+lugar|lotad|sold.?out|no\s+seats|"
+    r"indispon[ií]vel|capacity", re.I)
+
+
+def classify_sale_response(resp: CPResponse) -> tuple[str, str]:
+    """Classifica a resposta do POST /sale (3.3.1).
+
+    Devolve (categoria, detalhe) com categoria em:
+      'ok'         — venda criada (há saleID)
+      'sold_out'   — esgotado: notificar e parar
+      'known'      — erro conhecido não recuperável (4xx claro): não repetir
+      'transient'  — 5xx/429: retry seguro
+    O critério de sucesso é POSITIVO (existir saleID), não só o HTTP 200.
+    """
+    body = resp.body if isinstance(resp.body, dict) else {}
+    text = " ".join(resp.messages) or resp.text[:300]
+    if resp.ok and body.get("saleID"):
+        return "ok", f"saleID={body['saleID']}"
+    if resp.status >= 500 or resp.status == 429:
+        return "transient", f"HTTP {resp.status}"
+    if SOLD_OUT_RX.search(text) or SOLD_OUT_RX.search(resp.text[:2000]):
+        return "sold_out", text
+    if resp.ok:
+        return "known", f"HTTP {resp.status} sem saleID: {text}"
+    return "known", f"HTTP {resp.status}: {text}"
 
 
 # ---------------------------------------------------------------------------
@@ -89,15 +212,13 @@ def make_pkce_pair():
 # ---------------------------------------------------------------------------
 
 def login() -> dict:
-    """Faz login via Keycloak com PKCE e devolve os tokens (access/refresh)."""
-    session = requests.Session()
-    session.headers.update({"User-Agent": USER_AGENT})
+    """Login via Keycloak com PKCE; devolve os tokens (access/refresh)."""
+    session = make_session()
 
     verifier, challenge = make_pkce_pair()
     state = secrets.token_hex(16)
     nonce = secrets.token_hex(16)
 
-    # 1) Pedir o ecrã de login (traz session_code + execution no HTML)
     params = {
         "client_id": CLIENT_ID,
         "redirect_uri": REDIRECT_URI,
@@ -110,7 +231,7 @@ def login() -> dict:
         "code_challenge": challenge,
         "code_challenge_method": "S256",
     }
-    r = session.get(AUTH_ENDPOINT, params=params)
+    r = session.get(AUTH_ENDPOINT, params=params, timeout=TIMEOUT_CONNECT_READ)
     r.raise_for_status()
 
     match = re.search(r'action="([^"]+)"', r.text)
@@ -121,11 +242,11 @@ def login() -> dict:
         )
     form_action = match.group(1).replace("&amp;", "&")
 
-    # 2) Submeter utilizador/password
     r = session.post(
         form_action,
         data={"username": CP_EMAIL, "password": CP_PASSWORD, "credentialId": ""},
         allow_redirects=False,
+        timeout=TIMEOUT_CONNECT_READ,
     )
     if r.status_code != 302 or "location" not in r.headers:
         raise RuntimeError(
@@ -134,13 +255,11 @@ def login() -> dict:
         )
 
     location = r.headers["location"]
-    fragment = up.urlsplit(location).fragment
-    fragment_params = up.parse_qs(fragment)
+    fragment_params = up.parse_qs(up.urlsplit(location).fragment)
     if "code" not in fragment_params:
-        raise RuntimeError(f"Não veio nenhum 'code' no redirect de login: {location}")
+        raise RuntimeError("Não veio nenhum 'code' no redirect de login.")
     auth_code = fragment_params["code"][0]
 
-    # 3) Trocar o code por tokens
     r = session.post(
         TOKEN_ENDPOINT,
         data={
@@ -150,21 +269,19 @@ def login() -> dict:
             "redirect_uri": REDIRECT_URI,
             "code_verifier": verifier,
         },
+        timeout=TIMEOUT_CONNECT_READ,
     )
     r.raise_for_status()
-    tokens = r.json()
-    return tokens
+    return r.json()
 
 
 def refresh_tokens(refresh_token: str) -> dict:
     r = requests.post(
         TOKEN_ENDPOINT,
-        data={
-            "grant_type": "refresh_token",
-            "refresh_token": refresh_token,
-            "client_id": CLIENT_ID,
-        },
+        data={"grant_type": "refresh_token", "refresh_token": refresh_token,
+              "client_id": CLIENT_ID},
         headers={"User-Agent": USER_AGENT},
+        timeout=TIMEOUT_CONNECT_READ,
     )
     r.raise_for_status()
     return r.json()
@@ -174,23 +291,72 @@ def refresh_tokens(refresh_token: str) -> dict:
 # API CP
 # ---------------------------------------------------------------------------
 
-@dataclass
 class CPClient:
-    access_token: str
+    def __init__(self, access_token: str, session: requests.Session | None = None):
+        self.access_token = access_token
+        self.session = session or make_session()
 
-    def _headers(self, api_key: str, with_client_id: bool = False) -> dict:
+    def _headers(self, api_key: str, with_client_id: bool = False, with_token: bool = True) -> dict:
         h = {
             "Accept": "application/json, text/plain, */*",
             "Content-Type": "application/json",
             "User-Agent": USER_AGENT,
-            "x-access-token": self.access_token,
             "X-Api-Key": api_key,
             "x-cp-connect-id": X_CP_CONNECT_ID,
             "x-cp-connect-secret": X_CP_CONNECT_SECRET,
         }
+        if with_token:
+            h["x-access-token"] = self.access_token
         if with_client_id:
             h["x-cp-client-id"] = CP_EMAIL
         return h
+
+    def request(self, method: str, path: str, *, api_key: str, body: Any = None,
+                with_client_id: bool = False, with_token: bool = True,
+                timeout: tuple[float, float] = TIMEOUT_CONNECT_READ) -> CPResponse:
+        """Um único pedido, sem retries. Levanta CPError só para falhas de rede."""
+        url = path if path.startswith("http") else f"{API_BASE}{path}"
+        headers = self._headers(api_key, with_client_id, with_token)
+        t0 = time.perf_counter()
+        sent_at = time.time()
+        try:
+            r = self.session.request(method, url, json=body, headers=headers, timeout=timeout)
+        except requests.RequestException as e:
+            kind = "not_sent" if _is_not_sent(e) else "ambiguous"
+            raise CPError(kind, f"{type(e).__name__} em {method} {path}") from e
+        received_at = time.time()
+        try:
+            data = r.json() if r.content else None
+        except ValueError:
+            data = None
+        return CPResponse(
+            status=r.status_code, body=data, text=r.text, date_header=r.headers.get("Date"),
+            sent_at=sent_at, received_at=received_at,
+            elapsed_ms=(time.perf_counter() - t0) * 1000, messages=extract_messages(data),
+        )
+
+    def _checked(self, method: str, path: str, **kw: Any) -> CPResponse:
+        """Pedido cujo sucesso exige 2xx e nenhuma mensagem de erro."""
+        resp = self.request(method, path, **kw)
+        if not resp.ok:
+            raise CPError("http", f"HTTP {resp.status} em {method} {path}: "
+                                  f"{' / '.join(resp.messages) or resp.text[:200]}", resp)
+        if has_error_message(resp.messages):
+            raise CPError("http", f"mensagens de erro em {method} {path}: "
+                                  f"{' / '.join(resp.messages)}", resp)
+        return resp
+
+    # -- ligação --
+
+    def warm(self) -> CPResponse | None:
+        """Estabelece/mantém a ligação TCP/TLS à CP (qualquer resposta HTTP serve)."""
+        try:
+            return self.request("HEAD", "/", api_key=X_API_KEY_TRAVEL, with_token=False,
+                                timeout=(4.0, 6.0))
+        except CPError:
+            return None
+
+    # -- pesquisa --
 
     def search_journeys(self, origin_code: str, dest_code: str, travel_date: str) -> dict:
         body = {
@@ -209,224 +375,218 @@ class CPClient:
             "travelDate": travel_date,
             "username": "sivNetticket",
         }
-        r = requests.post(
-            f"{API_BASE}/travel-api/journeys",
-            json=body,
-            headers=self._headers(X_API_KEY_TRAVEL),
-        )
-        r.raise_for_status()
-        return r.json()
+        return self._checked("POST", "/travel-api/journeys", api_key=X_API_KEY_TRAVEL,
+                             body=body).body
 
-    def create_sale(self, travel_date: str, train_number: int, origin_code: str,
-                     dest_code: str, service_code: str, service_designation: str) -> dict:
+    # -- venda --
+
+    def create_sale_request(self, travel_date: str, sections: list[dict]) -> CPResponse:
+        """POST /sale: UM pedido, sem retries, resposta crua (classificar depois).
+
+        `sections` vem de `trip_sections()`: uma entrada de `outwardTrip` por secção da
+        viagem (PLANO_FINAL 2.2 e 7.3) — num comboio directo é uma só.
+        """
         body = {
             "quantity": 1,
             "travelClass": {"code": str(TRAVEL_CLASS)},
             "travelDate": travel_date,
-            "outwardTrip": [
-                {
-                    "trainNumber": train_number,
-                    "departureStation": {"code": origin_code},
-                    "arrivalStation": {"code": dest_code},
-                    "serviceCode": {"code": service_code, "designation": service_designation},
-                }
-            ],
+            "outwardTrip": [{
+                "trainNumber": s["train"],
+                "departureStation": {"code": s["dep"]},
+                "arrivalStation": {"code": s["arr"]},
+                "serviceCode": {"code": s["code"], "designation": s["designation"]},
+            } for s in sections],
             "lang": "pt",
         }
-        r = requests.post(
-            f"{API_BASE}/ticketing-api/sale",
-            json=body,
-            headers=self._headers(X_API_KEY_TICKETING, with_client_id=True),
-        )
-        r.raise_for_status()
-        return r.json()
+        return self.request("POST", "/ticketing-api/sale", api_key=X_API_KEY_TICKETING,
+                            body=body, with_client_id=True)
 
-    def set_passengers(self, sale_id: int) -> dict:
-        body = {
-            "salePassengers": [
-                {
-                    "idtype": {"code": "CC", "designation": "Cartão de Cidadão"},
-                    "passengerID": PASSENGER_CC,
-                    "passengerName": PASSENGER_NAME,
-                }
-            ]
-        }
-        r = requests.put(
-            f"{API_BASE}/ticketing-api/sale/{sale_id}/passengers",
-            json=body,
-            headers=self._headers(X_API_KEY_TICKETING, with_client_id=True),
-        )
-        r.raise_for_status()
-        return r.json()
+    def set_passengers(self, sale_id: int) -> CPResponse:
+        body = {"salePassengers": [{
+            "idtype": {"code": "CC", "designation": "Cartão de Cidadão"},
+            "passengerID": PASSENGER_CC,
+            "passengerName": PASSENGER_NAME,
+        }]}
+        return self._checked("PUT", f"/ticketing-api/sale/{sale_id}/passengers",
+                             api_key=X_API_KEY_TICKETING, body=body, with_client_id=True)
 
-    def set_client(self, sale_id: int) -> dict:
-        body = {
-            "clientEmail": CP_EMAIL,
-            "clientID": CP_EMAIL,
-            "clientMobile": PASSENGER_PHONE,
-            "clientName": PASSENGER_NAME,
-        }
-        r = requests.put(
-            f"{API_BASE}/ticketing-api/sale/{sale_id}/client",
-            json=body,
-            headers=self._headers(X_API_KEY_TICKETING, with_client_id=True),
-        )
-        r.raise_for_status()
-        return r.json()
+    def set_client(self, sale_id: int) -> CPResponse:
+        body = {"clientEmail": CP_EMAIL, "clientID": CP_EMAIL,
+                "clientMobile": PASSENGER_PHONE, "clientName": PASSENGER_NAME}
+        return self._checked("PUT", f"/ticketing-api/sale/{sale_id}/client",
+                             api_key=X_API_KEY_TICKETING, body=body, with_client_id=True)
 
-    def set_fiscal(self, sale_id: int) -> dict:
-        body = {"countryCode": "PT", "fiscalID": PASSENGER_NIF, "fiscalName": PASSENGER_NAME}
-        r = requests.put(
-            f"{API_BASE}/ticketing-api/sale/{sale_id}/fiscal",
-            json=body,
-            headers=self._headers(X_API_KEY_TICKETING, with_client_id=True),
-        )
-        r.raise_for_status()
-        return r.json()
+    def set_fiscal(self, sale_id: int) -> CPResponse:
+        body: dict = {"countryCode": "PT", "fiscalID": PASSENGER_NIF, "fiscalName": PASSENGER_NAME}
+        addr = fiscal_address()
+        if addr is not None:
+            body["fiscalAddress"] = addr
+        return self._checked("PUT", f"/ticketing-api/sale/{sale_id}/fiscal",
+                             api_key=X_API_KEY_TICKETING, body=body, with_client_id=True)
 
-    def apply_green_pass(self, sale_id: int) -> dict:
+    def apply_green_pass(self, sale_id: int) -> CPResponse:
         """Aplica o desconto do Passe Ferroviário Verde (equivalente à dropdown)."""
-        body = {
-            "requestedItems": [
-                {
-                    "itemCode": "302",
-                    "relatedTrain": None,
-                    "ticketIndex": 0,
-                    "type": "DISCOUNT",
-                    "inputData": GREEN_PASS_NUMBER,
-                }
-            ]
-        }
-        r = requests.put(
-            f"{API_BASE}/ticketing-api/sale/{sale_id}/items",
-            json=body,
-            headers=self._headers(X_API_KEY_TICKETING, with_client_id=True),
-        )
-        r.raise_for_status()
-        return r.json()
+        body = {"requestedItems": [{
+            "itemCode": "302", "relatedTrain": None, "ticketIndex": 0,
+            "type": "DISCOUNT", "inputData": GREEN_PASS_NUMBER,
+        }]}
+        return self._checked("PUT", f"/ticketing-api/sale/{sale_id}/items",
+                             api_key=X_API_KEY_TICKETING, body=body, with_client_id=True)
 
-    def confirm(self, sale_id: int) -> dict:
-        r = requests.put(
-            f"{API_BASE}/ticketing-api/sale/{sale_id}/confirm",
-            headers=self._headers(X_API_KEY_TICKETING, with_client_id=True),
-        )
-        r.raise_for_status()
-        return r.json()
+    def confirm(self, sale_id: int) -> CPResponse:
+        return self._checked("PUT", f"/ticketing-api/sale/{sale_id}/confirm",
+                             api_key=X_API_KEY_TICKETING, with_client_id=True)
 
 
 # ---------------------------------------------------------------------------
-# Lógica de escolha do comboio
+# Escolha do comboio
 # ---------------------------------------------------------------------------
 
 def pick_trip(journeys: dict, target_time: str | None = None,
-              train_number: int | None = None) -> dict:
-    """Escolhe a viagem por número de comboio exato, por horário aproximado,
-    ou a primeira saleable se nada for indicado."""
-    trips = [t for t in journeys.get("outwardTrip", []) if t.get("saleableOnline")]
+              train_number: int | None = None, require_saleable: bool = True) -> dict:
+    """Escolhe a viagem por nº de comboio exato (prioridade), por hora aproximada,
+    ou a primeira se nada for indicado.
+
+    `require_saleable=False` serve a véspera/pre-flight: antes de abrir a janela
+    de venda o comboio ainda não é vendável online, mas já existe e tem serviceCode.
+    """
+    trips = journeys.get("outwardTrip", []) or []
+    if require_saleable:
+        trips = [t for t in trips if t.get("saleableOnline")]
     if not trips:
-        raise RuntimeError("Nenhuma viagem disponível para venda online nesta data.")
+        raise RuntimeError("Nenhuma viagem encontrada para esta data"
+                           + (" (vendável online)." if require_saleable else "."))
 
     if train_number is not None:
         for t in trips:
-            # o nº de comboio está em cada secção da viagem (pode haver transbordos)
             if any(s["trainNumber"] == train_number for s in t["travelSections"]):
                 return t
-        disponiveis = sorted(
-            {s["trainNumber"] for t in trips for s in t["travelSections"]}
-        )
-        raise RuntimeError(
-            f"Comboio nº {train_number} não encontrado ou não disponível nesta data. "
-            f"Comboios disponíveis: {disponiveis}"
-        )
+        disponiveis = sorted({s["trainNumber"] for t in trips for s in t["travelSections"]})
+        raise RuntimeError(f"Comboio nº {train_number} não encontrado nesta data. "
+                           f"Comboios disponíveis: {disponiveis}")
 
     if not target_time:
         return trips[0]
 
-    def time_to_minutes(hhmm: str) -> int:
+    def to_min(hhmm: str) -> int:
         h, m = hhmm.split(":")
         return int(h) * 60 + int(m)
 
-    target = time_to_minutes(target_time)
-    return min(trips, key=lambda t: abs(time_to_minutes(t["departureTime"]) - target))
+    target = to_min(target_time)
+    return min(trips, key=lambda t: abs(to_min(t["departureTime"]) - target))
 
+
+def find_section(trip: dict, train_number: int) -> dict:
+    for s in trip["travelSections"]:
+        if s["trainNumber"] == train_number:
+            return s
+    return trip["travelSections"][0]
+
+
+def trip_sections(trip: dict, default_dep: str | None = None, default_arr: str | None = None) -> list[dict]:
+    """Secções da viagem no formato do POST /sale: uma por comboio (com transbordo, várias).
+
+    Cada secção traz as suas estações e o seu serviceCode. Num comboio directo cujo
+    horário não traga códigos de estação, usa `default_dep`/`default_arr`; num transbordo
+    não se adivinha: falta de dados é erro claro, nunca uma compra com estações trocadas.
+    """
+    out = []
+    raw = trip["travelSections"]
+    for s in raw:
+        dep = (s.get("departureStation") or {}).get("code") or (default_dep if len(raw) == 1 else None)
+        arr = (s.get("arrivalStation") or {}).get("code") or (default_arr if len(raw) == 1 else None)
+        if not dep or not arr:
+            raise RuntimeError(f"secção do comboio {s.get('trainNumber')} sem estações no horário")
+        out.append({"train": s["trainNumber"], "dep": dep, "arr": arr,
+                    "code": s["serviceCode"]["code"], "designation": s["serviceCode"]["designation"]})
+    return out
+
+
+def fiscal_address() -> Any:
+    """`fiscalAddress` opcional (PLANO_FINAL 2.4): JSON em CP_FISCAL_ADDRESS, copiado do HAR.
+    Só se usa se a CP recusar o passo fiscal sem morada; vazio = não se envia."""
+    raw = os.environ.get("CP_FISCAL_ADDRESS", "").strip()
+    if not raw:
+        return None
+    try:
+        return json.loads(raw)
+    except ValueError as e:
+        raise RuntimeError("CP_FISCAL_ADDRESS não é JSON válido") from e
+
+
+# ---------------------------------------------------------------------------
+# Uso manual (compra imediata, sem agendamento) — mantido do script inicial
+# ---------------------------------------------------------------------------
 
 def buy_one_leg(client: CPClient, origin_code: str, dest_code: str,
-                 travel_date: str, target_time: str | None = None,
-                 train_number: int | None = None) -> dict:
+                travel_date: str, target_time: str | None = None,
+                train_number: int | None = None) -> dict:
     journeys = client.search_journeys(origin_code, dest_code, travel_date)
     trip = pick_trip(journeys, target_time=target_time, train_number=train_number)
-    section = trip["travelSections"][0]
-
-    sale = client.create_sale(
-        travel_date=travel_date,
-        train_number=section["trainNumber"],
-        origin_code=origin_code,
-        dest_code=dest_code,
-        service_code=section["serviceCode"]["code"],
-        service_designation=section["serviceCode"]["designation"],
-    )
-    sale_id = sale["saleID"]
+    resp = client.create_sale_request(travel_date, trip_sections(trip, origin_code, dest_code))
+    kind, detail = classify_sale_response(resp)
+    if kind != "ok":
+        raise RuntimeError(f"Venda não criada ({kind}): {detail}")
+    sale_id = resp.body["saleID"]
 
     client.set_passengers(sale_id)
     client.set_client(sale_id)
     client.set_fiscal(sale_id)
     client.apply_green_pass(sale_id)
-    result = client.confirm(sale_id)
-
+    result = client.confirm(sale_id).body
     if result["status"]["code"] != "CONFIRMED":
         raise RuntimeError(f"Venda não confirmada: {result['status']}")
-
     return result
 
-
-# ---------------------------------------------------------------------------
-# Main
-# ---------------------------------------------------------------------------
 
 def main():
     import argparse
     import datetime as dt
 
-    parser = argparse.ArgumentParser(description="Compra automática de bilhetes CP")
-    parser.add_argument("--origem", required=True, help="chave em STATION_CODES, ex: aveiro")
-    parser.add_argument("--destino", required=True, help="chave em STATION_CODES, ex: lisboa_oriente")
+    parser = argparse.ArgumentParser(description="Compra imediata de bilhetes CP (uso manual)")
+    parser.add_argument("--login-only", action="store_true",
+                        help="só faz login, guarda token.json (chmod 600) e sai; para testes")
+    parser.add_argument("--origem", help="chave em STATION_CODES, ex: aveiro")
+    parser.add_argument("--destino", help="chave em STATION_CODES, ex: lisboa_oriente")
     parser.add_argument("--data", default=dt.date.today().isoformat(), help="YYYY-MM-DD (default: hoje)")
-    parser.add_argument("--hora-ida", default=None, help="HH:MM aproximada da ida (ignorado se --comboio-ida for dado)")
-    parser.add_argument("--hora-volta", default=None, help="HH:MM aproximada da volta (ignorado se --comboio-volta for dado)")
+    parser.add_argument("--hora-ida", default=None, help="HH:MM aproximada da ida (ignorado se --comboio-ida)")
+    parser.add_argument("--hora-volta", default=None, help="HH:MM aproximada da volta (ignorado se --comboio-volta)")
     parser.add_argument("--comboio-ida", type=int, default=None, help="Nº exato do comboio de ida")
     parser.add_argument("--comboio-volta", type=int, default=None, help="Nº exato do comboio de volta")
     parser.add_argument("--so-ida", action="store_true", help="Comprar só o bilhete de ida")
     args = parser.parse_args()
 
-    origem = STATION_CODES[args.origem]
-    destino = STATION_CODES[args.destino]
-
     print("A autenticar...")
     tokens = login()
+    common.save_tokens(tokens)
+    if args.login_only:
+        print(f"Login OK (access_token {tokens.get('expires_in')} s, sessão {tokens.get('refresh_expires_in')} s). "
+              f"Tokens guardados em {common.TOKEN_FILE.name} (chmod 600).")
+        return
+    if not args.origem or not args.destino:
+        parser.error("--origem e --destino são obrigatórios (exceto com --login-only)")
+    origem = STATION_CODES[args.origem]
+    destino = STATION_CODES[args.destino]
     client = CPClient(access_token=tokens["access_token"])
 
     ida_label = f"comboio nº{args.comboio_ida}" if args.comboio_ida else f"~{args.hora_ida}"
     print(f"A comprar ida: {args.origem} -> {args.destino}, {args.data}, {ida_label}")
     ida = buy_one_leg(client, origem, destino, args.data,
-                       target_time=args.hora_ida, train_number=args.comboio_ida)
+                      target_time=args.hora_ida, train_number=args.comboio_ida)
     print(f"  Ida confirmada: referência {ida['reference']}")
 
     if not args.so_ida:
         volta_label = f"comboio nº{args.comboio_volta}" if args.comboio_volta else f"~{args.hora_volta}"
         print(f"A comprar volta: {args.destino} -> {args.origem}, {args.data}, {volta_label}")
         volta = buy_one_leg(client, destino, origem, args.data,
-                             target_time=args.hora_volta, train_number=args.comboio_volta)
+                            target_time=args.hora_volta, train_number=args.comboio_volta)
         print(f"  Volta confirmada: referência {volta['reference']}")
-
     print("Concluído.")
 
 
 if __name__ == "__main__":
     try:
         main()
-    except requests.HTTPError as e:
-        print(f"Erro HTTP: {e.response.status_code} - {e.response.text[:500]}", file=sys.stderr)
-        sys.exit(1)
-    except Exception as e:
-        print(f"Erro: {e}", file=sys.stderr)
+    except (CPError, RuntimeError, requests.RequestException) as e:
+        print(f"Erro: {common.sanitize(e)}", file=sys.stderr)
         sys.exit(1)

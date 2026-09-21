@@ -1,0 +1,13 @@
+# Rotação dos logs do bilhetes_cp (PLANO_FINAL.md 3.10.9): não deixar encher o cartão SD.
+# Os logs por script (scheduler.log, hot_buy.log, ...) rodam sozinhos (RotatingFileHandler,
+# 1 MB x 5); aqui roda só o cron.log, que recebe o stdout/stderr das tarefas do cron.
+/home/bpereira/bilhetes_cp/logs/cron.log {
+    su bpereira bpereira
+    weekly
+    rotate 4
+    compress
+    delaycompress
+    missingok
+    notifempty
+    copytruncate
+}

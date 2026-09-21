@@ -1,0 +1,15 @@
+# bilhetes_cp — tarefas periódicas (PLANO_FINAL.md 3.2, 3.6, 3.9). Corre como bpereira.
+# Ficheiro novo em /etc/cron.d/: não mexe no crontab do utilizador (DDNS, tarefas-job).
+SHELL=/bin/bash
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+
+# (O Scheduler já não corre por cron: é o daemon cp-scheduler.service, PLANO_FINAL 3.2.)
+
+# Lembrete de configuração da semana seguinte: sábados às 08:00, 12:00 e 20:00.
+0 8,12,20 * * 6 bpereira /home/bpereira/bilhetes_cp/.venv/bin/python /home/bpereira/bilhetes_cp/scripts/config_reminder.py >> /home/bpereira/bilhetes_cp/logs/cron.log 2>&1
+
+# Validade do Passe Ferroviário Verde: diário às 09:00 (avisa 3 dias, 1 dia e no dia).
+0 9 * * * bpereira /home/bpereira/bilhetes_cp/.venv/bin/python /home/bpereira/bilhetes_cp/scripts/pass_expiry_check.py >> /home/bpereira/bilhetes_cp/logs/cron.log 2>&1
+
+# Heartbeat para o healthchecks.io (só faz algo se HEALTHCHECKS_PING_URL estiver no .env).
+*/5 * * * * bpereira /home/bpereira/bilhetes_cp/.venv/bin/python /home/bpereira/bilhetes_cp/scripts/heartbeat.py >> /home/bpereira/bilhetes_cp/logs/cron.log 2>&1

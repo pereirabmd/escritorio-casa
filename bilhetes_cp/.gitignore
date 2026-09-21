@@ -1,4 +1,4 @@
-# Segredos — nunca no git (ver PLANO.md secção 8)
+# Segredos — nunca no git (ver PLANO_FINAL.md secção 8)
 .env
 config/service-account.json
 token.json
@@ -11,3 +11,10 @@ locks/
 __pycache__/
 *.pyc
 .venv/
+
+# Screenshots dos testes da PWA (gerados)
+tests/_shots/
+
+# Ficheiros HAR/zip contêm password, tokens, CC e NIF em texto simples — nunca no git
+*.har
+*.zip

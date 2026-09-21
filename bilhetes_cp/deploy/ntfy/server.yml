@@ -1,4 +1,4 @@
-# ntfy self-hosted para o projeto bilhetes_cp (ver PLANO.md, secções 3.6 e 3.10.10)
+# ntfy self-hosted para o projeto bilhetes_cp (ver PLANO_FINAL.md, secções 3.6 e 3.10.10)
 # Escuta só em localhost: o acesso externo (80/443) é feito pelo nginx.
 base-url: "https://bmdpereira.duckdns.org"
 listen-http: "127.0.0.1:8080"

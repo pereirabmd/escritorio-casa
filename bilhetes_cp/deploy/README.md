@@ -4,7 +4,7 @@ Cópia versionada, **sem segredos**, do que está instalado no RPi (`casamento-p
 no `~/.ssh/config`), para poder ser reproduzido ou reposto. A fonte de verdade
 é o que corre no RPi; se alterares lá, atualiza aqui (e vice-versa).
 
-Tudo foi aplicado de forma **aditiva** (ver regra em `PLANO.md`): ficheiros
+Tudo foi aplicado de forma **aditiva** (ver regra em `PLANO_FINAL.md`): ficheiros
 novos ou alterações pontuais, nunca substituição de configuração existente.
 
 | Ficheiro aqui | Destino no RPi | Notas |
@@ -13,6 +13,9 @@ novos ou alterações pontuais, nunca substituição de configuração existente
 | `nginx/bmdpereira.duckdns.org` | `/etc/nginx/sites-available/` + symlink em `sites-enabled/` | `server{}` novo; não toca em `default` nem `camilaebruno` |
 | `fail2ban/filter.d/ntfy-auth.conf` | `/etc/fail2ban/filter.d/` | conta respostas 401/403 do ntfy |
 | `fail2ban/jail.d/ntfy.conf` | `/etc/fail2ban/jail.d/` | 5 falhas / 10 min → ban de 1 h; LAN ignorada |
+| `systemd/cp-scheduler.service` | `/etc/systemd/system/` | daemon do Scheduler (`Restart=always`, watchdog); lança o processo de compra como subprocesso separado |
+| `cron/bilhetes-cp` | `/etc/cron.d/bilhetes-cp` (root, 644) | lembrete de sábado, validade do passe e heartbeat; não toca no crontab do utilizador |
+| `logrotate/bilhetes-cp` | `/etc/logrotate.d/bilhetes-cp` (root, 644) | roda `logs/cron.log`; precisa da diretiva `su` porque a pasta é gravável pelo grupo |
 | `duckdns/update.sh` | `~/.duckdns/update.sh` | só mudou `domains=` para incluir `bmdpereira`; o token está em `~/.duckdns/token` (fora do git) |
 
 ## Como foi instalado (21/09/2026)

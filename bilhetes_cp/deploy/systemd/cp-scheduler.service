@@ -1,0 +1,23 @@
+# Scheduler das compras (PLANO_FINAL 3.2): um daemon único, sem timers por perna.
+[Unit]
+Description=bilhetes_cp scheduler (lê a Sheet e lança as compras)
+After=network-online.target chrony.service
+Wants=network-online.target
+
+[Service]
+Type=notify
+NotifyAccess=main
+User=bpereira
+WorkingDirectory=/home/bpereira/bilhetes_cp
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/home/bpereira/bilhetes_cp/.venv/bin/python scripts/scheduler.py
+Restart=always
+RestartSec=10
+# O daemon avisa o systemd de 15 em 15 s; sem aviso durante 5 min, é reiniciado (1.1: nada falha calado).
+WatchdogSec=300
+# Um `systemctl restart` NÃO pode matar um processo de compra a meio: os hot_buy são subprocessos
+# em sessão própria e só o processo principal é terminado.
+KillMode=process
+
+[Install]
+WantedBy=multi-user.target

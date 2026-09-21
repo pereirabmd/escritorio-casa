@@ -1,25 +1,61 @@
 {
   "timezone": "Europe/Lisbon",
+  "pwa_url": "https://pereirabmd.github.io/escritorio-casa/bilhetes_cp/",
   "stations": {
     "aveiro": "94-38000",
     "lisboa_oriente": "94-31039"
   },
+  "station_names": {
+    "aveiro": "Aveiro",
+    "lisboa_oriente": "Lisboa Oriente"
+  },
   "travel_class": 2,
   "purchase": {
     "hours_before_departure": 24,
-    "warm_process_lead_minutes": 3,
-    "attempt_offsets_seconds": [-0.3, 0.0, 0.3, 0.7],
+    "launch_lead_minutes": 6,
+    "login_lead_minutes": 5,
+    "fire_offset_ms": 0,
+    "max_sale_attempts": 3,
+    "step_retry_delays_s": [
+      0.5,
+      1,
+      2,
+      4,
+      8,
+      15,
+      30,
+      30,
+      30,
+      60,
+      60,
+      60,
+      60,
+      120,
+      120,
+      120
+    ],
+    "late_start_grace_minutes": 10,
+    "timetable_check_days": 14,
+    "clock_max_offset_ms": 150,
+    "cp_date_max_offset_s": 3.0,
     "access_token_lifetime_seconds": 300,
     "refresh_token_lifetime_seconds": 1799
   },
   "reminders": {
-    "config_missing_check_times": ["08:00", "12:00", "20:00"],
+    "config_missing_check_times": [
+      "08:00",
+      "12:00",
+      "20:00"
+    ],
     "departure_reminder_minutes_before": 30,
     "config_reminder_day": "saturday"
   },
   "green_pass": {
     "validity_days": 30,
-    "expiry_notify_days_before": [3, 1]
+    "expiry_notify_days_before": [
+      3,
+      1
+    ]
   },
   "sheets_polling_interval_minutes": 5,
   "cp_discount_item_code": "302"

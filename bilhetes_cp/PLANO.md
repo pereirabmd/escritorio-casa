@@ -1,5 +1,7 @@
 # Automação de bilhetes CP — Passe Ferroviário Verde
 
+> **Nota:** existe `PLANO_FINAL.md`, revisão posterior deste documento (com o HAR de 21/09/2026). Em caso de conflito prevalece o `PLANO_FINAL.md`; ver `PLANO_UP.md` para as diferenças.
+
 Automação para comprar bilhetes CP (Comboios de Portugal) ida e volta, a €0
 via desconto do Passe Ferroviário Verde, correndo num Raspberry Pi. Os
 bilhetes esgotam tipicamente em 2-3 segundos, por isso o timing exato da
@@ -107,26 +109,19 @@ status HTTP — pode vir 200 com avisos/erros parciais.
 O e-ticket em si (PDF/QR) **não é guardado por esta automação** — fica
 disponível na App CP oficial para consulta.
 
-**Endpoint adicional a explorar** (descoberto por Bruno, ainda não
-testado nesta conversa — `api-gateway.cp.pt` não está acessível às
-ferramentas usadas para montar este plano):
-`GET /travel-api/trains/<trainNumber>/timetable/<data>` — parece devolver
-o horário completo de um comboio específico numa data. A avaliar pelo
-padrão dos outros endpoints `/travel-api/...` no HAR original (`journeys`,
-`stations`, `rules`), este tipo de endpoint **não parece exigir
-`x-access-token`** (login de utilizador), só as chaves de app já
-guardadas no `.env` (`CP_API_KEY_TRAVEL`, `CP_CONNECT_ID`,
-`CP_CONNECT_SECRET`) — mas isto precisa de confirmação real com o Claude
-Code, que tem sessão ativa no RPi.
-
-Se confirmado, dois usos valiosos:
-1. **PWA**: ao escrever nº do comboio + data, preencher automaticamente
-   origem/destino/hora de partida a partir do timetable real, em vez de
-   tudo escrito à mão (reduz erro de digitação)
-2. **Validação no RPi** (liga a 3.10.3): usar na véspera para confirmar
-   que o comboio configurado ainda corre nessa data e que a hora
-   configurada bate certo com o timetable oficial, apanhando
-   desalinhamentos antes do disparo crítico
+**Endpoint `timetable` — confirmado em 21/09/2026** (testado a partir do RPi):
+`GET /travel-api/trains/<comboio>/timetable/<AAAA-MM-DD>` responde 200
+**sem `x-access-token`** (só as chaves da app: `X-Api-Key` de travel,
+`x-cp-connect-id` e `x-cp-connect-secret`) e devolve `trainStops`: uma lista
+com estação (`code` e `designation`), `departure`, `arrival` e plataforma.
+Para um comboio que não circula na data devolve 400/404. O preflight de
+CORS aceita o origin `https://pereirabmd.github.io` com esses headers, por
+isso o browser pode chamá-lo diretamente. Usos, ambos já implementados:
+1. **PWA**: ao escrever nº do comboio + data, confirma o percurso e preenche
+   ou valida a hora de partida (as chaves ficam só no telemóvel, ver 3.7)
+2. **Validação no RPi** (3.10.3, `scripts/timetable.py`): o Scheduler confronta
+   cada perna com o horário oficial nos 3 dias antes da viagem e avisa se o
+   comboio não circula, não faz o percurso ou parte a outra hora
 
 ---
 
@@ -295,30 +290,26 @@ Eventos que disparam notificação:
   (agendado dinamicamente logo após a compra ser confirmada)
 - Passe Ferroviário Verde a expirar (3 dias e 1 dia antes)
 
-**Prioridade de cada notificação** (cabeçalho `Priority` do ntfy). No Android
-só as prioridades **≥ 4 (`high`)** fazem *popup* em banner sobre o ecrã; a
+**Prioridade das notificações — decidido: todas com popup.** Todas as
+notificações do sistema (compra confirmada/falhada/esgotada/ambígua,
+lembrete de partida, lembrete semanal de configuração, passe a expirar,
+falhas de pre-flight, etc.) são enviadas com `Priority: high` (4). No
+Android só as prioridades **≥ 4** fazem *popup* em banner sobre o ecrã; a
 prioridade 3 (`default`) faz som mas só aparece na barra de notificações
-(confirmado no telemóvel de Bruno em 21/09/2026). Por isso:
-
-| Prioridade | Quando |
-|---|---|
-| `high` (4) — popup | compra falhada, ambígua ou esgotada; lembrete de partida T-30min; falha no pre-flight |
-| `default` (3) — sem popup | compra confirmada; lembrete semanal de configuração; passe a expirar |
-
-Todo o script que publique no ntfy deve definir a prioridade explicitamente
-(nunca deixar ao acaso), em linha com o princípio de 1.1: o que é urgente
-tem de chamar a atenção.
+(confirmado no telemóvel de Bruno em 21/09/2026). Regra de implementação:
+todo o script que publique no ntfy define `Priority: high` explicitamente,
+nunca deixa a prioridade por omissão; `high` chega, não é preciso `max`.
 
 ### 3.7 PWA
 - Frontend estático, hospedado no GitHub Pages (mesmo ecossistema de PWAs
   já existente)
 - Serve para: configurar a semana seguinte (origem, destino, comboio+hora
   ida/volta por dia), e consultar logs/bilhetes
-- **Melhoria a confirmar primeiro** (ver secção 2): se o endpoint
-  `/travel-api/trains/<id>/timetable/<data>` não exigir login, o
-  formulário pode preencher automaticamente origem/destino/hora ao
-  escrever o nº do comboio + data, em vez de tudo manual — implementar
-  só depois de confirmado
+- **Preenchimento automático a partir do timetable — implementado** (ver
+  secção 2). Precisa das chaves da CP neste telemóvel: correr
+  `python3 scripts/pwa_link.py` no computador do projeto e abrir o link uma vez
+  no telemóvel (as chaves vão no fragmento `#...`, ficam no `localStorage` e
+  nunca no código público). Sem elas a app funciona na mesma, sem confirmar
 - **Dropdown de comboios já usados**: no campo do nº de comboio, oferecer
   um dropdown com os comboios que já apareceram nas configurações
   anteriores (histórico na Sheet — Config e/ou Bilhetes), cada opção com
@@ -641,34 +632,25 @@ bilhetes_cp/
 ├── PLANO.md                     este documento
 ├── .env.example                 modelo de variáveis de ambiente
 ├── .gitignore
-├── index.html                   [A GERAR] PWA — entrada, na raiz (servida pelo GitHub Pages)
-├── manifest.webmanifest         [A GERAR]
-├── sw.js                        [A GERAR] service worker (Workbox)
-├── assets/
-│   ├── icon-source.png          [TU colocas] PNG fornecido, fonte única para ícone/favicon
-│   ├── icon-192.png             [A GERAR] derivado do icon-source, para o manifest
-│   ├── icon-512.png             [A GERAR] derivado do icon-source, para o manifest
-│   ├── apple-touch-icon.png     [A GERAR] derivado do icon-source, para iOS
-│   └── favicon.ico              [A GERAR] derivado do icon-source
+├── index.html                   PWA (HTML, CSS e JS numa página, como as outras apps)
+├── manifest.webmanifest
+├── sw.js                        service worker (Workbox)
+├── assets/                      ícones derivados de icon-source.png (192, 512, maskable, iOS, favicon)
 ├── config/
 │   ├── sheet_schema.json        estrutura das abas do Sheet
-│   └── app_config.example.json  configuração não-secreta (estações, tópico ntfy, etc.)
+│   └── app_config.example.json  configuração não-secreta (estações, parâmetros); a PWA também a lê
 ├── scripts/
-│   ├── cp_ticket.py             script inicial de compra (a adaptar — ver secção 3)
-│   ├── cp_ticket_original_notes.md
-│   ├── scheduler.py             [A GERAR] lê a Config, cria/remove jobs (secção 3.2)
-│   ├── config_reminder.py       [A GERAR] lembretes de sábado (secção 3.6)
-│   ├── pass_expiry_check.py     [A GERAR] job diário, valida Passe (secção 3.9)
-│   └── pre_flight.py            [A GERAR] checklist T-5min (secção 3.10.4)
-├── tests/
-│   └── test_timezone_dst.py     [A GERAR] testes unitários T-24h/DST (secção 3.10.7)
-├── deploy/                      configs já aplicadas no RPi (sem segredos) — ver deploy/README.md
-│   ├── ntfy/server.yml
-│   ├── nginx/bmdpereira.duckdns.org
-│   ├── fail2ban/filter.d/ntfy-auth.conf
-│   ├── fail2ban/jail.d/ntfy.conf
-│   └── duckdns/update.sh
-└── systemd/ (ou equivalente)    [A GERAR] templates de units/timers, aplicados no RPi via SSH
+│   ├── common.py                T-24h/DST, validação da Config, sanitização, notify, cache, lock/estado
+│   ├── cp_ticket.py             cliente da API da CP (login, pesquisa, venda), sem retries escondidos
+│   ├── hot_buy.py               processo de compra de uma perna (3.3, 3.3.1, 3.10)
+│   ├── scheduler.py             lê a Config, cria/remove timers (3.2)
+│   ├── timetable.py             valida a Config contra o horário oficial (secção 2)
+│   ├── pre_flight.py            checklist de T-5min (3.10.4); também corre à mão
+│   ├── config_reminder.py       lembretes de sábado (3.6)
+│   ├── pass_expiry_check.py     validade do Passe (3.9)
+│   └── pwa_link.py              link que liga a PWA às chaves da CP
+├── tests/                       unittest (87) e teste da PWA em Chromium real (pwa_smoke.mjs)
+└── deploy/                      configs aplicadas no RPi, sem segredos (ver deploy/README.md)
 ```
 
 Tudo aqui é código/config genérico e sem segredos — seguro para git
@@ -720,3 +702,7 @@ para o git; o `icon-source.png` não é segredo, mas também não é gerado —
   Cidadão, NIF, telefone, email, tokens ou nº do passe completos —
   ver 3.10.8; `logrotate`/retenção configurados para não encher o
   cartão SD — ver 3.10.9
+
+## 9. Estado da implementação
+
+Ver `PLANO_FINAL.md`, secção 9 (estado real do código e do RPi, o que está por verificar e o que depende de Bruno).
