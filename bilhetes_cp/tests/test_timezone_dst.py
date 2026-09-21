@@ -73,6 +73,21 @@ class FireTimeTests(unittest.TestCase):
         self.assertEqual(f.timestamp(), datetime(2026, 3, 28, 6, 45, tzinfo=common.UTC).timestamp())
 
 
+class AnchorFireTests(unittest.TestCase):
+    def test_disparo_ancorado_a_primeira_estacao_respeita_o_dst(self):
+        # comboio de domingo 29/03/2026 (dia da mudança de hora) que parte da 1.ª estação às 05:50:
+        # a véspera é sábado 28/03 (WET), por isso o disparo é sábado 05:50 local
+        leg = common.Leg(date(2026, 3, 29), "ida", "aveiro", "lisboa_oriente", 520, "06:45", 12,
+                         anchor="05:50", anchor_date=date(2026, 3, 29))
+        self.assertEqual(leg.fire.strftime("%Y-%m-%d %H:%M"), "2026-03-28 05:50")
+        self.assertEqual(leg.fire.utcoffset(), timedelta(0))
+        self.assertEqual(leg.departure.strftime("%H:%M"), "06:45")
+
+    def test_sem_ancora_e_igual_ao_calculo_original(self):
+        leg = common.Leg(date(2026, 9, 22), "ida", "aveiro", "lisboa_oriente", 520, "06:45", 12)
+        self.assertEqual(leg.fire, fire_time(date(2026, 9, 22), "06:45"))
+
+
 class SheetParsingTests(unittest.TestCase):
     def test_datas(self):
         serial = (date(2026, 9, 22) - date(1899, 12, 30)).days

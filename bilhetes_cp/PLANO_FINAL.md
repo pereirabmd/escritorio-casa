@@ -656,6 +656,16 @@ O que os HAR ensinam, para não voltar a ser mal interpretado:
   site é `200`) e funcionou antes do T-24h. Pode ser pouca procura ou regras
   diferentes por canal — **medir**, não assumir.
 
+- **Regra adotada em 22/09 (Bruno): a venda abre 24 h antes da partida do
+  comboio na sua 1.ª estação**, não na de embarque. Encaixa na compra
+  anterior: o comboio das 07:27 em Aveiro parte do Porto às 06:45, e as 06:58
+  são 13 min depois de T-24h dessa partida. Por isso o instante de disparo
+  (`Leg.fire`) e a data sugerida na PWA partem da hora da 1.ª estação
+  (`timetable.apply_anchor`, com a data do comboio nessa estação: se passa a
+  meia-noite antes do embarque, parte na véspera). Se a CP não devolver a
+  1.ª estação, usa-se a hora da Config e há aviso. É uma hipótese consistente
+  com o HAR, não uma prova: continua a medir-se (abaixo).
+
 **Por medir** (instrumentar nas primeiras compras reais e num modo de
 calibração):
 1. A resposta exata do `POST /sale` antes da abertura, e a de um comboio
@@ -838,7 +848,7 @@ bilhetes_cp/
 │   ├── pass_expiry_check.py     validade do Passe (3.9)
 │   ├── heartbeat.py             ping ao healthchecks.io (secção 6); inativo até haver URL no .env
 │   └── pwa_link.py              link que liga a PWA às chaves da CP
-├── tests/                       unittest (124) e teste da PWA em Chromium real (pwa_smoke.mjs)
+├── tests/                       unittest (136) e teste da PWA em Chromium real (pwa_smoke.mjs)
 └── deploy/                      configs aplicadas no RPi, sem segredos (ver deploy/README.md); inclui o `cp-scheduler.service` do daemon
 ```
 
@@ -927,6 +937,7 @@ Os 12 pontos de alinhamento que este plano pedia, com o estado real
 | 10 | Validações novas (3.9, 3.10.3) | ✅ disparo já passado com partida futura (aviso, sem compra), viagem depois do passe (rejeitada), e a Config tem de bater com o horário oficial (`timetable`, com `journeys` como segunda fonte) |
 | 11 | Regra do DST (3.4) | ⏳ a confirmar com a CP antes de 25/10/2026; os testes fixam "mesma hora do dia anterior" |
 | 12 | `*.har` no `.gitignore`; `CP_FISCAL_ADDRESS` no `.env.example` | ✅ |
+| — | Disparo ancorado à partida do comboio na 1.ª estação (3.11, regra de 22/09) | ✅ `Leg.fire` no RPi e data sugerida na PWA; sem a 1.ª estação usa a Config e avisa |
 
 Fora da lista de 9.8, por secção:
 - **3.3.1** categoria "ainda não aberto": ⏳ só depois da calibração (3.11); até lá, 4xx não se repete.
@@ -949,7 +960,7 @@ Login na CP a partir do RPi; `journeys` sem login; `timetable` sem login e com C
 aberto ao origin do GitHub Pages; leitura da Sheet real (cabeçalhos por nome); ntfy de
 ponta a ponta com token e com entrega agendada; pre-flight; daemon a correr sob o
 systemd; validação da Config contra o horário oficial (apanhou a linha de exemplo, ver
-9.6). 124 testes unitários (também no RPi, com a rede bloqueada) e 38 verificações da
+9.6). 136 testes unitários (também no RPi, com a rede bloqueada) e 41 verificações da
 PWA em Chromium (offline, teclado, 360 px, manifest, service worker).
 
 ### 9.4 Por verificar — nunca exercitado contra a CP real

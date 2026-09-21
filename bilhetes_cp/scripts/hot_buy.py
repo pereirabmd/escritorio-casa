@@ -32,6 +32,7 @@ from common import (STATES, TERMINAL, TZ, Leg, PurchaseLock, app_config, get_log
 from cp_ticket import (CPClient, CPError, classify_sale_response, login, pick_trip,
                        refresh_tokens, trip_sections)
 import pre_flight
+import timetable
 
 log = get_logger("hot_buy")
 
@@ -528,7 +529,7 @@ def load_leg(d: str, leg_name: str) -> Leg | None:
         legs, _ = common.parse_config_rows(snap["weekly"], min(today, target))
         for l in legs:
             if l.date == target and l.leg == leg_name:
-                return l
+                return timetable.apply_anchor(l)     # disparo à partida do comboio na 1.ª estação
     return None
 
 
@@ -540,6 +541,11 @@ def search_only(leg: Leg, cp_factory=CPClient, out=print) -> int:
     out(f"Perna {leg.key}: comboio {leg.train}, partida {leg.hhmm}, {leg.origin} -> {leg.destination}")
     out(f"  disparo (T-24h): {leg.fire:%a %d/%m %H:%M:%S %Z}; o processo arrancaria "
         f"{float(cfg('launch_lead_minutes', 6)):.0f} min antes")
+    if leg.anchor:
+        out(f"  ancorado à partida do comboio na 1.ª estação ({leg.anchor}"
+            + ("" if leg.anchor == leg.hhmm else f"; embarque às {leg.hhmm}") + ")")
+    else:
+        out(f"  sem a hora da 1.ª estação: disparo pela hora da Config ({leg.hhmm})")
     try:
         journeys = cp_factory("").search_journeys(origin, dest, leg.date.isoformat())
         trip = pick_trip(journeys, train_number=leg.train, require_saleable=False)

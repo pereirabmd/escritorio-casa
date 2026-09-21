@@ -42,6 +42,12 @@ const FAKE = `(() => {
           [when(add(t0,-1),'06:45'),'COMPRA',add(t0,0),'ida',524,'','CONFIRMED','REF123',''],[when(add(t0,-2),'18:31'),'COMPRA',add(t0,-1),'volta',525,409,'SOLD_OUT','','Não há lugares.'],
           [when(add(t0,-2),'18:30'),'ERRO',add(t0,-1),'volta',525,'','FAILED','','Login na CP falhou: CAPTCHA']],
   };
+  // chaves da CP falsas + uma CP falsa: o 524 parte do Porto às 06:10 e passa em Aveiro às 06:45
+  localStorage.setItem('bilhetes_cp.cpkeys', JSON.stringify({t:'k',i:'i',s:'s'}));
+  const TT={524:[{station:{code:'94-2006',designation:'Porto Campanha'},departure:'06:10'},{station:{code:'94-38000',designation:'Aveiro'},departure:'06:45'},{station:{code:'94-31039',designation:'Lisboa Oriente'},arrival:'09:52'}],
+            525:[{station:{code:'94-31039',designation:'Lisboa Oriente'},departure:'18:30'},{station:{code:'94-38000',designation:'Aveiro'},arrival:'20:45'}]};
+  const realFetch=window.fetch.bind(window);
+  window.fetch=(u,o)=>{const m=String(u).match(/trains\\/(\\d+)\\/timetable\\//); if(m){const st=TT[m[1]]; return Promise.resolve(new Response(JSON.stringify(st?{trainStops:st}:{}),{status:st?200:404}));} return realFetch(u,o);};
   window.__STATE=state; window.__saved=null;
   window.__BCP_API={
     async load(){return {passe:state.passe,weeklyRaw:state.weekly.map(r=>[...r]),ticketsRaw:state.tickets.map(r=>[...r]),logsRaw:state.logs.map(r=>[...r])};},
@@ -91,7 +97,7 @@ try {
     console.log('  problemas:', JSON.stringify(problems.slice(0, 4)));
   }
   check('a app arranca e mostra conteúdo', await ev(`document.querySelector('#view').innerText.length>40`));
-  check('título e versão', (await ev('document.title')) === 'Bilhetes CP' && (await ev('__BCP.VERSION')) === 'v1.0.1');
+  check('título e versão', (await ev('document.title')) === 'Bilhetes CP' && (await ev('__BCP.VERSION')) === 'v1.1.0');
   check('sem scroll horizontal', await ev(`document.documentElement.scrollWidth<=innerWidth && document.querySelector('#view').scrollWidth<=document.querySelector('#view').clientWidth+1`));
   const home = await text('#view');
   check('ação em destaque: falta configurar a semana seguinte', /Falta configurar a semana de \d\d\/\d\d a \d\d\/\d\d/.test(home), home.slice(0, 80));
@@ -119,6 +125,12 @@ try {
   const inWeek = await ev(`(()=>{const E=__BCP.S.editor,U=s=>{const[y,m,d]=s.split('-').map(Number);return Date.UTC(y,m-1,d)};return E.days.every(d=>U(d.date)>=U(E.week)&&U(d.date)<=U(E.week)+6*864e5)})()`);
   check('as datas copiadas caem na semana seguinte (+7 dias)', inWeek);
   check('mostra a hora da compra automática (T-24h)', /Compra automática/.test(await text('#editor')));
+  await sleep(1000);
+  const ft = await text('#editor');
+  check('a data sugerida da compra segue a partida do comboio na 1.ª estação (Porto 06:10, não Aveiro 06:45)', /Compra automática [^\n]* às 06:10 \(partida em Porto Campanha\)/.test(ft), ft.match(/Compra automática[^\n]*/g)?.join(' | '));
+  check('sem diferença (volta: 1.ª estação = embarque) não acrescenta nota', /Compra automática [^\n]* às 18:30(?! \()/.test(ft) && !/18:30 \(partida/.test(ft));
+  const noite = await ev(`(()=>{const a=__BCP.anchorFromStops([{station:{code:'A',designation:'Porto'},departure:'23:30'},{station:{code:'B'},departure:'01:10'}],'B','01:10','2026-09-22'); return a.startDate+' '+a.time})()`);
+  check('comboio que passa a meia-noite antes do embarque parte na véspera', noite === '2026-09-21 23:30', noite);
   await shot('04-editor');
 
   // validação

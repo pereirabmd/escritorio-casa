@@ -133,7 +133,6 @@ def evaluate(snap: dict, from_cache: bool, now_ts: float, plan_only: bool = Fals
 
     items: list[Item] = []
     for leg in sorted(legs, key=lambda l: l.fire):
-        fire_ts = leg.fire.timestamp()
         state = peek_state(leg.lock_key).get("state")
         if state in TERMINAL or leg.departure.timestamp() <= now_ts:
             continue                                   # já tratada, ou viagem passada
@@ -149,6 +148,16 @@ def evaluate(snap: dict, from_cache: bool, now_ts: float, plan_only: bool = Fals
                 _warn(plan_only, f"timetable-{leg.key}-{short_hash(problem)}", f"Linha inválida — {leg.key}",
                       problem[0].upper() + problem[1:] + ". Não agendei esta compra; corrige a Config.", 12)
                 continue
+            # A venda abre 24 h antes da partida do comboio na sua 1.ª estação (3.11), não na de embarque
+            leg = timetable.apply_anchor(leg)
+            if leg.anchor is None:
+                _warn(plan_only, f"anchor-{leg.key}", f"Não confirmei a partida do comboio — {leg.key}",
+                      f"Não consegui saber a hora a que o comboio {leg.train} parte da 1.ª estação; uso a hora da "
+                      f"Config ({leg.hhmm}). Se o comboio parte mais cedo de outra estação, o disparo pode chegar tarde.", 12)
+            elif leg.anchor != leg.hhmm:
+                log.info("%s: disparo ancorado à partida do comboio na 1.ª estação (%s), não às %s de embarque",
+                         leg.key, leg.anchor, leg.hhmm)
+        fire_ts = leg.fire.timestamp()
 
         first_seen = seen.setdefault(leg.key, now_ts)         # 1.º ciclo em que a perna foi vista
         if fire_ts <= now_ts:
@@ -172,7 +181,7 @@ def evaluate(snap: dict, from_cache: bool, now_ts: float, plan_only: bool = Fals
 
     if not plan_only:
         common._write_json_atomic(seen_path, {k: v for k, v in seen.items() if now_ts - v < 30 * 86400})
-    return items
+    return sorted(items, key=lambda i: (i.launch_ts, i.leg.key))
 
 
 # ---------------------------------------------------------------------------

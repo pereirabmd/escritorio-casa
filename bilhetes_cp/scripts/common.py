@@ -338,8 +338,13 @@ class Leg:
     origin: str         # chave em app_config.stations
     destination: str
     train: int
-    hhmm: str
+    hhmm: str           # partida na estação onde Bruno embarca
     row: int            # linha na Sheet (para mensagens de erro)
+    # A janela de venda abre 24 h antes da partida do comboio na sua PRIMEIRA estação, que pode
+    # ser anterior à de embarque (o comboio das 07:27 em Aveiro parte do Porto às 06:45). Preenchido
+    # por timetable.apply_anchor(); sem estes campos usa-se a hora da Config.
+    anchor: str | None = None          # 'HH:MM' da partida na 1.ª estação
+    anchor_date: date | None = None    # data dessa partida
 
     @property
     def key(self) -> str:
@@ -351,7 +356,7 @@ class Leg:
 
     @property
     def fire(self) -> datetime:
-        return fire_time(self.date, self.hhmm)
+        return fire_time(self.anchor_date or self.date, self.anchor or self.hhmm)
 
     @property
     def departure(self) -> datetime:

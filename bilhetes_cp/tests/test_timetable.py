@@ -86,5 +86,64 @@ class CacheTests(unittest.TestCase):
         self.assertFalse(common._state_file("timetable_checks.json").exists())
 
 
+class AnchorTests(unittest.TestCase):
+    """A venda abre 24 h antes da partida do comboio na sua 1.ª estação (PLANO_FINAL 3.11)."""
+    PORTO = "94-2006"
+
+    def setUp(self):
+        common._state_file("anchors.json").unlink(missing_ok=True)
+
+    def stops(self, first="06:10", board="06:45"):
+        return {"trainStops": [
+            {"station": {"code": self.PORTO, "designation": "Porto Campanha"}, "departure": first},
+            {"station": {"code": AVEIRO, "designation": "Aveiro"}, "departure": board},
+            {"station": {"code": LISBOA, "designation": "Lisboa Oriente"}, "arrival": "09:52", "departure": None}]}
+
+    def test_comboio_de_dia_ancora_a_partida_na_primeira_estacao(self):
+        a = timetable.anchor_for(leg(hhmm="06:45"), lambda t, d: self.stops())
+        self.assertEqual(a, ("06:10", D, "Porto Campanha"))
+
+    def test_o_disparo_passa_a_ser_24h_antes_da_primeira_estacao(self):
+        l = timetable.apply_anchor(leg(hhmm="06:45"), lambda t, d: self.stops())
+        self.assertEqual((l.anchor, l.anchor_date), ("06:10", D))
+        self.assertEqual(l.fire.strftime("%Y-%m-%d %H:%M"), "2026-09-22 06:10")     # véspera 06:10, não 06:45
+        self.assertEqual(l.departure.strftime("%H:%M"), "06:45")                      # o embarque não muda
+
+    def test_o_caso_do_har_aveiro_0727_de_um_comboio_que_parte_do_porto_as_0645(self):
+        l = timetable.apply_anchor(leg(hhmm="07:27"), lambda t, d: self.stops(first="06:45", board="07:27"))
+        self.assertEqual(l.fire.strftime("%H:%M"), "06:45")
+        self.assertEqual(l.fire.timestamp() - common.fire_time(D, "07:27").timestamp(), -42 * 60)
+
+    def test_comboio_que_passa_a_meia_noite_parte_na_vespera(self):
+        # 1.ª estação às 23:30 e embarque às 01:10 (já do dia seguinte): o comboio partiu na véspera
+        l = timetable.apply_anchor(leg(hhmm="01:10"), lambda t, d: self.stops(first="23:30", board="01:10"))
+        self.assertEqual((l.anchor, l.anchor_date.isoformat()), ("23:30", "2026-09-22"))
+        self.assertEqual(l.fire.strftime("%Y-%m-%d %H:%M"), "2026-09-21 23:30")
+
+    def test_quando_embarca_na_primeira_estacao_nada_muda(self):
+        l = timetable.apply_anchor(leg(hhmm="07:27"), lambda t, d: self.stops(first="07:27", board="07:27"))
+        self.assertEqual(l.fire, leg(hhmm="07:27").fire)
+
+    def test_cache_de_24h_e_valor_antigo_se_a_cp_falhar(self):
+        f = mock.Mock(return_value=self.stops())
+        timetable.anchor_for(leg(hhmm="06:45"), f)
+        timetable.anchor_for(leg(hhmm="06:45"), f)
+        f.assert_called_once()
+        cache = common._read_json(common._state_file("anchors.json"), {})
+        for v in cache.values():
+            v["ts"] -= 2 * 86400                                    # expirou
+        common._write_json_atomic(common._state_file("anchors.json"), cache)
+        boom = mock.Mock(side_effect=RuntimeError("HTTP 500"))
+        self.assertEqual(timetable.anchor_for(leg(hhmm="06:45"), boom)[0], "06:10")   # mantém o último conhecido
+
+    def test_sem_informacao_devolve_a_mesma_perna(self):
+        boom = mock.Mock(side_effect=RuntimeError("HTTP 500"))
+        l = leg(hhmm="06:45")
+        self.assertIs(timetable.apply_anchor(l, boom), l)
+        self.assertIsNone(timetable.anchor_for(l, lambda t, d: {"trainStops": []}))
+        self.assertIsNone(timetable.anchor_for(l, lambda t, d: None))
+        self.assertIsNone(timetable.anchor_for(l, lambda t, d: {"trainStops": [{"station": {"code": "outra"}, "departure": "06:10"}]}))
+
+
 if __name__ == "__main__":
     unittest.main()

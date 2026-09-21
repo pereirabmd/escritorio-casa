@@ -207,3 +207,5 @@ A outra sessão ainda está a editar o `PLANO.md`. Quando acabar, para manter
   com `DELETE` (7.3), a regra do DST (7.7) e o SSH só por chave.
 - **Daqui em diante o `PLANO_FINAL.md` é o único plano mantido.** O `PLANO.md` fica como
   base histórica desta comparação e não deve voltar a ser editado.
+- **Regra nova (3.11): a venda abre 24 h antes da partida do comboio na 1.ª estação**
+  (Bruno, 22/09). Implementada no disparo e na PWA; ver `PLANO_FINAL.md` 3.11.

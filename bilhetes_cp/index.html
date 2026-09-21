@@ -256,7 +256,7 @@ body.kb-open #toast{--toast-b:84px}
    Nenhuma credencial neste ficheiro: as chaves da CP (só para preencher
    horários) ficam no localStorage do telemóvel, importadas por um link.
    ===================================================================== */
-const VERSION = 'v1.0.1';
+const VERSION = 'v1.1.0';
 const CLIENT_ID = '108256538530-fgunbb52s7f3s9aurfpjtaf01v8fjbph.apps.googleusercontent.com';
 const SHEET_ID = '1PNY134CrkxVhcpKHjTDZMYqYv3q-_oeDusJ-hgLRMBk';
 const SCOPE = 'https://www.googleapis.com/auth/spreadsheets';
@@ -325,6 +325,17 @@ function lisbonInstant(iso, hhmm) {
 /* T-24h = dia de calendário anterior, MESMA hora local (não partida - 86400 s) */
 const fireInstant = (iso, hhmm) => lisbonInstant(addDays(iso, -1), hhmm);
 
+/* A venda abre 24 h antes da partida do comboio na sua 1.ª ESTAÇÃO, que pode ser anterior à de embarque
+   (o comboio das 07:27 em Aveiro parte do Porto às 06:45). A data é a do comboio à saída dessa estação:
+   se passa a meia-noite antes do embarque, parte na véspera. */
+function anchorFromStops(stops, originCode, boarding, date) {
+  const codes = (stops || []).map(s => s.station?.code), oi = codes.indexOf(originCode);
+  const first = String(stops?.[0]?.departure || '').slice(0, 5);
+  if (oi < 0 || !/^\d{2}:\d{2}$/.test(first)) return null;
+  const board = String(stops[oi].departure || '').slice(0, 5) || boarding;
+  return { time: first, station: stops[0].station?.designation || '', startDate: board >= first ? date : addDays(date, -1) };
+}
+
 /* ---------- valores como a Sheet os devolve (números de série, texto...) ---------- */
 function sheetDate(v) {
   if (v === '' || v == null || typeof v === 'boolean') return null;
@@ -352,6 +363,7 @@ const S = {
   tab: 'semana', loading: false, loaded: false, error: null, updateReady: false, logFilter: 'all',
   cfg: { stations: {}, names: {} },
   data: { passe: [], weekly: [], tickets: [], logs: [] },
+  anchors: {},   /* partida na 1.ª estação por comboio+data+origem (só com as chaves da CP) */
   editor: null, lastLoad: 0,
 };
 const stationLabel = (key) => S.cfg.names[key] || String(key || '').replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
@@ -512,7 +524,11 @@ function upcomingLegs() {
     if (r.trainIda && r.horaIda) out.push({ date: r.date, leg: 'ida', origin: r.origin, dest: r.dest, train: r.trainIda, hhmm: r.horaIda });
     if (r.trainVolta && r.horaVolta) out.push({ date: r.date, leg: 'volta', origin: r.dest, dest: r.origin, train: r.trainVolta, hhmm: r.horaVolta });
   }
-  return out.map(l => ({ ...l, fire: fireInstant(l.date, l.hhmm) })).sort((a, b) => a.fire - b.fire || a.hhmm.localeCompare(b.hhmm));
+  return out.map(l => {
+    const a = S.anchors[`${l.train}|${l.date}|${l.origin}`];
+    const fireDay = addDays(a ? a.startDate : l.date, -1), fireHM = a ? a.time : l.hhmm;
+    return { ...l, fireDay, fireHM, fire: lisbonInstant(fireDay, fireHM) };
+  }).sort((a, b) => a.fire - b.fire || a.hhmm.localeCompare(b.hhmm));
 }
 const weekActiveCount = (mon) => S.data.weekly.filter(r => r.ativo && r.date && r.date >= mon && r.date <= addDays(mon, 6)).length;
 const nextMonday = () => addDays(mondayOf(todayISO()), 7);
@@ -539,6 +555,18 @@ function explainError(e) {
   if (!navigator.onLine) return 'Sem ligação à internet.';
   return 'Não consegui ler a Sheet: ' + String(msg).slice(0, 140);
 }
+/* Partida na 1.ª estação das próximas pernas (para a data da compra na lista); só com as chaves da CP. */
+async function loadAnchors() {
+  if (!cpKeys()) return; let changed = false;
+  for (const l of upcomingLegs().slice(0, 8)) {
+    const k = `${l.train}|${l.date}|${l.origin}`; if (k in S.anchors) continue;
+    const res = await fetchTimetable(l.train, l.date);
+    if (res.error || res.off) continue;                       // tenta de novo mais tarde
+    S.anchors[k] = res.stops ? anchorFromStops(res.stops, stationCode(l.origin), l.hhmm, l.date) : null;
+    if (S.anchors[k]) changed = true;
+  }
+  if (changed && S.tab === 'semana' && !S.editor) render();
+}
 async function refresh() {
   if (S.loading) return;
   S.loading = true; $('#btnRefresh').classList.add('spin'); renderBanners();
@@ -547,6 +575,7 @@ async function refresh() {
   } catch (e) { console.error(e); S.error = explainError(e); }
   S.loading = false; $('#btnRefresh').classList.remove('spin');
   renderBanners(); render();
+  if (S.loaded) loadAnchors();
 }
 
 /* ---------- ícones ---------- */
@@ -597,7 +626,7 @@ function viewSemana() {
   for (const l of legs) {
     let chip;
     if (bought.has(`${l.date}|${l.train}`)) chip = '<span class="chip ok">Comprado</span>';
-    else if (l.fire > nowMs) chip = `<span class="chip">Compra ${esc(fmtDay(addDays(l.date, -1)))} ${esc(l.hhmm)}</span>`;
+    else if (l.fire > nowMs) chip = `<span class="chip">Compra ${esc(fmtDay(l.fireDay))} ${esc(l.fireHM)}</span>`;
     else chip = '<span class="chip warn">Sem bilhete</span>';
     rows += `<div class="row"><div><div class="t">${esc(l.hhmm)}</div><div class="d">${esc(fmtDay(l.date))}</div></div>
       <div><div class="r">${esc(stationLabel(l.origin))} → ${esc(stationLabel(l.dest))}</div><div class="m"><span>${l.leg === 'ida' ? 'Ida' : 'Volta'} · comboio ${l.train}</span>${chip}</div></div></div>`;
@@ -681,7 +710,10 @@ function optionsHistory() {
 }
 function fireText(d, leg) {
   const l = d[leg]; if (!d.date || !/^\d{2}:\d{2}$/.test(l.time)) return '';
-  return `Compra automática ${fmtDay(addDays(d.date, -1))} às ${l.time}`;
+  const a = l.anchor;      /* partida do comboio na 1.ª estação, se a CP a devolveu */
+  if (!a) return `Compra automática ${fmtDay(addDays(d.date, -1))} às ${l.time}`;
+  const nota = (a.time !== l.time || a.startDate !== d.date) ? ` (partida em ${a.station || '1.ª estação'})` : '';
+  return `Compra automática ${fmtDay(addDays(a.startDate, -1))} às ${a.time}${nota}`;
 }
 function legHtml(d, i, leg) {
   const label = leg === 'ida' ? 'Ida' : 'Volta', l = d[leg];
@@ -795,7 +827,7 @@ async function fetchTimetable(train, date) {
     .catch(() => ({ error: 'rede' }));
   ttCache.set(key, p); const res = await p; if (res.error) ttCache.delete(key); return res;
 }
-function scheduleVerify(i, leg, delay = 450) { clearTimeout(ttTimers[i + leg]); ttTimers[i + leg] = setTimeout(() => verifyLeg(i, leg), delay); }
+function scheduleVerify(i, leg, delay = 450) { const dd = S.editor?.days[i]; if (dd?.[leg]) dd[leg].anchor = null; clearTimeout(ttTimers[i + leg]); ttTimers[i + leg] = setTimeout(() => verifyLeg(i, leg), delay); }
 async function verifyLeg(i, leg) {
   const E = S.editor, d = E?.days[i]; if (!d) return; const box = $(`.dayc[data-i="${i}"] [data-tt="${leg}"]`); if (!box) return;
   const train = toNum(d[leg].train); box.className = 'tt'; box.textContent = '';
@@ -810,6 +842,7 @@ async function verifyLeg(i, leg) {
   const di = codes.indexOf(stationCode(dst), oi + 1);
   if (di < 0) return set('warn', `O comboio ${train} não segue de ${esc(stationLabel(org))} para ${esc(stationLabel(dst))}.`);
   const dep = String(res.stops[oi].departure || '').slice(0, 5), arr = String(res.stops[di].arrival || '').slice(0, 5);
+  d[leg].anchor = anchorFromStops(res.stops, stationCode(org), dep || d[leg].time, d.date); refreshDayMeta(i);
   const info = `${esc(stationLabel(org))} ${esc(dep)} → ${esc(stationLabel(dst))} ${esc(arr)}`;
   if (!d[leg].time) { d[leg].time = dep; const inp = $(`.dayc[data-i="${i}"] [data-f="${leg}.time"]`); if (inp) inp.value = dep; refreshDayMeta(i); E.dirty = true; return set('ok', `Preenchido pela CP: ${info}`); }
   if (d[leg].time === dep) return set('ok', `Confirmado pela CP: ${info}`);
@@ -825,7 +858,7 @@ function openSettings() {
     <div class="pass"><h3>Sessão Google</h3><p class="muted small" style="margin:6px 0 12px">A app renova a sessão sozinha. Termina-a se mudares de conta.</p>
       <button class="btn ghost" data-act="sign-out">Terminar sessão</button></div>
     <div class="pass"><h3>Confirmar horários na CP</h3>
-      <p class="muted small" style="margin:6px 0 12px">${keys ? 'Ligado neste telemóvel: ao escreveres o nº do comboio, a app confirma a hora e o percurso no horário oficial.'
+      <p class="muted small" style="margin:6px 0 12px">${keys ? 'Ligado neste telemóvel: ao escreveres o nº do comboio, a app confirma a hora e o percurso no horário oficial e mostra a data da compra a partir da partida do comboio na 1.ª estação.'
         : 'Desligado. Para ligar, no computador do projeto corre <b>python3 scripts/pwa_link.py</b> e abre o link que aparece neste telemóvel. As chaves ficam só aqui, nunca no código.'}</p>
       ${keys ? '<button class="btn ghost" data-act="clear-keys">Desligar e apagar as chaves</button>' : ''}</div>
     <div class="pass"><h3>Sheet</h3><p class="muted small" style="margin:6px 0 12px">A configuração, os registos e os bilhetes vivem numa Google Sheet.</p>
@@ -922,7 +955,7 @@ async function boot() {
   if (await ensureAuth(false)) { hideAuth(); await refresh(); if (wantEditor && S.loaded) openEditor(); }
   else { render(); showAuth(); }
 }
-window.__BCP = { S, mergeWeek, locateConfig, validateDays, sheetDate, sheetTime, fireInstant, applyViewport, openEditor, parseData, upcomingLegs, VERSION };
+window.__BCP = { S, mergeWeek, locateConfig, anchorFromStops, validateDays, sheetDate, sheetTime, fireInstant, applyViewport, openEditor, parseData, upcomingLegs, VERSION };
 boot();
 </script>
 </body>

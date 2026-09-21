@@ -36,6 +36,7 @@ class Base(unittest.TestCase):
                               side_effect=lambda key, title, msg, **kw: self.notes.append((key, title)) or True),
             # hermético: nunca consultar o horário oficial pela rede
             mock.patch.object(scheduler.timetable, "check_leg_cached", return_value=(None, False)),
+            mock.patch.object(scheduler.timetable, "apply_anchor", side_effect=lambda leg: leg),
         ]
         for p in patches:
             p.start()
@@ -92,6 +93,33 @@ class PlanTests(Base):
         self.assertEqual(len(self.ev(plan_only=True)), 2)
         self.assertEqual(self.notes, [])
         self.assertFalse(common._state_file("seen.json").exists())
+
+
+class AnchorTests(Base):
+    def test_o_arranque_e_o_disparo_seguem_a_partida_na_primeira_estacao(self):
+        import dataclasses
+        anchor = lambda leg: dataclasses.replace(leg, anchor="06:10", anchor_date=leg.date) if leg.leg == "ida" else leg  # noqa: E731
+        with mock.patch.object(scheduler.timetable, "apply_anchor", side_effect=anchor):
+            items = self.ev()
+        ida = [i for i in items if i.leg.leg == "ida"][0]
+        self.assertEqual(ida.fire_ts, datetime(2026, 9, 21, 6, 10, tzinfo=common.TZ).timestamp())     # não 06:45
+        self.assertEqual(ida.fire_ts - ida.launch_ts, 6 * 60)
+        self.assertNotIn("anchor-2026-09-22-ida", self.keys())          # a ida foi ancorada: sem aviso
+        self.assertIn("anchor-2026-09-22-volta", self.keys())           # a volta não foi: avisa
+
+    def test_sem_a_primeira_estacao_usa_a_hora_da_config_e_avisa(self):
+        items = self.ev()                                   # apply_anchor devolve a perna sem âncora
+        ida = [i for i in items if i.leg.leg == "ida"][0]
+        self.assertEqual(ida.fire_ts, datetime(2026, 9, 21, 6, 45, tzinfo=common.TZ).timestamp())
+        self.assertIn("anchor-2026-09-22-ida", self.keys())
+
+    def test_o_plano_sai_ordenado_pelo_arranque(self):
+        import dataclasses
+        # a ida ancorada a 06:10 e a volta às 18:30: continua ordenado
+        anchor = lambda leg: dataclasses.replace(leg, anchor="06:10", anchor_date=leg.date)  # noqa: E731
+        with mock.patch.object(scheduler.timetable, "apply_anchor", side_effect=anchor):
+            items = self.ev()
+        self.assertEqual([i.launch_ts for i in items], sorted(i.launch_ts for i in items))
 
 
 class LateAndRecoveryTests(Base):

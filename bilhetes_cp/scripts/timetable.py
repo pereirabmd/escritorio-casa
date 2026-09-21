@@ -11,8 +11,10 @@ O aviso é consultivo: a compra continua a ser feita pelo nº do comboio.
 
 from __future__ import annotations
 
+import dataclasses
+import re
 import time
-from datetime import date
+from datetime import date, timedelta
 from typing import Any, Callable
 
 import common
@@ -22,6 +24,7 @@ from cp_ticket import X_API_KEY_TRAVEL, CPClient, CPError, pick_trip, trip_secti
 log = common.get_logger("timetable")
 
 CACHE_TTL_S = 6 * 3600
+ANCHOR_TTL_S = 24 * 3600
 
 
 def fetch_timetable(train: int, d: date) -> dict | None:
@@ -86,6 +89,57 @@ def check_leg(leg: Leg, fetch: Callable[[int, date], dict | None] = fetch_timeta
         return (f"o {label} parte de {leg.origin.replace('_', ' ')} às {dep} segundo a CP, "
                 f"mas a Config tem {leg.hhmm}")
     return None
+
+
+def anchor_from_stops(leg: Leg, stops: list[dict]) -> tuple[str, date, str] | None:
+    """(hora, data, nome da estação) da partida do comboio na sua 1.ª estação.
+
+    A data é a do comboio à saída dessa estação: se o comboio passa a meia-noite antes de chegar
+    à estação de embarque (hora de embarque anterior à da 1.ª estação), parte na véspera.
+    """
+    codes = [(s.get("station") or {}).get("code") for s in stops]
+    org = station_code(leg.origin)
+    if not stops or org not in codes:
+        return None
+    first = str(stops[0].get("departure") or "")[:5]
+    if not re.fullmatch(r"\d{2}:\d{2}", first):
+        return None
+    board = str(stops[codes.index(org)].get("departure") or "")[:5] or leg.hhmm
+    start = leg.date if board >= first else leg.date - timedelta(days=1)
+    return first, start, (stops[0].get("station") or {}).get("designation") or ""
+
+
+def anchor_for(leg: Leg, fetch: Callable[[int, date], dict | None] = fetch_timetable
+               ) -> tuple[str, date, str] | None:
+    """Âncora do disparo (PLANO_FINAL 3.11). Cache de 24 h; se a CP falhar, mantém o último valor
+    conhecido em vez de voltar à hora de embarque. None = sem informação."""
+    path = common._state_file("anchors.json")
+    cache = common._read_json(path, {})
+    key = f"{leg.key}|{leg.train}|{leg.origin}|{leg.hhmm}"
+    hit, now = cache.get(key), time.time()
+
+    def unpack(h: dict) -> tuple[str, date, str]:
+        return h["hhmm"], date.fromisoformat(h["date"]), h.get("station", "")
+
+    if hit and now - hit["ts"] < ANCHOR_TTL_S:
+        return unpack(hit)
+    try:
+        res = anchor_from_stops(leg, ((fetch(leg.train, leg.date) or {}).get("trainStops") or []))
+    except (CPError, RuntimeError, ValueError, TypeError) as e:
+        log.warning("Sem informação da 1.ª estação de %s: %s", leg.key, type(e).__name__)
+        res = None
+    if res:
+        cache = {k: v for k, v in cache.items() if now - v["ts"] < 7 * 86400}
+        cache[key] = {"ts": now, "hhmm": res[0], "date": res[1].isoformat(), "station": res[2]}
+        common._write_json_atomic(path, cache)
+        return res
+    return unpack(hit) if hit else None
+
+
+def apply_anchor(leg: Leg, fetch: Callable[[int, date], dict | None] = fetch_timetable) -> Leg:
+    """A mesma perna, com o disparo ancorado à partida na 1.ª estação (se se conseguir saber)."""
+    a = anchor_for(leg, fetch)
+    return dataclasses.replace(leg, anchor=a[0], anchor_date=a[1]) if a else leg
 
 
 def check_leg_cached(leg: Leg, fetch: Callable[[int, date], dict | None] = fetch_timetable,
