@@ -94,9 +94,12 @@ function marcarAtrasadas() {
 
 function enviarNotificacoesDoDia() {
   const config = getConfigMap();
-  const horaPadrao = config['HoraPadrao'] || '08:00';
-  const naoIncomodarInicio = config['NaoIncomodarInicio'] || '';
-  const naoIncomodarFim = config['NaoIncomodarFim'] || '';
+  const fusoFolha = SpreadsheetApp.openById(
+    PropertiesService.getScriptProperties().getProperty('SHEET_ID')
+  ).getSpreadsheetTimeZone();
+  const horaPadrao = normalizarHora(config['HoraPadrao'], fusoFolha) || '08:00';
+  const naoIncomodarInicio = normalizarHora(config['NaoIncomodarInicio'], fusoFolha);
+  const naoIncomodarFim = normalizarHora(config['NaoIncomodarFim'], fusoFolha);
 
   const tarefasMap = {};
   sheetToObjects(getSheet('Tarefas')).forEach(t => (tarefasMap[t.ID] = t));
@@ -140,7 +143,7 @@ function enviarNotificacoesDoDia() {
     const tarefa = tarefasMap[inst.TarefaID];
     if (!tarefa) return;
 
-    const horaTarefa = tarefa.HoraNotificacao || horaPadrao;
+    const horaTarefa = normalizarHora(tarefa.HoraNotificacao, fusoFolha) || horaPadrao;
     if (horaTarefa > agora) return; // ainda não chegou a hora desta tarefa
 
     // F06 — Dependência: só notifica depois da tarefa-dependência estar Feita hoje
@@ -181,6 +184,21 @@ function enviarNotificacoesDoDia() {
       instanciasSheet.getRange(inst._rowIndex, 7).setValue('TRUE'); // NotificacaoEnviada
     }
   });
+}
+
+// A app grava as horas com valueInputOption=USER_ENTERED, por isso o Sheets
+// converte "20:10" num valor de hora e o getValues() devolve-o como Date
+// (dia 1899-12-30), não como texto. Comparar esse Date com o 'HH:mm' de
+// "agora" (horaTarefa > agora) dá sempre false, e a notificação saía logo no
+// primeiro ciclo do dia (~00:00) em vez de à hora marcada. Aqui devolvemos
+// sempre 'HH:mm' (ou '' se vazio) para a comparação de strings funcionar.
+function normalizarHora(valor, fuso) {
+  if (valor === '' || valor === null || valor === undefined) return '';
+  if (Object.prototype.toString.call(valor) === '[object Date]') {
+    return Utilities.formatDate(valor, fuso, 'HH:mm');
+  }
+  const m = String(valor).trim().match(/^(\d{1,2}):(\d{2})/);
+  return m ? ('0' + m[1]).slice(-2) + ':' + m[2] : String(valor).trim();
 }
 
 function dentroDaJanela(agora, inicio, fim) {

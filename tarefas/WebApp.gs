@@ -11,7 +11,7 @@
 // que está implementado é mesmo o código mais recente — copiar os ficheiros
 // para o editor NÃO chega, é preciso atualizar a implementação existente
 // (Implementar > Gerir implementações > editar > Nova versão).
-const VERSAO_SCRIPT = 'Beta 46';
+const VERSAO_SCRIPT = 'Beta 47';
 
 function doGet(e) {
   return jsonResponse(estadoSaude());
