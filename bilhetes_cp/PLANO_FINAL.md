@@ -341,18 +341,31 @@ a ser jobs periódicos separados (cron, `/etc/cron.d/bilhetes-cp`).
   efetiva a compra; uma venda `PENDING` duplicada não é um bilhete, mas
   bloqueia um lugar (2.4)
 - **Política de retry no `POST /sale`**: a resposta a uma tentativa cai em
-  categorias — **esgotado** (sem lugares, resposta clara da API — nada a
-  fazer, notificar e parar); **erro conhecido não recuperável** (4xx claro —
-  não repetir); **erro técnico transitório** (5xx, ou ligação falhou antes
-  de enviar — retry seguro); **ainda não aberto** (ver abaixo); ou
-  **AMBÍGUO** (timeout depois do request poder ter sido entregue — não
-  repetir às cegas). Um retry ingénuo neste último caso pode criar uma
+  categorias — **esgotado** (sem lugares, resposta clara da API — confirma-se
+  com uma rajada curta antes de parar, ver abaixo); **erro conhecido não
+  recuperável** (4xx claro — não repetir); **erro técnico transitório** (5xx,
+  ou ligação falhou antes de enviar — retry seguro); **ainda não aberto** (ver
+  abaixo); ou **AMBÍGUO** (timeout depois do request poder ter sido entregue —
+  não repetir às cegas). Um retry ingénuo neste último caso pode criar uma
   segunda venda se a primeira resposta se perdeu na rede sem o pedido se ter
   perdido:
   1. Ligação falhou antes de enviar → retry seguro
   2. Servidor respondeu com erro conhecido → retry conforme o código
      (5xx tenta de novo, 4xx normalmente não)
-  3. **Ainda não aberto** — uma venda que abre mais tarde do que o previsto é
+  3. **Esgotado confirma-se com uma rajada antes de desistir** (Bruno, 22/09,
+     tão persistente quanto ele já fazia à mão). O mesmo código (`WS:RES:116`,
+     ou outro da mesma família — `114`, etc.) pode aparecer **com a rede
+     condicionada**, sem ser esgotado a sério — e como o servidor respondeu
+     sem criar venda, repetir é tão seguro como um erro técnico transitório.
+     Esquema `sold_out_retry_delays_s` = `0, 0.5, 0.5, 0.5, 1×7, 2, 4, 8, 15,
+     30×3, 60×4, 120×3` — 25 retentativas, 26 tentativas no total, **~12 min**.
+     Como isto ultrapassa os 5 min do `access_token`, a rajada renova-o a
+     meio (3.1) — sem isso, um 401 a meio seria lido como recusa não
+     reconhecida e desistiria aos 15 s. Também para se o comboio já tiver
+     partido, mesmo com retentativas por gastar. Se ao fim disso continuar
+     esgotado, aplica-se o esquema normal (para, notifica, não insiste mais);
+     a notificação final diz quantas tentativas confirmaram o esgotado
+  4. **Ainda não aberto** — uma venda que abre mais tarde do que o previsto é
      tratada **na iteração seguinte**: repetir o `POST /sale` é seguro (nada foi
      criado) e desejável. Decisão de Bruno (22/09), antes da calibração: repete de
      0,25 em 0,25 s nos primeiros 20 s e de 2 em 2 s depois, até à venda abrir,
@@ -364,7 +377,7 @@ a ser jobs periódicos separados (cron, `/etc/cron.d/bilhetes-cp`).
      4xx **não reconhecida** também se repete, mas só durante 15 s
      (`unrecognized_4xx_retry_s`) e depois falha com a resposta completa no log,
      para se aprender o formato. Um estado AMBÍGUO nunca se repete
-  4. Timeout depois do request poder ter sido entregue → estado
+  5. Timeout depois do request poder ter sido entregue → estado
      **AMBÍGUO**: em teoria, verificar primeiro se a venda já foi criada
      antes de disparar outro `/sale`, via `GET
      /ticketing-api/trips/<email>?filter=FUTURE` (exige o cabeçalho
@@ -628,6 +641,15 @@ DISCOUNT_OK → CONFIRMED`, mais os estados terminais `SOLD_OUT`,
 guarda o `saleID`). Como os passos 3 a 7 são idempotentes (2.4), retomar
 significa simplesmente repetir a sequência sobre o mesmo `saleID`.
 
+**Confirmado com Bruno (22/09) o que isto significa na prática para a rajada
+do esgotado (3.3.1):** a app (PWA, separador Registo) só mostra **uma linha
+por perna**, escrita quando a rajada termina — sucesso, esgotado confirmado
+ou falha — nunca uma linha por tentativa. As 26 tentativas individuais (HTTP,
+`timestamp` da CP, atraso a cada uma) ficam só em `logs/hot_buy.log` no RPi,
+acessível por SSH (`tail -f ~/bilhetes_cp/logs/hot_buy.log`); não há nada a
+configurar para isto funcionar. Decidido: manter assim, sem resumo extra da
+rajada na aba Logs.
+
 **3.10.6 Recuperação de compra interrompida.** Se o RPi reiniciar depois
 de já ter criado a venda (`saleID` obtido) mas antes do `/confirm`, o
 processo, ao retomar, lê o estado local (3.10.5) e **continua essa venda
@@ -882,7 +904,7 @@ bilhetes_cp/
 │   ├── heartbeat.py             ping ao healthchecks.io (secção 6); inativo até haver URL no .env
 │   ├── live_delay.py            vigilância do comboio nos últimos 30 min (3.2), a cada minuto
 │   └── pwa_link.py              link que liga a PWA às chaves da CP
-├── tests/                       unittest (175) e teste da PWA em Chromium real (pwa_smoke.mjs)
+├── tests/                       unittest (179) e teste da PWA em Chromium real (pwa_smoke.mjs)
 └── deploy/                      configs aplicadas no RPi, sem segredos (ver deploy/README.md); inclui o `cp-scheduler.service` do daemon
 ```
 
@@ -1001,7 +1023,7 @@ ponta a ponta com token e com entrega agendada; pre-flight; daemon a correr sob 
 systemd; validação da Config contra o horário oficial (apanhou a linha de exemplo e, por um
 erro meu, a hora da 1.ª estação: corrigido, ver 3.11); `--search-only` e simulação da
 Config real (520 às 06:45 com embarque às 07:27; 731 às 17:30 com embarque às 17:39) com a
-CP real, sem lançar nada. 175 testes unitários (também no RPi, com a rede bloqueada) e 44 verificações da
+CP real, sem lançar nada. 179 testes unitários (também no RPi, com a rede bloqueada) e 44 verificações da
 PWA em Chromium (offline, teclado, 360 px, manifest, service worker).
 
 ### 9.4 Por verificar — nunca exercitado contra a CP real

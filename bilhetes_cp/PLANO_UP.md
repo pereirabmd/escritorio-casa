@@ -217,3 +217,10 @@ A outra sessão ainda está a editar o `PLANO.md`. Quando acabar, para manter
   partida** (Bruno, 22/09). `scripts/live_delay.py`, cron a cada minuto, lê a aba
   Bilhetes, consulta o `timetable` do comboio na estação de embarque e notifica só
   quando o atraso, o cais ou a supressão mudam em relação à última leitura.
+- **Regra nova, mais agressiva (3.3.1): "esgotado" confirma-se com uma rajada
+  de ~12 min antes de desistir** (Bruno, 22/09, tão persistente quanto ele já
+  fazia à mão) — o mesmo código pode aparecer com a rede condicionada, não só
+  esgotado a sério. Esquema `0, 0.5, 0.5, 0.5, 1×7, 2, 4, 8, 15, 30×3, 60×4,
+  120×3` (`sold_out_retry_delays_s`, 25 retentativas), depois o esquema
+  normal (para, notifica). Como ultrapassa os 5 min do `access_token`, a
+  rajada renova-o a meio; também para se o comboio já tiver partido.

@@ -321,13 +321,61 @@ class SeatInReminderTests(FlowBase):
 
 
 class SaleOutcomeTests(FlowBase):
-    def test_esgotado_notifica_e_para_sem_repetir(self):
-        cp = FakeCP(sale_script=[resp(409, {}, messages=[{"message": "Comboio esgotado"}])])
-        code, st = self.run_buyer(cp)
+    def test_esgotado_confirma_se_com_uma_rajada_longa_antes_de_desistir(self):
+        # Bruno, 22/09: o mesmo "esgotado" pode aparecer com a rede condicionada, não só a sério —
+        # o servidor respondeu SEM criar venda, por isso repetir é seguro (como um erro transitório).
+        # Esquema tão persistente quanto o que Bruno já fazia à mão: ~12 min, 25 retentativas (26 no total).
+        delays = hot_buy.cfg("sold_out_retry_delays_s", [])
+        self.assertEqual(len(delays), 25)
+        self.assertAlmostEqual(sum(delays), 727.5)
+        esgotado = resp(409, {}, messages=[{"message": "Comboio esgotado"}])
+        cp = FakeCP(sale_script=[esgotado] * (len(delays) + 1))
+        code, st = self.run_buyer(cp, advancing=True)
+        self.assertEqual((code, st["state"]), (0, "SOLD_OUT"))
+        self.assertEqual(cp.calls.count("sale"), len(delays) + 1)
+        self.assertNotIn("passengers", cp.calls)
+        self.assertEqual(self.sleeps, delays)
+        self.assertTrue(any("Esgotado" in t for t in self.titles()))
+        self.assertIn(f"confirmado depois de {len(delays) + 1} tentativas em ~12 min", self.notes[-1][1])
+
+    def test_a_rajada_do_esgotado_renova_o_token_se_demorar_mais_de_4_min(self):
+        # o access_token dura 5 min (3.1); uma rajada de ~12 min tem de o renovar a meio.
+        delays = hot_buy.cfg("sold_out_retry_delays_s", [])
+        esgotado = resp(409, {}, messages=[{"message": "Comboio esgotado"}])
+        cp = FakeCP(sale_script=[esgotado] * (len(delays) + 1))
+        reauths = []
+        with mock.patch.object(hot_buy.Buyer, "reauth",
+                               side_effect=lambda self, quiet=False: reauths.append(quiet), autospec=True):
+            self.run_buyer(cp, advancing=True)
+        self.assertTrue(any(reauths))            # renovou pelo menos uma vez
+
+    def test_a_rajada_do_esgotado_para_se_o_comboio_ja_partiu(self):
+        delays = hot_buy.cfg("sold_out_retry_delays_s", [])
+        esgotado = resp(409, {}, messages=[{"message": "Comboio esgotado"}])
+        cp = FakeCP(sale_script=[esgotado] * (len(delays) + 1))
+        depart_offset = self.leg.departure.timestamp() - self.leg.fire.timestamp()
+        code, st = self.run_buyer(cp, clock_offset=depart_offset + 1, advancing=True)
+        self.assertEqual((code, st["state"]), (0, "SOLD_OUT"))
+        self.assertEqual(cp.calls.count("sale"), 1)     # nem chegou a tentar: o comboio já partiu
+
+    def test_esgotado_que_era_so_rede_condicionada_recupera_dentro_da_rajada(self):
+        esgotado = resp(409, {}, messages=[{"message": "Comboio esgotado"}])
+        cp = FakeCP(sale_script=[esgotado, esgotado, esgotado, resp(200, {"saleID": 9})])
+        _, st = self.run_buyer(cp)
+        self.assertEqual(st["state"], "CONFIRMED")           # não desistiu: era transitório
+        self.assertEqual(cp.calls.count("sale"), 4)
+        self.assertEqual(self.sleeps[:3], [0, 0.5, 0.5])
+        self.assertFalse(any("Esgotado" in t for t in self.titles()))
+
+    def test_esgotado_sem_rajada_configurada_para_logo_como_antes(self):
+        esgotado = resp(409, {}, messages=[{"message": "Comboio esgotado"}])
+        cp = FakeCP(sale_script=[esgotado])
+        with mock.patch.dict(hot_buy.app_config()["purchase"], {"sold_out_retry_delays_s": []}):
+            code, st = self.run_buyer(cp)
         self.assertEqual((code, st["state"]), (0, "SOLD_OUT"))
         self.assertEqual(cp.calls.count("sale"), 1)
-        self.assertNotIn("passengers", cp.calls)
-        self.assertTrue(any("Esgotado" in t for t in self.titles()))
+        self.assertEqual(self.sleeps, [])
+        self.assertNotIn("confirmado depois de", self.notes[-1][1])
 
     def test_erro_tecnico_5xx_faz_retry_seguro(self):
         cp = FakeCP(sale_script=[resp(503, {}), resp(200, {"saleID": 9})])
@@ -424,10 +472,13 @@ class NotOpenYetTests(FlowBase):
         _, st = self.run_buyer(cp, clock_offset=100)
         self.assertEqual((st["state"], cp.calls.count("sale")), ("FAILED", 1))
 
-    def test_esgotado_continua_a_parar_logo(self):
-        cp = FakeCP(sale_script=[resp(409, {}, messages=["Comboio esgotado"]), resp(200, {"saleID": 9})])
+    def test_esgotado_persistente_usa_o_seu_proprio_esquema_nao_o_ciclo_do_ainda_nao_aberto(self):
+        delays = hot_buy.cfg("sold_out_retry_delays_s", [])
+        esgotado = resp(409, {}, messages=["Comboio esgotado"])
+        cp = FakeCP(sale_script=[esgotado] * (len(delays) + 1))
         _, st = self.run_buyer(cp, clock_offset=1, advancing=True)
-        self.assertEqual((st["state"], cp.calls.count("sale")), ("SOLD_OUT", 1))
+        self.assertEqual((st["state"], cp.calls.count("sale")), ("SOLD_OUT", len(delays) + 1))
+        self.assertEqual(self.sleeps, delays)          # o esquema do esgotado, não o do "ainda não aberto"
 
     def test_estado_ambiguo_nunca_e_repetido_mesmo_com_a_venda_por_abrir(self):
         cp = FakeCP(sale_script=[resp(409, {}, messages=NAO_ABERTO), CPError("ambiguous", "ReadTimeout"),

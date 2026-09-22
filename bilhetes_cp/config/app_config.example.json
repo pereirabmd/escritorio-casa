@@ -43,7 +43,34 @@
     "not_open_fast_phase_s": 20,
     "not_open_fast_interval_s": 0.25,
     "not_open_slow_interval_s": 2.0,
-    "unrecognized_4xx_retry_s": 15
+    "unrecognized_4xx_retry_s": 15,
+    "sold_out_retry_delays_s": [
+      0,
+      0.5,
+      0.5,
+      0.5,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      2,
+      4,
+      8,
+      15,
+      30,
+      30,
+      30,
+      60,
+      60,
+      60,
+      60,
+      120,
+      120,
+      120
+    ]
   },
   "reminders": {
     "config_missing_check_times": [

@@ -397,19 +397,26 @@ class Buyer:
         na iteração seguinte, sem criar nada (decisão de Bruno, 22/09): de 0,25 em 0,25 s no início
         e de 2 em 2 s depois, até abrir, esgotar ou acabar a janela. Uma recusa não reconhecida repete-se
         só durante uns segundos (pode ser "ainda não aberto" com outro texto) e depois falha, com a
-        resposta completa no log para se aprender o formato."""
+        resposta completa no log para se aprender o formato. Um "esgotado" (WS:RES:116, ou outro código
+        da mesma família — 114, etc.) confirma-se com uma rajada antes de desistir (Bruno, 22/09, tão
+        persistente quanto ele já faz à mão — ~12 min): o mesmo código pode aparecer com a rede
+        condicionada, sem ser esgotado a sério; como o servidor respondeu SEM criar venda, repetir é tão
+        seguro como um erro técnico transitório."""
         st = self.lock.state
         max_attempts = int(cfg("max_sale_attempts", 3))
+        sold_out_delays = list(cfg("sold_out_retry_delays_s", [0, 0.5, 0.5, 0.5, 1, 1, 1]))
         target = self.fire_ts
         open_window = float(cfg("not_open_retry_window_s", 600))
         fast_s, fast_iv = float(cfg("not_open_fast_phase_s", 20)), float(cfg("not_open_fast_interval_s", 0.25))
         slow_iv = float(cfg("not_open_slow_interval_s", 2.0))
         unknown_s = float(cfg("unrecognized_4xx_retry_s", 15))
         departure_ts = self.leg.departure.timestamp()
-        attempt = transient = 0
+        attempt = transient = sold_out_retry = 0
         waiting_since: float | None = None
         while True:
             attempt += 1
+            if self.clock() - self.login_at > 240:      # o token dura 5 min (3.1); a rajada do esgotado
+                self.reauth(quiet=True)                  # pode passar disso — nunca usar um token stale
             try:
                 resp = self.cp.create_sale_request(self.leg.date.isoformat(), st["sections"])
             except CPError as e:
@@ -451,8 +458,15 @@ class Buyer:
                     self.sleep(0.25 * transient)
                     continue
             elif kind == "sold_out":
+                if sold_out_retry < len(sold_out_delays) and self.clock() < departure_ts:
+                    self.sleep(sold_out_delays[sold_out_retry])
+                    sold_out_retry += 1
+                    continue
+                mins = sum(sold_out_delays) / 60
+                confirmado = (f" (confirmado depois de {sold_out_retry + 1} tentativas em "
+                             f"~{mins:.0f} min)" if sold_out_delays else "")
                 self.terminate("SOLD_OUT", f"Esgotado — {self.label}",
-                               f"Não há lugares. {detail}", "COMPRA", tags=["no_entry"],
+                               f"Não há lugares{confirmado}. {detail}", "COMPRA", tags=["no_entry"],
                                status=resp.status)
                 return "sold_out"
             elif kind in ("not_open", "known"):
