@@ -392,6 +392,7 @@ class Buyer:
                 log.info("POST /sale #%d -> HTTP %s [%s] %s", attempt, resp.status, kind, timing)
             if kind == "ok":
                 sale_id = resp.body["saleID"]
+                self.lock.update(carriage=find_key(resp.body, "carriageNumber"), seat=find_key(resp.body, "seatNumber"))
                 late = f" | abriu {self.clock() - target:.1f} s depois do alvo, tentativa {attempt}" if waiting_since else ""
                 self.lock.update(state="SALE_CREATED", sale_id=sale_id, timing=timing + late)
                 self.slog("COMPRA", "SALE_CREATED", status=resp.status, ref=str(sale_id), err=timing + late)
@@ -502,27 +503,45 @@ class Buyer:
             self.lock.update(state=name)
         return self.on_confirmed(resp)
 
+    def find_seat(self, body: Any) -> tuple[Any, Any]:
+        """Carruagem e lugar, por ordem: resposta do confirm; seatData guardado do POST /sale (é aí que
+        o lugar sai, 2.4); GET /sales/{id}. O lembrete de partida não pode ir sem eles."""
+        st = self.lock.state
+        carriage = find_key(body, "carriageNumber") or st.get("carriage")
+        seat = find_key(body, "seatNumber") or st.get("seat")
+        if not (carriage and seat) and st.get("sale_id"):
+            try:
+                detail = self.cp.get_sale(st["sale_id"]).body
+                carriage = carriage or find_key(detail, "carriageNumber")
+                seat = seat or find_key(detail, "seatNumber")
+            except Exception as e:  # noqa: BLE001 — é um recurso de último recurso, nunca impede a confirmação
+                log.warning("Não consegui ler a venda %s para obter o lugar: %s", st["sale_id"], type(e).__name__)
+        return carriage, seat
+
     def on_confirmed(self, resp: Any) -> int:
         body = resp.body if resp is not None else {}
         ref = str(body.get("reference", "")) if isinstance(body, dict) else ""
-        carriage = find_key(body, "carriageNumber")
-        seat = find_key(body, "seatNumber")
+        carriage, seat = self.find_seat(body)
         self.lock.update(reference=ref, carriage=carriage, seat=seat)
         leg = self.leg
         pretty = lambda k: k.replace("_", " ").title()  # noqa: E731
         boarding = leg.board or leg.hhmm                   # hora de embarque real, não a da 1.ª estação
         self.sheet("append_ticket", leg.date.isoformat(), leg.train, pretty(leg.origin),
                    pretty(leg.destination), boarding, carriage or "", seat or "", ref)
-        seat_txt = f"carruagem {carriage}, lugar {seat}" if carriage or seat else "lugar não devolvido pela CP"
+        have_seat = bool(carriage and seat)
+        seat_txt = (f"carruagem {carriage}, lugar {seat}" if have_seat else
+                    f"carruagem {carriage}" if carriage else f"lugar {seat}" if seat else
+                    "carruagem e lugar não devolvidos pela CP — vê na App CP")
+        route = f"Comboio {leg.train} · {pretty(leg.origin)} → {pretty(leg.destination)}"
         reminder_ok = False
         remind_ts = leg.departure.timestamp() - 30 * 60          # instante absoluto
         remind_at = datetime.fromtimestamp(remind_ts, TZ)
         if remind_ts > time.time() + 120:
-            reminder_ok = self.notify(
-                f"Partida às {boarding} (daqui a 30 min)",
-                f"Comboio {leg.train} · {pretty(leg.origin)} → {pretty(leg.destination)} · {seat_txt}",
-                tags=["train"], at=remind_at, logger=log)
-        self.lock.update(reminder_scheduled=reminder_ok)
+            # carruagem e lugar no TÍTULO e na mensagem: aparecem mesmo num popup truncado
+            title = f"Partida às {boarding} · {seat_txt}" if have_seat else f"Partida às {boarding} (daqui a 30 min)"
+            reminder_ok = self.notify(title, f"{route}. {seat_txt[0].upper() + seat_txt[1:]}.",
+                                      tags=["train"], at=remind_at, logger=log)
+        self.lock.update(reminder_scheduled=reminder_ok, seat_known=have_seat)
         extra = "" if reminder_ok else " (lembrete de partida não agendado)"
         return self.terminate("CONFIRMED", f"Bilhete comprado — {self.label}",
                               f"{pretty(leg.origin)} → {pretty(leg.destination)} às {boarding} · "

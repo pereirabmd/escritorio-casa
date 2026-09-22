@@ -442,6 +442,11 @@ class CPClient:
         return self._checked("PUT", f"/ticketing-api/sale/{sale_id}/items",
                              api_key=X_API_KEY_TICKETING, body=body, with_client_id=True)
 
+    def get_sale(self, sale_id: int) -> CPResponse:
+        """Estado de uma venda em qualquer estado (PLANO_FINAL 2.2): última fonte do lugar atribuído."""
+        return self._checked("GET", f"/ticketing-api/sales/{sale_id}",
+                             api_key=X_API_KEY_TICKETING, with_client_id=True)
+
     def confirm(self, sale_id: int) -> CPResponse:
         return self._checked("PUT", f"/ticketing-api/sale/{sale_id}/confirm",
                              api_key=X_API_KEY_TICKETING, with_client_id=True)

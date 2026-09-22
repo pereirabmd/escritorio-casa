@@ -274,6 +274,8 @@ pelo próprio script de compra, imediatamente a seguir a uma compra
 confirmada com sucesso (nesse momento já se sabe a hora exata de partida,
 carruagem e lugar a incluir na notificação).
 
+**Carruagem e lugar no lembrete (Bruno, 22/09):** o lembrete de partida leva-os no título e na mensagem. Vêm, por ordem, da resposta do `confirm`, do `seatData` guardado do `POST /sale` (é aí que o lugar sai, 2.4) e, em último recurso, do `GET /sales/{id}`. Se nenhuma fonte os der, a compra não falha: o lembrete segue a dizer onde ver (App CP).
+
 Os lembretes de sábado (3.6) e a verificação diária do Passe (3.9) continuam
 a ser jobs periódicos separados (cron, `/etc/cron.d/bilhetes-cp`).
 
@@ -862,7 +864,7 @@ bilhetes_cp/
 │   ├── pass_expiry_check.py     validade do Passe (3.9)
 │   ├── heartbeat.py             ping ao healthchecks.io (secção 6); inativo até haver URL no .env
 │   └── pwa_link.py              link que liga a PWA às chaves da CP
-├── tests/                       unittest (149) e teste da PWA em Chromium real (pwa_smoke.mjs)
+├── tests/                       unittest (153) e teste da PWA em Chromium real (pwa_smoke.mjs)
 └── deploy/                      configs aplicadas no RPi, sem segredos (ver deploy/README.md); inclui o `cp-scheduler.service` do daemon
 ```
 
@@ -952,10 +954,12 @@ Os 12 pontos de alinhamento que este plano pedia, com o estado real
 | 11 | Regra do DST (3.4) | ⏳ a confirmar com a CP antes de 25/10/2026; os testes fixam "mesma hora do dia anterior" |
 | 12 | `*.har` no `.gitignore`; `CP_FISCAL_ADDRESS` no `.env.example` | ✅ |
 | — | Disparo ancorado à partida do comboio na 1.ª estação (3.11, regra de 22/09) | ✅ `Leg.fire` no RPi e data sugerida na PWA; sem a 1.ª estação usa a Config e avisa |
+| — | Hora da Config = partida na 1.ª estação (3.11, 4; decisão de 22/09) | ✅ o validador aceita a hora da 1.ª estação ou a de embarque; a de embarque real (`Leg.board`) serve para o lembrete, o bilhete e "viagem já passou"; a PWA preenche e confirma com a da 1.ª estação |
+| — | Lembrete de partida com carruagem e lugar (3.2; decisão de 22/09) | ✅ no título e na mensagem; fontes: `confirm`, `seatData` do `POST /sale`, `GET /sales/{id}`; sem lugar em lado nenhum a compra não falha e o lembrete diz onde ver |
 | — | "Ainda não aberto" repete-se na iteração seguinte (3.3.1, decisão de 22/09) | ✅ janela de 10 min, fase rápida e lenta; os padrões de texto são um palpite até haver respostas reais |
 
 Fora da lista de 9.8, por secção:
-- **3.3.1** categoria "ainda não aberto": ⏳ só depois da calibração (3.11); até lá, 4xx não se repete.
+- **3.3.1** categoria "ainda não aberto": ✅ repete-se (decisão de 22/09); só os padrões de texto que a detetam são um palpite (ver 9.4).
 - **3.10.4** pre-flight: ✅. O login é feito a seguir, pelo processo quente, no mesmo minuto.
 - **3.11** instrumentação: ✅. Modo de calibração com `DELETE`: ⏳ (ver 8).
 - **Secção 6**: heartbeat ✅ em código (`heartbeat.py`, cron de 5 em 5 min), inativo até haver URL no `.env`; hardening: `ufw` ativo e `unattended-upgrades` instalado, mas o SSH ainda aceita password (⏳ decisão de Bruno).
@@ -974,8 +978,10 @@ Fora da lista de 9.8, por secção:
 Login na CP a partir do RPi; `journeys` sem login; `timetable` sem login e com CORS
 aberto ao origin do GitHub Pages; leitura da Sheet real (cabeçalhos por nome); ntfy de
 ponta a ponta com token e com entrega agendada; pre-flight; daemon a correr sob o
-systemd; validação da Config contra o horário oficial (apanhou a linha de exemplo, ver
-9.6). 149 testes unitários (também no RPi, com a rede bloqueada) e 44 verificações da
+systemd; validação da Config contra o horário oficial (apanhou a linha de exemplo e, por um
+erro meu, a hora da 1.ª estação: corrigido, ver 3.11); `--search-only` e simulação da
+Config real (520 às 06:45 com embarque às 07:27; 731 às 17:30 com embarque às 17:39) com a
+CP real, sem lançar nada. 153 testes unitários (também no RPi, com a rede bloqueada) e 44 verificações da
 PWA em Chromium (offline, teclado, 360 px, manifest, service worker).
 
 ### 9.4 Por verificar — nunca exercitado contra a CP real
@@ -991,8 +997,8 @@ PWA em Chromium (offline, teclado, 360 px, manifest, service worker).
   com `PENDING`**: por testar.
 
 ### 9.5 Ações que dependem de Bruno
-1. **Corrigir a linha de exemplo da Config** (ver 9.6): pôr `Ativo = NAO` ou substituí-la
-   pelas viagens reais.
+1. **Pôr as viagens reais na Config** (ver 9.6), com `Ativo = SIM` e **antes** da hora do
+   disparo: uma linha que chega depois só gera o aviso de configuração tardia.
 2. Opcional: abrir no telemóvel o link de `python3 scripts/pwa_link.py`, para a PWA
    confirmar horários.
 3. Apagar `~/Transferências/cp.pt.zip` (o HAR tem a password da CP, tokens, CC e NIF) e o
@@ -1005,15 +1011,21 @@ PWA em Chromium (offline, teclado, 360 px, manifest, service worker).
    num comboio de pouca procura e a cancela: desbloqueia o `--dry-run` e a calibração.
 
 ### 9.6 Cuidado: compras reais
-A Config tem uma **linha de exemplo ativa** (`Ativo = SIM`, 28/09, comboio 524 às 06:45 e
-531 às 18:00, com a nota "comboios/horas fictícios"). O 524 existe mas parte às 13:27 e o
-531 não existe nessa data. Por 3.10.3 o daemon rejeita as duas pernas e avisa por ntfy,
-por isso não compra nada; mesmo assim convém desativá-la.
-
 Qualquer linha `Ativo = SIM` que bata certo com o horário oficial e cujo disparo ainda
-esteja por chegar **gera uma compra real** no instante T-24h. Um disparo que passou há
-menos de 10 min só se recupera se a perna já era conhecida antes da hora (reboot);
-uma linha que chega tarde só gera um aviso.
+esteja por chegar **gera uma compra real** no instante T-24h.
+
+- **Estado a 22/09 às 01:10:** a Config não tem nenhuma linha de viagem (só a nota de
+  exemplo), por isso o daemon tem 0 pernas no plano e não compra nada. A linha de
+  exemplo antiga (28/09, comboios 524 e 531 "fictícios") foi rejeitada por 3.10.3 e
+  entretanto removida.
+- **Caso de referência (520):** Bruno configurou 23/09, comboio 520 às 06:45 (hora a que
+  parte do Porto) com embarque em Aveiro às 07:27, e a volta 731 às 17:30 (embarque
+  17:39). O plano simulado dá disparo a 22/09 às 06:45 e 17:30 (arranque do processo às
+  06:39 e 17:24) e lembrete de partida às 06:57 e 17:09.
+- Um disparo que passou há menos de 10 min só se recupera se a perna já era conhecida
+  antes da hora (reboot); uma linha que chega tarde só gera um aviso.
+- Se a venda abrir mais tarde do que o previsto, repete-se (3.3.1); um estado AMBÍGUO
+  nunca se repete.
 
 ### 9.7 Decisões e desvios ao plano
 - ntfy como pacote nativo, não Docker (3.6). Todas as notificações com `Priority: high`.
@@ -1023,7 +1035,18 @@ uma linha que chega tarde só gera um aviso.
 - O pre-flight publica uma mensagem de estado real em vez de uma mensagem de teste.
 - PWA com `gapi client`, Google Identity Services e Workbox, como o plano manda; as chaves
   da CP entram por um link (`scripts/pwa_link.py`), nunca no código público. Ícones
-  gerados de `assets/icon-source.png` sobre o verde claro da paleta.
+  gerados de `assets/icon-source.png` (o ícone do comboio com bilhete) sobre o verde
+  claro da paleta; o service worker sobe de versão sempre que a página muda (`VERSION`).
+
+**Decisões de Bruno nesta implementação** (22/09), todas já refletidas nas secções indicadas:
+1. `PLANO_FINAL.md` é o plano de referência; `PLANO.md` fica como histórico (secção 9, cabeçalho).
+2. O passe vale 30 dias contando o dia do carregamento: expira a compra + 29 (3.9, 4).
+3. A venda abre 24 h antes da partida do comboio na sua 1.ª estação (3.11).
+4. A hora da Config é a da 1.ª estação; a de embarque também se aceita (3.11, 4).
+5. Uma venda que abre tarde repete-se na iteração seguinte (3.3.1).
+6. O lembrete de partida leva carruagem e lugar (3.2).
+7. Todas as notificações levam popup (`Priority: high`) (3.6).
+8. O `--dry-run` fica adiado até se testar o `DELETE /sale/{id}` (3.10.7).
 
 ### 9.8 Operação
 ```
@@ -1039,3 +1062,18 @@ systemctl status cp-scheduler                       # o daemon; journalctl -u cp
 tail -f logs/scheduler.log logs/hot_buy.log         # logs
 sudo fail2ban-client set ntfy-auth unbanip <IP>     # desbanir
 ```
+
+### 9.9 Parâmetros ajustáveis (`config/app_config.example.json`, chave `purchase`)
+| Parâmetro | Valor | O que faz |
+|---|---|---|
+| `launch_lead_minutes` | 6 | antecedência com que o daemon arranca o processo de compra |
+| `login_lead_minutes` | 5 | quando o processo faz o login (T-5 min, 3.1) |
+| `fire_offset_ms` | 0 | ajuste fino do instante de disparo, para a calibração (3.11) |
+| `max_sale_attempts` | 3 | tentativas do `POST /sale` em erro técnico (5xx, ligação) |
+| `step_retry_delays_s` | 0,5 … 120 | esperas ao repetir um passo pós-venda (somam ~12 min, dentro dos 15 do `sale_deadline`) |
+| `not_open_retry_window_s` | 600 | quanto tempo se repete uma venda "ainda não aberta" |
+| `not_open_fast_phase_s` / `_fast_interval_s` / `_slow_interval_s` | 20 / 0,25 / 2 | ritmo dessas repetições |
+| `unrecognized_4xx_retry_s` | 15 | quanto tempo se repete uma recusa não reconhecida |
+| `late_start_grace_minutes` | 10 | tolerância para recuperar um disparo que passou (reboot) |
+| `timetable_check_days` | 14 | a partir de quantos dias antes se valida a Config e se descobre a 1.ª estação |
+| `clock_max_offset_ms` / `cp_date_max_offset_s` | 150 / 3 | limites do pre-flight (3.10.1, 3.11.1) |

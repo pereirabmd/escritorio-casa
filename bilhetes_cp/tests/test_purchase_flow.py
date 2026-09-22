@@ -73,6 +73,14 @@ class FakeCP:
     def set_fiscal(self, sid): return self._step("fiscal", resp())
     def apply_green_pass(self, sid): return self._step("items", resp(200, {"totalAmount": 0}))
 
+    sale_detail = None
+
+    def get_sale(self, sid):
+        self.calls.append("get_sale")
+        if isinstance(self.sale_detail, Exception):
+            raise self.sale_detail
+        return resp(200, self.sale_detail or {})
+
     def confirm(self, sid):
         return self._step("confirm", resp(200, {"status": {"code": "CONFIRMED"}, "reference": "REF123",
                                               "seatData": {"carriageNumber": 3, "seatNumber": 42}}))
@@ -147,7 +155,7 @@ class HappyPathTests(FlowBase):
         # lembrete T-30min agendado no servidor (kwarg `at`), 30 min antes da partida
         lembrete = [n for n in self.notes if n[0].startswith("Partida às")][0]
         self.assertEqual(lembrete[2]["at"], self.leg.departure - timedelta(minutes=30))
-        self.assertIn("carruagem 3, lugar 42", lembrete[1])
+        self.assertIn("Carruagem 3, lugar 42", lembrete[1])
         self.assertTrue(st["reminder_scheduled"])
         self.assertEqual(self.sheets.logs[-1][0], "COMPRA")
 
@@ -229,7 +237,7 @@ class BoardingTimeTests(FlowBase):
         _, st = self.run_buyer(cp)
         self.assertEqual(st["state"], "CONFIRMED")
         lembrete = [n for n in self.notes if n[0].startswith("Partida às")][0]
-        self.assertEqual(lembrete[0], "Partida às 07:27 (daqui a 30 min)")                       # não 06:45
+        self.assertEqual(lembrete[0], "Partida às 07:27 · carruagem 3, lugar 42")                # não 06:45; lugar no título
         self.assertEqual(lembrete[2]["at"].strftime("%H:%M"), "06:57")                            # 07:27 - 30 min
         self.assertEqual(self.sheets.bilhetes[0][4], "07:27")                                      # hora do bilhete = embarque
         self.assertEqual(self.leg.fire.strftime("%H:%M"), "06:45")                                # o disparo, à 1.ª estação
@@ -241,6 +249,52 @@ class BoardingTimeTests(FlowBase):
         with mock.patch.object(hot_buy, "notify_once", return_value=True) as n:
             self.run_buyer(FakeCP())
         self.assertFalse(any("Hora não bate certo" in str(c) for c in n.call_args_list))
+
+
+SEM_LUGAR = resp(200, {"status": {"code": "CONFIRMED"}, "reference": "REF9"})
+
+
+class SeatInReminderTests(FlowBase):
+    """O lembrete de partida tem de levar carruagem e lugar (Bruno, 22/09)."""
+
+    def lembrete(self):
+        return [n for n in self.notes if n[0].startswith("Partida às")][0]
+
+    def test_o_lembrete_leva_carruagem_e_lugar_no_titulo_e_na_mensagem(self):
+        _, st = self.run_buyer(FakeCP())
+        titulo, msg, kw = self.lembrete()
+        self.assertEqual(titulo, "Partida às 06:45 · carruagem 3, lugar 42")
+        self.assertIn("Carruagem 3, lugar 42", msg)
+        self.assertIn("Comboio 524", msg)
+        self.assertIn("at", kw)
+        self.assertTrue(st["seat_known"])
+
+    def test_se_o_confirm_nao_traz_o_lugar_usa_o_do_post_sale(self):
+        cp = FakeCP(sale_script=[resp(200, {"saleID": 9, "seatData": {"carriageNumber": 5, "seatNumber": 17}})],
+                    steps={"confirm": SEM_LUGAR})
+        _, st = self.run_buyer(cp)
+        self.assertEqual((st["carriage"], st["seat"]), (5, 17))            # não foi sobrescrito por None
+        self.assertEqual(self.lembrete()[0], "Partida às 06:45 · carruagem 5, lugar 17")
+        self.assertNotIn("get_sale", cp.calls)                             # nem foi preciso ir à venda
+        self.assertEqual(self.sheets.bilhetes[0][5:7], (5, 17))
+
+    def test_como_ultimo_recurso_le_a_venda(self):
+        cp = FakeCP(steps={"confirm": SEM_LUGAR})
+        cp.sale_detail = {"seatData": {"carriageNumber": 8, "seatNumber": 61}}
+        _, st = self.run_buyer(cp)
+        self.assertIn("get_sale", cp.calls)
+        self.assertEqual(self.lembrete()[0], "Partida às 06:45 · carruagem 8, lugar 61")
+
+    def test_sem_lugar_em_lado_nenhum_o_lembrete_segue_e_diz_onde_ver(self):
+        cp = FakeCP(steps={"confirm": SEM_LUGAR})
+        cp.sale_detail = RuntimeError("HTTP 500")
+        _, st = self.run_buyer(cp)
+        self.assertEqual(st["state"], "CONFIRMED")                          # a compra não falha por isto
+        titulo, msg, _ = self.lembrete()
+        self.assertEqual(titulo, "Partida às 06:45 (daqui a 30 min)")
+        self.assertIn("vê na App CP", msg)
+        self.assertFalse(st["seat_known"])
+        self.assertTrue(any("Bilhete comprado" in t for t in self.titles()))
 
 
 class SaleOutcomeTests(FlowBase):
