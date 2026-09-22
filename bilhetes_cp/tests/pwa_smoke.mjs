@@ -45,9 +45,19 @@ const FAKE = `(() => {
   // chaves da CP falsas + uma CP falsa: o 524 parte do Porto às 06:10 e passa em Aveiro às 06:45
   localStorage.setItem('bilhetes_cp.cpkeys', JSON.stringify({t:'k',i:'i',s:'s'}));
   const TT={524:[{station:{code:'94-2006',designation:'Porto Campanha'},departure:'06:10'},{station:{code:'94-38000',designation:'Aveiro'},departure:'06:45'},{station:{code:'94-31039',designation:'Lisboa Oriente'},arrival:'09:52'}],
-            525:[{station:{code:'94-31039',designation:'Lisboa Oriente'},departure:'18:30'},{station:{code:'94-38000',designation:'Aveiro'},arrival:'20:45'}]};
+            525:[{station:{code:'94-31039',designation:'Lisboa Oriente'},departure:'18:30'},{station:{code:'94-38000',designation:'Aveiro'},arrival:'20:45'}],
+            // 511: só vai até Pampilhosa (caso real de transbordo — não passa em Aveiro sozinho)
+            511:[{station:{code:'94-31039',designation:'Lisboa Oriente'},departure:'07:39'},{station:{code:'94-37002',designation:'Pampilhosa'},arrival:'09:50'}]};
+  // journeys (Lisboa Oriente -> Aveiro): o 511 liga ao 4609 em Pampilhosa
+  const JN={'94-31039|94-38000':{outwardTrip:[{travelSections:[
+    {trainNumber:511,departureStation:{code:'94-31039',designation:'Lisboa Oriente'},arrivalStation:{code:'94-37002',designation:'Pampilhosa'},departureTime:'07:39',arrivalTime:'09:50'},
+    {trainNumber:4609,departureStation:{code:'94-37002',designation:'Pampilhosa'},arrivalStation:{code:'94-38000',designation:'Aveiro'},departureTime:'10:29',arrivalTime:'11:07'}]}]}};
   const realFetch=window.fetch.bind(window);
-  window.fetch=(u,o)=>{const m=String(u).match(/trains\\/(\\d+)\\/timetable\\//); if(m){const st=TT[m[1]]; return Promise.resolve(new Response(JSON.stringify(st?{trainStops:st}:{}),{status:st?200:404}));} return realFetch(u,o);};
+  window.fetch=(u,o)=>{
+    const m=String(u).match(/trains\\/(\\d+)\\/timetable\\//); if(m){const st=TT[m[1]]; return Promise.resolve(new Response(JSON.stringify(st?{trainStops:st}:{}),{status:st?200:404}));}
+    if(String(u).includes('/travel-api/journeys')&&o&&o.method==='POST'){const b=JSON.parse(o.body); const key=b.departureStationCode+'|'+b.arrivalStationCode; return Promise.resolve(new Response(JSON.stringify(JN[key]||{outwardTrip:[]}),{status:200}));}
+    return realFetch(u,o);
+  };
   window.__STATE=state; window.__saved=null;
   window.__BCP_API={
     async load(){return {passe:state.passe,weeklyRaw:state.weekly.map(r=>[...r]),ticketsRaw:state.tickets.map(r=>[...r]),logsRaw:state.logs.map(r=>[...r])};},
@@ -97,7 +107,7 @@ try {
     console.log('  problemas:', JSON.stringify(problems.slice(0, 4)));
   }
   check('a app arranca e mostra conteúdo', await ev(`document.querySelector('#view').innerText.length>40`));
-  check('título e versão', (await ev('document.title')) === 'Bilhetes CP' && (await ev('__BCP.VERSION')) === 'v1.1.1');
+  check('título e versão', (await ev('document.title')) === 'Bilhetes CP' && (await ev('__BCP.VERSION')) === 'v1.1.2');
   check('sem scroll horizontal', await ev(`document.documentElement.scrollWidth<=innerWidth && document.querySelector('#view').scrollWidth<=document.querySelector('#view').clientWidth+1`));
   const home = await text('#view');
   check('ação em destaque: falta configurar a semana seguinte', /Falta configurar a semana de \d\d\/\d\d a \d\d\/\d\d/.test(home), home.slice(0, 80));
@@ -198,6 +208,25 @@ try {
   await ev(`(async()=>{const t=new Intl.DateTimeFormat('en-CA',{timeZone:'Europe/Lisbon'}).format(new Date()); const U=iso=>{const [y,m,d]=iso.split('-').map(Number);return Date.UTC(y,m-1,d)}; window.__STATE.passe[2]=Math.round((U(t)+2*864e5-Date.UTC(1899,11,30))/864e5); document.querySelector('#btnRefresh').click();})()`);
   await sleep(600);
   check('a 2 dias de expirar, o cartão do passe muda para aviso', await ev(`!!document.querySelector('.meter.warn')`) && /renova na App CP/.test(await text('#view')));
+
+  console.log('\n== Comboio de transbordo no editor (caso real do 511, Bruno 22/09)');
+  await click('.done [data-act="edit-week"]');
+  await click('[data-act="add-day"]');
+  const ti = await ev(`__BCP.S.editor.days.length - 1`);
+  const setSel = (f, v) => ev(`(()=>{const s=document.querySelector('#editor .dayc[data-i="${ti}"] [data-f="${f}"]'); s.value='${v}'; s.dispatchEvent(new Event('change',{bubbles:true}));})()`);
+  await setSel('origin', 'lisboa_oriente'); await setSel('dest', 'aveiro');
+  // "add-day" copia a hora do dia anterior; limpar para simular o preenchimento automático de um dia novo
+  await ev(`(()=>{const i=document.querySelector('#editor .dayc[data-i="${ti}"] [data-f="ida.time"]'); i.value=''; i.dispatchEvent(new Event('input',{bubbles:true}));})()`);
+  await ev(`(()=>{const i=document.querySelector('#editor .dayc[data-i="${ti}"] [data-f="ida.train"]'); i.value='511'; i.dispatchEvent(new Event('input',{bubbles:true}));})()`);
+  await sleep(1200);
+  const tt511 = await text(`#editor .dayc[data-i="${ti}"] [data-tt="ida"]`);
+  check('511 (só até Pampilhosa) não mostra erro de percurso — confirma-se pelo journeys', !/não segue/.test(tt511) && !/não para/.test(tt511), tt511);
+  check('511 preenche a hora automaticamente, com nota de transbordo', /Preenchido pela CP/.test(tt511) && /com transbordo/.test(tt511), tt511);
+  const filled511 = await ev(`document.querySelector('#editor .dayc[data-i="${ti}"] [data-f="ida.time"]').value`);
+  check('a hora preenchida é a da 1.ª estação (07:39, Lisboa Oriente)', filled511 === '07:39', filled511);
+  await shot('11-transbordo');
+  // não guarda nem fecha o editor (del-day chamaria confirm(), sem handler neste harness);
+  // os testes seguintes não dependem do estado do editor.
 
   console.log('\n== Manifest e service worker');
   const man = await ev(`fetch('manifest.webmanifest').then(r=>r.json())`);

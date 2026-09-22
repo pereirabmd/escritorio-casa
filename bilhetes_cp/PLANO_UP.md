@@ -1,6 +1,11 @@
 # PLANO_UP — alterações ao plano do bilhetes_cp
 
-**Regra: `PLANO.md` (como está hoje) + as alterações deste ficheiro = `PLANO_FINAL.md`.**
+> **Congelado em 22/09/2026, por decisão de Bruno: a partir de agora só o
+> `PLANO_FINAL.md` é mantido e consultado.** Este ficheiro fica só como
+> histórico de como se chegou lá; todo o conteúdo relevante (incluindo os
+> pontos ainda por decidir da secção 5) já está em `PLANO_FINAL.md`.
+
+**Regra: `PLANO.md` (como estava em 21/09/2026) + as alterações deste ficheiro = `PLANO_FINAL.md`.**
 Tudo o que difere entre os dois planos está listado aqui, e nada que não
 esteja aqui difere. O `PLANO_FINAL.md` é o documento a seguir; este serve para
 rever o que mudou e, na implementação, para saber o que aplicar ao código.
@@ -224,3 +229,7 @@ A outra sessão ainda está a editar o `PLANO.md`. Quando acabar, para manter
   120×3` (`sold_out_retry_delays_s`, 25 retentativas), depois o esquema
   normal (para, notifica). Como ultrapassa os 5 min do `access_token`, a
   rajada renova-o a meio; também para se o comboio já tiver partido.
+- **Correção na PWA (3.7): comboio de transbordo (ex.: 511) deixa de mostrar
+  aviso de percurso** — passa a confirmar pelo `journeys` quando o `timetable`
+  do próprio comboio não cobre o trajeto todo, preenchendo a hora
+  automaticamente com a nota "(com transbordo)", em vez de erro.

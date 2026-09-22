@@ -510,6 +510,14 @@ nunca deixa a prioridade por omissão; `high` chega, não é preciso `max`.
   `python3 scripts/pwa_link.py` no computador do projeto e abrir o link uma vez
   no telemóvel (as chaves vão no fragmento `#...`, ficam no `localStorage` e
   nunca no código público). Sem elas a app funciona na mesma, sem confirmar
+- **Corrigido (22/09): comboio de transbordo na PWA.** O preenchimento
+  automático usava só o `timetable` do próprio comboio; um comboio que só é
+  uma secção de uma viagem (ex.: o 511 só vai até Pampilhosa, liga ao 4609
+  até Aveiro) mostrava um aviso de percurso em vez de preencher a hora. A
+  PWA passa a confirmar pelo `journeys` (mesmas chaves, sem login) quando o
+  `timetable` não cobre o trajeto todo — o mesmo fallback já usado no RPi
+  (`scripts/timetable.py`, `check_via_journeys`) — e preenche normalmente,
+  com a nota "(com transbordo)"
 - **Dropdown de comboios já usados**: no campo do nº de comboio, oferecer
   um dropdown com os comboios que já apareceram nas configurações
   anteriores (histórico na Sheet — Config e/ou Bilhetes), cada opção com
@@ -1005,7 +1013,12 @@ Fora da lista de 9.8, por secção:
 - **3.11** instrumentação: ✅. Modo de calibração com `DELETE`: ⏳ (ver 8).
 - **Secção 6**: heartbeat ✅ em código (`heartbeat.py`, cron de 5 em 5 min), inativo até haver URL no `.env`; hardening: `ufw` ativo e `unattended-upgrades` instalado, mas o SSH ainda aceita password (⏳ decisão de Bruno).
 - **ntfy**: ✅ o RPi autentica-se com um token revogável (`NTFY_TOKEN`), com a password de reserva.
-- **PLANO_UP 5**: AMBÍGUO (repetir o `/sale` em vez de pedir confirmação manual), estado por perna na Sheet e service account restrita a esta Sheet ficam por decidir; o código **não repete** um `/sale` ambíguo.
+- **Pontos de design por decidir** (nenhum implementado): **AMBÍGUO** — repetir o `/sale`
+  em vez de pedir confirmação manual (depende de testar se a CP aceita uma 2.ª venda para
+  o mesmo passageiro/comboio; por agora o código **não repete**); **estado por perna na
+  Sheet** (agendado/comprado/falhou), com notificação quando uma semana fica agendada;
+  **service account restrita só a esta Sheet**, em vez da pasta partilhada; **ecrã de
+  consentimento OAuth** da PWA em modo "Testing" — por confirmar se expira ao fim de 7 dias.
 
 ### 9.2 O que está feito e a correr no RPi
 - ntfy, nginx, TLS, fail2ban, DDNS (3.6 e `deploy/README.md`).
@@ -1023,7 +1036,7 @@ ponta a ponta com token e com entrega agendada; pre-flight; daemon a correr sob 
 systemd; validação da Config contra o horário oficial (apanhou a linha de exemplo e, por um
 erro meu, a hora da 1.ª estação: corrigido, ver 3.11); `--search-only` e simulação da
 Config real (520 às 06:45 com embarque às 07:27; 731 às 17:30 com embarque às 17:39) com a
-CP real, sem lançar nada. 179 testes unitários (também no RPi, com a rede bloqueada) e 44 verificações da
+CP real, sem lançar nada. 179 testes unitários (também no RPi, com a rede bloqueada) e 47 verificações da
 PWA em Chromium (offline, teclado, 360 px, manifest, service worker).
 
 ### 9.4 Por verificar — nunca exercitado contra a CP real
@@ -1047,8 +1060,9 @@ PWA em Chromium (offline, teclado, 360 px, manifest, service worker).
    `anexos.zip`, depois de usados.
 4. Criar um check em healthchecks.io (período 5 min, tolerância 10 min) e pôr o URL em
    `HEALTHCHECKS_PING_URL` no `.env` do RPi.
-5. Decidir sobre o SSH só por chave (hoje aceita password) e sobre os pontos de
-   `PLANO_UP` 5 referidos em 9.1.
+5. Decidir sobre o SSH só por chave (hoje aceita password), sobre repetir o `/sale` num
+   estado AMBÍGUO, sobre um estado por perna na Sheet e sobre restringir a service
+   account só a esta Sheet (pontos de design por decidir, listados em 9.1).
 6. Autorizar (ou não) um teste real de `DELETE /sale/{id}`, que cria uma venda `PENDING`
    num comboio de pouca procura e a cancela: desbloqueia o `--dry-run` e a calibração.
 

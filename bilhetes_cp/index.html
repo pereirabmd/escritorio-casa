@@ -256,7 +256,7 @@ body.kb-open #toast{--toast-b:84px}
    Nenhuma credencial neste ficheiro: as chaves da CP (só para preencher
    horários) ficam no localStorage do telemóvel, importadas por um link.
    ===================================================================== */
-const VERSION = 'v1.1.1';
+const VERSION = 'v1.1.2';
 const CLIENT_ID = '108256538530-fgunbb52s7f3s9aurfpjtaf01v8fjbph.apps.googleusercontent.com';
 const SHEET_ID = '1PNY134CrkxVhcpKHjTDZMYqYv3q-_oeDusJ-hgLRMBk';
 const SCOPE = 'https://www.googleapis.com/auth/spreadsheets';
@@ -831,6 +831,30 @@ async function fetchTimetable(train, date) {
     .catch(() => ({ error: 'rede' }));
   ttCache.set(key, p); const res = await p; if (res.error) ttCache.delete(key); return res;
 }
+/* Pesquisa de horários (journeys): só usada como reforço quando o comboio escolhido não faz o
+   trajeto todo sozinho — pode ser uma secção de uma viagem com transbordo (ex.: o 511 só vai até
+   Pampilhosa; segue no 4609 até Aveiro). Mesmo fallback já usado no RPi (scripts/timetable.py,
+   check_via_journeys) — sem isto, o preenchimento automático da hora falha com um aviso em vez de
+   confirmar a viagem. Usa as mesmas chaves do timetable, sem login. */
+const jCache = new Map();
+async function fetchJourneys(orgCode, dstCode, date) {
+  const k = cpKeys(); if (!k || !orgCode || !dstCode) return null;
+  const key = `${orgCode}|${dstCode}|${date}`; if (jCache.has(key)) return jCache.get(key);
+  const p = fetch(`${CP_API}/travel-api/journeys`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Accept': 'application/json, text/plain, */*',
+      'X-Api-Key': k.t, 'x-cp-connect-id': k.i, 'x-cp-connect-secret': k.s },
+    body: JSON.stringify({ arrivalStationCode: dstCode, classes: [2], configID: 200, departureStationCode: orgCode,
+      lang: 'PT', quantities: [{ quantity: 1, type: 1 }], returnDate: null,
+      returnTimeLimit: { endTime: '23:59', limitType: 0, startTime: '00:00' }, saleableOnly: false,
+      searchType: 3, services: [], timeLimit: { endTime: '23:59', limitType: 0, startTime: '00:00' },
+      travelDate: date, username: 'sivNetticket' }),
+  }).then(r => r.ok ? r.json() : null).catch(() => null);
+  jCache.set(key, p); const res = await p; if (!res) jCache.delete(key); return res;
+}
+const tripWithTrain = (data, train) =>
+  (data?.outwardTrip || []).find(t => (t.travelSections || []).some(s => s.trainNumber === train)) || null;
+
 function scheduleVerify(i, leg, delay = 450) { const dd = S.editor?.days[i]; if (dd?.[leg]) dd[leg].anchor = null; clearTimeout(ttTimers[i + leg]); ttTimers[i + leg] = setTimeout(() => verifyLeg(i, leg), delay); }
 async function verifyLeg(i, leg) {
   const E = S.editor, d = E?.days[i]; if (!d) return; const box = $(`.dayc[data-i="${i}"] [data-tt="${leg}"]`); if (!box) return;
@@ -841,21 +865,41 @@ async function verifyLeg(i, leg) {
   const set = (cls, html) => { box.className = 'tt ' + cls; box.innerHTML = html; };
   if (res.none) return set('warn', `A CP não tem o comboio ${train} em ${esc(fmtDay(d.date))}.`);
   if (res.error || !res.stops) return;
+
   const codes = res.stops.map(s => s.station?.code), oi = codes.indexOf(stationCode(org));
-  if (oi < 0) return set('warn', `O comboio ${train} não para em ${esc(stationLabel(org))}.`);
-  const di = codes.indexOf(stationCode(dst), oi + 1);
-  if (di < 0) return set('warn', `O comboio ${train} não segue de ${esc(stationLabel(org))} para ${esc(stationLabel(dst))}.`);
-  const dep = String(res.stops[oi].departure || '').slice(0, 5), arr = String(res.stops[di].arrival || '').slice(0, 5);
-  const first = String(res.stops[0].departure || '').slice(0, 5), firstName = res.stops[0].station?.designation || '';
-  const code = stationCode(org), typed = d[leg].time;
-  const info = (oi === 0 ? '' : `${esc(firstName)} ${esc(first)} → `) + `${esc(stationLabel(org))} ${esc(dep)} → ${esc(stationLabel(dst))} ${esc(arr)}`;
+  const di = oi < 0 ? -1 : codes.indexOf(stationCode(dst), oi + 1);
+  let anchorStops = res.stops, first, firstName, dep, arr, info;
+
+  if (oi >= 0 && di >= 0) {
+    dep = String(res.stops[oi].departure || '').slice(0, 5); arr = String(res.stops[di].arrival || '').slice(0, 5);
+    first = String(res.stops[0].departure || '').slice(0, 5); firstName = res.stops[0].station?.designation || '';
+    info = (oi === 0 ? '' : `${esc(firstName)} ${esc(first)} → `) + `${esc(stationLabel(org))} ${esc(dep)} → ${esc(stationLabel(dst))} ${esc(arr)}`;
+  } else {
+    const trip = tripWithTrain(await fetchJourneys(stationCode(org), stationCode(dst), d.date), train);
+    if (S.editor !== E || !$(`.dayc[data-i="${i}"] [data-tt="${leg}"]`)) return;
+    if (!trip) {
+      return set('warn', oi < 0 ? `O comboio ${train} não para em ${esc(stationLabel(org))}.`
+                                : `O comboio ${train} não segue de ${esc(stationLabel(org))} para ${esc(stationLabel(dst))}.`);
+    }
+    const firstSec = trip.travelSections[0], lastSec = trip.travelSections[trip.travelSections.length - 1];
+    first = String(firstSec.departureTime || '').slice(0, 5);
+    firstName = firstSec.departureStation?.designation || stationLabel(org);
+    dep = oi >= 0 ? String(res.stops[oi].departure || '').slice(0, 5) : first;
+    arr = String(lastSec.arrivalTime || '').slice(0, 5);
+    anchorStops = oi >= 0 ? res.stops : [{ station: firstSec.departureStation, departure: firstSec.departureTime }];
+    info = `${esc(firstName)} ${esc(first)} → ${esc(stationLabel(dst))} ${esc(arr)}`
+         + (trip.travelSections.length > 1 ? ' (com transbordo)' : '');
+  }
+
+  const code = anchorStops === res.stops ? stationCode(org) : anchorStops[0].station?.code;
+  const typed = d[leg].time;
   if (!typed) {          /* a Config leva a hora da 1.ª estação: é a que abre a venda */
-    const v = first || dep; d[leg].time = v; d[leg].anchor = anchorFromStops(res.stops, code, v, d.date);
+    const v = first || dep; d[leg].time = v; d[leg].anchor = anchorFromStops(anchorStops, code, v, d.date);
     const inp = $(`.dayc[data-i="${i}"] [data-f="${leg}.time"]`); if (inp) inp.value = v;
     refreshDayMeta(i); E.dirty = true;
-    return set('ok', `Preenchido pela CP com a partida do comboio (${esc(oi === 0 ? stationLabel(org) : firstName)}) às ${esc(v)}: ${info}`);
+    return set('ok', `Preenchido pela CP com a partida do comboio (${esc(firstName || stationLabel(org))}) às ${esc(v)}: ${info}`);
   }
-  d[leg].anchor = anchorFromStops(res.stops, code, typed, d.date); refreshDayMeta(i);
+  d[leg].anchor = anchorFromStops(anchorStops, code, typed, d.date); refreshDayMeta(i);
   if (typed === first || typed === dep) return set('ok', `Confirmado pela CP: ${info}`);
   set('warn', `A CP indica ${esc(first)} (${esc(firstName)}) e ${esc(dep)} (${esc(stationLabel(org))}); tens ${esc(typed)}. <button data-act="use-time" data-i="${i}" data-leg="${leg}" data-time="${esc(first)}">Usar ${esc(first)}</button>`);
 }

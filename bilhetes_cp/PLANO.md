@@ -1,6 +1,6 @@
 # Automação de bilhetes CP — Passe Ferroviário Verde
 
-> **Nota:** existe `PLANO_FINAL.md`, revisão posterior deste documento (com o HAR de 21/09/2026). Em caso de conflito prevalece o `PLANO_FINAL.md`; ver `PLANO_UP.md` para as diferenças.
+> **Nota:** este documento está desatualizado e não é mantido. A referência única, a partir de 22/09/2026, é `PLANO_FINAL.md`.
 
 Automação para comprar bilhetes CP (Comboios de Portugal) ida e volta, a €0
 via desconto do Passe Ferroviário Verde, correndo num Raspberry Pi. Os
