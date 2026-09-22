@@ -20,6 +20,7 @@ na aba Logs; erros inesperados também.
 from __future__ import annotations
 
 import argparse
+import re
 import sys
 import time
 import traceback
@@ -735,10 +736,17 @@ def search_only(leg: Leg, cp_factory=CPClient, out=print) -> int:
     return 0
 
 
+def _leg_arg(v: str) -> str:
+    """'ida'/'volta' (Config, 3.2) ou 'pedidoN' (linha N da aba Pedidos, 3.2.1)."""
+    if v in ("ida", "volta") or re.fullmatch(r"pedido\d+", v):
+        return v
+    raise argparse.ArgumentTypeError(f"leg inválida: {v!r} (ida, volta, ou pedidoN)")
+
+
 def main() -> int:
-    ap = argparse.ArgumentParser(description="Compra de uma perna (lançado pelo Scheduler)")
+    ap = argparse.ArgumentParser(description="Compra de uma perna (lançado pelo Scheduler ou pela fila de pedidos)")
     ap.add_argument("--date", required=True, help="data da viagem YYYY-MM-DD")
-    ap.add_argument("--leg", required=True, choices=("ida", "volta"))
+    ap.add_argument("--leg", required=True, type=_leg_arg)
     ap.add_argument("--search-only", action="store_true",
                     help="só pesquisa e mostra o que compraria; nunca cria uma venda")
     args = ap.parse_args()

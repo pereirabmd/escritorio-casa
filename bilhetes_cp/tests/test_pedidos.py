@@ -107,6 +107,11 @@ class RunTests(unittest.TestCase):
 
 
 class LaunchTests(unittest.TestCase):
+    def setUp(self):
+        for f in common.BASE_DIR.glob("locks/*.json"):
+            f.unlink()
+        common._state_file("launched_pedidos.json").unlink(missing_ok=True)
+
     def test_launch_reinicia_o_lock_antes_de_lancar(self):
         legs, _ = common.parse_request_rows([prow()], common.now_local().date())
         leg = legs[0]
@@ -126,6 +131,35 @@ class LaunchTests(unittest.TestCase):
              mock.patch.object(common, "notify_once", return_value=True) as n:
             self.assertFalse(pedidos.launch(legs[0], out=lambda *a: None))
         n.assert_called_once()
+
+    def test_para_apos_falhas_repetidas_sem_progresso_e_avisa(self):
+        # Regressão (22/09): um processo que morre sempre antes de gravar estado (ex.: "--leg"
+        # com um valor que o argparse do hot_buy.py rejeita) era relançado a cada minuto, para
+        # sempre, sem nunca tentar comprar nem notificar — 30 lançamentos seguidos em produção.
+        legs, _ = common.parse_request_rows([prow()], common.now_local().date())
+        leg = legs[0]
+        clock = iter(2_000_000.0 + 40 * i for i in range(20))
+        with mock.patch("pedidos.subprocess.Popen"), \
+             mock.patch("pedidos.time.time", side_effect=lambda: next(clock)), \
+             mock.patch.object(common, "notify_once", return_value=True) as n:
+            oks = [pedidos.launch(leg, out=lambda *a: None) for _ in range(pedidos.MAX_LAUNCHES + 2)]
+        self.assertEqual(oks, [True] * pedidos.MAX_LAUNCHES + [False, False])
+        self.assertEqual(n.call_count, 2)
+
+    def test_uma_tentativa_real_mesmo_falhada_nunca_conta_para_o_limite(self):
+        legs, _ = common.parse_request_rows([prow()], common.now_local().date())
+        leg = legs[0]
+        clock = iter(2_000_000.0 + 40 * i for i in range(40))
+        with mock.patch("pedidos.subprocess.Popen"), \
+             mock.patch("pedidos.time.time", side_effect=lambda: next(clock)), \
+             mock.patch.object(common, "notify_once", return_value=True) as n:
+            oks = []
+            for _ in range(pedidos.MAX_LAUNCHES + 3):
+                oks.append(pedidos.launch(leg, out=lambda *a: None))
+                lock = common.PurchaseLock(leg.lock_key)
+                lock.acquire(); lock.update(state="FAILED"); lock.release()   # simula uma tentativa real
+        self.assertTrue(all(oks), oks)
+        n.assert_not_called()
 
 
 if __name__ == "__main__":

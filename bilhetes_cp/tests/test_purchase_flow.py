@@ -739,6 +739,16 @@ class RequestTests(FlowBase):
         self.run_buyer(cp, clock_offset=100)
         self.assertEqual(self.sheets.requests, [])
 
+    def test_hot_buy_py_aceita_pedidoN_na_linha_de_comandos(self):
+        # Regressão (22/09): "--leg" tinha choices=("ida","volta") e rejeitava "pedidoN" com
+        # exit(2) antes de qualquer log — pedidos.py relançava a mesma perna a cada minuto,
+        # para sempre, sem nunca tentar comprar nem notificar. hot_buy.main() faz o parse.
+        self.assertEqual(hot_buy._leg_arg("pedido5"), "pedido5")
+        self.assertEqual(hot_buy._leg_arg("ida"), "ida")
+        self.assertEqual(hot_buy._leg_arg("volta"), "volta")
+        with self.assertRaises(Exception):
+            hot_buy._leg_arg("qualquer_coisa")
+
 
 class ClassifyTests(unittest.TestCase):
     def test_erro_real_de_22_09_500_com_ws_res_116_e_esgotado_nao_transitorio(self):

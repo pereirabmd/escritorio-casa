@@ -58,19 +58,48 @@ def is_due(raw_row: list, retry: bool, interval_s: float, now_ts: float) -> tupl
     return (now_ts - last_ts >= interval_s), False
 
 
+MAX_LAUNCHES = 5   # relançamentos seguidos que morrem sem gravar nada de novo no lock (ver launch())
+
+
 def launch(leg, out=log.info) -> bool:
+    """Lança `hot_buy.py --leg pedidoN`. Trava (com aviso, 1.1) se o mesmo processo morrer
+    sempre antes de gravar estado — foi exatamente isto que aconteceu em produção a 22/09
+    (`--leg` só aceitava ida/volta; `pedidoN` rebentava no argparse antes de qualquer log, e
+    esta função relançava-o a cada minuto, sem fim, sem nunca tentar comprar nem notificar).
+    Uma retentativa legítima (Retry/Forçar depois de uma tentativa real, mesmo falhada ou
+    esgotada) nunca é travada por isto: só conta contra o limite quando a tentativa anterior
+    não chegou sequer a escrever no lock — nesse caso `peek_state` continua vazio."""
+    path = common._state_file("launched_pedidos.json")
+    launched = common._read_json(path, {})
+    rec = launched.get(leg.lock_key, {})
+    now_ts = time.time()
+    if now_ts - rec.get("ts", 0) < 30:
+        return False                                            # acabou de ser lançado
+    prev = common.peek_state(leg.lock_key)
+    if prev.get("updated_at"):                                  # a tentativa anterior fez algo real
+        rec = {}
+    if rec.get("n", 0) >= MAX_LAUNCHES and prev.get("state") not in scheduler.RESUMABLE:
+        common.notify_once(f"pedido-stuck-{leg.lock_key}", f"Pedido preso — {leg.key}",
+                           f"Tentei lançar a compra {MAX_LAUNCHES} vezes e o processo morre sempre antes de "
+                           "gravar estado (nunca chegou a tentar comprar). Parei de tentar; vê "
+                           "logs/hot_buy.stdout.log e logs/pedidos.log no RPi.",
+                           cooldown_s=3600, logger=log)
+        return False
     lock_path(leg.lock_key).unlink(missing_ok=True)   # cada retentativa é uma tentativa nova (3.2)
     out(f"A lançar {leg.key}: comboio {leg.train} {leg.origin} -> {leg.destination} {leg.hhmm}")
     try:
-        subprocess.Popen([sys.executable, "scripts/hot_buy.py", "--date", leg.date.isoformat(),
-                          "--leg", leg.leg], cwd=common.BASE_DIR, start_new_session=True)
-        return True
+        with open(common.BASE_DIR / "logs" / "hot_buy.stdout.log", "ab") as stdout:
+            subprocess.Popen([sys.executable, "scripts/hot_buy.py", "--date", leg.date.isoformat(), "--leg", leg.leg],
+                             cwd=common.BASE_DIR, stdout=stdout, stderr=subprocess.STDOUT, start_new_session=True)
     except OSError as e:
         log.error("Não consegui lançar %s: %s", leg.key, e)
         common.notify_once(f"pedido-launch-fail-{leg.lock_key}", f"Não consegui lançar o pedido — {leg.key}",
                            f"{type(e).__name__}: a tentativa NÃO arrancou. Vê os logs no RPi.",
                            cooldown_s=1800, logger=log)
         return False
+    launched[leg.lock_key] = {"ts": now_ts, "n": rec.get("n", 0) + 1}
+    common._write_json_atomic(path, launched)
+    return True
 
 
 def run(plan_only: bool = False) -> int:
