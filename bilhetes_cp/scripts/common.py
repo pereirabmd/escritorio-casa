@@ -345,6 +345,10 @@ class Leg:
     # por timetable.apply_anchor(); sem estes campos usa-se a hora da Config.
     anchor: str | None = None          # 'HH:MM' da partida na 1.ª estação
     anchor_date: date | None = None    # data dessa partida
+    # A hora da Config é a da 1.ª estação (a que abre a venda); a de embarque real (Aveiro 07:27) só é
+    # usada para o lembrete, o bilhete e saber se a viagem já passou.
+    board: str | None = None           # 'HH:MM' da partida na estação de embarque
+    board_date: date | None = None     # data dessa partida
 
     @property
     def key(self) -> str:
@@ -360,7 +364,7 @@ class Leg:
 
     @property
     def departure(self) -> datetime:
-        return departure_dt(self.date, self.hhmm)
+        return departure_dt(self.board_date or self.date, self.board or self.hhmm)
 
 
 def norm_station(name: Any) -> str:

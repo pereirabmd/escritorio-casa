@@ -256,7 +256,7 @@ body.kb-open #toast{--toast-b:84px}
    Nenhuma credencial neste ficheiro: as chaves da CP (só para preencher
    horários) ficam no localStorage do telemóvel, importadas por um link.
    ===================================================================== */
-const VERSION = 'v1.1.0';
+const VERSION = 'v1.1.1';
 const CLIENT_ID = '108256538530-fgunbb52s7f3s9aurfpjtaf01v8fjbph.apps.googleusercontent.com';
 const SHEET_ID = '1PNY134CrkxVhcpKHjTDZMYqYv3q-_oeDusJ-hgLRMBk';
 const SCOPE = 'https://www.googleapis.com/auth/spreadsheets';
@@ -326,14 +326,17 @@ function lisbonInstant(iso, hhmm) {
 const fireInstant = (iso, hhmm) => lisbonInstant(addDays(iso, -1), hhmm);
 
 /* A venda abre 24 h antes da partida do comboio na sua 1.ª ESTAÇÃO, que pode ser anterior à de embarque
-   (o comboio das 07:27 em Aveiro parte do Porto às 06:45). A data é a do comboio à saída dessa estação:
-   se passa a meia-noite antes do embarque, parte na véspera. */
-function anchorFromStops(stops, originCode, boarding, date) {
+   (o comboio das 07:27 em Aveiro parte do Porto às 06:45). A hora da Config é a da 1.ª estação; aceita-se
+   também a de embarque. `typed` é a hora escrita: se passa a meia-noite entre as duas estações, a data
+   escrita é a da estação cuja hora foi escrita (1.ª estação = início da viagem). */
+function anchorFromStops(stops, originCode, typed, date) {
   const codes = (stops || []).map(s => s.station?.code), oi = codes.indexOf(originCode);
   const first = String(stops?.[0]?.departure || '').slice(0, 5);
   if (oi < 0 || !/^\d{2}:\d{2}$/.test(first)) return null;
-  const board = String(stops[oi].departure || '').slice(0, 5) || boarding;
-  return { time: first, station: stops[0].station?.designation || '', startDate: board >= first ? date : addDays(date, -1) };
+  const board = String(stops[oi].departure || '').slice(0, 5) || typed;
+  const wraps = board < first ? 1 : 0, typedFirst = typed === first && first !== board;
+  return { time: first, station: stops[0].station?.designation || '', board,
+    startDate: typedFirst ? date : addDays(date, -wraps), boardDate: typedFirst ? addDays(date, wraps) : date };
 }
 
 /* ---------- valores como a Sheet os devolve (números de série, texto...) ---------- */
@@ -527,7 +530,7 @@ function upcomingLegs() {
   return out.map(l => {
     const a = S.anchors[`${l.train}|${l.date}|${l.origin}`];
     const fireDay = addDays(a ? a.startDate : l.date, -1), fireHM = a ? a.time : l.hhmm;
-    return { ...l, fireDay, fireHM, fire: lisbonInstant(fireDay, fireHM) };
+    return { ...l, fireDay, fireHM, showHM: a?.board || l.hhmm, showDay: a?.boardDate || l.date, fire: lisbonInstant(fireDay, fireHM) };
   }).sort((a, b) => a.fire - b.fire || a.hhmm.localeCompare(b.hhmm));
 }
 const weekActiveCount = (mon) => S.data.weekly.filter(r => r.ativo && r.date && r.date >= mon && r.date <= addDays(mon, 6)).length;
@@ -628,7 +631,7 @@ function viewSemana() {
     if (bought.has(`${l.date}|${l.train}`)) chip = '<span class="chip ok">Comprado</span>';
     else if (l.fire > nowMs) chip = `<span class="chip">Compra ${esc(fmtDay(l.fireDay))} ${esc(l.fireHM)}</span>`;
     else chip = '<span class="chip warn">Sem bilhete</span>';
-    rows += `<div class="row"><div><div class="t">${esc(l.hhmm)}</div><div class="d">${esc(fmtDay(l.date))}</div></div>
+    rows += `<div class="row"><div><div class="t">${esc(l.showHM)}</div><div class="d">${esc(fmtDay(l.showDay))}</div></div>
       <div><div class="r">${esc(stationLabel(l.origin))} → ${esc(stationLabel(l.dest))}</div><div class="m"><span>${l.leg === 'ida' ? 'Ida' : 'Volta'} · comboio ${l.train}</span>${chip}</div></div></div>`;
   }
   parts.push(`<div><div class="section-title"><h2>Próximas compras</h2><button class="link" data-act="edit-week" data-week="${mondayOf(today)}">Esta semana</button></div>
@@ -712,7 +715,8 @@ function fireText(d, leg) {
   const l = d[leg]; if (!d.date || !/^\d{2}:\d{2}$/.test(l.time)) return '';
   const a = l.anchor;      /* partida do comboio na 1.ª estação, se a CP a devolveu */
   if (!a) return `Compra automática ${fmtDay(addDays(d.date, -1))} às ${l.time}`;
-  const nota = (a.time !== l.time || a.startDate !== d.date) ? ` (partida em ${a.station || '1.ª estação'})` : '';
+  const nota = a.time !== l.time ? ` (partida em ${a.station || '1.ª estação'})`
+    : (a.board && a.board !== a.time ? ` · embarque às ${a.board}` : '');
   return `Compra automática ${fmtDay(addDays(a.startDate, -1))} às ${a.time}${nota}`;
 }
 function legHtml(d, i, leg) {
@@ -721,7 +725,7 @@ function legHtml(d, i, leg) {
     <div class="leg-h"><h3>${label}</h3><span class="fire" data-fire="${leg}">${esc(fireText(d, leg))}</span></div>
     <div class="leg-row">
       <label class="f"><span>Comboio</span><input class="in num" inputmode="numeric" pattern="[0-9]*" autocomplete="off" data-f="${leg}.train" value="${esc(l.train)}" placeholder="524"></label>
-      <label class="f"><span>Hora de partida</span><input class="in time" type="time" data-f="${leg}.time" value="${esc(l.time)}"></label>
+      <label class="f"><span>Partida (1.ª estação)</span><input class="in time" type="time" data-f="${leg}.time" value="${esc(l.time)}"></label>
     </div>
     <select class="in hist" data-f="${leg}.hist" aria-label="Escolher um comboio já usado">${optionsHistory()}</select>
     <p class="tt" data-tt="${leg}" aria-live="polite"></p>
@@ -842,11 +846,18 @@ async function verifyLeg(i, leg) {
   const di = codes.indexOf(stationCode(dst), oi + 1);
   if (di < 0) return set('warn', `O comboio ${train} não segue de ${esc(stationLabel(org))} para ${esc(stationLabel(dst))}.`);
   const dep = String(res.stops[oi].departure || '').slice(0, 5), arr = String(res.stops[di].arrival || '').slice(0, 5);
-  d[leg].anchor = anchorFromStops(res.stops, stationCode(org), dep || d[leg].time, d.date); refreshDayMeta(i);
-  const info = `${esc(stationLabel(org))} ${esc(dep)} → ${esc(stationLabel(dst))} ${esc(arr)}`;
-  if (!d[leg].time) { d[leg].time = dep; const inp = $(`.dayc[data-i="${i}"] [data-f="${leg}.time"]`); if (inp) inp.value = dep; refreshDayMeta(i); E.dirty = true; return set('ok', `Preenchido pela CP: ${info}`); }
-  if (d[leg].time === dep) return set('ok', `Confirmado pela CP: ${info}`);
-  set('warn', `A CP indica ${esc(dep)} (${info}).<button data-act="use-time" data-i="${i}" data-leg="${leg}" data-time="${esc(dep)}">Usar ${esc(dep)}</button>`);
+  const first = String(res.stops[0].departure || '').slice(0, 5), firstName = res.stops[0].station?.designation || '';
+  const code = stationCode(org), typed = d[leg].time;
+  const info = (oi === 0 ? '' : `${esc(firstName)} ${esc(first)} → `) + `${esc(stationLabel(org))} ${esc(dep)} → ${esc(stationLabel(dst))} ${esc(arr)}`;
+  if (!typed) {          /* a Config leva a hora da 1.ª estação: é a que abre a venda */
+    const v = first || dep; d[leg].time = v; d[leg].anchor = anchorFromStops(res.stops, code, v, d.date);
+    const inp = $(`.dayc[data-i="${i}"] [data-f="${leg}.time"]`); if (inp) inp.value = v;
+    refreshDayMeta(i); E.dirty = true;
+    return set('ok', `Preenchido pela CP com a partida do comboio (${esc(oi === 0 ? stationLabel(org) : firstName)}) às ${esc(v)}: ${info}`);
+  }
+  d[leg].anchor = anchorFromStops(res.stops, code, typed, d.date); refreshDayMeta(i);
+  if (typed === first || typed === dep) return set('ok', `Confirmado pela CP: ${info}`);
+  set('warn', `A CP indica ${esc(first)} (${esc(firstName)}) e ${esc(dep)} (${esc(stationLabel(org))}); tens ${esc(typed)}. <button data-act="use-time" data-i="${i}" data-leg="${leg}" data-time="${esc(first)}">Usar ${esc(first)}</button>`);
 }
 
 /* ---------- definições ---------- */

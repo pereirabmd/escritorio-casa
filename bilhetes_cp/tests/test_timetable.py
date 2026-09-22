@@ -45,6 +45,16 @@ class CheckLegTests(unittest.TestCase):
         self.assertIn("às 07:27 segundo a CP", msg)
         self.assertIn("Config tem 07:30", msg)
 
+    def test_aceita_a_hora_da_primeira_estacao_ou_a_de_embarque(self):
+        # o caso real: o 520 parte do Porto às 06:45 e passa em Aveiro às 07:27; Bruno configura 06:45
+        f = lambda t, d: tt(("94-2006", "06:45"), (AVEIRO, "07:27"), (LISBOA, None))  # noqa: E731
+        self.assertIsNone(timetable.check_leg(leg(hhmm="06:45"), f))      # 1.ª estação
+        self.assertIsNone(timetable.check_leg(leg(hhmm="07:27"), f))      # embarque
+        msg = timetable.check_leg(leg(hhmm="07:00"), f)                    # nenhuma das duas
+        self.assertIn("às 06:45", msg)
+        self.assertIn("às 07:27", msg)
+        self.assertIn("Config tem 07:00", msg)
+
     def test_erro_de_rede_nas_duas_fontes_propaga_para_o_chamador_decidir(self):
         def boom(*a):
             raise RuntimeError("HTTP 500")
@@ -58,7 +68,8 @@ class CheckLegTests(unittest.TestCase):
             {"trainNumber": train, "serviceCode": {"code": "IC", "designation": "IC"}}]}]}
         self.assertIsNone(timetable.check_leg(leg(), boom, lambda l: trip("07:27")))
         self.assertIn("não consta dos horários", timetable.check_leg(leg(), boom, lambda l: trip("07:27", train=999)))
-        self.assertIn("parte às 08:00", timetable.check_leg(leg(), boom, lambda l: trip("08:00")))
+        # o journeys só dá a hora de embarque: a da Config pode ser a da 1.ª estação, por isso não a compara
+        self.assertIsNone(timetable.check_leg(leg(hhmm="06:45"), boom, lambda l: trip("07:27")))
 
 
 class CacheTests(unittest.TestCase):
@@ -101,7 +112,7 @@ class AnchorTests(unittest.TestCase):
 
     def test_comboio_de_dia_ancora_a_partida_na_primeira_estacao(self):
         a = timetable.anchor_for(leg(hhmm="06:45"), lambda t, d: self.stops())
-        self.assertEqual(a, ("06:10", D, "Porto Campanha"))
+        self.assertEqual(a, ("06:10", D, "Porto Campanha", "06:45", D))
 
     def test_o_disparo_passa_a_ser_24h_antes_da_primeira_estacao(self):
         l = timetable.apply_anchor(leg(hhmm="06:45"), lambda t, d: self.stops())
@@ -119,6 +130,22 @@ class AnchorTests(unittest.TestCase):
         l = timetable.apply_anchor(leg(hhmm="01:10"), lambda t, d: self.stops(first="23:30", board="01:10"))
         self.assertEqual((l.anchor, l.anchor_date.isoformat()), ("23:30", "2026-09-22"))
         self.assertEqual(l.fire.strftime("%Y-%m-%d %H:%M"), "2026-09-21 23:30")
+
+    def test_hora_da_config_e_a_da_primeira_estacao_como_no_caso_do_520(self):
+        # Bruno configura 06:45 (Porto); embarca em Aveiro às 07:27: o disparo é 24 h antes das 06:45
+        f = lambda t, d: self.stops(first="06:45", board="07:27")  # noqa: E731
+        l = timetable.apply_anchor(leg(hhmm="06:45"), f)
+        self.assertEqual(l.fire.strftime("%Y-%m-%d %H:%M"), "2026-09-22 06:45")
+        self.assertEqual((l.board, l.board_date), ("07:27", D))
+        self.assertEqual(l.departure.strftime("%H:%M"), "07:27")          # o embarque é às 07:27
+        self.assertEqual(l.hhmm, "06:45")
+
+    def test_meia_noite_com_a_hora_da_primeira_estacao_a_data_e_a_do_inicio(self):
+        # Config 23:30 no dia 23 (início da viagem); embarca às 01:10, já no dia 24
+        l = timetable.apply_anchor(leg(hhmm="23:30"), lambda t, d: self.stops(first="23:30", board="01:10"))
+        self.assertEqual((l.anchor_date, l.board_date.isoformat()), (D, "2026-09-24"))
+        self.assertEqual(l.fire.strftime("%Y-%m-%d %H:%M"), "2026-09-22 23:30")
+        self.assertEqual(l.departure.strftime("%Y-%m-%d %H:%M"), "2026-09-24 01:10")
 
     def test_quando_embarca_na_primeira_estacao_nada_muda(self):
         l = timetable.apply_anchor(leg(hhmm="07:27"), lambda t, d: self.stops(first="07:27", board="07:27"))

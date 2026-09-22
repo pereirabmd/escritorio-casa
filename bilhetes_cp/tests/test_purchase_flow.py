@@ -107,17 +107,22 @@ class FlowBase(unittest.TestCase):
         self.notes.append((title, message, kw))
         return True
 
-    def run_buyer(self, cp, login_fn=None, sheets=None, state=None):
+    def run_buyer(self, cp, login_fn=None, sheets=None, state=None, clock_offset=100, advancing=False):
         if state:
             lock = common.PurchaseLock(self.leg.lock_key)
             lock.acquire(); lock.update(**state); lock.release()
         lock = common.PurchaseLock(self.leg.lock_key)
         fire = self.leg.fire.timestamp()
+        now = [fire + clock_offset]                       # `advancing`: o tempo avança com cada espera
+        def sleep(s):
+            self.sleeps.append(s)
+            if advancing:
+                now[0] += s
         buyer = hot_buy.Buyer(
             self.leg, lock, sheets=sheets or self.sheets,
             login_fn=login_fn or (lambda: {"access_token": "a", "refresh_token": "r"}),
             refresh_fn=lambda rt: {"access_token": "a2", "refresh_token": "r2"},
-            cp_factory=lambda tok: cp, clock=lambda: fire + 100, sleep=self.sleeps.append,
+            cp_factory=lambda tok: cp, clock=lambda: now[0], sleep=sleep,
             notify_fn=self.notify_fn)
         code = buyer.run()
         return code, common.peek_state(self.leg.lock_key)
@@ -214,6 +219,30 @@ class SearchOnlyTests(FlowBase):
         self.assertIn("FALHA", "\n".join(linhas))
 
 
+class BoardingTimeTests(FlowBase):
+    def test_hora_da_config_e_a_da_1a_estacao_o_lembrete_e_o_bilhete_usam_o_embarque(self):
+        # Config 06:45 (o comboio parte do Porto); Bruno embarca em Aveiro às 07:27
+        self.leg = common.Leg(DAY, "ida", "aveiro", "lisboa_oriente", 524, "06:45", 12,
+                              anchor="06:45", anchor_date=DAY, board="07:27", board_date=DAY)
+        common.lock_path(self.leg.lock_key).unlink(missing_ok=True)
+        cp = FakeCP()
+        _, st = self.run_buyer(cp)
+        self.assertEqual(st["state"], "CONFIRMED")
+        lembrete = [n for n in self.notes if n[0].startswith("Partida às")][0]
+        self.assertEqual(lembrete[0], "Partida às 07:27 (daqui a 30 min)")                       # não 06:45
+        self.assertEqual(lembrete[2]["at"].strftime("%H:%M"), "06:57")                            # 07:27 - 30 min
+        self.assertEqual(self.sheets.bilhetes[0][4], "07:27")                                      # hora do bilhete = embarque
+        self.assertEqual(self.leg.fire.strftime("%H:%M"), "06:45")                                # o disparo, à 1.ª estação
+
+    def test_nao_avisa_hora_diferente_quando_a_config_e_a_da_1a_estacao(self):
+        self.leg = common.Leg(DAY, "ida", "aveiro", "lisboa_oriente", 524, "06:10", 12,
+                              anchor="06:10", anchor_date=DAY, board="06:45", board_date=DAY)
+        common.lock_path(self.leg.lock_key).unlink(missing_ok=True)
+        with mock.patch.object(hot_buy, "notify_once", return_value=True) as n:
+            self.run_buyer(FakeCP())
+        self.assertFalse(any("Hora não bate certo" in str(c) for c in n.call_args_list))
+
+
 class SaleOutcomeTests(FlowBase):
     def test_esgotado_notifica_e_para_sem_repetir(self):
         cp = FakeCP(sale_script=[resp(409, {}, messages=[{"message": "Comboio esgotado"}])])
@@ -261,6 +290,79 @@ class SaleOutcomeTests(FlowBase):
         _, st = self.run_buyer(cp)
         self.assertEqual(st["state"], "FAILED")
         self.assertNotIn("passengers", cp.calls)
+
+
+NAO_ABERTO = [{"message": "A venda para este comboio ainda não está aberta"}]
+
+
+class NotOpenYetTests(FlowBase):
+    """Uma venda que abre mais tarde do que o previsto é tratada na iteração seguinte (Bruno, 22/09)."""
+
+    def test_ainda_nao_aberto_repete_e_compra_quando_abre(self):
+        cp = FakeCP(sale_script=[resp(409, {}, messages=NAO_ABERTO), resp(409, {}, messages=NAO_ABERTO),
+                                 resp(200, {"saleID": 9})])
+        _, st = self.run_buyer(cp)
+        self.assertEqual(st["state"], "CONFIRMED")
+        self.assertEqual(cp.calls.count("sale"), 3)                       # duas recusas e uma venda
+        self.assertEqual(cp.calls.count("passengers"), 1)                 # e só UMA sequência de passos
+        self.assertEqual(len(self.sleeps), 2)
+        self.assertEqual([t for t in self.titles() if t.startswith("Ainda não abriu")].__len__(), 1)   # avisa uma vez
+        self.assertIn("abriu", st["timing"])                              # fica registado o atraso
+        self.assertTrue(any(r[5] == "AINDA_NAO_ABERTO" for r in self.sheets.logs))
+
+    def test_comeca_depressa_e_abranda(self):
+        cp = FakeCP(sale_script=[resp(409, {}, messages=NAO_ABERTO)] * 3 + [resp(200, {"saleID": 9})])
+        self.run_buyer(cp, clock_offset=1, advancing=True)                # 1 s depois do alvo: fase rápida
+        self.assertEqual(self.sleeps, [0.25, 0.25, 0.25])
+        self.sleeps.clear()
+        cp = FakeCP(sale_script=[resp(409, {}, messages=NAO_ABERTO)] * 2 + [resp(200, {"saleID": 9})])
+        self.setUp()
+        self.run_buyer(cp, clock_offset=60, advancing=True)               # 60 s depois: fase lenta
+        self.assertEqual(self.sleeps, [2.0, 2.0])
+
+    def test_nao_repete_para_sempre_e_diz_que_nao_abriu(self):
+        cp = FakeCP(sale_script=[resp(409, {}, messages=NAO_ABERTO)] * 2000)
+        code, st = self.run_buyer(cp, clock_offset=0, advancing=True)
+        self.assertEqual((code, st["state"]), (2, "FAILED"))
+        n = cp.calls.count("sale")
+        self.assertTrue(300 < n < 450, n)                                # 20 s a 0,25 s + ~10 min a 2 s
+        self.assertNotIn("passengers", cp.calls)
+        self.assertTrue(any("não abriu" in t for t in self.titles()))
+        self.assertEqual(len([t for t in self.titles() if t.startswith("Ainda não abriu")]), 1)
+
+    def test_recusa_nao_reconhecida_repete_uns_segundos_e_depois_falha(self):
+        recusa = resp(400, {}, messages=["Pedido inválido"])
+        cp = FakeCP(sale_script=[recusa, resp(200, {"saleID": 9})])
+        _, st = self.run_buyer(cp, clock_offset=1, advancing=True)
+        self.assertEqual((st["state"], cp.calls.count("sale")), ("CONFIRMED", 2))
+        self.setUp()
+        cp = FakeCP(sale_script=[recusa] * 1000)
+        code, st = self.run_buyer(cp, clock_offset=0, advancing=True)
+        self.assertEqual((code, st["state"]), (2, "FAILED"))
+        self.assertTrue(40 < cp.calls.count("sale") < 100, cp.calls.count("sale"))     # ~15 s a 0,25 s
+        self.assertTrue(any("Compra falhou" in t for t in self.titles()))
+
+    def test_recusa_nao_reconhecida_depois_da_janela_curta_nao_repete(self):
+        cp = FakeCP(sale_script=[resp(400, {}, messages=["Pedido inválido"]), resp(200, {"saleID": 9})])
+        _, st = self.run_buyer(cp, clock_offset=100)
+        self.assertEqual((st["state"], cp.calls.count("sale")), ("FAILED", 1))
+
+    def test_esgotado_continua_a_parar_logo(self):
+        cp = FakeCP(sale_script=[resp(409, {}, messages=["Comboio esgotado"]), resp(200, {"saleID": 9})])
+        _, st = self.run_buyer(cp, clock_offset=1, advancing=True)
+        self.assertEqual((st["state"], cp.calls.count("sale")), ("SOLD_OUT", 1))
+
+    def test_estado_ambiguo_nunca_e_repetido_mesmo_com_a_venda_por_abrir(self):
+        cp = FakeCP(sale_script=[resp(409, {}, messages=NAO_ABERTO), CPError("ambiguous", "ReadTimeout"),
+                                 resp(200, {"saleID": 9})])
+        _, st = self.run_buyer(cp, clock_offset=1, advancing=True)
+        self.assertEqual((st["state"], cp.calls.count("sale")), ("AMBIGUOUS", 2))     # parou no ambíguo
+
+    def test_para_de_tentar_quando_o_comboio_ja_partiu(self):
+        cp = FakeCP(sale_script=[resp(409, {}, messages=NAO_ABERTO)] * 50)
+        depart = self.leg.departure.timestamp() - self.leg.fire.timestamp()
+        _, st = self.run_buyer(cp, clock_offset=depart + 5)              # já depois da partida
+        self.assertEqual((st["state"], cp.calls.count("sale")), ("FAILED", 1))
 
 
 class CompletionTests(FlowBase):
@@ -420,6 +522,9 @@ class ClassifyTests(unittest.TestCase):
         self.assertEqual(classify_sale_response(resp(500))[0], "transient")
         self.assertEqual(classify_sale_response(resp(429))[0], "transient")
         self.assertEqual(classify_sale_response(resp(422, {}, messages=["Sem lugares disponíveis"]))[0], "sold_out")
+        self.assertEqual(classify_sale_response(resp(409, {}, messages=["A venda ainda não está aberta"]))[0], "not_open")
+        self.assertEqual(classify_sale_response(resp(409, {}, messages=["Comboio indisponível"]))[0], "not_open")   # nunca esgotado por engano
+        self.assertEqual(classify_sale_response(resp(422, {}, messages=["Sale is not open yet"]))[0], "not_open")
         self.assertEqual(classify_sale_response(resp(200, {}, messages=["Comboio esgotado"]))[0], "sold_out")
         self.assertEqual(classify_sale_response(resp(400, {}, messages=["Estação inválida"]))[0], "known")
         self.assertEqual(classify_sale_response(resp(200, {"x": 1}))[0], "known")

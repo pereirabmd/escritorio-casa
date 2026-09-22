@@ -97,7 +97,7 @@ try {
     console.log('  problemas:', JSON.stringify(problems.slice(0, 4)));
   }
   check('a app arranca e mostra conteúdo', await ev(`document.querySelector('#view').innerText.length>40`));
-  check('título e versão', (await ev('document.title')) === 'Bilhetes CP' && (await ev('__BCP.VERSION')) === 'v1.1.0');
+  check('título e versão', (await ev('document.title')) === 'Bilhetes CP' && (await ev('__BCP.VERSION')) === 'v1.1.1');
   check('sem scroll horizontal', await ev(`document.documentElement.scrollWidth<=innerWidth && document.querySelector('#view').scrollWidth<=document.querySelector('#view').clientWidth+1`));
   const home = await text('#view');
   check('ação em destaque: falta configurar a semana seguinte', /Falta configurar a semana de \d\d\/\d\d a \d\d\/\d\d/.test(home), home.slice(0, 80));
@@ -129,6 +129,17 @@ try {
   const ft = await text('#editor');
   check('a data sugerida da compra segue a partida do comboio na 1.ª estação (Porto 06:10, não Aveiro 06:45)', /Compra automática [^\n]* às 06:10 \(partida em Porto Campanha\)/.test(ft), ft.match(/Compra automática[^\n]*/g)?.join(' | '));
   check('sem diferença (volta: 1.ª estação = embarque) não acrescenta nota', /Compra automática [^\n]* às 18:30(?! \()/.test(ft) && !/18:30 \(partida/.test(ft));
+  // a hora da Config é a da 1.ª estação (caso do 520): aceita-se, confirma-se e mostra-se o embarque
+  await ev(`(()=>{const i=document.querySelector('#editor .dayc [data-f="ida.time"]'); i.value='06:10'; i.dispatchEvent(new Event('input',{bubbles:true}));})()`);
+  await sleep(1200);
+  const t1 = await text('#editor .dayc [data-tt="ida"]'), f1 = await text('#editor .dayc [data-fire="ida"]');
+  check('hora da 1.ª estação (06:10) é aceite e confirmada pela CP', /Confirmado pela CP/.test(t1) && /Porto Campanha 06:10/.test(t1), t1);
+  check('com a hora da 1.ª estação a compra é às 06:10 e mostra o embarque às 06:45', /às 06:10 · embarque às 06:45/.test(f1), f1);
+  await ev(`(()=>{const i=document.querySelector('#editor .dayc [data-f="ida.time"]'); i.value='07:00'; i.dispatchEvent(new Event('input',{bubbles:true}));})()`);
+  await sleep(1200);
+  const t2 = await text('#editor .dayc [data-tt="ida"]');
+  check('uma hora que não é nem a da 1.ª estação nem a de embarque avisa e sugere a da 1.ª estação', /A CP indica 06:10 \(Porto Campanha\) e 06:45/.test(t2) && /Usar 06:10/.test(t2), t2);
+  await ev(`(()=>{const i=document.querySelector('#editor .dayc [data-f="ida.time"]'); i.value='06:45'; i.dispatchEvent(new Event('input',{bubbles:true}));})()`);
   const noite = await ev(`(()=>{const a=__BCP.anchorFromStops([{station:{code:'A',designation:'Porto'},departure:'23:30'},{station:{code:'B'},departure:'01:10'}],'B','01:10','2026-09-22'); return a.startDate+' '+a.time})()`);
   check('comboio que passa a meia-noite antes do embarque parte na véspera', noite === '2026-09-21 23:30', noite);
   await shot('04-editor');

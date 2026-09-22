@@ -209,3 +209,5 @@ A outra sessão ainda está a editar o `PLANO.md`. Quando acabar, para manter
   base histórica desta comparação e não deve voltar a ser editado.
 - **Regra nova (3.11): a venda abre 24 h antes da partida do comboio na 1.ª estação**
   (Bruno, 22/09). Implementada no disparo e na PWA; ver `PLANO_FINAL.md` 3.11.
+- **Regra nova (3.3.1): "ainda não aberto" repete-se na iteração seguinte** (Bruno, 22/09); substitui o "não repetir até à calibração".
+- **Regra nova (3.11, 4): a hora da Config é a da 1.ª estação** (Bruno, 22/09); a de embarque também se aceita.

@@ -165,9 +165,15 @@ def _is_not_sent(exc: Exception) -> bool:
     return False
 
 
-SOLD_OUT_RX = re.compile(
-    r"esgotad|sem\s+lugar|n[aã]o\s+h[aá]\s+lugar|lotad|sold.?out|no\s+seats|"
-    r"indispon[ií]vel|capacity", re.I)
+# Só o que diz inequivocamente "sem lugares". "Indisponível" fica de fora de propósito: pode ser
+# "ainda não aberto", e tratá-lo como esgotado seria perder o bilhete; repetir por engano não custa nada.
+SOLD_OUT_RX = re.compile(r"esgotad|sem\s+lugar|n[aã]o\s+h[aá]\s+lugar|lotad|sold.?out|no\s+seats", re.I)
+
+# "Ainda não aberto" (venda que abre mais tarde do que o previsto). O formato real da resposta da CP
+# ainda não foi observado (PLANO_FINAL 2.7): estes padrões são um palpite a confirmar com os logs.
+NOT_OPEN_RX = re.compile(
+    r"ainda\s+n[aã]o|n[aã]o\s+(est[aá]\s+)?abert|not\s+yet|too\s+early|fora\s+d[oa]\s+(prazo|per[ií]odo)|"
+    r"anteced[eê]ncia|per[ií]odo\s+de\s+venda|sale\s+(is\s+)?not\s+open|indispon[ií]vel|opens?\s+(at|on|in)", re.I)
 
 
 def classify_sale_response(resp: CPResponse) -> tuple[str, str]:
@@ -176,7 +182,8 @@ def classify_sale_response(resp: CPResponse) -> tuple[str, str]:
     Devolve (categoria, detalhe) com categoria em:
       'ok'         — venda criada (há saleID)
       'sold_out'   — esgotado: notificar e parar
-      'known'      — erro conhecido não recuperável (4xx claro): não repetir
+      'not_open'   — a venda ainda não abriu (nada foi criado): repetir na iteração seguinte
+      'known'      — recusa não reconhecida (4xx): repete-se só durante uma janela curta, depois falha
       'transient'  — 5xx/429: retry seguro
     O critério de sucesso é POSITIVO (existir saleID), não só o HTTP 200.
     """
@@ -188,6 +195,8 @@ def classify_sale_response(resp: CPResponse) -> tuple[str, str]:
         return "transient", f"HTTP {resp.status}"
     if SOLD_OUT_RX.search(text) or SOLD_OUT_RX.search(resp.text[:2000]):
         return "sold_out", text
+    if NOT_OPEN_RX.search(text) or NOT_OPEN_RX.search(resp.text[:2000]):
+        return "not_open", text
     if resp.ok:
         return "known", f"HTTP {resp.status} sem saleID: {text}"
     return "known", f"HTTP {resp.status}: {text}"

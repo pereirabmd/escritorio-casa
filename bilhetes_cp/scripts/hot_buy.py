@@ -324,7 +324,7 @@ class Buyer:
             trains[ckey] = sections
             common._write_json_atomic(cache_path, trains)
             dep = str(trip.get("departureTime", ""))[:5]
-            if dep and dep != self.leg.hhmm:
+            if dep and dep not in (self.leg.hhmm, self.leg.board):
                 notify_once(f"hora-mismatch-{self.leg.key}-{dep}",
                             f"Hora não bate certo — {self.label}",
                             f"A Sheet diz {self.leg.hhmm} mas a CP indica {dep} para o comboio "
@@ -347,16 +347,30 @@ class Buyer:
     # ---- disparo ---------------------------------------------------------
 
     def fire_sale(self) -> str:
+        """O disparo. Um erro técnico repete-se pouco (3.3.1); uma venda que ainda NÃO abriu repete-se
+        na iteração seguinte, sem criar nada (decisão de Bruno, 22/09): de 0,25 em 0,25 s no início
+        e de 2 em 2 s depois, até abrir, esgotar ou acabar a janela. Uma recusa não reconhecida repete-se
+        só durante uns segundos (pode ser "ainda não aberto" com outro texto) e depois falha, com a
+        resposta completa no log para se aprender o formato."""
         st = self.lock.state
         max_attempts = int(cfg("max_sale_attempts", 3))
-        for attempt in range(1, max_attempts + 1):
-            target = self.fire_ts
+        target = self.fire_ts
+        open_window = float(cfg("not_open_retry_window_s", 600))
+        fast_s, fast_iv = float(cfg("not_open_fast_phase_s", 20)), float(cfg("not_open_fast_interval_s", 0.25))
+        slow_iv = float(cfg("not_open_slow_interval_s", 2.0))
+        unknown_s = float(cfg("unrecognized_4xx_retry_s", 15))
+        departure_ts = self.leg.departure.timestamp()
+        attempt = transient = 0
+        waiting_since: float | None = None
+        while True:
+            attempt += 1
             try:
                 resp = self.cp.create_sale_request(self.leg.date.isoformat(), st["sections"])
             except CPError as e:
-                if e.kind == "not_sent" and attempt < max_attempts:
-                    log.warning("POST /sale não chegou a sair (%s) — retry seguro %d/%d", e, attempt, max_attempts)
-                    self.sleep(0.25 * attempt)
+                if e.kind == "not_sent" and transient < max_attempts - 1:
+                    transient += 1
+                    log.warning("POST /sale não chegou a sair (%s) — retry seguro %d/%d", e, transient, max_attempts)
+                    self.sleep(0.25 * transient)
                     continue
                 if e.kind == "not_sent":
                     self.terminate("FAILED", f"Compra falhou — {self.label}",
@@ -374,24 +388,50 @@ class Buyer:
             timing = (f"alvo {hms(target)} | enviado {hms(resp.sent_at)} "
                       f"({(resp.sent_at - target) * 1000:+.0f} ms) | resposta {hms(resp.received_at)} "
                       f"({resp.elapsed_ms:.0f} ms) | timestamp CP {server_ts} | Date CP {resp.date_header}")
-            log.info("POST /sale #%d -> HTTP %s [%s] %s", attempt, resp.status, kind, timing)
+            if kind not in ("not_open", "known") or attempt <= 3 or attempt % 20 == 0:   # sem inundar o log
+                log.info("POST /sale #%d -> HTTP %s [%s] %s", attempt, resp.status, kind, timing)
             if kind == "ok":
                 sale_id = resp.body["saleID"]
-                self.lock.update(state="SALE_CREATED", sale_id=sale_id, timing=timing)
-                self.slog("COMPRA", "SALE_CREATED", status=resp.status, ref=str(sale_id), err=timing)
+                late = f" | abriu {self.clock() - target:.1f} s depois do alvo, tentativa {attempt}" if waiting_since else ""
+                self.lock.update(state="SALE_CREATED", sale_id=sale_id, timing=timing + late)
+                self.slog("COMPRA", "SALE_CREATED", status=resp.status, ref=str(sale_id), err=timing + late)
                 return "ok"
-            if kind == "transient" and attempt < max_attempts:
-                self.sleep(0.25 * attempt)
-                continue
-            if kind == "sold_out":
+            if kind == "transient":
+                transient += 1
+                if transient < max_attempts:
+                    self.sleep(0.25 * transient)
+                    continue
+            elif kind == "sold_out":
                 self.terminate("SOLD_OUT", f"Esgotado — {self.label}",
                                f"Não há lugares. {detail}", "COMPRA", tags=["no_entry"],
                                status=resp.status)
                 return "sold_out"
+            elif kind in ("not_open", "known"):
+                now = self.clock()
+                window = open_window if kind == "not_open" else unknown_s
+                if now < target + window and now < departure_ts:
+                    if waiting_since is None:
+                        waiting_since = now
+                        log.warning("Venda ainda não aberta (%s): resposta %s", kind, common.sanitize(resp.text[:500]))
+                        self.slog("COMPRA", "AINDA_NAO_ABERTO" if kind == "not_open" else "RECUSA_A_REPETIR",
+                                  status=resp.status, err=f"{detail[:200]} | {timing}")
+                        self.notify(f"Ainda não abriu — {self.label}",
+                                    ("A CP diz que a venda ainda não abriu" if kind == "not_open" else
+                                     "A CP recusou o pedido (resposta não reconhecida; pode ser \"ainda não aberto\")")
+                                    + f". Volto a tentar de {fast_iv:g} em {fast_iv:g} s durante até "
+                                      f"{window / 60 if window >= 60 else window:.0f} {'min' if window >= 60 else 's'}. "
+                                    f"Resposta: {detail[:120]}", tags=["hourglass_flowing_sand"], logger=log)
+                    self.sleep(fast_iv if now - target < fast_s else slow_iv)
+                    continue
+                if kind == "not_open":
+                    self.terminate("FAILED", f"A venda não abriu — {self.label}",
+                                   f"Tentei durante {open_window / 60:.0f} min e a CP continuou a dizer que "
+                                   f"a venda não abriu ({detail[:150]}). Verifica na App CP.", "ERRO",
+                                   status=resp.status)
+                    return "failed"
             self.terminate("FAILED", f"Compra falhou — {self.label}",
                            f"{detail}. Resposta: {resp.text[:300]}", "ERRO", status=resp.status)
             return "failed"
-        return "failed"
 
     # ---- concluir a venda ------------------------------------------------
 
@@ -470,21 +510,22 @@ class Buyer:
         self.lock.update(reference=ref, carriage=carriage, seat=seat)
         leg = self.leg
         pretty = lambda k: k.replace("_", " ").title()  # noqa: E731
+        boarding = leg.board or leg.hhmm                   # hora de embarque real, não a da 1.ª estação
         self.sheet("append_ticket", leg.date.isoformat(), leg.train, pretty(leg.origin),
-                   pretty(leg.destination), leg.hhmm, carriage or "", seat or "", ref)
+                   pretty(leg.destination), boarding, carriage or "", seat or "", ref)
         seat_txt = f"carruagem {carriage}, lugar {seat}" if carriage or seat else "lugar não devolvido pela CP"
         reminder_ok = False
         remind_ts = leg.departure.timestamp() - 30 * 60          # instante absoluto
         remind_at = datetime.fromtimestamp(remind_ts, TZ)
         if remind_ts > time.time() + 120:
             reminder_ok = self.notify(
-                f"Partida às {leg.hhmm} (daqui a 30 min)",
+                f"Partida às {boarding} (daqui a 30 min)",
                 f"Comboio {leg.train} · {pretty(leg.origin)} → {pretty(leg.destination)} · {seat_txt}",
                 tags=["train"], at=remind_at, logger=log)
         self.lock.update(reminder_scheduled=reminder_ok)
         extra = "" if reminder_ok else " (lembrete de partida não agendado)"
         return self.terminate("CONFIRMED", f"Bilhete comprado — {self.label}",
-                              f"{pretty(leg.origin)} → {pretty(leg.destination)} às {leg.hhmm} · "
+                              f"{pretty(leg.origin)} → {pretty(leg.destination)} às {boarding} · "
                               f"{seat_txt} · ref. {ref}{extra}", "COMPRA", tags=["white_check_mark"], ref=ref)
 
     # ---- proteção contra compra duplicada -------------------------------
@@ -542,8 +583,7 @@ def search_only(leg: Leg, cp_factory=CPClient, out=print) -> int:
     out(f"  disparo (T-24h): {leg.fire:%a %d/%m %H:%M:%S %Z}; o processo arrancaria "
         f"{float(cfg('launch_lead_minutes', 6)):.0f} min antes")
     if leg.anchor:
-        out(f"  ancorado à partida do comboio na 1.ª estação ({leg.anchor}"
-            + ("" if leg.anchor == leg.hhmm else f"; embarque às {leg.hhmm}") + ")")
+        out(f"  disparo à partida do comboio na 1.ª estação ({leg.anchor}); embarque em {leg.origin} às {leg.board or leg.hhmm}")
     else:
         out(f"  sem a hora da 1.ª estação: disparo pela hora da Config ({leg.hhmm})")
     try:
@@ -558,8 +598,9 @@ def search_only(leg: Leg, cp_factory=CPClient, out=print) -> int:
         f"vendável online: {trip.get('saleableOnline')} (não indica a janela de venda)")
     for s in sections:
         out(f"  secção: comboio {s['train']} {s['dep']} -> {s['arr']} ({s['designation']})")
-    out("  hora da Config " + ("bate certo com a CP." if dep == leg.hhmm
-                              else f"NÃO bate certo: Config {leg.hhmm}, CP {dep} (a compra é pelo nº do comboio)."))
+    ok = leg.hhmm in (dep, leg.anchor or dep)              # vale a hora da 1.ª estação ou a de embarque
+    out("  hora da Config " + ("bate certo com a CP." if ok
+                              else f"NÃO bate certo: Config {leg.hhmm}, CP {dep} no embarque (a compra é pelo nº do comboio)."))
     out("Nenhuma venda foi criada.")
     return 0
 

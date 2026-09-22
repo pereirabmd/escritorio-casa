@@ -333,12 +333,18 @@ a ser jobs periódicos separados (cron, `/etc/cron.d/bilhetes-cp`).
   1. Ligação falhou antes de enviar → retry seguro
   2. Servidor respondeu com erro conhecido → retry conforme o código
      (5xx tenta de novo, 4xx normalmente não)
-  3. **Ainda não aberto** — só pode ser tratado depois da calibração
-     (3.11): se se provar que, antes da abertura, a API responde de forma
-     inequívoca (código/mensagem própria, sem criar venda), essa resposta
-     é "ainda não aberto" e repetir é seguro e desejável, a intervalos
-     curtos, até sucesso, esgotado ou fim do prazo. Até essa prova, aplica-se
-     a regra geral do ponto 2 (4xx → não repetir)
+  3. **Ainda não aberto** — uma venda que abre mais tarde do que o previsto é
+     tratada **na iteração seguinte**: repetir o `POST /sale` é seguro (nada foi
+     criado) e desejável. Decisão de Bruno (22/09), antes da calibração: repete de
+     0,25 em 0,25 s nos primeiros 20 s e de 2 em 2 s depois, até à venda abrir,
+     esgotar, ao fim de 10 min (`not_open_retry_window_s`) ou à partida do
+     comboio, avisando uma vez por ntfy. O formato real da resposta ainda é
+     desconhecido (2.7), por isso a deteção é por padrões de texto (`NOT_OPEN_RX`)
+     e "indisponível" conta como "ainda não aberto", nunca como esgotado: errar
+     nesse sentido custa só uns pedidos, o contrário custa o bilhete. Uma recusa
+     4xx **não reconhecida** também se repete, mas só durante 15 s
+     (`unrecognized_4xx_retry_s`) e depois falha com a resposta completa no log,
+     para se aprender o formato. Um estado AMBÍGUO nunca se repete
   4. Timeout depois do request poder ter sido entregue → estado
      **AMBÍGUO**: em teoria, verificar primeiro se a venda já foi criada
      antes de disparar outro `/sale`, via `GET
@@ -666,6 +672,14 @@ O que os HAR ensinam, para não voltar a ser mal interpretado:
   1.ª estação, usa-se a hora da Config e há aviso. É uma hipótese consistente
   com o HAR, não uma prova: continua a medir-se (abaixo).
 
+  **A hora da Config (`Hora_Ida`/`Hora_Volta`) é a da 1.ª estação** (Bruno, 22/09:
+  o 520 configura-se às 06:45, a hora a que parte do Porto, embora Bruno embarque
+  em Aveiro às 07:27). A data da Config é a do início da viagem nessa estação. A
+  hora de embarque também se aceita. A hora de embarque real, lida do horário
+  oficial, serve só para o lembrete de partida, para o bilhete e para saber se a
+  viagem já passou; se a hora da Config não for nem a da 1.ª estação nem a de
+  embarque, a linha é inválida (3.10.3).
+
 **Por medir** (instrumentar nas primeiras compras reais e num modo de
 calibração):
 1. A resposta exata do `POST /sale` antes da abertura, e a de um comboio
@@ -729,7 +743,7 @@ Bloco do Passe (topo, linhas 4-6):
 Tabela semanal (a partir da linha 11):
 | Data | Origem | Destino | Comboio_Ida | Hora_Ida | Comboio_Volta | Hora_Volta | Ativo |
 
-Datas em ISO e horas em texto `HH:MM` (ver 3.5). A posição fixa das linhas
+Datas em ISO e horas em texto `HH:MM` (ver 3.5). `Hora_Ida` e `Hora_Volta` são as horas a que o comboio parte da sua 1.ª estação (3.11). A posição fixa das linhas
 (bloco do passe nas linhas 4-6, tabela a partir da 11) torna a leitura
 frágil a inserções de linhas: o RPi deve procurar os cabeçalhos pelo nome em
 vez de confiar só nos números de linha.
@@ -848,7 +862,7 @@ bilhetes_cp/
 │   ├── pass_expiry_check.py     validade do Passe (3.9)
 │   ├── heartbeat.py             ping ao healthchecks.io (secção 6); inativo até haver URL no .env
 │   └── pwa_link.py              link que liga a PWA às chaves da CP
-├── tests/                       unittest (136) e teste da PWA em Chromium real (pwa_smoke.mjs)
+├── tests/                       unittest (149) e teste da PWA em Chromium real (pwa_smoke.mjs)
 └── deploy/                      configs aplicadas no RPi, sem segredos (ver deploy/README.md); inclui o `cp-scheduler.service` do daemon
 ```
 
@@ -938,6 +952,7 @@ Os 12 pontos de alinhamento que este plano pedia, com o estado real
 | 11 | Regra do DST (3.4) | ⏳ a confirmar com a CP antes de 25/10/2026; os testes fixam "mesma hora do dia anterior" |
 | 12 | `*.har` no `.gitignore`; `CP_FISCAL_ADDRESS` no `.env.example` | ✅ |
 | — | Disparo ancorado à partida do comboio na 1.ª estação (3.11, regra de 22/09) | ✅ `Leg.fire` no RPi e data sugerida na PWA; sem a 1.ª estação usa a Config e avisa |
+| — | "Ainda não aberto" repete-se na iteração seguinte (3.3.1, decisão de 22/09) | ✅ janela de 10 min, fase rápida e lenta; os padrões de texto são um palpite até haver respostas reais |
 
 Fora da lista de 9.8, por secção:
 - **3.3.1** categoria "ainda não aberto": ⏳ só depois da calibração (3.11); até lá, 4xx não se repete.
@@ -960,14 +975,15 @@ Login na CP a partir do RPi; `journeys` sem login; `timetable` sem login e com C
 aberto ao origin do GitHub Pages; leitura da Sheet real (cabeçalhos por nome); ntfy de
 ponta a ponta com token e com entrega agendada; pre-flight; daemon a correr sob o
 systemd; validação da Config contra o horário oficial (apanhou a linha de exemplo, ver
-9.6). 136 testes unitários (também no RPi, com a rede bloqueada) e 41 verificações da
+9.6). 149 testes unitários (também no RPi, com a rede bloqueada) e 44 verificações da
 PWA em Chromium (offline, teclado, 360 px, manifest, service worker).
 
 ### 9.4 Por verificar — nunca exercitado contra a CP real
 - **`POST /sale` e os passos seguintes**: cobertos por testes com uma CP falsa; nenhuma
   compra real foi feita por esta automação.
 - **Respostas de esgotado, "ainda não abriu" e erro** (2.7): `classify_sale_response`
-  assume padrões de texto em `messages`; os primeiros registos reais dirão se ajusta.
+  assume padrões de texto em `messages`; os primeiros registos reais dirão se ajusta. Até lá
+  uma recusa não reconhecida repete-se 15 s antes de falhar (3.3.1).
 - **`totalAmount` e `seatData`**: procurados de forma tolerante.
 - **Janela de abertura T-24h (3.11)**: por medir com as primeiras compras reais.
 - **Recuperação de reboot a meio de uma compra** (3.10.6): testada com estados

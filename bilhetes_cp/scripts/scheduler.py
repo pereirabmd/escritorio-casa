@@ -157,6 +157,9 @@ def evaluate(snap: dict, from_cache: bool, now_ts: float, plan_only: bool = Fals
             elif leg.anchor != leg.hhmm:
                 log.info("%s: disparo ancorado à partida do comboio na 1.ª estação (%s), não às %s de embarque",
                          leg.key, leg.anchor, leg.hhmm)
+            else:
+                log.info("%s: disparo às %s (partida na 1.ª estação; embarque às %s)", leg.key, leg.anchor,
+                         leg.board or leg.hhmm)
         fire_ts = leg.fire.timestamp()
 
         first_seen = seen.setdefault(leg.key, now_ts)         # 1.º ciclo em que a perna foi vista

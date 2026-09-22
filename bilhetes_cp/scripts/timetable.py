@@ -47,7 +47,7 @@ def fetch_journeys(leg: Leg) -> dict:
 
 def check_via_journeys(leg: Leg, journeys: Callable[[Leg], dict] = fetch_journeys) -> str | None:
     """Segunda fonte, quando o `timetable` não responde: o `journeys` lista todos os comboios
-    do dia entre as duas estações. Se o comboio não consta, ou parte a outra hora, é problema."""
+    do dia entre as duas estações. Se o comboio não consta, é problema."""
     label = f"comboio {leg.train} em {leg.date:%d/%m}"
     data = journeys(leg)          # se a rede falhar, propaga: "sem informação", nunca "não existe"
     try:
@@ -55,10 +55,7 @@ def check_via_journeys(leg: Leg, journeys: Callable[[Leg], dict] = fetch_journey
     except RuntimeError:
         return (f"o {label} não consta dos horários entre {leg.origin.replace('_', ' ')} "
                 f"e {leg.destination.replace('_', ' ')}")
-    dep = str(trip.get("departureTime", ""))[:5]
-    if dep and dep != leg.hhmm:
-        return f"o {label} parte às {dep} segundo a CP, mas a Config tem {leg.hhmm}"
-    return None
+    return None     # o `journeys` só dá a hora de embarque: a da Config pode ser a da 1.ª estação, não se compara
 
 
 def check_leg(leg: Leg, fetch: Callable[[int, date], dict | None] = fetch_timetable,
@@ -85,17 +82,23 @@ def check_leg(leg: Leg, fetch: Callable[[int, date], dict | None] = fetch_timeta
         return (f"o {label} não segue de {leg.origin.replace('_', ' ')} "
                 f"para {leg.destination.replace('_', ' ')}")
     dep = str(stops[i].get("departure") or "")[:5]
-    if dep and dep != leg.hhmm:
+    first = str(stops[0].get("departure") or "")[:5]
+    if leg.hhmm not in {h for h in (dep, first) if h}:      # vale a hora da 1.ª estação OU a de embarque
+        if i > 0 and first and first != dep:
+            return (f"o {label} parte de {(stops[0].get('station') or {}).get('designation') or 'a 1.ª estação'} "
+                    f"às {first} e de {leg.origin.replace('_', ' ')} às {dep} segundo a CP, "
+                    f"mas a Config tem {leg.hhmm}")
         return (f"o {label} parte de {leg.origin.replace('_', ' ')} às {dep} segundo a CP, "
                 f"mas a Config tem {leg.hhmm}")
     return None
 
 
-def anchor_from_stops(leg: Leg, stops: list[dict]) -> tuple[str, date, str] | None:
-    """(hora, data, nome da estação) da partida do comboio na sua 1.ª estação.
+def anchor_from_stops(leg: Leg, stops: list[dict]) -> tuple[str, date, str, str, date] | None:
+    """(hora e data da partida na 1.ª estação, nome dessa estação, hora e data de embarque).
 
-    A data é a do comboio à saída dessa estação: se o comboio passa a meia-noite antes de chegar
-    à estação de embarque (hora de embarque anterior à da 1.ª estação), parte na véspera.
+    A hora da Config é normalmente a da 1.ª estação (a que abre a venda); aceita-se também a de
+    embarque. Se o comboio passa a meia-noite entre as duas, a data da Config é a da estação cuja hora
+    foi escrita (a 1.ª estação: data do início da viagem; senão: a do embarque).
     """
     codes = [(s.get("station") or {}).get("code") for s in stops]
     org = station_code(leg.origin)
@@ -105,21 +108,26 @@ def anchor_from_stops(leg: Leg, stops: list[dict]) -> tuple[str, date, str] | No
     if not re.fullmatch(r"\d{2}:\d{2}", first):
         return None
     board = str(stops[codes.index(org)].get("departure") or "")[:5] or leg.hhmm
-    start = leg.date if board >= first else leg.date - timedelta(days=1)
-    return first, start, (stops[0].get("station") or {}).get("designation") or ""
+    wraps = timedelta(days=1) if board < first else timedelta(0)
+    if leg.hhmm == first and first != board:          # Bruno escreveu a hora da 1.ª estação
+        start, board_date = leg.date, leg.date + wraps
+    else:                                             # escreveu a de embarque
+        start, board_date = leg.date - wraps, leg.date
+    return first, start, (stops[0].get("station") or {}).get("designation") or "", board, board_date
 
 
 def anchor_for(leg: Leg, fetch: Callable[[int, date], dict | None] = fetch_timetable
-               ) -> tuple[str, date, str] | None:
+               ) -> tuple[str, date, str, str, date] | None:
     """Âncora do disparo (PLANO_FINAL 3.11). Cache de 24 h; se a CP falhar, mantém o último valor
-    conhecido em vez de voltar à hora de embarque. None = sem informação."""
+    conhecido em vez de voltar à hora da Config. None = sem informação."""
     path = common._state_file("anchors.json")
     cache = common._read_json(path, {})
     key = f"{leg.key}|{leg.train}|{leg.origin}|{leg.hhmm}"
     hit, now = cache.get(key), time.time()
 
-    def unpack(h: dict) -> tuple[str, date, str]:
-        return h["hhmm"], date.fromisoformat(h["date"]), h.get("station", "")
+    def unpack(h: dict) -> tuple[str, date, str, str, date]:
+        return (h["hhmm"], date.fromisoformat(h["date"]), h.get("station", ""),
+                h.get("board", h["hhmm"]), date.fromisoformat(h.get("board_date", h["date"])))
 
     if hit and now - hit["ts"] < ANCHOR_TTL_S:
         return unpack(hit)
@@ -130,16 +138,17 @@ def anchor_for(leg: Leg, fetch: Callable[[int, date], dict | None] = fetch_timet
         res = None
     if res:
         cache = {k: v for k, v in cache.items() if now - v["ts"] < 7 * 86400}
-        cache[key] = {"ts": now, "hhmm": res[0], "date": res[1].isoformat(), "station": res[2]}
+        cache[key] = {"ts": now, "hhmm": res[0], "date": res[1].isoformat(), "station": res[2],
+                      "board": res[3], "board_date": res[4].isoformat()}
         common._write_json_atomic(path, cache)
         return res
     return unpack(hit) if hit else None
 
 
 def apply_anchor(leg: Leg, fetch: Callable[[int, date], dict | None] = fetch_timetable) -> Leg:
-    """A mesma perna, com o disparo ancorado à partida na 1.ª estação (se se conseguir saber)."""
+    """A mesma perna, com o disparo ancorado à 1.ª estação e a hora de embarque real (se se souber)."""
     a = anchor_for(leg, fetch)
-    return dataclasses.replace(leg, anchor=a[0], anchor_date=a[1]) if a else leg
+    return dataclasses.replace(leg, anchor=a[0], anchor_date=a[1], board=a[3], board_date=a[4]) if a else leg
 
 
 def check_leg_cached(leg: Leg, fetch: Callable[[int, date], dict | None] = fetch_timetable,

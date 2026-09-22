@@ -39,7 +39,12 @@
     "clock_max_offset_ms": 150,
     "cp_date_max_offset_s": 3.0,
     "access_token_lifetime_seconds": 300,
-    "refresh_token_lifetime_seconds": 1799
+    "refresh_token_lifetime_seconds": 1799,
+    "not_open_retry_window_s": 600,
+    "not_open_fast_phase_s": 20,
+    "not_open_fast_interval_s": 0.25,
+    "not_open_slow_interval_s": 2.0,
+    "unrecognized_4xx_retry_s": 15
   },
   "reminders": {
     "config_missing_check_times": [
