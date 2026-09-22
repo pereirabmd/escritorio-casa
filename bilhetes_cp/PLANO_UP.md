@@ -212,3 +212,8 @@ A outra sessão ainda está a editar o `PLANO.md`. Quando acabar, para manter
 - **Regra nova (3.3.1): "ainda não aberto" repete-se na iteração seguinte** (Bruno, 22/09); substitui o "não repetir até à calibração".
 - **Regra nova (3.11, 4): a hora da Config é a da 1.ª estação** (Bruno, 22/09); a de embarque também se aceita.
 - **Regra nova (3.2): o lembrete de partida leva carruagem e lugar** (Bruno, 22/09), com três fontes e sem falhar a compra se faltarem.
+- **Regra corrigida (3.2): uma configuração tardia inicia a compra de imediato** (Bruno, 22/09), em vez de recusar; substitui a tolerância `late_start_grace_minutes` e a condição "já era conhecida antes do disparo".
+- **Funcionalidade nova (3.2): vigilância do comboio nos últimos 30 min antes da
+  partida** (Bruno, 22/09). `scripts/live_delay.py`, cron a cada minuto, lê a aba
+  Bilhetes, consulta o `timetable` do comboio na estação de embarque e notifica só
+  quando o atraso, o cais ou a supressão mudam em relação à última leitura.

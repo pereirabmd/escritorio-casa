@@ -27,8 +27,7 @@ class Base(unittest.TestCase):
     def setUp(self):
         for f in common.BASE_DIR.glob("locks/*.json"):
             f.unlink()
-        for n in ("seen.json", "launched.json"):
-            common._state_file(n).unlink(missing_ok=True)
+        common._state_file("launched.json").unlink(missing_ok=True)
         self.notes = []
         self.snap = {"weekly": [row()], "passe": []}
         patches = [
@@ -47,13 +46,6 @@ class Base(unittest.TestCase):
 
     def keys(self):
         return [k for k, _ in self.notes]
-
-    def mark_seen(self, before_fire=True):
-        """Simula que a perna já era conhecida (ciclos anteriores) antes da hora do disparo."""
-        legs = common.parse_snapshot(self.snap, NOW.date())[0]
-        common._write_json_atomic(common._state_file("seen.json"),
-                                  {l.key: l.fire.timestamp() - (3600 if before_fire else -3600) for l in legs})
-        return legs
 
     def set_state(self, leg, state, **kw):
         lock = common.PurchaseLock(leg.lock_key)
@@ -88,11 +80,10 @@ class PlanTests(Base):
         self.assertEqual({i.leg.date.isoformat() for i in items}, {"2026-09-23"})
         self.assertTrue(any(k.startswith("config-issue-") for k in self.keys()))
 
-    def test_plan_only_nao_notifica_nem_grava_estado(self):
+    def test_plan_only_nao_notifica(self):
         self.snap = {"weekly": [row(h_ida="25:90"), row(data="2026-09-23")], "passe": []}
         self.assertEqual(len(self.ev(plan_only=True)), 2)
         self.assertEqual(self.notes, [])
-        self.assertFalse(common._state_file("seen.json").exists())
 
 
 class AnchorTests(Base):
@@ -122,33 +113,36 @@ class AnchorTests(Base):
         self.assertEqual([i.launch_ts for i in items], sorted(i.launch_ts for i in items))
 
 
-class LateAndRecoveryTests(Base):
-    """Disparo já passado com a partida ainda futura (3.10.3, 3.2 ponto 5)."""
+class LateArrivalTests(Base):
+    """Um disparo já passado é lançado de imediato, desde que a partida ainda seja futura
+    (Bruno, 22/09): chegar tarde não é motivo para desistir."""
     LATE = datetime(2026, 9, 21, 6, 50, tzinfo=common.TZ).timestamp()      # 5 min depois do disparo da ida
 
-    def test_configuracao_tardia_avisa_e_nao_compra(self):
-        items = self.ev(now=self.LATE)                     # a perna nunca tinha sido vista antes do disparo
-        self.assertEqual([i.leg.leg for i in items], ["volta"])          # a volta ainda é futura
-        self.assertIn("late-config-2026-09-22-ida-524", self.keys())
-
-    def test_perna_conhecida_antes_do_disparo_e_recuperada_depois_de_um_reboot(self):
-        self.mark_seen()
+    def test_configuracao_tardia_e_iniciada_de_imediato(self):
         items = self.ev(now=self.LATE)
-        ida = [i for i in items if i.leg.leg == "ida"]
-        self.assertEqual(len(ida), 1)
-        self.assertEqual(ida[0].launch_ts, self.LATE)                   # arranca já
-        self.assertFalse(any(k.startswith("late-config") for k in self.keys()))
+        self.assertEqual({i.leg.leg for i in items}, {"ida", "volta"})     # a ida também, mesmo tardia
+        ida = [i for i in items if i.leg.leg == "ida"][0]
+        self.assertEqual(ida.launch_ts, self.LATE)                        # arranca já, não T-6min
+        self.assertTrue(any(k.startswith("late-start-2026-09-22-ida") for k in self.keys()))
 
-    def test_fora_da_tolerancia_avisa_janela_perdida(self):
-        self.mark_seen()
-        items = self.ev(now=datetime(2026, 9, 21, 7, 30, tzinfo=common.TZ).timestamp())   # 45 min depois
-        self.assertEqual([i.leg.leg for i in items], ["volta"])
-        self.assertIn("missed-2026-09-22-ida-524", self.keys())
+    def test_atraso_de_poucos_segundos_nao_gera_aviso_de_atraso(self):
+        items = self.ev(now=datetime(2026, 9, 21, 6, 45, 30, tzinfo=common.TZ).timestamp())
+        self.assertEqual(len(items), 2)
+        self.assertFalse(any(k.startswith("late-start-") for k in self.keys()))
+
+    def test_muito_tarde_mas_antes_da_partida_continua_a_ser_lancado(self):
+        quase_partida = datetime(2026, 9, 22, 6, 40, tzinfo=common.TZ).timestamp()   # a 5 min de partir
+        items = self.ev(now=quase_partida)
+        self.assertTrue(any(i.leg.leg == "ida" for i in items))
+
+    def test_depois_da_partida_ja_nao_e_lancado(self):
+        items = self.ev(now=datetime(2026, 9, 22, 7, 0, tzinfo=common.TZ).timestamp())
+        self.assertFalse(any(i.leg.leg == "ida" for i in items))
 
     def test_venda_a_meio_pode_ser_retomada_ate_aos_15_min(self):
-        legs = self.mark_seen()
+        legs = common.parse_snapshot(self.snap, NOW.date())[0]
         self.set_state(legs[0], "FISCAL_OK", sale_id=7)
-        t12 = datetime(2026, 9, 21, 6, 57, tzinfo=common.TZ).timestamp()     # 12 min depois: fora da tolerância de 10, dentro dos 15
+        t12 = datetime(2026, 9, 21, 6, 57, tzinfo=common.TZ).timestamp()     # 12 min depois: dentro dos 15
         self.assertTrue(any(i.leg.leg == "ida" for i in self.ev(now=t12)))
         t20 = datetime(2026, 9, 21, 7, 5, tzinfo=common.TZ).timestamp()      # 20 min depois: a venda expirou
         self.assertFalse(any(i.leg.leg == "ida" for i in self.ev(now=t20)))

@@ -11,8 +11,8 @@ import timetable
 D = date(2026, 9, 23)
 
 
-def leg(train=520, hhmm="07:27"):
-    return common.Leg(D, "ida", "aveiro", "lisboa_oriente", train, hhmm, 12)
+def leg(train=520, hhmm="07:27", org="aveiro", dst="lisboa_oriente"):
+    return common.Leg(D, "ida", org, dst, train, hhmm, 12)
 
 
 def tt(*stops):
@@ -32,13 +32,32 @@ class CheckLegTests(unittest.TestCase):
             msg = timetable.check_leg(leg(), lambda t, d, r=resposta: r)
             self.assertIn("não consta do horário oficial", msg)
 
-    def test_nao_para_na_origem(self):
-        msg = timetable.check_leg(leg(), lambda t, d: tt(("94-2006", "06:45"), (LISBOA, None)))
+    def test_nao_para_na_origem_e_sem_transbordo_e_erro(self):
+        msg = timetable.check_leg(leg(), lambda t, d: tt(("94-2006", "06:45"), (LISBOA, None)),
+                                  lambda l: {"outwardTrip": []})
         self.assertIn("não para em aveiro", msg)
 
-    def test_sentido_errado(self):  # destino antes da origem
-        msg = timetable.check_leg(leg(), lambda t, d: tt((LISBOA, "06:00"), (AVEIRO, "07:27")))
+    def test_sentido_errado_e_sem_transbordo_e_erro(self):  # destino antes da origem
+        msg = timetable.check_leg(leg(), lambda t, d: tt((LISBOA, "06:00"), (AVEIRO, "07:27")),
+                                  lambda l: {"outwardTrip": []})
         self.assertIn("não segue de aveiro para lisboa oriente", msg)
+        self.assertIn("nem com transbordo", msg)
+
+    def test_o_caso_real_do_511_lisboa_oriente_para_aveiro_com_transbordo_em_pampilhosa(self):
+        # o timetable do 511 só vai até Pampilhosa; a viagem completa é 511 + 4609
+        stops_511 = tt((LISBOA, "07:39"), ("94-37002", None))         # não passa em Aveiro
+        journeys = {"outwardTrip": [{"travelSections": [
+            {"trainNumber": 511, "departureStation": {"code": LISBOA}, "arrivalStation": {"code": "94-37002"}},
+            {"trainNumber": 4609, "departureStation": {"code": "94-37002"}, "arrivalStation": {"code": AVEIRO}}]}]}
+        l = leg(train=511, hhmm="07:39", org="lisboa_oriente", dst="aveiro")
+        self.assertIsNone(timetable.check_leg(l, lambda t, d: stops_511, lambda x: journeys))
+
+    def test_511_sem_a_viagem_completa_na_pesquisa_continua_a_ser_erro(self):
+        stops_511 = tt((LISBOA, "07:39"), ("94-37002", None))
+        l = leg(train=511, hhmm="07:39", org="lisboa_oriente", dst="aveiro")
+        msg = timetable.check_leg(l, lambda t, d: stops_511, lambda x: {"outwardTrip": []})
+        self.assertIn("não segue de", msg)
+        self.assertIn("nem com transbordo", msg)
 
     def test_hora_diferente(self):
         msg = timetable.check_leg(leg(hhmm="07:30"), lambda t, d: tt((AVEIRO, "07:27"), (LISBOA, None)))

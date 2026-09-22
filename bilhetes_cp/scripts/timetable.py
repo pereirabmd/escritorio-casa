@@ -45,6 +45,16 @@ def fetch_journeys(leg: Leg) -> dict:
                                         leg.date.isoformat())
 
 
+def journey_with_train(leg: Leg, journeys: Callable[[Leg], dict] = fetch_journeys) -> dict | None:
+    """A viagem (origem -> destino) que inclui este comboio, ou None se não existir. Conhece os
+    transbordos (ex.: 511 até Pampilhosa e 4609 até Aveiro). Se a rede falhar, propaga: "sem informação"."""
+    data = journeys(leg)
+    try:
+        return pick_trip(data, train_number=leg.train, require_saleable=False)
+    except RuntimeError:
+        return None
+
+
 def check_via_journeys(leg: Leg, journeys: Callable[[Leg], dict] = fetch_journeys) -> str | None:
     """Segunda fonte, quando o `timetable` não responde: o `journeys` lista todos os comboios
     do dia entre as duas estações. Se o comboio não consta, é problema."""
@@ -76,11 +86,16 @@ def check_leg(leg: Leg, fetch: Callable[[int, date], dict | None] = fetch_timeta
     codes = [(s.get("station") or {}).get("code") for s in stops]
     org, dst = station_code(leg.origin), station_code(leg.destination)
     if org not in codes:
+        # pode ser a 2.ª secção de uma viagem com transbordo: a pesquisa de horários decide
+        if journey_with_train(leg, journeys) is not None:
+            return None
         return f"o {label} não para em {leg.origin.replace('_', ' ')}"
     i = codes.index(org)
     if dst not in codes[i + 1:]:
-        return (f"o {label} não segue de {leg.origin.replace('_', ' ')} "
-                f"para {leg.destination.replace('_', ' ')}")
+        # o comboio não chega sozinho ao destino: só é problema se também não houver viagem com transbordo
+        if journey_with_train(leg, journeys) is None:
+            return (f"o {label} não segue de {leg.origin.replace('_', ' ')} "
+                    f"para {leg.destination.replace('_', ' ')}, nem com transbordo")
     dep = str(stops[i].get("departure") or "")[:5]
     first = str(stops[0].get("departure") or "")[:5]
     if leg.hhmm not in {h for h in (dep, first) if h}:      # vale a hora da 1.ª estação OU a de embarque

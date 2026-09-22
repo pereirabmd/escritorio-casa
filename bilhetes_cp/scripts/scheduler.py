@@ -10,9 +10,9 @@ substitui os jobs individuais por disparo: não há `at`, nem timers por perna. 
 3. dorme até ao próximo marco e, nessa altura, arranca o processo "quente" (`hot_buy.py`) como
    subprocesso SEPARADO: o daemon nunca faz o `POST /sale`, e um erro no processo quente não o
    derruba. Lançar é idempotente (lock por perna + estado local)
-4. ao arrancar (reboot, crash) recalcula tudo; um disparo que passou há pouco (tolerância
-   `late_start_grace_minutes`) só é lançado se a perna já era conhecida ANTES da hora do disparo;
-   uma linha que chega depois da hora gera aviso, não compra (3.10.3)
+4. ao arrancar (reboot, crash) recalcula tudo; um disparo já passado é lançado **de imediato**,
+   desde que a partida ainda seja futura — chegar tarde (config tardia, reboot, daemon parado)
+   não é motivo para desistir, é motivo para tentar já (decisão de Bruno, 22/09)
 5. avisa o systemd de que está vivo (watchdog): um daemon parado falharia em silêncio (1.1)
 
     python scripts/scheduler.py               # daemon (é o que o systemd corre)
@@ -121,10 +121,7 @@ def evaluate(snap: dict, from_cache: bool, now_ts: float, plan_only: bool = Fals
     now = datetime.fromtimestamp(now_ts, TZ)
     legs, issues = common.parse_snapshot(snap, now.date())
     expiry = pass_expiry_check.expiry_date(snap.get("passe", []))
-    seen_path = common._state_file("seen.json")
-    seen = common._read_json(seen_path, {})
     lead_s = float(cfg("launch_lead_minutes", 6)) * 60
-    grace_s = float(cfg("late_start_grace_minutes", 10)) * 60
     check_days = float(cfg("timetable_check_days", 14))
 
     for issue in issues:
@@ -162,28 +159,27 @@ def evaluate(snap: dict, from_cache: bool, now_ts: float, plan_only: bool = Fals
                          leg.board or leg.hhmm)
         fire_ts = leg.fire.timestamp()
 
-        first_seen = seen.setdefault(leg.key, now_ts)         # 1.º ciclo em que a perna foi vista
         if fire_ts <= now_ts:
-            # O disparo já passou e a partida ainda é futura. Só se recupera o que já era conhecido
-            # antes da hora (reboot/crash); uma linha que chega depois avisa e não compra.
-            known = first_seen < fire_ts or bool(state)
-            limit = fire_ts + (SALE_DEADLINE_S if state in RESUMABLE else grace_s)
-            if not known:
-                _warn(plan_only, f"late-config-{leg.lock_key}", f"Configuração tardia — {leg.key}",
-                      f"O instante de compra ({leg.fire:%d/%m %H:%M}) já tinha passado quando esta viagem foi "
-                      f"configurada (comboio {leg.train}). Não vou comprar automaticamente: compra na App CP.")
-                continue
-            if now_ts > limit:
-                _warn(plan_only, f"missed-{leg.lock_key}", f"Janela de compra perdida — {leg.key}",
-                      f"O instante de compra ({leg.fire:%d/%m %H:%M}) já passou sem bilhete para o comboio "
-                      f"{leg.train}. Não vou comprar automaticamente.")
-                continue
+            if state in RESUMABLE:
+                # Há uma venda em curso: os PUT são idempotentes dentro do prazo da CP (2.5), fora
+                # dele a venda presume-se expirada e não se retoma (3.3.1) — mas continua-se a avisar
+                # em cada ciclo até alguém verificar, nunca falha calada (1.1).
+                limit = fire_ts + SALE_DEADLINE_S
+                if now_ts > limit:
+                    _warn(plan_only, f"missed-{leg.lock_key}", f"Venda por concluir, fora de prazo — {leg.key}",
+                          f"A venda do comboio {leg.train} (criada {leg.fire:%d/%m %H:%M}) já passou o prazo de "
+                          f"{SALE_DEADLINE_S // 60:.0f} min para se concluir. Não a retomo: confirma na App CP.")
+                    continue
+            elif now_ts - fire_ts > 120:
+                # Chegou tarde (config tardia, reboot, daemon parado) — a partida ainda é futura, por
+                # isso inicia-se JÁ, em vez de esperar por um T-24h que já passou (decisão de Bruno).
+                _warn(plan_only, f"late-start-{leg.lock_key}", f"Compra atrasada — a iniciar já — {leg.key}",
+                      f"O instante de compra do comboio {leg.train} era {leg.fire:%d/%m %H:%M} e já passou "
+                      f"{(now_ts - fire_ts) / 60:.0f} min. Vou tentar comprar agora mesmo.", 6)
             items.append(Item(leg, now_ts, fire_ts))
         else:
             items.append(Item(leg, fire_ts - lead_s, fire_ts))
 
-    if not plan_only:
-        common._write_json_atomic(seen_path, {k: v for k, v in seen.items() if now_ts - v < 30 * 86400})
     return sorted(items, key=lambda i: (i.launch_ts, i.leg.key))
 
 

@@ -13,3 +13,7 @@ PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 
 # Heartbeat para o healthchecks.io (só faz algo se HEALTHCHECKS_PING_URL estiver no .env).
 */5 * * * * bpereira /home/bpereira/bilhetes_cp/.venv/bin/python /home/bpereira/bilhetes_cp/scripts/heartbeat.py >> /home/bpereira/bilhetes_cp/logs/cron.log 2>&1
+
+# Vigilância do comboio nos últimos 30 min antes da partida: sai logo se não houver nenhum bilhete
+# nessa janela, por isso corre bem a cada minuto (Bruno, 22/09).
+* * * * * bpereira /home/bpereira/bilhetes_cp/.venv/bin/python /home/bpereira/bilhetes_cp/scripts/live_delay.py >> /home/bpereira/bilhetes_cp/logs/cron.log 2>&1

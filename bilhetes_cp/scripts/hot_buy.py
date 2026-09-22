@@ -66,6 +66,52 @@ def find_key(obj: Any, key: str) -> Any:
     return None
 
 
+def collect_seats(obj: Any) -> list[dict]:
+    """Todos os lugares atribuídos (carruagem + lugar), por ordem. Numa viagem com transbordo há um por
+    comboio (ex.: 511 e 4609): o `trainNumber` que identifica cada lugar é o do bloco que o contém
+    (`outwardTrip[i]`), não o da própria `seatData`, por isso o número desce durante a travessia."""
+    found: list[dict] = []
+
+    def walk(o: Any, train: Any = None) -> None:
+        if isinstance(o, dict):
+            train = o.get("trainNumber", train)
+            c, s = o.get("carriageNumber"), o.get("seatNumber")
+            if c not in (None, "") and s not in (None, ""):
+                x = {"carriage": c, "seat": s, "train": train}
+                if x not in found:
+                    found.append(x)
+            for v in o.values():
+                walk(v, train)
+        elif isinstance(o, list):
+            for v in o:
+                walk(v, train)
+
+    walk(obj)
+    return found
+
+
+def seat_phrase(seats: list[dict]) -> str:
+    parts = []
+    for x in seats:
+        bit = f"carruagem {x['carriage']}, lugar {x['seat']}"
+        parts.append(bit + (f" (comboio {x['train']})" if len(seats) > 1 and x.get("train") else ""))
+    return " · ".join(parts)
+
+
+def merge_seats(base: list[dict], extra: list[dict]) -> list[dict]:
+    """União de duas listas de lugares por comboio: `extra` (mais recente) sobrepõe-se a `base` só
+    para os comboios que também traz; os que só estão em `base` mantêm-se."""
+    order: list[Any] = []
+    by_train: dict[Any, dict] = {}
+    for lst in (base, extra):
+        for x in lst:
+            k = x.get("train")
+            if k not in by_train:
+                order.append(k)
+            by_train[k] = x
+    return [by_train[k] for k in order]
+
+
 def to_amount(v: Any) -> float | None:
     if isinstance(v, dict):
         for k in ("value", "amount", "total"):
@@ -392,7 +438,9 @@ class Buyer:
                 log.info("POST /sale #%d -> HTTP %s [%s] %s", attempt, resp.status, kind, timing)
             if kind == "ok":
                 sale_id = resp.body["saleID"]
-                self.lock.update(carriage=find_key(resp.body, "carriageNumber"), seat=find_key(resp.body, "seatNumber"))
+                seats = collect_seats(resp.body)
+                self.lock.update(seats=seats, carriage=(seats[0]["carriage"] if seats else find_key(resp.body, "carriageNumber")),
+                                 seat=(seats[0]["seat"] if seats else find_key(resp.body, "seatNumber")))
                 late = f" | abriu {self.clock() - target:.1f} s depois do alvo, tentativa {attempt}" if waiting_since else ""
                 self.lock.update(state="SALE_CREATED", sale_id=sale_id, timing=timing + late)
                 self.slog("COMPRA", "SALE_CREATED", status=resp.status, ref=str(sale_id), err=timing + late)
@@ -503,33 +551,43 @@ class Buyer:
             self.lock.update(state=name)
         return self.on_confirmed(resp)
 
-    def find_seat(self, body: Any) -> tuple[Any, Any]:
-        """Carruagem e lugar, por ordem: resposta do confirm; seatData guardado do POST /sale (é aí que
-        o lugar sai, 2.4); GET /sales/{id}. O lembrete de partida não pode ir sem eles."""
+    def find_seats(self, body: Any) -> list[dict]:
+        """Lugares, por comboio: o `seatData` guardado do `POST /sale` (é aí que o lugar sai, 2.4) é a
+        base, e o que o `confirm` trouxer sobrepõe-se, comboio a comboio (uma viagem com transbordo pode
+        ter um por secção). Se nenhum dos dois tiver nada, consulta `GET /sales/{id}` em último recurso.
+        O lembrete de partida não pode ir sem eles."""
         st = self.lock.state
-        carriage = find_key(body, "carriageNumber") or st.get("carriage")
-        seat = find_key(body, "seatNumber") or st.get("seat")
-        if not (carriage and seat) and st.get("sale_id"):
+        seats = merge_seats(list(st.get("seats") or []), collect_seats(body))
+        if not seats and st.get("sale_id"):
             try:
-                detail = self.cp.get_sale(st["sale_id"]).body
-                carriage = carriage or find_key(detail, "carriageNumber")
-                seat = seat or find_key(detail, "seatNumber")
-            except Exception as e:  # noqa: BLE001 — é um recurso de último recurso, nunca impede a confirmação
+                seats = collect_seats(self.cp.get_sale(st["sale_id"]).body)
+            except Exception as e:  # noqa: BLE001 — último recurso, nunca impede a confirmação
                 log.warning("Não consegui ler a venda %s para obter o lugar: %s", st["sale_id"], type(e).__name__)
-        return carriage, seat
+        if not seats:                                    # só um dos dois campos, sem "seatData" a envolver
+            c = find_key(body, "carriageNumber") or st.get("carriage")
+            s_ = find_key(body, "seatNumber") or st.get("seat")
+            if c or s_:
+                seats = [{"carriage": c, "seat": s_, "train": None}]
+        return seats
 
     def on_confirmed(self, resp: Any) -> int:
         body = resp.body if resp is not None else {}
         ref = str(body.get("reference", "")) if isinstance(body, dict) else ""
-        carriage, seat = self.find_seat(body)
-        self.lock.update(reference=ref, carriage=carriage, seat=seat)
+        seats = self.find_seats(body)
+        complete = [x for x in seats if x["carriage"] not in (None, "") and x["seat"] not in (None, "")]
+        carriages = [x["carriage"] for x in seats if x["carriage"] not in (None, "")]
+        pieces = [x["seat"] for x in seats if x["seat"] not in (None, "")]
+        # com um só lugar mantém o valor tal como veio da CP (não força a string); com vários, junta-os
+        carriage = carriages[0] if len(carriages) == 1 else (" / ".join(str(c) for c in carriages) or None)
+        seat = pieces[0] if len(pieces) == 1 else (" / ".join(str(p) for p in pieces) or None)
+        self.lock.update(reference=ref, carriage=carriage, seat=seat, seats=seats)
         leg = self.leg
         pretty = lambda k: k.replace("_", " ").title()  # noqa: E731
         boarding = leg.board or leg.hhmm                   # hora de embarque real, não a da 1.ª estação
         self.sheet("append_ticket", leg.date.isoformat(), leg.train, pretty(leg.origin),
                    pretty(leg.destination), boarding, carriage or "", seat or "", ref)
-        have_seat = bool(carriage and seat)
-        seat_txt = (f"carruagem {carriage}, lugar {seat}" if have_seat else
+        have_seat = bool(complete)
+        seat_txt = (seat_phrase(complete) if have_seat else
                     f"carruagem {carriage}" if carriage else f"lugar {seat}" if seat else
                     "carruagem e lugar não devolvidos pela CP — vê na App CP")
         route = f"Comboio {leg.train} · {pretty(leg.origin)} → {pretty(leg.destination)}"

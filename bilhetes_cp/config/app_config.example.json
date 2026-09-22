@@ -34,7 +34,6 @@
       120,
       120
     ],
-    "late_start_grace_minutes": 10,
     "timetable_check_days": 14,
     "clock_max_offset_ms": 150,
     "cp_date_max_offset_s": 3.0,

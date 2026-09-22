@@ -129,20 +129,26 @@ class CPResponse:
 
 
 def extract_messages(body: Any) -> list[str]:
-    """Extrai o campo `messages` (a CP pode devolver 200 com avisos/erros)."""
-    if not isinstance(body, dict) or not body.get("messages"):
+    """Extrai o(s) aviso/erro da resposta. A CP usa dois formatos vistos até agora: um campo
+    `messages` (lista, previsto no HAR original) ou, numa recusa real de 22/09 (HTTP 500,
+    `error: WS:RES:116`, comboio esgotado), campos `error`/`description`/`message` ao nível de topo,
+    sem `messages` nenhuns. Ler os dois, para nunca cair no `resp.text` cru sem necessidade."""
+    if not isinstance(body, dict):
         return []
-    raw = body["messages"]
-    entries = raw if isinstance(raw, list) else [raw]
-    out: list[str] = []
-    for e in entries:
-        if isinstance(e, dict):
-            parts = [str(e[k]) for k in ("type", "level", "severity", "code", "message", "text",
-                                           "description", "detail") if e.get(k)]
-            out.append(" | ".join(parts) if parts else str(e))
-        else:
-            out.append(str(e))
-    return out
+    if body.get("messages"):
+        raw = body["messages"]
+        entries = raw if isinstance(raw, list) else [raw]
+        out: list[str] = []
+        for e in entries:
+            if isinstance(e, dict):
+                parts = [str(e[k]) for k in ("type", "level", "severity", "code", "message", "text",
+                                               "description", "detail") if e.get(k)]
+                out.append(" | ".join(parts) if parts else str(e))
+            else:
+                out.append(str(e))
+        return out
+    parts = [str(body[k]) for k in ("error", "message", "description") if body.get(k)]
+    return [" | ".join(parts)] if parts else []
 
 
 def has_error_message(messages: list[str]) -> bool:
@@ -169,6 +175,10 @@ def _is_not_sent(exc: Exception) -> bool:
 # "ainda não aberto", e tratá-lo como esgotado seria perder o bilhete; repetir por engano não custa nada.
 SOLD_OUT_RX = re.compile(r"esgotad|sem\s+lugar|n[aã]o\s+h[aá]\s+lugar|lotad|sold.?out|no\s+seats", re.I)
 
+# Código de erro visto numa recusa real (22/09, HTTP 500): esgotado, sem ambiguidade nenhuma —
+# mais fiável do que qualquer padrão de texto, e cobre o caso de vir traduzido de outra forma.
+SOLD_OUT_CODES = {"WS:RES:116"}
+
 # "Ainda não aberto" (venda que abre mais tarde do que o previsto). O formato real da resposta da CP
 # ainda não foi observado (PLANO_FINAL 2.7): estes padrões são um palpite a confirmar com os logs.
 NOT_OPEN_RX = re.compile(
@@ -191,12 +201,14 @@ def classify_sale_response(resp: CPResponse) -> tuple[str, str]:
     text = " ".join(resp.messages) or resp.text[:300]
     if resp.ok and body.get("saleID"):
         return "ok", f"saleID={body['saleID']}"
-    if resp.status >= 500 or resp.status == 429:
-        return "transient", f"HTTP {resp.status}"
-    if SOLD_OUT_RX.search(text) or SOLD_OUT_RX.search(resp.text[:2000]):
+    # A mensagem de negócio manda mais do que o código HTTP de transporte: um 500 real (22/09,
+    # WS:RES:116) veio a dizer "sem lugares", não erro de servidor — verificar SEMPRE antes do 5xx.
+    if body.get("error") in SOLD_OUT_CODES or SOLD_OUT_RX.search(text) or SOLD_OUT_RX.search(resp.text[:2000]):
         return "sold_out", text
     if NOT_OPEN_RX.search(text) or NOT_OPEN_RX.search(resp.text[:2000]):
         return "not_open", text
+    if resp.status >= 500 or resp.status == 429:
+        return "transient", f"HTTP {resp.status}"
     if resp.ok:
         return "known", f"HTTP {resp.status} sem saleID: {text}"
     return "known", f"HTTP {resp.status}: {text}"

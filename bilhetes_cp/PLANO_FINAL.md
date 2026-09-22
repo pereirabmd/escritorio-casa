@@ -262,9 +262,12 @@ o daemon calcula tudo a partir da config e do estado local, em ciclo:
    já foi lançada e o lock por perna (3.3.1) impede duplicados
 5. **Ao arrancar** (reboot, crash, `Restart=always`) recalcula do zero. Um
    disparo cujo instante já passou há menos que a tolerância configurada
-   (`late_start_grace_minutes`, 10 min) é lançado de imediato, depois de
-   verificar que não existe compra nem lock para essa perna (3.3.1); mais
-   tarde do que isso apenas notifica (1.1) e a decisão é de Bruno (App CP)
+   é lançado **de imediato** (decisão de Bruno, 22/09: chegar tarde nunca é
+   motivo para desistir, só para tentar já), depois de verificar que não
+   existe compra nem lock para essa perna (3.3.1). Só não se lança se a
+   partida já passou, ou se havia uma venda em curso cujo prazo de conclusão
+   (`sale_deadline`, 15 min) também já passou — aí notifica e a decisão é de
+   Bruno (App CP)
 6. **Saúde:** o watchdog do systemd reinicia um ciclo bloqueado (sem ele um
    daemon parado falharia em silêncio, contra 1.1). O heartbeat externo
    (healthchecks.io) fica na secção 6
@@ -275,6 +278,20 @@ confirmada com sucesso (nesse momento já se sabe a hora exata de partida,
 carruagem e lugar a incluir na notificação).
 
 **Carruagem e lugar no lembrete (Bruno, 22/09):** o lembrete de partida leva-os no título e na mensagem. Vêm, por ordem, da resposta do `confirm`, do `seatData` guardado do `POST /sale` (é aí que o lugar sai, 2.4) e, em último recurso, do `GET /sales/{id}`. Se nenhuma fonte os der, a compra não falha: o lembrete segue a dizer onde ver (App CP).
+
+**Vigilância do comboio nos últimos 30 min (Bruno, 22/09, `scripts/live_delay.py`):**
+job de cron à parte, correndo **a cada minuto**, que sai logo se nenhum bilhete
+da aba Bilhetes tiver partida nos próximos 30 minutos (barato de correr tão
+frequentemente). Para cada bilhete nessa janela, consulta o horário oficial do
+comboio (`GET /travel-api/trains/<nº>/timetable/<data>`, o mesmo endpoint de
+2.6/3.10.3 — cada paragem traz `delay`, `platform`, `supression`, `ETA`, `ETD`)
+na estação de embarque e compara com a última leitura, guardada em
+`state/live_delay.json`. **Só notifica quando algo muda** — a primeira leitura
+da janela fica só como referência, sem notificação. Uma supressão nova é
+prioridade alta com etiqueta própria (`rotating_light`); as restantes mudanças
+(atraso, cais, previsões) levam a etiqueta `warning`. Uma falha a consultar a
+CP nunca é silenciosa, mas tem um intervalo de 10 min entre avisos para não
+inundar durante uma indisponibilidade da CP.
 
 Os lembretes de sábado (3.6) e a verificação diária do Passe (3.9) continuam
 a ser jobs periódicos separados (cron, `/etc/cron.d/bilhetes-cp`).
@@ -863,8 +880,9 @@ bilhetes_cp/
 │   ├── config_reminder.py       lembretes de sábado (3.6)
 │   ├── pass_expiry_check.py     validade do Passe (3.9)
 │   ├── heartbeat.py             ping ao healthchecks.io (secção 6); inativo até haver URL no .env
+│   ├── live_delay.py            vigilância do comboio nos últimos 30 min (3.2), a cada minuto
 │   └── pwa_link.py              link que liga a PWA às chaves da CP
-├── tests/                       unittest (153) e teste da PWA em Chromium real (pwa_smoke.mjs)
+├── tests/                       unittest (175) e teste da PWA em Chromium real (pwa_smoke.mjs)
 └── deploy/                      configs aplicadas no RPi, sem segredos (ver deploy/README.md); inclui o `cp-scheduler.service` do daemon
 ```
 
@@ -956,6 +974,7 @@ Os 12 pontos de alinhamento que este plano pedia, com o estado real
 | — | Disparo ancorado à partida do comboio na 1.ª estação (3.11, regra de 22/09) | ✅ `Leg.fire` no RPi e data sugerida na PWA; sem a 1.ª estação usa a Config e avisa |
 | — | Hora da Config = partida na 1.ª estação (3.11, 4; decisão de 22/09) | ✅ o validador aceita a hora da 1.ª estação ou a de embarque; a de embarque real (`Leg.board`) serve para o lembrete, o bilhete e "viagem já passou"; a PWA preenche e confirma com a da 1.ª estação |
 | — | Lembrete de partida com carruagem e lugar (3.2; decisão de 22/09) | ✅ no título e na mensagem; fontes: `confirm`, `seatData` do `POST /sale`, `GET /sales/{id}`; sem lugar em lado nenhum a compra não falha e o lembrete diz onde ver |
+| — | Compra atrasada inicia-se de imediato (3.2, decisão de 22/09) | ✅ sem tolerância nem "conhecida antes": qualquer disparo já passado com a partida ainda futura é lançado já; só recusa se a partida já passou ou se uma venda em curso excedeu os 15 min |
 | — | "Ainda não aberto" repete-se na iteração seguinte (3.3.1, decisão de 22/09) | ✅ janela de 10 min, fase rápida e lenta; os padrões de texto são um palpite até haver respostas reais |
 
 Fora da lista de 9.8, por secção:
@@ -971,7 +990,8 @@ Fora da lista de 9.8, por secção:
 - `chrony` (substituiu o `systemd-timesyncd`, que o `chrony` remove) e fuso `Europe/Lisbon`.
 - Código em `~/bilhetes_cp` (venv Python). Daemon `cp-scheduler.service`; cron novo em
   `/etc/cron.d/bilhetes-cp` (não toca no crontab do utilizador) para os lembretes de
-  sábado, a validade do passe e o heartbeat; `logrotate` para o `cron.log`.
+  sábado, a validade do passe, o heartbeat e a vigilância do comboio a cada minuto
+  (`live_delay.py`, 3.2); `logrotate` para o `cron.log`.
 - PWA completa (Semana, Bilhetes, Registo, editor da semana, definições).
 
 ### 9.3 Verificado com o mundo real
@@ -981,7 +1001,7 @@ ponta a ponta com token e com entrega agendada; pre-flight; daemon a correr sob 
 systemd; validação da Config contra o horário oficial (apanhou a linha de exemplo e, por um
 erro meu, a hora da 1.ª estação: corrigido, ver 3.11); `--search-only` e simulação da
 Config real (520 às 06:45 com embarque às 07:27; 731 às 17:30 com embarque às 17:39) com a
-CP real, sem lançar nada. 153 testes unitários (também no RPi, com a rede bloqueada) e 44 verificações da
+CP real, sem lançar nada. 175 testes unitários (também no RPi, com a rede bloqueada) e 44 verificações da
 PWA em Chromium (offline, teclado, 360 px, manifest, service worker).
 
 ### 9.4 Por verificar — nunca exercitado contra a CP real
@@ -1033,6 +1053,8 @@ esteja por chegar **gera uma compra real** no instante T-24h.
   reboots; não há timer para isso.
 - Dia só de ida: comboio e hora da volta ambos vazios. Volta a meio é erro.
 - O pre-flight publica uma mensagem de estado real em vez de uma mensagem de teste.
+- Vigilância do comboio nos últimos 30 min antes da partida (`live_delay.py`), a cada
+  minuto, notificando só quando algo muda (atraso, cais, supressão).
 - PWA com `gapi client`, Google Identity Services e Workbox, como o plano manda; as chaves
   da CP entram por um link (`scripts/pwa_link.py`), nunca no código público. Ícones
   gerados de `assets/icon-source.png` (o ícone do comboio com bilhete) sobre o verde
@@ -1074,6 +1096,5 @@ sudo fail2ban-client set ntfy-auth unbanip <IP>     # desbanir
 | `not_open_retry_window_s` | 600 | quanto tempo se repete uma venda "ainda não aberta" |
 | `not_open_fast_phase_s` / `_fast_interval_s` / `_slow_interval_s` | 20 / 0,25 / 2 | ritmo dessas repetições |
 | `unrecognized_4xx_retry_s` | 15 | quanto tempo se repete uma recusa não reconhecida |
-| `late_start_grace_minutes` | 10 | tolerância para recuperar um disparo que passou (reboot) |
 | `timetable_check_days` | 14 | a partir de quantos dias antes se valida a Config e se descobre a 1.ª estação |
 | `clock_max_offset_ms` / `cp_date_max_offset_s` | 150 / 3 | limites do pre-flight (3.10.1, 3.11.1) |

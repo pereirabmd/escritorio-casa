@@ -254,6 +254,29 @@ class BoardingTimeTests(FlowBase):
 SEM_LUGAR = resp(200, {"status": {"code": "CONFIRMED"}, "reference": "REF9"})
 
 
+class MultiTrainSeatTests(FlowBase):
+    """Viagem com transbordo (ex.: 511 + 4609): um lugar por comboio (Bruno, 22/09)."""
+
+    def test_dois_lugares_de_comboios_diferentes_aparecem_os_dois(self):
+        cp = FakeCP(sale_script=[resp(200, {"saleID": 9, "outwardTrip": [
+            {"trainNumber": 511, "seatData": {"carriageNumber": 2, "seatNumber": 14}},
+            {"trainNumber": 4609, "seatData": {"carriageNumber": 7, "seatNumber": 3}}]})],
+                    steps={"confirm": resp(200, {"status": {"code": "CONFIRMED"}, "reference": "REF123"})})
+        _, st = self.run_buyer(cp)
+        self.assertEqual(len(st["seats"]), 2)
+        titulo = [n for n in self.notes if n[0].startswith("Partida às")][0][0]
+        self.assertIn("carruagem 2, lugar 14 (comboio 511)", titulo)
+        self.assertIn("carruagem 7, lugar 3 (comboio 4609)", titulo)
+        self.assertEqual(self.sheets.bilhetes[0][5], "2 / 7")
+        self.assertEqual(self.sheets.bilhetes[0][6], "14 / 3")
+
+    def test_um_so_lugar_nao_leva_o_numero_do_comboio(self):
+        _, st = self.run_buyer(FakeCP())
+        titulo = [n for n in self.notes if n[0].startswith("Partida às")][0][0]
+        self.assertIn("carruagem 3, lugar 42", titulo)
+        self.assertNotIn("comboio", titulo)
+
+
 class SeatInReminderTests(FlowBase):
     """O lembrete de partida tem de levar carruagem e lugar (Bruno, 22/09)."""
 
@@ -571,6 +594,18 @@ class LoginTests(FlowBase):
 
 
 class ClassifyTests(unittest.TestCase):
+    def test_erro_real_de_22_09_500_com_ws_res_116_e_esgotado_nao_transitorio(self):
+        # Resposta real da CP (comboio 521, 22/09/2026): HTTP 500, sem "messages", mas com error/
+        # description/message ao nível de topo. Antes desta correção era lido como "transient" e
+        # gerava 3 tentativas reais desnecessárias antes de desistir.
+        body = {"status": 500, "error": "WS:RES:116",
+                "description": "Atenção\nNão há lugares disponíveis para a totalidade do pedido\nWS:RES:9XX|116",
+                "message": "Não foi possível reservar os lugares"}
+        r = resp(500, body)
+        self.assertEqual(extract_messages(body), ["WS:RES:116 | Não foi possível reservar os lugares | "
+                                                   "Atenção\nNão há lugares disponíveis para a totalidade do pedido\nWS:RES:9XX|116"])
+        self.assertEqual(classify_sale_response(r)[0], "sold_out")
+
     def test_classificacao_das_respostas_do_sale(self):
         self.assertEqual(classify_sale_response(resp(200, {"saleID": 1}))[0], "ok")
         self.assertEqual(classify_sale_response(resp(500))[0], "transient")
