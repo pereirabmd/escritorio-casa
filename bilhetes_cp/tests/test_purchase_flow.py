@@ -89,10 +89,13 @@ class FakeCP:
 class FakeSheets:
     def __init__(self, tickets=None):
         self.tickets, self.logs, self.bilhetes = tickets or [], [], []
+        self.requests, self.request_updates = [], []
 
     def read_tickets(self): return self.tickets
     def append_log(self, *row): self.logs.append(row)
     def append_ticket(self, *row): self.bilhetes.append(row)
+    def append_request(self, *row): self.requests.append(row)
+    def update_request(self, row, **fields): self.request_updates.append((row, fields))
 
 
 class FlowBase(unittest.TestCase):
@@ -642,6 +645,99 @@ class LoginTests(FlowBase):
             code, st = self.run_buyer(FakeCP(), sheets=BrokenSheets())
         self.assertEqual(st["state"], "CONFIRMED")
         self.assertTrue(n.called)   # avisou que não conseguiu escrever na Sheet
+
+
+class RequestTests(FlowBase):
+    """Aba Pedidos (3.2): escrita de volta para pernas avulsas, e espelhamento automático de
+    pernas da Config que falham/esgotam/ficam ambíguas."""
+
+    def make_pedido(self, row=5):
+        self.leg = common.Leg(DAY, f"pedido{row}", "aveiro", "lisboa_oriente", self.train, "06:45", row)
+        common.lock_path(self.leg.lock_key).unlink(missing_ok=True)
+
+    def test_confirmado_escreve_estado_referencia_e_limpa_forcar(self):
+        self.make_pedido()
+        _, st = self.run_buyer(FakeCP())
+        self.assertEqual(st["state"], "CONFIRMED")
+        row, fields = self.sheets.request_updates[-1]
+        self.assertEqual(row, 5)
+        self.assertEqual(fields["estado"], "CONFIRMADO")
+        self.assertEqual(fields["referencia"], "REF123")
+        self.assertEqual(fields["forcar"], "NAO")
+        self.assertIn("ultima_tentativa", fields)
+        # e também escreve "A_TENTAR" logo no arranque, antes do resultado final
+        self.assertTrue(any(f.get("estado") == "A_TENTAR" for _, f in self.sheets.request_updates))
+
+    def test_esgotado_escreve_estado_esgotado(self):
+        self.make_pedido()
+        cp = FakeCP(sale_script=[resp(409, {}, messages=["Comboio esgotado"])] * (len(hot_buy.cfg("sold_out_retry_delays_s", [])) + 1))
+        _, st = self.run_buyer(cp, advancing=True)
+        self.assertEqual(st["state"], "SOLD_OUT")
+        self.assertEqual(self.sheets.request_updates[-1][1]["estado"], "ESGOTADO")
+
+    def test_falhou_escreve_estado_falhou_com_a_mensagem(self):
+        self.make_pedido()
+        cp = FakeCP(sale_script=[resp(400, {}, messages=["Pedido inválido"])])
+        _, st = self.run_buyer(cp, clock_offset=100)
+        self.assertEqual(st["state"], "FAILED")
+        fields = self.sheets.request_updates[-1][1]
+        self.assertEqual(fields["estado"], "FALHOU")
+        self.assertIn("Pedido inválido", fields["mensagem"])
+
+    def test_ambiguo_escreve_estado_ambiguo_e_nao_e_espelhado_de_novo(self):
+        self.make_pedido()
+        cp = FakeCP(sale_script=[CPError("ambiguous", "ReadTimeout")])
+        _, st = self.run_buyer(cp, clock_offset=1, advancing=True)
+        self.assertEqual(st["state"], "AMBIGUOUS")
+        self.assertEqual(self.sheets.request_updates[-1][1]["estado"], "AMBIGUO")
+        self.assertEqual(self.sheets.requests, [])          # é um pedido — não se espelha a si próprio
+
+    def test_um_pedido_nao_afeta_a_aba_bilhetes_de_forma_diferente(self):
+        self.make_pedido()
+        _, st = self.run_buyer(FakeCP())
+        self.assertEqual(len(self.sheets.bilhetes), 1)       # o bilhete grava-se na mesma
+
+    def test_perna_da_config_falhada_e_espelhada_para_pedidos(self):
+        # self.leg fica "ida" (default do FlowBase) — uma perna normal da Config
+        cp = FakeCP(sale_script=[resp(400, {}, messages=["Pedido inválido"])])
+        _, st = self.run_buyer(cp, clock_offset=100)
+        self.assertEqual(st["state"], "FAILED")
+        self.assertEqual(len(self.sheets.requests), 1)
+        row = self.sheets.requests[0]
+        self.assertEqual(row[0], self.leg.date.isoformat())
+        self.assertEqual(row[3], self.leg.train)
+        self.assertEqual(row[5:7], ("SIM", "NAO"))    # Ativo, Retry (por omissão: visível, mas não repete sozinho)
+        self.assertEqual(row[7], "FALHOU")            # Estado
+
+    def test_perna_da_config_esgotada_tambem_e_espelhada(self):
+        cp = FakeCP(sale_script=[resp(409, {}, messages=["Comboio esgotado"])] * (len(hot_buy.cfg("sold_out_retry_delays_s", [])) + 1))
+        _, st = self.run_buyer(cp, advancing=True)
+        self.assertEqual(st["state"], "SOLD_OUT")
+        self.assertEqual(len(self.sheets.requests), 1)
+        self.assertEqual(self.sheets.requests[0][7], "ESGOTADO")
+
+    def test_perna_da_config_ambigua_tambem_aparece_so_para_leitura(self):
+        cp = FakeCP(sale_script=[CPError("ambiguous", "ReadTimeout")])
+        _, st = self.run_buyer(cp, clock_offset=1, advancing=True)
+        self.assertEqual(st["state"], "AMBIGUOUS")
+        self.assertEqual(len(self.sheets.requests), 1)
+        row = self.sheets.requests[0]
+        self.assertEqual(row[7], "AMBIGUO")
+        self.assertEqual(row[6], "NAO")     # Retry sempre NAO: nunca se relança sozinho
+
+    def test_perna_confirmada_da_config_nunca_e_espelhada(self):
+        _, st = self.run_buyer(FakeCP())
+        self.assertEqual(st["state"], "CONFIRMED")
+        self.assertEqual(self.sheets.requests, [])
+
+    def test_viagem_ja_passada_nao_e_espelhada(self):
+        # uma perna cuja partida já é passado não faz sentido pôr na fila de retry
+        self.leg = common.Leg(DAY, "ida", "aveiro", "lisboa_oriente", self.train, "06:45", 12,
+                              board="06:45", board_date=DAY - timedelta(days=400))
+        common.lock_path(self.leg.lock_key).unlink(missing_ok=True)
+        cp = FakeCP(sale_script=[resp(400, {}, messages=["Pedido inválido"])])
+        self.run_buyer(cp, clock_offset=100)
+        self.assertEqual(self.sheets.requests, [])
 
 
 class ClassifyTests(unittest.TestCase):

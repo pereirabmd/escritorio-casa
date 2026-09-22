@@ -146,6 +146,25 @@ h3{margin:0;font:600 19px/1.15 var(--font-num)}
 .log .tx{min-width:0;font-size:15px}
 .log .err-msg{margin-top:4px;color:var(--err);font-size:14px;word-break:break-word}
 
+/* pedidos avulsos */
+.pedidos{display:flex;flex-direction:column;gap:8px}
+.pedido{background:var(--card);border-radius:14px;padding:12px 14px;box-shadow:0 1px 0 var(--line)}
+.pd-top{display:flex;justify-content:space-between;align-items:flex-start;gap:10px}
+.pd-top .t{font-size:13px;color:var(--text2);font-weight:500}
+.pd-top .r{font-weight:500;margin-top:2px}
+.pd-msg{margin-top:6px;word-break:break-word}
+.pd-actions{display:flex;flex-wrap:wrap;align-items:center;gap:8px 18px;margin-top:10px}
+.pd-actions .btn{min-height:40px;padding:0 16px}
+.switch.small{min-height:auto;gap:8px;font-size:14px}
+.switch.small input{width:38px;height:22px}
+.switch.small input::after{width:16px;height:16px}
+.switch.small input:checked::after{transform:translateX(16px)}
+.add-pedido{background:var(--card);border-radius:16px;padding:4px 14px;box-shadow:0 1px 0 var(--line)}
+.add-pedido summary{min-height:48px;display:flex;align-items:center;font-weight:600;color:var(--primary-dark);cursor:pointer;list-style:none}
+.add-pedido summary::-webkit-details-marker{display:none}
+.add-pedido[open]{padding-bottom:14px}
+.add-pedido[open] summary{border-bottom:1px solid var(--line);margin-bottom:12px}
+
 .empty{background:var(--card);border-radius:16px;padding:22px 18px;text-align:center;color:var(--text2);box-shadow:0 1px 0 var(--line)}
 .skel{height:84px;border-radius:16px;background:linear-gradient(90deg,var(--bg2),#fff 50%,var(--bg2));background-size:200% 100%;animation:sh 1.3s linear infinite}
 @keyframes sh{to{background-position:-200% 0}}
@@ -234,6 +253,7 @@ body.kb-open #toast{--toast-b:84px}
     <button role="tab" data-tab="semana" aria-selected="true"><svg viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="15" rx="2.5"/><path d="M3.5 10h17M8 3v4M16 3v4"/></svg>Semana</button>
     <button role="tab" data-tab="bilhetes" aria-selected="false"><svg viewBox="0 0 24 24"><path d="M4 8a2 2 0 0 0 0 4v0a2 2 0 0 1 0 4v1a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-1a2 2 0 0 1 0-4v0a2 2 0 0 0 0-4V7a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2z" transform="translate(0 -.5)"/><path d="M14.5 6v2M14.5 11v2M14.5 16v2"/></svg>Bilhetes</button>
     <button role="tab" data-tab="registo" aria-selected="false"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></svg>Registo</button>
+    <button role="tab" data-tab="pedidos" aria-selected="false"><svg viewBox="0 0 24 24"><path d="M20 12a8 8 0 1 1-2.4-5.7"/><path d="M20 3v5h-5"/></svg>Pedidos</button>
   </nav>
 
   <section id="auth" class="overlay" hidden>
@@ -256,7 +276,7 @@ body.kb-open #toast{--toast-b:84px}
    Nenhuma credencial neste ficheiro: as chaves da CP (só para preencher
    horários) ficam no localStorage do telemóvel, importadas por um link.
    ===================================================================== */
-const VERSION = 'v1.1.2';
+const VERSION = 'v1.1.3';
 const CLIENT_ID = '108256538530-fgunbb52s7f3s9aurfpjtaf01v8fjbph.apps.googleusercontent.com';
 const SHEET_ID = '1PNY134CrkxVhcpKHjTDZMYqYv3q-_oeDusJ-hgLRMBk';
 const SCOPE = 'https://www.googleapis.com/auth/spreadsheets';
@@ -365,7 +385,7 @@ const normStation = (s) => String(s ?? '').normalize('NFKD').replace(/[̀-ͯ]/g,
 const S = {
   tab: 'semana', loading: false, loaded: false, error: null, updateReady: false, logFilter: 'all',
   cfg: { stations: {}, names: {} },
-  data: { passe: [], weekly: [], tickets: [], logs: [] },
+  data: { passe: [], weekly: [], tickets: [], logs: [], requests: [] },
   anchors: {},   /* partida na 1.ª estação por comboio+data+origem (só com as chaves da CP) */
   editor: null, lastLoad: 0,
 };
@@ -463,15 +483,16 @@ async function gcall(fn) {
     throw e;
   }
 }
+const REQUEST_COLS = { retry: 'G', forcar: 'H' };   // únicas colunas que a PWA escreve na aba Pedidos
 const REAL_API = {
   async load() {
     const r = await gcall(() => gapi.client.sheets.spreadsheets.values.batchGet({
       spreadsheetId: SHEET_ID, valueRenderOption: 'UNFORMATTED_VALUE', dateTimeRenderOption: 'SERIAL_NUMBER',
-      ranges: ['Config!A1:L300', 'Bilhetes!A5:H600', 'Logs!A5:I1500'],
+      ranges: ['Config!A1:L300', 'Bilhetes!A5:H600', 'Logs!A5:I1500', 'Pedidos!A5:L1000'],
     }));
     const v = r.result.valueRanges.map(x => x.values || []);
     const cfg = locateConfig(v[0]);
-    return { passe: cfg.passe, weeklyRaw: cfg.weekly, firstRow: cfg.firstRow, ticketsRaw: v[1], logsRaw: v[2] };
+    return { passe: cfg.passe, weeklyRaw: cfg.weekly, firstRow: cfg.firstRow, ticketsRaw: v[1], logsRaw: v[2], requestsRaw: v[3] };
   },
   /* lê a tabela atual, troca só as linhas da semana e escreve TUDO num único pedido (atómico) */
   async saveWeek(weekStart, newRows) {
@@ -486,6 +507,18 @@ const REAL_API = {
     await gcall(() => gapi.client.sheets.spreadsheets.values.update({
       spreadsheetId: SHEET_ID, range: `Config!${colLetter(loc.colStart)}${loc.firstRow}:${colLetter(loc.colStart + 7)}${loc.firstRow + n - 1}`,
       valueInputOption: 'RAW', resource: { values } }));
+  },
+  /* Pedidos avulsos (3.2): forçar uma tentativa já, ligar/desligar a retentativa periódica, e
+     adicionar um pedido novo — nunca mexe nas colunas que o RPi escreve (Estado, Mensagem, ...). */
+  async setPedidoFlag(row, field, on) {
+    await gcall(() => gapi.client.sheets.spreadsheets.values.update({
+      spreadsheetId: SHEET_ID, range: `Pedidos!${REQUEST_COLS[field]}${row}`, valueInputOption: 'RAW',
+      resource: { values: [[on ? 'SIM' : 'NAO']] } }));
+  },
+  async addPedido({ data, origem, destino, comboio, hora }) {
+    await gcall(() => gapi.client.sheets.spreadsheets.values.append({
+      spreadsheetId: SHEET_ID, range: 'Pedidos!A5', valueInputOption: 'RAW', insertDataOption: 'INSERT_ROWS',
+      resource: { values: [[data, origem, destino, comboio, hora, 'SIM', 'NAO', 'NAO', 'PENDENTE', '', '', '']] } }));
   },
 };
 const api = window.__BCP_API || REAL_API;   // (o teste injeta uma API falsa)
@@ -515,7 +548,15 @@ function parseData(raw) {
   const logs = raw.logsRaw.filter(r => r.some(c => c !== '')).map(c => ({
     ts: String(c[0] ?? ''), tipo: String(c[1] ?? ''), date: sheetDate(c[2]), leg: String(c[3] ?? ''), train: c[4] ?? '',
     http: c[5] ?? '', result: String(c[6] ?? ''), ref: String(c[7] ?? ''), err: String(c[8] ?? '') }));
-  return { passe: raw.passe, weekly, tickets, logs };
+  const requests = (raw.requestsRaw || []).map((r, i) => {
+    const c = [...r]; while (c.length < 12) c.push('');
+    return { row: 5 + i, date: sheetDate(c[0]), origin: String(c[1] ?? ''), dest: String(c[2] ?? ''),
+      train: toNum(c[3]), hora: sheetTime(c[4]) || String(c[4] ?? ''), ativo: String(c[5]).trim().toUpperCase() === 'SIM',
+      retry: String(c[6]).trim().toUpperCase() === 'SIM', forcar: String(c[7]).trim().toUpperCase() === 'SIM',
+      estado: String(c[8] ?? '').trim().toUpperCase() || 'PENDENTE', ultima: String(c[9] ?? ''),
+      ref: String(c[10] ?? ''), msg: String(c[11] ?? ''), empty: c.every(x => x === '' || x == null) };
+  }).filter(r => !r.empty);
+  return { passe: raw.passe, weekly, tickets, logs, requests };
 }
 const boughtSet = () => new Set(S.data.tickets.filter(t => t.date && t.train).map(t => `${t.date}|${t.train}`));
 
@@ -595,7 +636,7 @@ function render() {
   $$('#tabs button').forEach(b => b.setAttribute('aria-selected', String(b.dataset.tab === S.tab)));
   const v = $('#view');
   if (!S.loaded && !S.error) { v.innerHTML = '<div class="skel"></div><div class="skel"></div><div class="skel"></div>'; return; }
-  v.innerHTML = ({ semana: viewSemana, bilhetes: viewBilhetes, registo: viewRegisto }[S.tab])();
+  v.innerHTML = ({ semana: viewSemana, bilhetes: viewBilhetes, registo: viewRegisto, pedidos: viewPedidos }[S.tab])();
 }
 
 function ticketHtml(t, cls = '') {
@@ -680,6 +721,85 @@ function viewRegisto() {
     html += `<div class="log"><div class="h">${esc(hh)}</div><div class="tx"><span class="chip ${logClass(l)}">${esc(LOG_RESULT[l.result] || l.result || LOG_TIPO[l.tipo] || l.tipo)}</span> <span class="muted">${esc(LOG_TIPO[l.tipo] || l.tipo)}</span>${what ? `<div class="muted small">${esc(what)}</div>` : ''}${l.err ? `<div class="err-msg">${esc(l.err)}</div>` : ''}</div></div>`;
   }
   return html;
+}
+
+/* ---------- pedidos avulsos (3.2) ---------- */
+const PEDIDO_ESTADO = { PENDENTE: 'Pendente', A_TENTAR: 'A tentar…', ESGOTADO: 'Esgotado', FALHOU: 'Falhou', AMBIGUO: 'Confirmar na App CP', CONFIRMADO: 'Comprado' };
+const pedidoClass = (r) => r.estado === 'AMBIGUO' ? 'warn' : (r.estado === 'ESGOTADO' || r.estado === 'FALHOU') ? 'err' : r.estado === 'CONFIRMADO' ? 'ok' : '';
+function pedidoHtml(r) {
+  const busy = r.estado === 'A_TENTAR', ambiguo = r.estado === 'AMBIGUO';
+  return `<article class="pedido" data-row="${r.row}">
+    <div class="pd-top">
+      <div><div class="t">${r.date ? esc(fmtDay(r.date)) : 'Data por definir'} · ${esc(r.hora || '--:--')}</div>
+        <div class="r">${esc(r.origin || '—')}<span class="arrow">→</span>${esc(r.dest || '—')} <span class="muted">· comboio ${esc(r.train ?? '—')}</span></div></div>
+      <span class="chip ${pedidoClass(r)}">${esc(PEDIDO_ESTADO[r.estado] || r.estado || 'Pendente')}</span>
+    </div>
+    ${r.msg ? `<div class="muted small pd-msg">${esc(r.msg)}</div>` : ''}
+    ${ambiguo
+      ? `<p class="muted small pd-msg">Confirma na App CP se a compra chegou a ser feita antes de tentares outra vez.</p>`
+      : `<div class="pd-actions">
+          <button class="btn quiet" data-act="pedido-force" data-row="${r.row}" ${busy ? 'disabled' : ''}>${busy ? 'A tentar…' : 'Tentar agora'}</button>
+          <label class="switch small"><input type="checkbox" data-pedido-retry="${r.row}" ${r.retry ? 'checked' : ''}>Repetir automaticamente</label>
+        </div>`}
+  </article>`;
+}
+function pedidoFormHtml() {
+  return `<details class="add-pedido">
+    <summary>+ Novo pedido</summary>
+    <div class="route">
+      <label class="f"><span>De</span><select class="in" data-pf="origin">${optionsStations()}</select></label>
+      <button class="swap" data-act="pedido-swap" aria-label="Trocar origem e destino">${IC.swap}</button>
+      <label class="f"><span>Para</span><select class="in" data-pf="dest">${optionsStations()}</select></label>
+    </div>
+    <div class="leg-row">
+      <label class="f"><span>Dia</span><input class="in" type="date" data-pf="date" min="${todayISO()}" value="${todayISO()}"></label>
+      <label class="f"><span>Comboio</span><input class="in num" inputmode="numeric" pattern="[0-9]*" autocomplete="off" data-pf="train" placeholder="524"></label>
+    </div>
+    <label class="f"><span>Hora de partida (1.ª estação)</span><input class="in time" type="time" data-pf="hora"></label>
+    <div class="add" style="margin-top:12px"><button class="btn" data-act="pedido-add">Adicionar pedido</button></div>
+  </details>`;
+}
+function viewPedidos() {
+  const today = todayISO();
+  const pend = S.data.requests.filter(r => r.estado !== 'CONFIRMADO' && (!r.date || r.date >= today))
+    .sort((a, b) => ((a.date || '') + (a.hora || '')).localeCompare((b.date || '') + (b.hora || '')));
+  const list = pend.length ? `<div class="pedidos">${pend.map(pedidoHtml).join('')}</div>`
+    : '<div class="empty">Sem pedidos pendentes.<br>Aparecem aqui compras que ainda não tentámos, ou que falharam — podes forçar uma nova tentativa, ou deixar o RPi repetir sozinho.</div>';
+  return list + pedidoFormHtml();
+}
+async function pedidoForce(row) {
+  const r = S.data.requests.find(x => x.row === row); if (!r || r.estado === 'A_TENTAR') return;
+  const prev = r.estado; r.estado = 'A_TENTAR'; render();
+  try {
+    await api.setPedidoFlag(row, 'forcar', true);
+    toast('Pedido marcado para tentar já. O RPi corre a fila a cada minuto.');
+  } catch (e) {
+    console.error(e); r.estado = prev; render(); toast('Não consegui marcar: ' + explainError(e));
+  }
+}
+async function pedidoRetryToggle(row, on) {
+  const r = S.data.requests.find(x => x.row === row); if (!r) return;
+  const prev = r.retry; r.retry = on;
+  try {
+    await api.setPedidoFlag(row, 'retry', on);
+    toast(on ? 'Retentativa automática ligada.' : 'Retentativa automática desligada.');
+  } catch (e) {
+    console.error(e); r.retry = prev; render(); toast('Não consegui guardar: ' + explainError(e));
+  }
+}
+async function pedidoAdd(form) {
+  const val = (k) => $(`[data-pf="${k}"]`, form)?.value || '';
+  const origin = val('origin'), dest = val('dest'), date = val('date'), train = toNum(val('train')), hora = val('hora');
+  if (!date || !origin || !dest || origin === dest || !train || !/^([01]\d|2[0-3]):[0-5]\d$/.test(hora)) {
+    toast('Preenche a origem, o destino, o comboio e a hora.'); return;
+  }
+  const btn = $('[data-act="pedido-add"]', form); btn.disabled = true; btn.textContent = 'A adicionar…';
+  try {
+    await api.addPedido({ data: date, origem: outName(origin), destino: outName(dest), comboio: train, hora });
+    toast('Pedido adicionado. Aparece na lista assim que o RPi tentar.'); refresh();
+  } catch (e) {
+    console.error(e); toast('Não consegui adicionar: ' + explainError(e)); btn.disabled = false; btn.textContent = 'Adicionar pedido';
+  }
 }
 
 /* ---------- editor da semana ---------- */
@@ -947,6 +1067,9 @@ document.addEventListener('click', async (e) => {
     case 'use-time': { const d = E.days[+b.dataset.i]; d[b.dataset.leg].time = b.dataset.time; E.dirty = true; renderEditor(); break; }
     case 'save-week': saveWeek(); break;
     case 'log-filter': S.logFilter = b.dataset.f; render(); break;
+    case 'pedido-swap': { const f = b.closest('.add-pedido'), o = $('[data-pf="origin"]', f), d = $('[data-pf="dest"]', f); [o.value, d.value] = [d.value, o.value]; break; }
+    case 'pedido-force': pedidoForce(+b.dataset.row); break;
+    case 'pedido-add': pedidoAdd(b.closest('.add-pedido')); break;
     case 'sign-in': $('#btnSignIn').disabled = true; if (await ensureAuth(true)) { hideAuth(); refresh(); } else showAuth('Não foi possível entrar. Tenta outra vez.'); break;
     case 'sign-out': { const t = accessToken; lsDel(TOKEN_KEY); accessToken = null; try { if (t) google.accounts.oauth2.revoke(t, () => { }); } catch { /* ok */ } $('#settings').hidden = true; showAuth('Sessão terminada.'); break; }
     case 'clear-keys': lsDel(KEYS_KEY); ttCache.clear(); openSettings(); toast('Chaves da CP apagadas deste telemóvel.'); break;
@@ -961,6 +1084,7 @@ document.addEventListener('input', (e) => {
   else return; E.dirty = true;
 });
 document.addEventListener('change', (e) => {
+  if (e.target.matches('[data-pedido-retry]')) { pedidoRetryToggle(+e.target.dataset.pedidoRetry, e.target.checked); return; }
   const E = S.editor, f = e.target.dataset?.f; if (!E || !f) return;
   const i = +e.target.closest('.dayc')?.dataset.i; const d = E.days[i]; if (!d) return;
   if (f === 'date' || f === 'origin' || f === 'dest') { d[f] = e.target.value; refreshDayMeta(i); ['ida', 'volta'].forEach(l => scheduleVerify(i, l, 0)); }
