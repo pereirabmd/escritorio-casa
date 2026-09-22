@@ -349,19 +349,10 @@ class Leg:
     # usada para o lembrete, o bilhete e saber se a viagem já passou.
     board: str | None = None           # 'HH:MM' da partida na estação de embarque
     board_date: date | None = None     # data dessa partida
-    # Só para pernas da aba Pedidos (3.2): "pedidoN" como `leg`, N = linha na Sheet (chave única,
-    # dispensa par ida/volta — permite mais de dois comboios no mesmo dia). `retry` vem da coluna
-    # Retry dessa linha.
-    retry: bool = False
 
     @property
     def key(self) -> str:
         return f"{self.date.isoformat()}-{self.leg}"
-
-    @property
-    def is_request(self) -> bool:
-        """True se vier da aba Pedidos, não da Config semanal (3.2)."""
-        return self.leg.startswith("pedido")
 
     @property
     def lock_key(self) -> str:
@@ -369,10 +360,6 @@ class Leg:
 
     @property
     def fire(self) -> datetime:
-        if self.is_request:
-            # Pedidos avulsos (3.2) não esperam por um T-24h: disparam assim que possível, como uma
-            # "compra atrasada" — recalculado a cada leitura, por isso o processo nunca fica à espera.
-            return now_local()
         return fire_time(self.anchor_date or self.date, self.anchor or self.hhmm)
 
     @property
@@ -464,57 +451,6 @@ def parse_config_rows(rows: list[list[Any]], today: date, first_row: int = 12
         legs.append(Leg(d, "ida", org, dst, train_ida, hora_ida, row))
         if not volta_vazia:
             legs.append(Leg(d, "volta", dst, org, train_volta, hora_volta, row))
-    return legs, issues
-
-
-# Colunas da aba Pedidos (3.2): uma linha = um comboio avulso, sem par ida/volta — permite mais
-# de dois comboios no mesmo dia. Alimentada por pedidos manuais (PWA) e por compras da Config
-# semanal que falharam/esgotaram (espelhadas automaticamente por hot_buy.py).
-REQUEST_HEADERS = ["Data", "Origem", "Destino", "Comboio", "Hora", "Ativo", "Retry", "Forcar",
-                   "Estado", "Ultima_Tentativa", "Referencia", "Mensagem"]
-REQUEST_TERMINAL = {"CONFIRMADO", "AMBIGUO"}   # nunca se relançam sozinhos (nem por Retry, nem por Forçar)
-
-
-def parse_request_rows(rows: list[list[Any]], today: date, first_row: int = 5
-                       ) -> tuple[list[Leg], list[str]]:
-    """Valida a aba Pedidos. Cada linha ativa e válida vira uma `Leg` com `leg='pedidoN'`
-    (N = linha na Sheet, chave por si só única — dispensa a distinção ida/volta da Config)."""
-    legs: list[Leg] = []
-    issues: list[str] = []
-    for i, raw in enumerate(rows):
-        row = first_row + i
-        cells = list(raw) + [""] * 12
-        data_v, org_v, dst_v, train_v, hora_v, ativo, retry_v = cells[:7]
-        if str(ativo).strip().upper() != "SIM":
-            continue
-        problems: list[str] = []
-
-        d = parse_sheet_date(data_v)
-        if d is None:
-            problems.append(f"data inválida ({data_v!r})")
-        elif d < today:
-            problems.append(f"data {d.isoformat()} já passou")
-
-        org, dst = norm_station(org_v), norm_station(dst_v)
-        if station_code(org) is None:
-            problems.append(f"origem desconhecida ({org_v!r})")
-        if station_code(dst) is None:
-            problems.append(f"destino desconhecido ({dst_v!r})")
-        if org and org == dst:
-            problems.append("origem igual ao destino")
-
-        train = _to_train(train_v)
-        if train is None:
-            problems.append(f"comboio inválido ({train_v!r})")
-        hora = parse_sheet_time(hora_v)
-        if hora is None:
-            problems.append(f"hora inválida ({hora_v!r})")
-
-        if problems:
-            issues.append(f"Linha {row} (Pedidos): " + "; ".join(problems))
-            continue
-        legs.append(Leg(d, f"pedido{row}", org, dst, train, hora, row,
-                        retry=str(retry_v).strip().upper() == "SIM"))
     return legs, issues
 
 
@@ -620,36 +556,6 @@ class SheetsClient:
     def append_ticket(self, data: str, comboio: Any, origem: str, destino: str,
                       hora: str, carruagem: Any, lugar: Any, referencia: str) -> None:
         self._append("Bilhetes", [data, comboio, origem, destino, hora, carruagem, lugar, referencia])
-
-    def read_requests(self) -> list[list[Any]]:
-        res = self._svc().spreadsheets().values().get(
-            spreadsheetId=self.sheet_id, range="Pedidos!A5:L1000",
-            valueRenderOption="UNFORMATTED_VALUE", dateTimeRenderOption="FORMATTED_STRING",
-        ).execute(num_retries=3)
-        return res.get("values", [])
-
-    def append_request(self, data: str, origem: str, destino: str, comboio: Any, hora: str,
-                       ativo: str = "SIM", retry: str = "NAO", estado: str = "PENDENTE") -> None:
-        self._append("Pedidos", [data, origem, destino, comboio, hora, ativo, retry, "NAO",
-                                 estado, "", "", ""])
-
-    _REQUEST_COLS = {"data": "A", "origem": "B", "destino": "C", "comboio": "D", "hora": "E",
-                     "ativo": "F", "retry": "G", "forcar": "H", "estado": "I",
-                     "ultima_tentativa": "J", "referencia": "K", "mensagem": "L"}
-
-    def update_request(self, row: int, **fields: Any) -> None:
-        """Atualiza só as colunas indicadas de uma linha de Pedidos, pelo nº de linha — nunca
-        reescreve a linha toda (protege os campos que o utilizador possa estar a editar)."""
-        data = []
-        for k, v in fields.items():
-            col = self._REQUEST_COLS[k]
-            v = sanitize(v) if isinstance(v, str) else v
-            data.append({"range": f"Pedidos!{col}{row}", "values": [[v]]})
-        if not data:
-            return
-        self._svc().spreadsheets().values().batchUpdate(
-            spreadsheetId=self.sheet_id, body={"valueInputOption": "RAW", "data": data},
-        ).execute(num_retries=3)
 
 
 TOKEN_FILE = BASE_DIR / "token.json"

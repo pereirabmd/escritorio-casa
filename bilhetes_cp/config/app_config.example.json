@@ -70,8 +70,7 @@
       120,
       120,
       120
-    ],
-    "pedido_retry_interval_minutes": 15
+    ]
   },
   "reminders": {
     "config_missing_check_times": [

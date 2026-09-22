@@ -41,13 +41,6 @@ const FAKE = `(() => {
     logs:[[when(add(t0,-1),'06:39'),'PREFLIGHT','','','','','OK','',''],[when(add(t0,-1),'06:45'),'COMPRA',add(t0,0),'ida',524,200,'SALE_CREATED','','alvo 06:45:00.000 | enviado +3 ms'],
           [when(add(t0,-1),'06:45'),'COMPRA',add(t0,0),'ida',524,'','CONFIRMED','REF123',''],[when(add(t0,-2),'18:31'),'COMPRA',add(t0,-1),'volta',525,409,'SOLD_OUT','','Não há lugares.'],
           [when(add(t0,-2),'18:30'),'ERRO',add(t0,-1),'volta',525,'','FAILED','','Login na CP falhou: CAPTCHA']],
-    // Pedidos avulsos (3.2): linha 5=pendente, 6=falhou com retry ligado, 7=ambíguo, 8=confirmado (não deve aparecer),
-    // 9=falhou mas já passou (também não deve aparecer).
-    requests:[[add(t0,2),'Aveiro','Lisboa Oriente',530,'06:45','SIM','NAO','NAO','PENDENTE','','',''],
-              [add(t0,3),'Aveiro','Lisboa Oriente',531,'07:15','SIM','SIM','NAO','FALHOU',when(add(t0,3),'07:00'),'','Sem lugares (esgotado).'],
-              [add(t0,4),'Aveiro','Lisboa Oriente',532,'08:00','SIM','NAO','NAO','AMBIGUO',when(add(t0,4),'08:00'),'','Ligação cortada a meio da compra.'],
-              [add(t0,-1),'Aveiro','Lisboa Oriente',533,'09:00','SIM','NAO','NAO','CONFIRMADO','','REF999',''],
-              [add(t0,-2),'Aveiro','Lisboa Oriente',529,'06:00','SIM','NAO','NAO','FALHOU','','','Esgotado.']],
   };
   // chaves da CP falsas + uma CP falsa: o 524 parte do Porto às 06:10 e passa em Aveiro às 06:45
   localStorage.setItem('bilhetes_cp.cpkeys', JSON.stringify({t:'k',i:'i',s:'s'}));
@@ -65,12 +58,10 @@ const FAKE = `(() => {
     if(String(u).includes('/travel-api/journeys')&&o&&o.method==='POST'){const b=JSON.parse(o.body); const key=b.departureStationCode+'|'+b.arrivalStationCode; return Promise.resolve(new Response(JSON.stringify(JN[key]||{outwardTrip:[]}),{status:200}));}
     return realFetch(u,o);
   };
-  window.__STATE=state; window.__saved=null; window.__pedidoFlag=null; window.__pedidoAdded=null;
+  window.__STATE=state; window.__saved=null;
   window.__BCP_API={
-    async load(){return {passe:state.passe,weeklyRaw:state.weekly.map(r=>[...r]),ticketsRaw:state.tickets.map(r=>[...r]),logsRaw:state.logs.map(r=>[...r]),requestsRaw:state.requests.map(r=>[...r])};},
+    async load(){return {passe:state.passe,weeklyRaw:state.weekly.map(r=>[...r]),ticketsRaw:state.tickets.map(r=>[...r]),logsRaw:state.logs.map(r=>[...r])};},
     async saveWeek(weekStart,newRows){window.__saved={weekStart,newRows};state.weekly=window.__BCP.mergeWeek(state.weekly,weekStart,newRows);},
-    async setPedidoFlag(row,field,on){window.__pedidoFlag={row,field,on}; const r=state.requests[row-5]; if(r) r[field==='forcar'?7:6]=on?'SIM':'NAO';},
-    async addPedido(p){window.__pedidoAdded=p; state.requests.push([p.data,p.origem,p.destino,p.comboio,p.hora,'SIM','NAO','NAO','PENDENTE','','','']);},
   };
 })();`;
 
@@ -116,7 +107,7 @@ try {
     console.log('  problemas:', JSON.stringify(problems.slice(0, 4)));
   }
   check('a app arranca e mostra conteúdo', await ev(`document.querySelector('#view').innerText.length>40`));
-  check('título e versão', (await ev('document.title')) === 'Bilhetes CP' && (await ev('__BCP.VERSION')) === 'v1.1.3');
+  check('título e versão', (await ev('document.title')) === 'Bilhetes CP' && (await ev('__BCP.VERSION')) === 'v1.1.2');
   check('sem scroll horizontal', await ev(`document.documentElement.scrollWidth<=innerWidth && document.querySelector('#view').scrollWidth<=document.querySelector('#view').clientWidth+1`));
   const home = await text('#view');
   check('ação em destaque: falta configurar a semana seguinte', /Falta configurar a semana de \d\d\/\d\d a \d\d\/\d\d/.test(home), home.slice(0, 80));
@@ -133,33 +124,6 @@ try {
   await click('[data-f="bad"]'); reg = await text('#view');
   check('Registo: filtro "Problemas" só deixa esgotado/falhas', /Esgotado/.test(reg) && /Falhou/.test(reg) && !/Verificação/.test(reg) && !/Venda criada/.test(reg));
   await shot('03-registo');
-
-  console.log('\n== Pedidos avulsos');
-  await click('[data-tab="pedidos"]'); let ped = await text('#view');
-  check('Pedidos: mostra os pendentes com estado em português', /Pendente/.test(ped) && /Falhou/.test(ped) && /Confirmar na App CP/.test(ped) && /Sem lugares \(esgotado\)\./.test(ped));
-  check('Pedidos: pedido já confirmado não aparece na lista', !/REF999/.test(ped) && !/comboio 533/.test(ped));
-  check('Pedidos: pedido cujo comboio já passou não aparece na lista', !/comboio 529/.test(ped));
-  const ambNoActions = await ev(`(()=>{const a=document.querySelector('.pedido[data-row="7"]'); return !!a && !a.querySelector('[data-act="pedido-force"]') && !a.querySelector('[data-pedido-retry]');})()`);
-  check('Pedidos: o ambíguo não tem "Tentar agora" nem interruptor de repetição', ambNoActions);
-  await shot('03b-pedidos');
-
-  await click('[data-act="pedido-force"][data-row="5"]');
-  await until(() => ev(`window.__pedidoFlag && window.__pedidoFlag.row===5`), 3000);
-  check('"Tentar agora" chama setPedidoFlag(forcar) e mostra "A tentar…"', (await ev('window.__pedidoFlag')).field === 'forcar' && /A tentar…/.test(await text('#view')));
-  await ev(`(()=>{const c=document.querySelector('[data-pedido-retry="6"]'); c.checked=false; c.dispatchEvent(new Event('change',{bubbles:true}));})()`);
-  await until(() => ev(`window.__pedidoFlag && window.__pedidoFlag.field==='retry'`), 3000);
-  check('desligar o interruptor de repetição chama setPedidoFlag(retry, false)', (await ev('window.__pedidoFlag')).on === false);
-
-  await click('.add-pedido summary');
-  await ev(`(()=>{const s=document.querySelector('[data-pf="origin"]'); s.value='aveiro'; s.dispatchEvent(new Event('change',{bubbles:true}));})()`);
-  await ev(`(()=>{const s=document.querySelector('[data-pf="dest"]'); s.value='lisboa_oriente'; s.dispatchEvent(new Event('change',{bubbles:true}));})()`);
-  await ev(`(()=>{const i=document.querySelector('[data-pf="train"]'); i.value='540'; i.dispatchEvent(new Event('input',{bubbles:true}));})()`);
-  await ev(`(()=>{const i=document.querySelector('[data-pf="hora"]'); i.value='09:15'; i.dispatchEvent(new Event('input',{bubbles:true}));})()`);
-  await click('[data-act="pedido-add"]');
-  await until(() => ev(`!!window.__pedidoAdded`), 3000);
-  const added = await ev('window.__pedidoAdded');
-  check('adicionar um pedido envia origem/destino por nome e o comboio como número', added && added.origem === 'Aveiro' && added.destino === 'Lisboa Oriente' && added.comboio === 540 && added.hora === '09:15', JSON.stringify(added));
-  await shot('03c-pedido-novo');
   await click('[data-tab="semana"]');
 
   console.log('\n== Editor da semana');

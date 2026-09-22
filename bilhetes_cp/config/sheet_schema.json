@@ -28,13 +28,6 @@
       "header_row": 4,
       "first_data_row": 5,
       "columns": ["Data", "Comboio", "Origem", "Destino", "Hora_Partida", "Carruagem", "Lugar", "Referencia"]
-    },
-    "Pedidos": {
-      "description": "Fila de pedidos avulsos (3.2): uma linha = um comboio, sem par ida/volta — permite mais de dois comboios no mesmo dia. Alimentada por pedidos manuais na PWA e, automaticamente, por pernas da Config semanal que falharam, esgotaram ou ficaram ambiguas (espelhadas pelo RPi). O RPi tenta comprar ate a linha ficar CONFIRMADO ou o comboio partir; AMBIGUO nunca se relanca sozinho.",
-      "header_row": 4,
-      "first_data_row": 5,
-      "columns": ["Data", "Origem", "Destino", "Comboio", "Hora", "Ativo", "Retry", "Forcar", "Estado", "Ultima_Tentativa", "Referencia", "Mensagem"],
-      "notes": "Ativo=SIM/NAO (like the Config). Retry=SIM liga a retentativa periodica (scripts/pedidos.py, cron a cada minuto). Forcar=SIM (escrito pela PWA) forca uma tentativa ja, e o RPi limpa-o para NAO assim que a tentativa arranca. Estado: PENDENTE (nunca tentado) / A_TENTAR / CONFIRMADO / ESGOTADO / FALHOU / AMBIGUO — escrito so pelo RPi."
     }
   }
 }

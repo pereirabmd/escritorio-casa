@@ -84,67 +84,6 @@ class ConfigValidationTests(unittest.TestCase):
         self.assertEqual(self.parse(["2026-09-22"]), ([], []))
 
 
-def prow(data="2026-09-23", org="aveiro", dst="lisboa_oriente", comboio=520, hora="06:45",
-        ativo="SIM", retry="NAO"):
-    return [data, org, dst, comboio, hora, ativo, retry, "NAO", "", "", "", ""]
-
-
-class RequestValidationTests(unittest.TestCase):
-    """Aba Pedidos (3.2): uma linha = um comboio; permite mais de dois no mesmo dia."""
-
-    def parse(self, *rows):
-        return common.parse_request_rows(list(rows), TODAY)
-
-    def test_linha_valida_gera_uma_perna_pedidoN(self):
-        legs, issues = self.parse(prow())
-        self.assertEqual(issues, [])
-        self.assertEqual(len(legs), 1)
-        l = legs[0]
-        self.assertEqual((l.leg, l.origin, l.destination, l.train, l.hhmm, l.row), ("pedido5", "aveiro", "lisboa_oriente", 520, "06:45", 5))
-        self.assertTrue(l.is_request)
-        self.assertFalse(l.retry)
-
-    def test_mais_de_dois_comboios_no_mesmo_dia_sao_tudo_menos_um_erro(self):
-        legs, issues = self.parse(prow(comboio=520), prow(comboio=521), prow(comboio=522, hora="12:00"))
-        self.assertEqual(issues, [])
-        self.assertEqual(sorted(l.train for l in legs), [520, 521, 522])
-        self.assertEqual(len({l.key for l in legs}), 3)          # chaves todas distintas (pedido5/6/7)
-
-    def test_retry_le_se_da_coluna(self):
-        legs, _ = self.parse(prow(retry="SIM"))
-        self.assertTrue(legs[0].retry)
-
-    def test_inativa_e_ignorada(self):
-        self.assertEqual(self.parse(prow(ativo="NAO")), ([], []))
-
-    def test_problemas_tipicos_sem_travar_as_outras_linhas(self):
-        legs, issues = self.parse(prow(comboio="abc"), prow(comboio=521))
-        self.assertEqual([l.train for l in legs], [521])
-        self.assertIn("Linha 5 (Pedidos)", issues[0])
-        self.assertIn("comboio inválido", issues[0])
-
-    def test_data_passada_e_origem_igual_ao_destino(self):
-        _, issues = self.parse(prow(data="2020-01-01"))
-        self.assertIn("já passou", issues[0])
-        _, issues = self.parse(prow(dst="aveiro"))
-        self.assertIn("origem igual ao destino", issues[0])
-
-
-class RequestFireTests(unittest.TestCase):
-    """Um pedido avulso nunca espera por T-24h: dispara assim que possível (3.2)."""
-
-    def test_fire_de_um_pedido_e_sempre_agora(self):
-        leg = common.Leg(date(2026, 12, 25), "pedido5", "aveiro", "lisboa_oriente", 520, "06:45", 5)
-        antes = common.now_local()
-        self.assertAlmostEqual(leg.fire.timestamp(), antes.timestamp(), delta=2)
-
-    def test_perna_normal_da_config_nao_e_afetada(self):
-        leg = common.Leg(date(2026, 9, 23), "ida", "aveiro", "lisboa_oriente", 520, "06:45", 12)
-        self.assertFalse(leg.is_request)
-        self.assertEqual(leg.fire, common.fire_time(leg.date, leg.hhmm))
-        self.assertEqual(leg.fire.strftime("%Y-%m-%d %H:%M"), "2026-09-22 06:45")
-
-
 class SanitizeTests(unittest.TestCase):
     def test_remove_valores_sensiveis_e_tokens(self):
         cru = ("login com teste.pessoa@exemplo.pt senha-de-teste-123 CC 12345678 NIF 123456789 "

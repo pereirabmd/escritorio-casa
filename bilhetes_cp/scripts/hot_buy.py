@@ -20,7 +20,6 @@ na aba Logs; erros inesperados também.
 from __future__ import annotations
 
 import argparse
-import re
 import sys
 import time
 import traceback
@@ -143,8 +142,7 @@ class Buyer:
         self.login_at = 0.0
         self.origin_code = station_code(leg.origin) or ""
         self.dest_code = station_code(leg.destination) or ""
-        kind = "pedido" if leg.is_request else leg.leg
-        self.label = f"comboio {leg.train} ({kind}) {leg.date.strftime('%d/%m')} {leg.hhmm}"
+        self.label = f"comboio {leg.train} ({leg.leg}) {leg.date.strftime('%d/%m')} {leg.hhmm}"
 
     # ---- utilitários ----------------------------------------------------
 
@@ -206,30 +204,12 @@ class Buyer:
 
     # ---- terminar -------------------------------------------------------
 
-    REQUEST_ESTADO = {"CONFIRMED": "CONFIRMADO", "SOLD_OUT": "ESGOTADO", "FAILED": "FALHOU",
-                      "AMBIGUOUS": "AMBIGUO"}
-
     def terminate(self, state: str, title: str, message: str, tipo: str, *, tags: list[str] | None = None,
                   status: Any = "", ref: str = "") -> int:
         self.lock.update(state=state, final_message=message)
         log.error("%s | %s | %s", state, title, message) if state != "CONFIRMED" else log.info("%s | %s", title, message)
         self.slog(tipo, state, status=status, ref=ref, err="" if state == "CONFIRMED" else message)
         self.notify(title, message, tags=tags or ["warning"], logger=log)
-        if self.leg.is_request:
-            # Escreve o resultado de volta na própria linha de Pedidos (3.2) — é aí que a PWA lê o
-            # estado; "Forcar" fica sempre limpo no fim, senão um clique perdido ficava a forçar para sempre.
-            self.sheet("update_request", self.leg.row, estado=self.REQUEST_ESTADO.get(state, state),
-                      ultima_tentativa=datetime.now(TZ).isoformat(timespec="seconds"),
-                      referencia=ref, mensagem=common.sanitize(message)[:400], forcar="NAO")
-        elif state in ("SOLD_OUT", "FAILED", "AMBIGUOUS") and self.leg.departure.timestamp() > time.time():
-            # Uma perna da Config semanal que falhou/esgotou/ficou ambígua, com a partida ainda por
-            # vir, passa a aparecer também nos Pedidos — para a PWA mostrar tudo o que falta comprar
-            # ou falhou num único sítio, sem o utilizador ter de ir procurar ao Registo (Bruno, 22/09).
-            # AMBIGUO entra só para leitura: Retry fica sempre NAO e o código nunca o relança sozinho.
-            leg = self.leg
-            pretty = lambda k: k.replace("_", " ").title()  # noqa: E731
-            self.sheet("append_request", leg.date.isoformat(), pretty(leg.origin), pretty(leg.destination),
-                      leg.train, leg.board or leg.hhmm, "SIM", "NAO", self.REQUEST_ESTADO.get(state, state))
         return 0 if state in ("CONFIRMED", "SOLD_OUT") else 2
 
     # ---- fluxo principal ------------------------------------------------
@@ -274,9 +254,6 @@ class Buyer:
                             tags=["white_check_mark"], logger=log)
                 return 0
             self.lock.update(state="WARMING")
-            if self.leg.is_request:
-                self.sheet("update_request", self.leg.row, estado="A_TENTAR",
-                          ultima_tentativa=datetime.now(TZ).isoformat(timespec="seconds"), forcar="NAO")
 
         # 1) pre-flight e notificação de estado
         self.do_preflight()
@@ -667,24 +644,7 @@ class Buyer:
 
 # ---------------------------------------------------------------------------
 
-def load_pedido_leg(leg_name: str) -> Leg | None:
-    """Carrega uma perna da aba Pedidos (3.2) pelo nº de linha embutido em `leg_name` ('pedidoN')."""
-    try:
-        row = int(leg_name.removeprefix("pedido"))
-    except ValueError:
-        return None
-    try:
-        rows = common.SheetsClient().read_requests()
-    except Exception as e:  # noqa: BLE001
-        log.error("Não consegui ler a aba Pedidos: %s", type(e).__name__)
-        return None
-    legs, _ = common.parse_request_rows(rows, common.now_local().date())
-    return next((l for l in legs if l.row == row), None)
-
-
 def load_leg(d: str, leg_name: str) -> Leg | None:
-    if leg_name.startswith("pedido"):
-        return load_pedido_leg(leg_name)
     today = common.now_local().date()
     target = datetime.strptime(d, "%Y-%m-%d").date()
     for source in ("cache", "sheet"):
@@ -736,17 +696,10 @@ def search_only(leg: Leg, cp_factory=CPClient, out=print) -> int:
     return 0
 
 
-def _leg_arg(v: str) -> str:
-    """'ida'/'volta' (Config, 3.2) ou 'pedidoN' (linha N da aba Pedidos, 3.2.1)."""
-    if v in ("ida", "volta") or re.fullmatch(r"pedido\d+", v):
-        return v
-    raise argparse.ArgumentTypeError(f"leg inválida: {v!r} (ida, volta, ou pedidoN)")
-
-
 def main() -> int:
-    ap = argparse.ArgumentParser(description="Compra de uma perna (lançado pelo Scheduler ou pela fila de pedidos)")
+    ap = argparse.ArgumentParser(description="Compra de uma perna (lançado pelo Scheduler)")
     ap.add_argument("--date", required=True, help="data da viagem YYYY-MM-DD")
-    ap.add_argument("--leg", required=True, type=_leg_arg)
+    ap.add_argument("--leg", required=True, choices=("ida", "volta"))
     ap.add_argument("--search-only", action="store_true",
                     help="só pesquisa e mostra o que compraria; nunca cria uma venda")
     args = ap.parse_args()
