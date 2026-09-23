@@ -1,0 +1,12 @@
+# Reconciliação das notificações agendadas no ntfy — substitui o trigger
+# horário do Apps Script E o pi/tarefas-job.sh de hoje (uma só cadência).
+[Unit]
+Description=tarefas de casa — recalcular notificacoes (ntfy)
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=bpereira
+WorkingDirectory=/home/bpereira/tarefas/pi
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/home/bpereira/tarefas/pi/.venv/bin/python recalcular.py

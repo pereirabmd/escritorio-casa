@@ -297,19 +297,5 @@ h2.section-title::before{content:'— '; opacity:.55;}
 }
 #offline-banner.show{display:flex;}
 
-/* Aviso persistente: as notificações deste telemóvel não estão a funcionar.
-   Fica visível enquanto a condição se mantiver (sem botão de fechar). */
-#notif-banner{
-  display:none; flex:0 0 auto; align-items:center; justify-content:center; gap:10px;
-  background:rgba(217,120,104,.14); color:var(--urgent);
-  font-size:11.5px; font-weight:600; padding:7px 14px; text-align:center;
-  position:relative; z-index:2;
-}
-#notif-banner.show{display:flex;}
-#notif-banner button{
-  flex:0 0 auto; background:var(--urgent); color:#fff; border:none; border-radius:999px;
-  padding:5px 12px; font-size:11px; font-weight:700; font-family:inherit; cursor:pointer;
-}
-
 /* ---------- Adição: checkbox de tarefa como <button> (reset nativo) ---------- */
 .task-check{font:inherit; -webkit-appearance:none; appearance:none; cursor:pointer;}

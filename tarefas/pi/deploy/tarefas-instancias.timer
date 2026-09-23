@@ -1,0 +1,10 @@
+[Unit]
+Description=tarefas de casa — gerar instancias, a cada 6h
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=6h
+AccuracySec=5min
+
+[Install]
+WantedBy=timers.target

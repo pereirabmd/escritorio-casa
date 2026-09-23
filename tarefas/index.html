@@ -34,7 +34,6 @@
   <div id="paper-texture"></div>
   <img id="app-watermark" src="icon-192.png" alt="" aria-hidden="true">
   <div id="offline-banner" role="status">Sem ligação — a mostrar os últimos dados sincronizados.</div>
-  <div id="notif-banner" role="status"><span id="notif-banner-texto"></span><button type="button" id="notif-banner-btn"></button></div>
   <header>
     <img src="icon-192.png" alt="Tarefas de Casa" style="width:34px; height:34px; border-radius:9px; flex:0 0 auto;">
     <div style="flex:1">
@@ -132,11 +131,24 @@
         </div>
         <div id="lista-pessoas"></div>
 
-        <h2 class="section-title" style="margin-top:18px">Notificações</h2>
+        <h2 class="section-title" style="margin-top:18px">Notificações (ntfy)</h2>
         <div class="card">
-          <div id="notif-status" style="font-size:13px; margin-bottom:10px; color:var(--text-secondary)">Estado desconhecido</div>
-          <button class="btn" id="btn-notif">Ativar notificações</button>
-          <button class="btn secondary" id="btn-testar-notif">Testar notificação</button>
+          <p style="font-size:12.5px; color:var(--text-secondary); margin:0 0 12px;">
+            As notificações chegam pela app <strong>ntfy</strong> no telemóvel, não pelo
+            browser — instala-a e subscreve o tópico "tarefas" com as credenciais abaixo
+            (uma por pessoa). Depois de guardar, toca em "Testar" e confirma na própria
+            app ntfy — não aparece aqui.
+          </p>
+          <div class="field" style="margin-bottom:8px;">
+            <label for="f-ntfy-user">Utilizador ntfy</label>
+            <input type="text" id="f-ntfy-user" autocomplete="off">
+          </div>
+          <div class="field" style="margin-bottom:10px;">
+            <label for="f-ntfy-password">Password ntfy</label>
+            <input type="password" id="f-ntfy-password" autocomplete="off">
+          </div>
+          <button class="btn" id="btn-guardar-ntfy">Guardar</button>
+          <button class="btn secondary" id="btn-testar-notif">Testar</button>
         </div>
       </div>
 
@@ -346,14 +358,12 @@
 
 <div id="toast" role="status" aria-live="polite"></div>
 
-<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-messaging-compat.js"></script>
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 
-<!-- Animações — carregadas como scripts clássicos (sem build), tal como o
-     Firebase acima. Se algum CDN falhar (ex: primeira visita offline), a
-     app continua a funcionar: cada função de animação verifica a
-     biblioteca antes de a usar (ver secção ANIMAÇÕES mais abaixo). -->
+<!-- Animações — carregadas como scripts clássicos (sem build). Se algum CDN
+     falhar (ex: primeira visita offline), a app continua a funcionar: cada
+     função de animação verifica a biblioteca antes de a usar (ver secção
+     ANIMAÇÕES mais abaixo). -->
 <script src="https://cdn.jsdelivr.net/npm/gsap@3.15.0/dist/gsap.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/gsap@3.15.0/dist/Flip.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/gsap@3.15.0/dist/ScrollTrigger.min.js"></script>
@@ -361,7 +371,7 @@
 <script src="https://cdn.jsdelivr.net/npm/animejs@4.5.0/dist/bundles/anime.umd.min.js"></script>
 
 <script>
-const APP_VERSION = 'Beta 47';
+const APP_VERSION = 'Beta 48';
 
 // ---------------------------------------------------------------
 // PISCINA — catálogo estático (não editável pela UI; ver PROJECT-CONTEXT.md)
@@ -648,16 +658,10 @@ window.addEventListener('orientationchange', () => setTimeout(ajustarAlturaApp, 
 // ---------------------------------------------------------------
 const CLIENT_ID = '108256538530-fgunbb52s7f3s9aurfpjtaf01v8fjbph.apps.googleusercontent.com';
 const SHEET_ID = '1ZwA9RqwCbOlfWLmYZWFsE5iq2oUqr-XZru_HDy6NjjI';
-const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwWfRcQ5QK0dI2YAhqHGfLbKLJoDwSCEwTb345fU352LdWk6ezdLqG1WzQLsJGO3zSj/exec';
-const VAPID_KEY = 'BJNuaIlSVerEJ6W7SuANJYDx53ynOGswUnL5zE_HG_KVBVh-1v5u9oliQ2WisT6y8_Vn3as7g8Dbla04Is3RRew';
-const FIREBASE_CONFIG = {
-  apiKey: 'AIzaSyDzjj6gCkFYSstqW4Y7tBUGnOKFIap9FlA',
-  authDomain: 'bmdpereira-5a8f4.firebaseapp.com',
-  projectId: 'bmdpereira-5a8f4',
-  storageBucket: 'bmdpereira-5a8f4.firebasestorage.app',
-  messagingSenderId: '951047052830',
-  appId: '1:951047052830:web:921d360204b7155d80d80f'
-};
+// Serviço no Raspberry Pi (nginx + TLS, mesmo domínio do ntfy) — substitui o
+// Apps Script/Firebase: gera instâncias, reconcilia as notificações no ntfy,
+// e trata marcarFeita/snooze/configurarNtfy/testar. Ver tarefas/pi/servidor.py.
+const TAREFAS_API_URL = 'https://bmdpereira.duckdns.org/tarefas-api';
 const SCOPE = 'https://www.googleapis.com/auth/spreadsheets https://www.googleapis.com/auth/userinfo.email';
 const CAT_CORES = {
   'Limpeza':'var(--cat-limpeza)', 'Cozinha':'var(--cat-cozinha)', 'Roupa':'var(--cat-roupa)',
@@ -1089,7 +1093,6 @@ async function carregarTudo() {
     document.getElementById('header-sub').style.color = '';
     document.getElementById('header-sub').textContent = 'atualizado agora';
     renderTudo();
-    sincronizarTokenNotifSilenciosamente();
     await carregarPiscina();
   } catch (e) {
     const sub = document.getElementById('header-sub');
@@ -1110,6 +1113,7 @@ function renderTudo() {
   renderFormOpcoes();
   renderResumo();
   preencherNaoIncomodar();
+  preencherNtfy();
   renderAuditoria();
   renderPiscina();
 }
@@ -1556,6 +1560,13 @@ function formatarQuando(dataConclusaoStr) {
   return `${dia}/${mes} às ${horaParte}`;
 }
 
+// Pede ao Pi para reconciliar já as notificações agendadas no ntfy, sem
+// esperar pelo próximo ciclo do cron — sugestão do PLANO. Falha em silêncio
+// de propósito: o cron é a rede de segurança se isto não chegar a correr.
+function dispararRecalculoRemoto() {
+  fetch(`${TAREFAS_API_URL}/recalcularAgora`, { method: 'POST' }).catch(() => {});
+}
+
 async function marcarFeita(inst) {
   const estadoAnterior = inst.Estado;
   const dataConclusaoAnterior = inst.DataConclusao;
@@ -1598,6 +1609,7 @@ async function marcarFeita(inst) {
   toast(novoEstado === 'Feita'
     ? 'Tarefa concluída' + (concluidasExtra ? ` · +${concluidasExtra} atrasada${concluidasExtra > 1 ? 's' : ''} anterior${concluidasExtra > 1 ? 'es' : ''}` : '')
     : 'Reaberta');
+  dispararRecalculoRemoto();
 }
 
 async function saltarTarefa(inst) {
@@ -1610,6 +1622,7 @@ async function saltarTarefa(inst) {
     comFlipHoje(() => { renderHoje(); renderCalendario(); });
   }
   toast(ok ? 'Tarefa saltada por hoje' : 'Falha ao guardar: ' + (ultimoErroSheets || 'sem ligação?'));
+  if (ok) dispararRecalculoRemoto();
 }
 
 // F10 — Abre o Google Calendar com o evento pré-preenchido, para a pessoa
@@ -2318,10 +2331,7 @@ document.getElementById('btn-gerir-pessoas').addEventListener('click', abrirModa
 document.getElementById('btn-forcar-geracao').addEventListener('click', async () => {
   toast('A atualizar...');
   try {
-    const res = await fetch(APPS_SCRIPT_URL, {
-      method: 'POST',
-      body: JSON.stringify({ tipo: 'gerar' })
-    });
+    const res = await fetch(`${TAREFAS_API_URL}/gerar`, { method: 'POST' });
     const data = await res.json();
     toast(data.ok ? `Tarefas atualizadas (${data.criadas} nova(s))` : 'Falha: ' + data.erro);
     await carregarTudo();
@@ -2450,19 +2460,15 @@ function configRawFind(chave) {
 async function verificarSaude() {
   const el = document.getElementById('saude-status');
   try {
-    const res = await fetch(APPS_SCRIPT_URL, {
-      method: 'POST',
-      body: JSON.stringify({ tipo: 'saude' })
-    });
+    const res = await fetch(`${TAREFAS_API_URL}/saude`);
     const data = await res.json();
     if (!data.ultimaExecucao) {
-      el.innerHTML = '⚠️ O trigger automático ainda não correu nenhuma vez.';
+      el.innerHTML = '⚠️ A reconciliação das notificações no Pi ainda não correu nenhuma vez.';
       return;
     }
     const cor = data.saudavel ? 'var(--success)' : 'var(--urgent)';
     const icone = data.saudavel ? '✓' : '⚠️';
-    const avisoFalhas = data.falhasConsecutivas >= 2 ? ` · ${data.falhasConsecutivas} falhas seguidas!` : '';
-    el.innerHTML = `<span style="color:${cor}">${icone} Última execução automática: há ${data.minutosDesde} min${avisoFalhas}</span>`;
+    el.innerHTML = `<span style="color:${cor}">${icone} Última reconciliação no Pi: há ${data.minutosDesde} min</span>`;
   } catch (e) {
     el.textContent = 'Não foi possível verificar o estado do sistema.';
   }
@@ -2612,6 +2618,7 @@ function renderConfigPessoas() {
       lsSet('tarefas.pessoa', p);
       lsRemove('tarefas.convidado');
       renderConfigPessoas();
+      preencherNtfy();
       toast('Perfil: ' + p);
     });
     lista.appendChild(div);
@@ -2625,255 +2632,67 @@ function renderConfigPessoas() {
     lsSet('tarefas.pessoa', 'Convidado');
     lsSet('tarefas.convidado', 'TRUE');
     renderConfigPessoas();
+    preencherNtfy();
     toast('Modo convidado ativo — só consulta, sem tarefas atribuídas');
   });
   lista.appendChild(convidadoDiv);
 }
 
 // ---------------------------------------------------------------
-// NOTIFICAÇÕES (Firebase Messaging)
+// NOTIFICAÇÕES (ntfy) — a entrega deixa de passar pelo browser: é a app
+// ntfy no telemóvel (já instalada para o bilhetes_cp) que mostra o aviso,
+// subscrita ao tópico partilhado "tarefas" com a credencial de leitura
+// desta pessoa. Não há permissão nenhuma a pedir ao browser — só falta
+// guardar essa credencial (o Pi encripta-a antes de a gravar na Sheet,
+// nunca fica em claro fora do pedido inicial) e, opcionalmente, testar.
 // ---------------------------------------------------------------
-firebase.initializeApp(FIREBASE_CONFIG);
-const messaging = firebase.messaging();
 
-// Quando a app está aberta em primeiro plano, o Chrome não mostra a
-// notificação automaticamente — tem de ser feito manualmente aqui.
-messaging.onMessage((payload) => {
-  const titulo = payload.data?.titulo || 'Tarefas de Casa';
-  const corpo = payload.data?.corpo || '';
-  const instanciaId = payload.data?.instanciaId || '';
-  const idMensagem = payload.data?.msgId || instanciaId || (titulo + corpo);
-  toast(titulo + ': ' + corpo);
-  confirmarRecepcaoNotificacao(payload.data);
-
-  if (navigator.serviceWorker) {
-    navigator.serviceWorker.getRegistration('./firebase-messaging-sw.js').then((reg) => {
-      if (reg) {
-        reg.showNotification(titulo, {
-          body: corpo,
-          icon: './icon-192.png',
-          tag: idMensagem,
-          data: { instanciaId },
-          actions: instanciaId ? [{ action: 'concluir', title: 'Marcar feita' }] : []
-        });
-      }
-    });
-  }
-
-  // A app já está aberta — atualiza a lista para refletir a tarefa nova
-  carregarTudo();
-});
-
-function atualizarEstadoNotif() {
-  const el = document.getElementById('notif-status');
-  const btn = document.getElementById('btn-notif');
-  if (!('Notification' in window)) { el.textContent = 'Não suportado neste browser'; btn.disabled = true; return; }
-  if (Notification.permission === 'granted') {
-    el.textContent = 'Notificações ativas';
-    btn.textContent = 'Notificações já ativas';
-  } else if (Notification.permission === 'denied') {
-    el.textContent = 'Bloqueadas nas definições do browser (estado: denied)';
-  } else {
-    el.textContent = 'Ainda não ativadas (estado: ' + Notification.permission + ')';
-    btn.textContent = 'Ativar notificações';
-  }
+function preencherNtfy() {
+  const pessoaObj = state.pessoasObjs?.find(p => p.nome === pessoaAtual);
+  const elUser = document.getElementById('f-ntfy-user');
+  const elPass = document.getElementById('f-ntfy-password');
+  if (!elUser || !elPass) return;
+  elPass.value = '';
+  if (!pessoaObj) { elUser.value = ''; elPass.placeholder = ''; return; }
+  elUser.value = state.config[`Pessoa${pessoaObj.num}_NtfyUser`] || '';
+  elPass.placeholder = state.config[`Pessoa${pessoaObj.num}_NtfyPasswordEnc`]
+    ? '(já configurada — deixa em branco para manter)' : '';
 }
 
-// F20 — Sincronização automática e silenciosa do token FCM.
-//
-// Causa do bug "notificações param sempre que o Android mata a app em
-// segundo plano": o Chrome pode gerar um token FCM NOVO nessa altura (a
-// app perde o token antigo, guardado só em memória/IndexedDB do browser).
-// Sem isto, a app nunca detetava a mudança sozinha — o token antigo ficava
-// registado no Apps Script, o próximo envio para ele falhava e o
-// NotificationSender.gs desativava a subscrição automaticamente (ver
-// desativarSubscricao em NotificationSender.gs), só voltando a funcionar
-// quando a pessoa reparava e tocava outra vez em "Ativar notificações".
-//
-// A correção: sempre que a app carrega dados (arranque, cada sincronização,
-// reabrir depois de estar em segundo plano), verifica em silêncio se o
-// token atual ainda é o mesmo que está registado no servidor — e volta a
-// registá-lo sozinha se tiver mudado, sem esperar que a pessoa repare.
-const TOKEN_REGISTADO_KEY = 'tarefas.notifTokenRegistado';
-const TOKEN_REGISTADO_EM_KEY = 'tarefas.notifTokenRegistadoEm';
-// Mesmo com o token igual, volta a registá-lo de tempos a tempos: se o
-// servidor desativou a subscrição por uma falha passageira, o token continua
-// válido mas a app nunca o saberia (só re-registava quando o token mudava).
-const REREGISTO_TOKEN_APOS_MS = 12 * 60 * 60 * 1000;
-
-async function registarTokenNoServidor(token, mostrarFeedback) {
+document.getElementById('btn-guardar-ntfy').addEventListener('click', async () => {
+  if (!pessoaAtual || pessoaAtual === 'Convidado') { toast('Escolhe primeiro quem és, em cima'); return; }
+  const ntfyUser = document.getElementById('f-ntfy-user').value.trim();
+  const ntfyPassword = document.getElementById('f-ntfy-password').value;
+  if (!ntfyUser || !ntfyPassword) { toast('Preenche o utilizador e a password ntfy'); return; }
+  toast('A guardar...');
   try {
-    const res = await fetch(APPS_SCRIPT_URL, {
+    const res = await fetch(`${TAREFAS_API_URL}/configurarNtfy`, {
       method: 'POST',
-      body: JSON.stringify({ pessoa: pessoaAtual, fcmToken: token })
+      body: JSON.stringify({ pessoa: pessoaAtual, ntfyUser, ntfyPassword })
     });
     const data = await res.json();
     if (data.ok) {
-      lsSet(TOKEN_REGISTADO_KEY, token);
-      lsSet(TOKEN_REGISTADO_EM_KEY, String(Date.now()));
-      if (mostrarFeedback) toast('Notificações ativadas');
-    } else if (mostrarFeedback) {
-      toast('Falha ao registar: ' + data.erro);
+      toast('Credenciais ntfy guardadas');
+      await carregarTudo();
+    } else {
+      toast('Falha: ' + (data.erro || 'sem detalhe'));
     }
-    return data.ok;
-  } catch (e) {
-    if (mostrarFeedback) toast('Erro: ' + (e && e.message ? e.message : String(e)));
-    return false;
-  }
-}
-
-// Confirma ao servidor que uma notificação chegou a este dispositivo (versão
-// da app aberta; o service worker faz o mesmo quando a app está fechada).
-function confirmarRecepcaoNotificacao(dados) {
-  if (!dados || !dados.msgId) return;
-  fetch(APPS_SCRIPT_URL, {
-    method: 'POST',
-    body: JSON.stringify({
-      tipo: 'recebido',
-      msgId: dados.msgId,
-      pessoa: dados.pessoa || '',
-      tokenFim: dados.tokenFim || '',
-      titulo: dados.titulo || '',
-      instanciaId: dados.instanciaId || ''
-    })
-  }).catch(() => {});
-}
-
-async function consultarEstadoNotificacoes(token) {
-  try {
-    const res = await fetch(APPS_SCRIPT_URL, {
-      method: 'POST',
-      body: JSON.stringify({ tipo: 'estadoNotificacoes', pessoa: pessoaAtual, fcmToken: token })
-    });
-    const data = await res.json();
-    return data.ok ? data : null;
-  } catch (e) {
-    return null; // sem rede/servidor: não inventa um aviso, só não atualiza
-  }
-}
-
-// Aviso PERSISTENTE (não um toast): fica visível enquanto a condição se
-// mantiver e some sozinho quando ela deixa de existir. Não tem botão de
-// fechar de propósito — silenciá-lo esconderia o problema em vez de o
-// resolver. O botão aciona os botões que já existem em Configurações.
-const AVISOS_NOTIF = {
-  bloqueadas: {
-    texto: 'Notificações bloqueadas nas definições do browser — não vais receber avisos neste telemóvel.',
-    botao: null
-  },
-  naoAtivadas: {
-    texto: 'Notificações ainda não ativadas neste telemóvel.',
-    botao: 'Ativar', acao: 'btn-notif'
-  },
-  inativas: {
-    texto: 'As notificações deste telemóvel estão inativas.',
-    botao: 'Reativar', acao: 'btn-notif'
-  },
-  semConfirmacao: {
-    texto: 'O último aviso enviado ainda não foi confirmado por este telemóvel. Se não o viste, confirma que o Chrome não está com a poupança de bateria restrita.',
-    botao: 'Testar', acao: 'btn-testar-notif'
-  }
-};
-
-function atualizarAvisoNotificacoes(chave) {
-  const banner = document.getElementById('notif-banner');
-  if (!banner) return;
-  const aviso = chave ? AVISOS_NOTIF[chave] : null;
-  banner.classList.toggle('show', !!aviso);
-  if (!aviso) return;
-  document.getElementById('notif-banner-texto').textContent = aviso.texto;
-  const btn = document.getElementById('notif-banner-btn');
-  btn.style.display = aviso.botao ? '' : 'none';
-  btn.textContent = aviso.botao || '';
-  btn.onclick = aviso.acao ? () => document.getElementById(aviso.acao).click() : null;
-}
-
-let sincronizacaoTokenEmCurso = false;
-let ultimaVerificacaoNotif = 0;
-// `forcar` ignora o intervalo mínimo entre verificações (usado pelos botões);
-// sem ele, voltar várias vezes à app seguidas não multiplica pedidos ao Apps Script.
-async function sincronizarTokenNotifSilenciosamente(forcar) {
-  if (sincronizacaoTokenEmCurso) return;
-  if (!pessoaAtual || pessoaAtual === 'Convidado') { atualizarAvisoNotificacoes(null); return; }
-  if (!('Notification' in window)) return;
-  if (Notification.permission === 'denied') { atualizarAvisoNotificacoes('bloqueadas'); return; }
-  if (Notification.permission !== 'granted') { atualizarAvisoNotificacoes('naoAtivadas'); return; }
-  if (!navigator.onLine) return;
-  if (!forcar && Date.now() - ultimaVerificacaoNotif < 2 * 60 * 1000) return;
-  sincronizacaoTokenEmCurso = true;
-  try {
-    ultimaVerificacaoNotif = Date.now();
-    const swReg = await navigator.serviceWorker.register('./firebase-messaging-sw.js');
-    const token = await messaging.getToken({ vapidKey: VAPID_KEY, serviceWorkerRegistration: swReg });
-    if (!token) return;
-
-    const registadoEm = Number(lsGet(TOKEN_REGISTADO_EM_KEY) || 0);
-    const precisaRegistar = token !== lsGet(TOKEN_REGISTADO_KEY) || Date.now() - registadoEm > REREGISTO_TOKEN_APOS_MS;
-    let acabouDeRegistar = false;
-    if (precisaRegistar) acabouDeRegistar = await registarTokenNoServidor(token, false);
-
-    let estado = await consultarEstadoNotificacoes(token);
-    if (estado && (!estado.registado || !estado.ativa) && !acabouDeRegistar) {
-      // O servidor desativou este token entretanto: reativa já.
-      if (await registarTokenNoServidor(token, false)) estado = await consultarEstadoNotificacoes(token);
-    }
-    if (!estado) return; // sem resposta: mantém o aviso que já estava
-    if (!estado.registado || !estado.ativa) atualizarAvisoNotificacoes('inativas');
-    else if (estado.semConfirmacao) atualizarAvisoNotificacoes('semConfirmacao');
-    else atualizarAvisoNotificacoes(null);
-  } catch (e) {
-    console.warn('Sincronização silenciosa do token de notificações falhou:', e);
-  } finally {
-    sincronizacaoTokenEmCurso = false;
-  }
-}
-
-// Além de cada carregarTudo(), também ao voltar a esta aba/app depois de
-// estar em segundo plano — cobre o caso de o Android não chegar a
-// descarregar a página da memória, só a suspender.
-document.addEventListener('visibilitychange', () => {
-  if (document.visibilityState === 'visible') sincronizarTokenNotifSilenciosamente();
-});
-
-document.getElementById('btn-notif').addEventListener('click', async () => {
-  if (!pessoaAtual) { toast('Escolhe primeiro quem és, em cima'); return; }
-  try {
-    const permission = await Notification.requestPermission();
-    if (permission !== 'granted') {
-      toast('Estado devolvido: "' + permission + '" (não é bloqueio definitivo se não for "denied")');
-      atualizarEstadoNotif();
-      sincronizarTokenNotifSilenciosamente(true);
-      return;
-    }
-
-    const swReg = await navigator.serviceWorker.register('./firebase-messaging-sw.js');
-    const token = await messaging.getToken({ vapidKey: VAPID_KEY, serviceWorkerRegistration: swReg });
-    await registarTokenNoServidor(token, true);
-    atualizarEstadoNotif();
-    sincronizarTokenNotifSilenciosamente(true); // atualiza o aviso persistente
   } catch (e) {
     console.error(e);
-    toast('Erro: ' + (e && e.message ? e.message : String(e)));
+    toast('Erro de rede ao guardar');
   }
 });
 
 document.getElementById('btn-testar-notif').addEventListener('click', async () => {
-  if (!pessoaAtual) { toast('Escolhe primeiro quem és, em cima'); return; }
-  toast('A enviar notificação de teste...');
+  if (!pessoaAtual || pessoaAtual === 'Convidado') { toast('Escolhe primeiro quem és, em cima'); return; }
+  toast('A publicar notificação de teste...');
   try {
-    const res = await fetch(APPS_SCRIPT_URL, {
+    const res = await fetch(`${TAREFAS_API_URL}/testar`, {
       method: 'POST',
-      body: JSON.stringify({ tipo: 'teste', pessoa: pessoaAtual })
+      body: JSON.stringify({ pessoa: pessoaAtual })
     });
     const data = await res.json();
-    if (data.ok) {
-      // versaoScript ausente = o Apps Script implementado é anterior à Beta 45
-      // (código novo copiado mas implementação não atualizada).
-      toast(`Teste enviado (${data.enviados}/${data.total}) · script ${data.versaoScript || 'desatualizado'}`);
-      setTimeout(() => sincronizarTokenNotifSilenciosamente(true), 15000); // dá tempo à confirmação de receção chegar
-    } else {
-      toast('Falha: ' + (data.erro || 'sem detalhe'));
-    }
+    toast(data.ok ? (data.aviso || 'Publicado — confirma na app ntfy') : 'Falha: ' + (data.erro || 'sem detalhe'));
   } catch (e) {
     console.error(e);
     toast('Erro de rede ao testar');
@@ -3093,9 +2912,9 @@ window.addEventListener('offline', atualizarBannerOffline);
 
 // ---------------------------------------------------------------
 // ATUALIZAÇÃO DO SERVICE WORKER — o SW ativa-se sozinho de imediato
-// (skipWaiting + clients.claim em firebase-messaging-sw.js); falta só
-// avisar quem já tinha a página aberta de que a versão mudou, para não
-// ficar a usar HTML/JS antigo em memória indefinidamente.
+// (skipWaiting + clients.claim em sw.js); falta só avisar quem já tinha a
+// página aberta de que a versão mudou, para não ficar a usar HTML/JS antigo
+// em memória indefinidamente.
 // ---------------------------------------------------------------
 function iniciarDetecaoAtualizacaoSW() {
   if (!('serviceWorker' in navigator)) return;
@@ -3118,7 +2937,6 @@ window.addEventListener('load', () => {
   document.getElementById('footer-version').textContent = APP_VERSION;
   const temaGuardado = lsGet('tarefas.tema') || 'auto';
   aplicarTema(temaGuardado);
-  atualizarEstadoNotif();
   verificarSaude();
   atualizarBannerOffline();
 
@@ -3128,9 +2946,9 @@ window.addEventListener('load', () => {
   }
 
   if ('serviceWorker' in navigator) {
-    // Único service worker da app (cache + push). Não registar
-    // service-worker.js à parte — competiria pelo mesmo scope.
-    navigator.serviceWorker.register('./firebase-messaging-sw.js');
+    // Único service worker da app — agora só cache da app shell; a entrega
+    // de notificações passou a ser feita pela app ntfy, fora do browser.
+    navigator.serviceWorker.register('./sw.js');
     iniciarDetecaoAtualizacaoSW();
   }
 

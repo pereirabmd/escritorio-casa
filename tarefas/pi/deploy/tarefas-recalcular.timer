@@ -1,0 +1,12 @@
+# A cada 5 min — cadência de segurança para o recalcularAgora (chamado pela
+# PWA logo depois de gravar uma alteração) não ser a única via.
+[Unit]
+Description=tarefas de casa — recalcular notificacoes, a cada 5 min
+
+[Timer]
+OnBootSec=1min
+OnUnitActiveSec=5min
+AccuracySec=30s
+
+[Install]
+WantedBy=timers.target

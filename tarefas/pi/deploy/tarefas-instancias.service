@@ -1,0 +1,12 @@
+# Gera instâncias recorrentes com antecedência (Config!DiasAntecedenciaGeracao)
+# — idempotente, pode correr com folga sem risco de duplicar.
+[Unit]
+Description=tarefas de casa — gerar instancias recorrentes
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=bpereira
+WorkingDirectory=/home/bpereira/tarefas/pi
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/home/bpereira/tarefas/pi/.venv/bin/python instancias.py

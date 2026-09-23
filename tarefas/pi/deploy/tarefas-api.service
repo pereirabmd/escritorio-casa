@@ -1,0 +1,18 @@
+# Serviço HTTP pequeno (marcarFeita/snooze/configurarNtfy/testar/gerar/
+# saude/recalcularAgora) — atrás do nginx, ver deploy/nginx-tarefas-api.conf.
+[Unit]
+Description=tarefas de casa — servico HTTP (servidor.py)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=bpereira
+WorkingDirectory=/home/bpereira/tarefas/pi
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/home/bpereira/tarefas/pi/.venv/bin/python servidor.py
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

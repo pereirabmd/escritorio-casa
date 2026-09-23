@@ -1,0 +1,13 @@
+# Segredos — nunca no git (ver tarefas/pi/deploy/README.md)
+pi/.env
+pi/config/service-account.json
+
+# Estado/logs gerados em runtime no RPi
+pi/state/
+pi/logs/
+pi/locks/
+
+# Python
+__pycache__/
+*.pyc
+pi/.venv/

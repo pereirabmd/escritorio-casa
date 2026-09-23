@@ -1,0 +1,10 @@
+[Unit]
+Description=tarefas de casa — manutencao, uma vez por mes
+
+[Timer]
+OnCalendar=*-*-01 04:00:00
+Persistent=true
+AccuracySec=1h
+
+[Install]
+WantedBy=timers.target
