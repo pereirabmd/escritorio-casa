@@ -35,12 +35,22 @@ const FAKE = `(() => {
   const t0=today(), m0=mon(t0), when=(iso,hm)=>iso+'T'+hm+':12.345+01:00';
   const state={
     passe:[serial(add(t0,-9)),29,serial(add(t0,20)),20],
-    weekly:[[add(m0,1),'Aveiro','Lisboa Oriente',524,'06:45',525,'18:30','SIM'],[add(m0,3),'Aveiro','Lisboa Oriente',524,'06:45',525,'18:30','SIM'],
-            [add(m0,-6),'Aveiro','Lisboa Oriente',520,'07:27',521,'18:00','SIM']],
+    // uma linha = uma viagem, sem par ida/volta (decisão de Bruno, 22/09): o dia de m0+1 e o de m0+3
+    // têm 2 viagens cada (o antigo par ida/volta, agora 2 linhas); m0-6 só tem 1.
+    weekly:[[add(m0,1),'Aveiro','Lisboa Oriente',524,'06:45','SIM'],[add(m0,1),'Lisboa Oriente','Aveiro',525,'18:30','SIM'],
+            [add(m0,3),'Aveiro','Lisboa Oriente',524,'06:45','SIM'],[add(m0,3),'Lisboa Oriente','Aveiro',525,'18:30','SIM'],
+            [add(m0,-6),'Aveiro','Lisboa Oriente',520,'07:27','SIM']],
     tickets:[[add(t0,1),524,'Aveiro','Lisboa Oriente','06:45',3,42,'REF123'],[add(m0,-6),520,'Aveiro','Lisboa Oriente','07:27',5,11,'REF100']],
     logs:[[when(add(t0,-1),'06:39'),'PREFLIGHT','','','','','OK','',''],[when(add(t0,-1),'06:45'),'COMPRA',add(t0,0),'ida',524,200,'SALE_CREATED','','alvo 06:45:00.000 | enviado +3 ms'],
           [when(add(t0,-1),'06:45'),'COMPRA',add(t0,0),'ida',524,'','CONFIRMED','REF123',''],[when(add(t0,-2),'18:31'),'COMPRA',add(t0,-1),'volta',525,409,'SOLD_OUT','','Não há lugares.'],
           [when(add(t0,-2),'18:30'),'ERRO',add(t0,-1),'volta',525,'','FAILED','','Login na CP falhou: CAPTCHA']],
+    // Pedidos avulsos (3.2.1): linha 5=pendente, 6=falhou com retry ligado (5 min), 7=ambíguo,
+    // 8=confirmado (não deve aparecer), 9=falhou mas já passou (também não deve aparecer).
+    requests:[[add(t0,2),'Aveiro','Lisboa Oriente',530,'06:45','SIM','NAO','','NAO','PENDENTE','','',''],
+              [add(t0,3),'Aveiro','Lisboa Oriente',531,'07:15','SIM','SIM',5,'NAO','FALHOU',when(add(t0,3),'07:00'),'','Sem lugares (esgotado).'],
+              [add(t0,4),'Aveiro','Lisboa Oriente',532,'08:00','SIM','NAO','','NAO','AMBIGUO',when(add(t0,4),'08:00'),'','Ligação cortada a meio da compra.'],
+              [add(t0,-1),'Aveiro','Lisboa Oriente',533,'09:00','SIM','NAO','','NAO','CONFIRMADO','','REF999',''],
+              [add(t0,-2),'Aveiro','Lisboa Oriente',529,'06:00','SIM','NAO','','NAO','FALHOU','','','Esgotado.']],
   };
   // chaves da CP falsas + uma CP falsa: o 524 parte do Porto às 06:10 e passa em Aveiro às 06:45
   localStorage.setItem('bilhetes_cp.cpkeys', JSON.stringify({t:'k',i:'i',s:'s'}));
@@ -58,10 +68,12 @@ const FAKE = `(() => {
     if(String(u).includes('/travel-api/journeys')&&o&&o.method==='POST'){const b=JSON.parse(o.body); const key=b.departureStationCode+'|'+b.arrivalStationCode; return Promise.resolve(new Response(JSON.stringify(JN[key]||{outwardTrip:[]}),{status:200}));}
     return realFetch(u,o);
   };
-  window.__STATE=state; window.__saved=null;
+  window.__STATE=state; window.__saved=null; window.__pedidoForce=null; window.__pedidoRetry=null;
   window.__BCP_API={
-    async load(){return {passe:state.passe,weeklyRaw:state.weekly.map(r=>[...r]),ticketsRaw:state.tickets.map(r=>[...r]),logsRaw:state.logs.map(r=>[...r])};},
+    async load(){return {passe:state.passe,weeklyRaw:state.weekly.map(r=>[...r]),ticketsRaw:state.tickets.map(r=>[...r]),logsRaw:state.logs.map(r=>[...r]),requestsRaw:state.requests.map(r=>[...r])};},
     async saveWeek(weekStart,newRows){window.__saved={weekStart,newRows};state.weekly=window.__BCP.mergeWeek(state.weekly,weekStart,newRows);},
+    async forcarPedido(row){window.__pedidoForce=row; const r=state.requests[row-5]; if(r) r[8]='SIM';},
+    async setPedidoRetry(row,on,minutos){window.__pedidoRetry={row,on,minutos}; const r=state.requests[row-5]; if(r){r[6]=on?'SIM':'NAO'; r[7]=minutos;}},
   };
 })();`;
 
@@ -107,7 +119,7 @@ try {
     console.log('  problemas:', JSON.stringify(problems.slice(0, 4)));
   }
   check('a app arranca e mostra conteúdo', await ev(`document.querySelector('#view').innerText.length>40`));
-  check('título e versão', (await ev('document.title')) === 'Bilhetes CP' && (await ev('__BCP.VERSION')) === 'v1.1.2');
+  check('título e versão', (await ev('document.title')) === 'Bilhetes CP' && (await ev('__BCP.VERSION')) === 'v1.2.0');
   check('sem scroll horizontal', await ev(`document.documentElement.scrollWidth<=innerWidth && document.querySelector('#view').scrollWidth<=document.querySelector('#view').clientWidth+1`));
   const home = await text('#view');
   check('ação em destaque: falta configurar a semana seguinte', /Falta configurar a semana de \d\d\/\d\d a \d\d\/\d\d/.test(home), home.slice(0, 80));
@@ -124,6 +136,28 @@ try {
   await click('[data-f="bad"]'); reg = await text('#view');
   check('Registo: filtro "Problemas" só deixa esgotado/falhas', /Esgotado/.test(reg) && /Falhou/.test(reg) && !/Verificação/.test(reg) && !/Venda criada/.test(reg));
   await shot('03-registo');
+
+  console.log('\n== Pedidos avulsos');
+  await click('[data-tab="pedidos"]'); let ped = await text('#view');
+  check('Pedidos: mostra os pendentes com estado em português', /Pendente/.test(ped) && /Falhou/.test(ped) && /Confirmar na App CP/.test(ped) && /Sem lugares \(esgotado\)\./.test(ped));
+  check('Pedidos: pedido já confirmado não aparece na lista', !/REF999/.test(ped) && !/comboio 533/.test(ped));
+  check('Pedidos: pedido cujo comboio já passou não aparece na lista', !/comboio 529/.test(ped));
+  const ambNoActions = await ev(`(()=>{const a=document.querySelector('.pedido[data-row="7"]'); return !!a && !a.querySelector('[data-act="pedido-force"]') && !a.querySelector('[data-pedido-retry]');})()`);
+  check('Pedidos: o ambíguo não tem "Tentar agora" nem interruptor de repetição', ambNoActions);
+  await shot('03b-pedidos');
+
+  await click('[data-act="pedido-force"][data-row="5"]');
+  await until(() => ev(`window.__pedidoForce===5`), 3000);
+  check('"Tentar agora" força uma única tentativa e mostra "A tentar…"', (await ev('window.__pedidoForce')) === 5 && /A tentar…/.test(await text('#view')));
+
+  await ev(`(()=>{const i=document.querySelector('[data-pedido-min="6"]'); i.value='10'; i.dispatchEvent(new Event('change',{bubbles:true}));})()`);
+  await until(() => ev(`window.__pedidoRetry && window.__pedidoRetry.row===6`), 3000);
+  check('mudar os minutos liga a repetição com o novo intervalo', JSON.stringify(await ev('window.__pedidoRetry')) === JSON.stringify({ row: 6, on: true, minutos: 10 }));
+
+  await ev(`(()=>{const c=document.querySelector('[data-pedido-retry="6"]'); c.checked=false; c.dispatchEvent(new Event('change',{bubbles:true}));})()`);
+  await until(() => ev(`window.__pedidoRetry && window.__pedidoRetry.on===false`), 3000);
+  check('desligar o interruptor desliga a repetição automática', (await ev('window.__pedidoRetry')).on === false);
+  await shot('03c-pedidos-acoes');
   await click('[data-tab="semana"]');
 
   console.log('\n== Editor da semana');
@@ -140,30 +174,40 @@ try {
   check('a data sugerida da compra segue a partida do comboio na 1.ª estação (Porto 06:10, não Aveiro 06:45)', /Compra automática [^\n]* às 06:10 \(partida em Porto Campanha\)/.test(ft), ft.match(/Compra automática[^\n]*/g)?.join(' | '));
   check('sem diferença (volta: 1.ª estação = embarque) não acrescenta nota', /Compra automática [^\n]* às 18:30(?! \()/.test(ft) && !/18:30 \(partida/.test(ft));
   // a hora da Config é a da 1.ª estação (caso do 520): aceita-se, confirma-se e mostra-se o embarque
-  await ev(`(()=>{const i=document.querySelector('#editor .dayc [data-f="ida.time"]'); i.value='06:10'; i.dispatchEvent(new Event('input',{bubbles:true}));})()`);
+  await ev(`(()=>{const i=document.querySelector('#editor .dayc [data-f="time"][data-vi="0"]'); i.value='06:10'; i.dispatchEvent(new Event('input',{bubbles:true}));})()`);
   await sleep(1200);
-  const t1 = await text('#editor .dayc [data-tt="ida"]'), f1 = await text('#editor .dayc [data-fire="ida"]');
+  const t1 = await text('#editor .dayc [data-tt="0"]'), f1 = await text('#editor .dayc [data-fire="0"]');
   check('hora da 1.ª estação (06:10) é aceite e confirmada pela CP', /Confirmado pela CP/.test(t1) && /Porto Campanha 06:10/.test(t1), t1);
   check('com a hora da 1.ª estação a compra é às 06:10 e mostra o embarque às 06:45', /às 06:10 · embarque às 06:45/.test(f1), f1);
-  await ev(`(()=>{const i=document.querySelector('#editor .dayc [data-f="ida.time"]'); i.value='07:00'; i.dispatchEvent(new Event('input',{bubbles:true}));})()`);
+  await ev(`(()=>{const i=document.querySelector('#editor .dayc [data-f="time"][data-vi="0"]'); i.value='07:00'; i.dispatchEvent(new Event('input',{bubbles:true}));})()`);
   await sleep(1200);
-  const t2 = await text('#editor .dayc [data-tt="ida"]');
+  const t2 = await text('#editor .dayc [data-tt="0"]');
   check('uma hora que não é nem a da 1.ª estação nem a de embarque avisa e sugere a da 1.ª estação', /A CP indica 06:10 \(Porto Campanha\) e 06:45/.test(t2) && /Usar 06:10/.test(t2), t2);
-  await ev(`(()=>{const i=document.querySelector('#editor .dayc [data-f="ida.time"]'); i.value='06:45'; i.dispatchEvent(new Event('input',{bubbles:true}));})()`);
+  await ev(`(()=>{const i=document.querySelector('#editor .dayc [data-f="time"][data-vi="0"]'); i.value='06:45'; i.dispatchEvent(new Event('input',{bubbles:true}));})()`);
   const noite = await ev(`(()=>{const a=__BCP.anchorFromStops([{station:{code:'A',designation:'Porto'},departure:'23:30'},{station:{code:'B'},departure:'01:10'}],'B','01:10','2026-09-22'); return a.startDate+' '+a.time})()`);
   check('comboio que passa a meia-noite antes do embarque parte na véspera', noite === '2026-09-21 23:30', noite);
   await shot('04-editor');
 
   // validação
-  await ev(`(()=>{const i=document.querySelector('#editor .dayc [data-f="ida.train"]'); i.value='abc'; i.dispatchEvent(new Event('input',{bubbles:true}));})()`);
+  await ev(`(()=>{const i=document.querySelector('#editor .dayc [data-f="train"][data-vi="0"]'); i.value='abc'; i.dispatchEvent(new Event('input',{bubbles:true}));})()`);
   await ev(`window.__saved=null`); await click('[data-act="save-week"]');
   check('não guarda com dados inválidos e explica o problema', (await ev('window.__saved')) === null && /inválido/.test(await text('#editor .errs:not(:empty)')));
   await shot('05-editor-erro');
-  await ev(`(()=>{const i=document.querySelector('#editor .dayc [data-f="ida.train"]'); i.value='524'; i.dispatchEvent(new Event('input',{bubbles:true}));})()`);
+  await ev(`(()=>{const i=document.querySelector('#editor .dayc [data-f="train"][data-vi="0"]'); i.value='524'; i.dispatchEvent(new Event('input',{bubbles:true}));})()`);
+
+  console.log('\n== Mais de 2 viagens no mesmo dia (sem ida/volta, Bruno 22/09)');
+  await click('[data-act="add-viagem"][data-i="0"]');
+  check('"+ Adicionar viagem" acrescenta uma 3.ª viagem ao dia', (await ev(`document.querySelectorAll('#editor .dayc[data-i="0"] .leg').length`)) === 3);
+  await click('[data-act="dup-viagem"][data-i="0"][data-vi="0"]');
+  const dup = await ev(`(()=>{const E=__BCP.S.editor; return {n:E.days[0].viagens.length, v1:E.days[0].viagens[1]}})()`);
+  check('duplicar troca origem e destino da viagem original', dup.n === 4 && dup.v1.origin === 'lisboa_oriente' && dup.v1.dest === 'aveiro', JSON.stringify(dup));
+  await click('[data-act="del-viagem"][data-i="0"][data-vi="1"]');
+  await click('[data-act="del-viagem"][data-i="0"][data-vi="1"]');
+  check('remover viagens volta às 2 originais', (await ev(`__BCP.S.editor.days[0].viagens.length`)) === 2);
 
   // teclado: com o teclado aberto o formulário e a barra de guardar têm de continuar visíveis
   console.log('\n== Teclado do telemóvel');
-  await ev(`document.querySelector('#editor .dayc [data-f="volta.train"]').focus()`);
+  await ev(`document.querySelector('#editor .dayc [data-f="train"][data-vi="1"]').focus()`);
   await ev(`__BCP.applyViewport({height:430,offsetTop:0})`); await sleep(700);
   const kb = await ev(`(()=>{const app=document.querySelector('#app').getBoundingClientRect(), a=document.activeElement.getBoundingClientRect(), b=document.querySelector('#editor .savebar').getBoundingClientRect(), body=document.querySelector('#edBody').getBoundingClientRect();
     return {appH:Math.round(app.height), open:document.body.classList.contains('kb-open'), navHidden:getComputedStyle(document.querySelector('#tabs')).display==='none', saveBottom:Math.round(b.bottom), inputVisible:a.top>=body.top-1&&a.bottom<=body.bottom+1, inputTop:Math.round(a.top), inputBottom:Math.round(a.bottom), bodyTop:Math.round(body.top), bodyBottom:Math.round(body.bottom)}})()`);
@@ -178,9 +222,10 @@ try {
   // guardar
   await click('[data-act="save-week"]'); await until(() => ev('window.__saved!==null'), 4000);
   const saved = await ev('window.__saved');
-  check('guarda as linhas certas (data, estações, comboios, horas, SIM)', saved && saved.newRows.length === 2 && saved.newRows.every(r => /^\d{4}-\d\d-\d\d$/.test(r[0]) && r[1] === 'Aveiro' && r[2] === 'Lisboa Oriente' && Number.isInteger(r[3]) && /^\d\d:\d\d$/.test(r[4]) && r[7] === 'SIM'), JSON.stringify(saved));
+  check('guarda as linhas certas (data, estações, comboios, horas, SIM), uma por viagem',
+    saved && saved.newRows.length === 4 && saved.newRows.every(r => /^\d{4}-\d\d-\d\d$/.test(r[0]) && Number.isInteger(r[3]) && /^\d\d:\d\d$/.test(r[4]) && r[5] === 'SIM'), JSON.stringify(saved));
   const st = await ev(`window.__STATE.weekly.length`);
-  check('não apaga as linhas de outras semanas (3 antigas + 2 novas)', st === 5, 'linhas=' + st);
+  check('não apaga as linhas de outras semanas (5 antigas + 4 novas)', st === 9, 'linhas=' + st);
   check('as linhas ficam ordenadas por data', await ev(`(()=>{const d=window.__STATE.weekly.map(r=>r[0]); return d.join()===[...d].sort().join()})()`));
   await until(() => ev(`document.querySelector('#editor').hidden`), 3000);
   await sleep(400);
@@ -216,13 +261,13 @@ try {
   const setSel = (f, v) => ev(`(()=>{const s=document.querySelector('#editor .dayc[data-i="${ti}"] [data-f="${f}"]'); s.value='${v}'; s.dispatchEvent(new Event('change',{bubbles:true}));})()`);
   await setSel('origin', 'lisboa_oriente'); await setSel('dest', 'aveiro');
   // "add-day" copia a hora do dia anterior; limpar para simular o preenchimento automático de um dia novo
-  await ev(`(()=>{const i=document.querySelector('#editor .dayc[data-i="${ti}"] [data-f="ida.time"]'); i.value=''; i.dispatchEvent(new Event('input',{bubbles:true}));})()`);
-  await ev(`(()=>{const i=document.querySelector('#editor .dayc[data-i="${ti}"] [data-f="ida.train"]'); i.value='511'; i.dispatchEvent(new Event('input',{bubbles:true}));})()`);
+  await ev(`(()=>{const i=document.querySelector('#editor .dayc[data-i="${ti}"] [data-f="time"][data-vi="0"]'); i.value=''; i.dispatchEvent(new Event('input',{bubbles:true}));})()`);
+  await ev(`(()=>{const i=document.querySelector('#editor .dayc[data-i="${ti}"] [data-f="train"][data-vi="0"]'); i.value='511'; i.dispatchEvent(new Event('input',{bubbles:true}));})()`);
   await sleep(1200);
-  const tt511 = await text(`#editor .dayc[data-i="${ti}"] [data-tt="ida"]`);
+  const tt511 = await text(`#editor .dayc[data-i="${ti}"] [data-tt="0"]`);
   check('511 (só até Pampilhosa) não mostra erro de percurso — confirma-se pelo journeys', !/não segue/.test(tt511) && !/não para/.test(tt511), tt511);
   check('511 preenche a hora automaticamente, com nota de transbordo', /Preenchido pela CP/.test(tt511) && /com transbordo/.test(tt511), tt511);
-  const filled511 = await ev(`document.querySelector('#editor .dayc[data-i="${ti}"] [data-f="ida.time"]').value`);
+  const filled511 = await ev(`document.querySelector('#editor .dayc[data-i="${ti}"] [data-f="time"][data-vi="0"]').value`);
   check('a hora preenchida é a da 1.ª estação (07:39, Lisboa Oriente)', filled511 === '07:39', filled511);
   await shot('11-transbordo');
   // não guarda nem fecha o editor (del-day chamaria confirm(), sem handler neste harness);

@@ -334,7 +334,7 @@ def parse_sheet_time(v: Any) -> str | None:
 @dataclass(frozen=True)
 class Leg:
     date: date
-    leg: str            # 'ida' | 'volta'
+    leg: str            # id estável da viagem: 'vN' (linha N da Config) ou 'pedidoN' (linha N dos Pedidos)
     origin: str         # chave em app_config.stations
     destination: str
     train: int
@@ -349,6 +349,10 @@ class Leg:
     # usada para o lembrete, o bilhete e saber se a viagem já passou.
     board: str | None = None           # 'HH:MM' da partida na estação de embarque
     board_date: date | None = None     # data dessa partida
+    # Só para pedidos avulsos (3.2.1, leg começa por 'pedido'): Retry/Intervalo_Minutos da aba
+    # Pedidos. None em retry_minutes cai no valor de reserva de app_config (pedido_retry_interval_minutes).
+    retry: bool = False
+    retry_minutes: float | None = None
 
     @property
     def key(self) -> str:
@@ -359,7 +363,14 @@ class Leg:
         return f"{self.date.isoformat()}-{self.leg}-{self.train}"
 
     @property
+    def is_request(self) -> bool:
+        """True se vier da aba Pedidos, não da Config semanal (3.2.1)."""
+        return self.leg.startswith("pedido")
+
+    @property
     def fire(self) -> datetime:
+        if self.is_request:
+            return now_local()   # um pedido dispara "agora", recalculado a cada acesso
         return fire_time(self.anchor_date or self.date, self.anchor or self.hhmm)
 
     @property
@@ -379,6 +390,12 @@ def station_code(key: str) -> str | None:
     return key if re.fullmatch(r"\d{2}-\d{5}", key) else None
 
 
+def station_label(key: str) -> str:
+    """Nome bonito de uma estação para logs/notificações/Sheet (espelha o `stationLabel` da PWA)."""
+    names = app_config().get("station_names", {})
+    return names.get(key) or str(key).replace("_", " ").title()
+
+
 def _to_train(v: Any) -> int | None:
     if isinstance(v, bool) or v in (None, ""):
         return None
@@ -391,21 +408,23 @@ def _to_train(v: Any) -> int | None:
 
 def parse_config_rows(rows: list[list[Any]], today: date, first_row: int = 12
                       ) -> tuple[list[Leg], list[str]]:
-    """Valida a tabela semanal. Devolve (pernas válidas, problemas em texto).
+    """Valida a tabela semanal. Devolve (viagens válidas, problemas em texto).
 
-    Colunas: Data, Origem, Destino, Comboio_Ida, Hora_Ida, Comboio_Volta,
-    Hora_Volta, Ativo. Só linhas com Ativo=SIM são validadas. Volta vazia
-    (comboio e hora) significa dia só de ida; volta a meio é erro.
-    Uma linha inválida gera problema e não bloqueia as restantes.
+    Colunas: Data, Origem, Destino, Comboio, Hora, Ativo — uma linha = uma
+    viagem, sem par ida/volta (decisão de Bruno, 22/09): mais do que uma
+    viagem no mesmo dia é só mais do que uma linha com a mesma Data. Só
+    linhas com Ativo=SIM são validadas. Uma linha inválida gera problema e
+    não bloqueia as restantes. `leg.leg` é `f"v{linha}"` — um id estável pela
+    própria linha da Sheet, não pelo papel (ida/volta) da viagem.
     """
     legs: list[Leg] = []
     issues: list[str] = []
-    seen_dates: dict[date, int] = {}
+    seen: dict[tuple[date, int, str], int] = {}
 
     for i, raw in enumerate(rows):
         row = first_row + i
-        cells = list(raw) + [""] * (8 - len(raw))
-        data_v, org_v, dst_v, t_ida, h_ida, t_volta, h_volta, ativo = cells[:8]
+        cells = list(raw) + [""] * (6 - len(raw))
+        data_v, org_v, dst_v, train_v, hora_v, ativo = cells[:6]
         if str(ativo).strip().upper() != "SIM":
             continue
         problems: list[str] = []
@@ -415,10 +434,6 @@ def parse_config_rows(rows: list[list[Any]], today: date, first_row: int = 12
             problems.append(f"data inválida ({data_v!r})")
         elif d < today:
             problems.append(f"data {d.isoformat()} já passou (linha ativa mas sem efeito)")
-        elif d in seen_dates:
-            problems.append(f"data {d.isoformat()} repetida (já na linha {seen_dates[d]})")
-        if d is not None and d >= today:
-            seen_dates.setdefault(d, row)
 
         org, dst = norm_station(org_v), norm_station(dst_v)
         if station_code(org) is None:
@@ -428,35 +443,29 @@ def parse_config_rows(rows: list[list[Any]], today: date, first_row: int = 12
         if org and org == dst:
             problems.append("origem igual ao destino")
 
-        train_ida, hora_ida = _to_train(t_ida), parse_sheet_time(h_ida)
-        if train_ida is None:
-            problems.append(f"comboio de ida inválido ({t_ida!r})")
-        if hora_ida is None:
-            problems.append(f"hora de ida inválida ({h_ida!r})")
+        train, hora = _to_train(train_v), parse_sheet_time(hora_v)
+        if train is None:
+            problems.append(f"comboio inválido ({train_v!r})")
+        if hora is None:
+            problems.append(f"hora inválida ({hora_v!r})")
 
-        volta_vazia = t_volta in (None, "") and h_volta in (None, "")
-        train_volta, hora_volta = _to_train(t_volta), parse_sheet_time(h_volta)
-        if not volta_vazia:
-            if train_volta is None:
-                problems.append(f"comboio de volta inválido ({t_volta!r})")
-            if hora_volta is None:
-                problems.append(f"hora de volta inválida ({h_volta!r})")
-            if hora_ida and hora_volta and hora_volta <= hora_ida:
-                problems.append(f"volta ({hora_volta}) não é depois da ida ({hora_ida})")
+        if d is not None and train is not None and hora is not None:
+            dup_key = (d, train, hora)
+            if dup_key in seen:
+                problems.append(f"mesmo comboio {train} às {hora} já na linha {seen[dup_key]}")
+            else:
+                seen[dup_key] = row
 
         if problems:
             issues.append(f"Linha {row}: " + "; ".join(problems))
             continue
 
-        legs.append(Leg(d, "ida", org, dst, train_ida, hora_ida, row))
-        if not volta_vazia:
-            legs.append(Leg(d, "volta", dst, org, train_volta, hora_volta, row))
+        legs.append(Leg(d, f"v{row}", org, dst, train, hora, row))
     return legs, issues
 
 
 PASSE_HEADERS = ["Data_Ultima_Compra", "Validade_Dias", "Data_Expira", "Dias_Restantes"]
-WEEKLY_HEADERS = ["Data", "Origem", "Destino", "Comboio_Ida", "Hora_Ida", "Comboio_Volta",
-                  "Hora_Volta", "Ativo"]
+WEEKLY_HEADERS = ["Data", "Origem", "Destino", "Comboio", "Hora", "Ativo"]
 
 
 def _hnorm(c: Any) -> str:
@@ -492,6 +501,71 @@ def locate_config(values: list[list[Any]]) -> tuple[list[Any], list[list[Any]], 
 def parse_snapshot(snap: dict, today: date) -> tuple[list[Leg], list[str]]:
     """parse_config_rows sobre uma leitura da Config (com o nº real da 1ª linha)."""
     return parse_config_rows(snap["weekly"], today, first_row=int(snap.get("first_row", 12)))
+
+
+# ---------------------------------------------------------------------------
+# Pedidos avulsos (3.2.1): retentativa leve de viagens da Config que esgotaram o retry
+# ---------------------------------------------------------------------------
+
+REQUEST_HEADERS = ["Data", "Origem", "Destino", "Comboio", "Hora", "Ativo", "Retry",
+                   "Intervalo_Minutos", "Forcar", "Estado", "Ultima_Tentativa", "Referencia", "Mensagem"]
+REQUEST_TERMINAL = {"CONFIRMADO", "AMBIGUO"}   # nunca se relançam sozinhos, nem por Retry nem por Forçar
+
+
+def _to_minutes(v: Any) -> float | None:
+    if isinstance(v, bool) or v in (None, ""):
+        return None
+    try:
+        f = float(str(v).strip().replace(",", "."))
+    except ValueError:
+        return None
+    return f if f > 0 else None
+
+
+def parse_request_rows(rows: list[list[Any]], today: date, first_row: int = 5
+                       ) -> tuple[list[Leg], list[str]]:
+    """Valida a aba Pedidos. Cada linha ativa e válida vira uma `Leg` com `leg='pedidoN'`
+    (N = linha na Sheet — chave por si só única, sem par ida/volta). Mesmas regras de validação
+    da Config (data/estação/comboio/hora); uma linha inválida gera problema e não bloqueia as
+    restantes."""
+    legs: list[Leg] = []
+    issues: list[str] = []
+    for i, raw in enumerate(rows):
+        row = first_row + i
+        cells = list(raw) + [""] * 13
+        data_v, org_v, dst_v, train_v, hora_v, ativo, retry_v, interval_v = cells[:8]
+        if str(ativo).strip().upper() != "SIM":
+            continue
+        problems: list[str] = []
+
+        d = parse_sheet_date(data_v)
+        if d is None:
+            problems.append(f"data inválida ({data_v!r})")
+        elif d < today:
+            problems.append(f"data {d.isoformat()} já passou")
+
+        org, dst = norm_station(org_v), norm_station(dst_v)
+        if station_code(org) is None:
+            problems.append(f"origem desconhecida ({org_v!r})")
+        if station_code(dst) is None:
+            problems.append(f"destino desconhecido ({dst_v!r})")
+        if org and org == dst:
+            problems.append("origem igual ao destino")
+
+        train = _to_train(train_v)
+        if train is None:
+            problems.append(f"comboio inválido ({train_v!r})")
+        hora = parse_sheet_time(hora_v)
+        if hora is None:
+            problems.append(f"hora inválida ({hora_v!r})")
+
+        if problems:
+            issues.append(f"Linha {row} (Pedidos): " + "; ".join(problems))
+            continue
+
+        legs.append(Leg(d, f"pedido{row}", org, dst, train, hora, row,
+                        retry=str(retry_v).strip().upper() == "SIM", retry_minutes=_to_minutes(interval_v)))
+    return legs, issues
 
 
 # ---------------------------------------------------------------------------
@@ -556,6 +630,38 @@ class SheetsClient:
     def append_ticket(self, data: str, comboio: Any, origem: str, destino: str,
                       hora: str, carruagem: Any, lugar: Any, referencia: str) -> None:
         self._append("Bilhetes", [data, comboio, origem, destino, hora, carruagem, lugar, referencia])
+
+    def read_requests(self) -> list[list[Any]]:
+        res = self._svc().spreadsheets().values().get(
+            spreadsheetId=self.sheet_id, range="Pedidos!A5:M1000",
+            valueRenderOption="UNFORMATTED_VALUE", dateTimeRenderOption="SERIAL_NUMBER",
+        ).execute(num_retries=3)
+        return res.get("values", [])
+
+    def append_request(self, data: str, origem: str, destino: str, comboio: Any, hora: str,
+                       ativo: str = "SIM", retry: str = "NAO", intervalo: Any = "",
+                       estado: str = "PENDENTE") -> None:
+        self._append("Pedidos", [data, origem, destino, comboio, hora, ativo, retry, intervalo,
+                                 "NAO", estado, "", "", ""])
+
+    _REQUEST_COLS = {"data": "A", "origem": "B", "destino": "C", "comboio": "D", "hora": "E",
+                     "ativo": "F", "retry": "G", "intervalo_minutos": "H", "forcar": "I",
+                     "estado": "J", "ultima_tentativa": "K", "referencia": "L", "mensagem": "M"}
+
+    def update_request(self, row: int, **fields: Any) -> None:
+        """Escreve só os campos dados (uma célula por campo, nunca reescreve a linha toda)."""
+        data = []
+        for name, value in fields.items():
+            col = self._REQUEST_COLS.get(name)
+            if col is None:
+                raise ValueError(f"coluna de Pedidos desconhecida: {name!r}")
+            data.append({"range": f"Pedidos!{col}{row}", "values": [[sanitize(value) if isinstance(value, str) else value]]})
+        if not data:
+            return
+        self._svc().spreadsheets().values().batchUpdate(
+            spreadsheetId=self.sheet_id,
+            body={"valueInputOption": "RAW", "data": data},
+        ).execute(num_retries=3)
 
 
 TOKEN_FILE = BASE_DIR / "token.json"

@@ -49,6 +49,8 @@ button{cursor:pointer}
 .icon-btn:hover{background:rgba(255,255,255,.14)}
 .icon-btn svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
 .icon-btn.spin svg{animation:spin .9s linear infinite}
+.icon-btn.small{width:36px;height:36px;border-radius:10px}
+.icon-btn.small svg{width:18px;height:18px}
 @keyframes spin{to{transform:rotate(360deg)}}
 
 nav.tabs{flex:none;background:var(--primary);display:flex;padding:0 6px calc(env(safe-area-inset-bottom) + 2px)}
@@ -146,6 +148,21 @@ h3{margin:0;font:600 19px/1.15 var(--font-num)}
 .log .tx{min-width:0;font-size:15px}
 .log .err-msg{margin-top:4px;color:var(--err);font-size:14px;word-break:break-word}
 
+/* pedidos avulsos */
+.pedidos{display:flex;flex-direction:column;gap:8px}
+.pedido{background:var(--card);border-radius:14px;padding:12px 14px;box-shadow:0 1px 0 var(--line)}
+.pd-top{display:flex;justify-content:space-between;align-items:flex-start;gap:10px}
+.pd-top .t{font-size:13px;color:var(--text2);font-weight:500}
+.pd-top .r{font-weight:500;margin-top:2px}
+.pd-msg{margin-top:6px;word-break:break-word}
+.pd-actions{display:flex;flex-wrap:wrap;align-items:center;gap:8px 10px;margin-top:10px}
+.pd-actions .btn{min-height:40px;padding:0 16px}
+.switch.small{min-height:auto;gap:8px;font-size:14px}
+.switch.small input{width:38px;height:22px}
+.switch.small input::after{width:16px;height:16px}
+.switch.small input:checked::after{transform:translateX(16px)}
+input.pd-min{width:56px;min-height:36px;padding:0 8px;text-align:center;flex:none}
+
 .empty{background:var(--card);border-radius:16px;padding:22px 18px;text-align:center;color:var(--text2);box-shadow:0 1px 0 var(--line)}
 .skel{height:84px;border-radius:16px;background:linear-gradient(90deg,var(--bg2),#fff 50%,var(--bg2));background-size:200% 100%;animation:sh 1.3s linear infinite}
 @keyframes sh{to{background-position:-200% 0}}
@@ -194,15 +211,14 @@ select.in{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.o
 .swap:hover{background:var(--primary-light)}
 .swap svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
 .leg{margin-top:14px;padding-top:12px;border-top:2px dashed var(--line)}
-.leg-h{display:flex;align-items:baseline;justify-content:space-between;gap:10px}
-.leg-h .fire{font-size:13.5px;color:var(--text2)}
+.leg-h{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.leg-h-acts{display:flex;gap:2px;flex:none;color:var(--text2)}
+.leg .fire{display:block;font-size:13.5px;color:var(--text2);margin-top:2px}
 .leg-row{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:8px}
 .leg select.hist{margin-top:8px;min-height:44px;font-size:15px;color:var(--text2)}
 .tt{margin:8px 0 0;font-size:14px;line-height:1.3;min-height:0}
 .tt.ok{color:var(--primary-dark)}.tt.warn{color:var(--warn)}
 .tt button{border:0;background:none;color:inherit;font-weight:600;text-decoration:underline;padding:4px 0 4px 6px}
-.check{display:flex;align-items:center;gap:10px;min-height:44px;margin-top:8px;font-weight:500}
-.check input{width:22px;height:22px;accent-color:var(--primary)}
 .errs{margin:10px 0 0;padding:10px 12px;border-radius:10px;background:var(--err-bg);color:var(--err);font-size:14px}
 .errs:empty{display:none}
 .add{display:flex;gap:10px;flex-wrap:wrap}
@@ -233,6 +249,7 @@ body.kb-open #toast{--toast-b:84px}
   <nav class="tabs" id="tabs" role="tablist" aria-label="Secções">
     <button role="tab" data-tab="semana" aria-selected="true"><svg viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="15" rx="2.5"/><path d="M3.5 10h17M8 3v4M16 3v4"/></svg>Semana</button>
     <button role="tab" data-tab="bilhetes" aria-selected="false"><svg viewBox="0 0 24 24"><path d="M4 8a2 2 0 0 0 0 4v0a2 2 0 0 1 0 4v1a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-1a2 2 0 0 1 0-4v0a2 2 0 0 0 0-4V7a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2z" transform="translate(0 -.5)"/><path d="M14.5 6v2M14.5 11v2M14.5 16v2"/></svg>Bilhetes</button>
+    <button role="tab" data-tab="pedidos" aria-selected="false"><svg viewBox="0 0 24 24"><path d="M20 12a8 8 0 1 1-2.4-5.7"/><path d="M20 3v5h-5"/></svg>Pedidos</button>
     <button role="tab" data-tab="registo" aria-selected="false"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></svg>Registo</button>
   </nav>
 
@@ -256,7 +273,7 @@ body.kb-open #toast{--toast-b:84px}
    Nenhuma credencial neste ficheiro: as chaves da CP (só para preencher
    horários) ficam no localStorage do telemóvel, importadas por um link.
    ===================================================================== */
-const VERSION = 'v1.1.2';
+const VERSION = 'v1.2.0';
 const CLIENT_ID = '108256538530-fgunbb52s7f3s9aurfpjtaf01v8fjbph.apps.googleusercontent.com';
 const SHEET_ID = '1PNY134CrkxVhcpKHjTDZMYqYv3q-_oeDusJ-hgLRMBk';
 const SCOPE = 'https://www.googleapis.com/auth/spreadsheets';
@@ -267,7 +284,7 @@ const CP_API = 'https://api-gateway.cp.pt/cp/services';
 /* Cabeçalhos da aba Config, procurados pelo NOME (PLANO_FINAL secção 4): inserir linhas na
    Sheet não pode desalinhar leituras nem escritas. */
 const HEAD_PASSE = ['Data_Ultima_Compra', 'Validade_Dias', 'Data_Expira', 'Dias_Restantes'];
-const HEAD_WEEK = ['Data', 'Origem', 'Destino', 'Comboio_Ida', 'Hora_Ida', 'Comboio_Volta', 'Hora_Volta', 'Ativo'];
+const HEAD_WEEK = ['Data', 'Origem', 'Destino', 'Comboio', 'Hora', 'Ativo'];
 const hnorm = (c) => String(c ?? '').toLowerCase().replace(/[^a-z0-9]/g, '');
 function locateConfig(values) {
   const find = (heads) => {
@@ -365,7 +382,7 @@ const normStation = (s) => String(s ?? '').normalize('NFKD').replace(/[̀-ͯ]/g,
 const S = {
   tab: 'semana', loading: false, loaded: false, error: null, updateReady: false, logFilter: 'all',
   cfg: { stations: {}, names: {} },
-  data: { passe: [], weekly: [], tickets: [], logs: [] },
+  data: { passe: [], weekly: [], tickets: [], logs: [], requests: [] },
   anchors: {},   /* partida na 1.ª estação por comboio+data+origem (só com as chaves da CP) */
   editor: null, lastLoad: 0,
 };
@@ -467,11 +484,11 @@ const REAL_API = {
   async load() {
     const r = await gcall(() => gapi.client.sheets.spreadsheets.values.batchGet({
       spreadsheetId: SHEET_ID, valueRenderOption: 'UNFORMATTED_VALUE', dateTimeRenderOption: 'SERIAL_NUMBER',
-      ranges: ['Config!A1:L300', 'Bilhetes!A5:H600', 'Logs!A5:I1500'],
+      ranges: ['Config!A1:L300', 'Bilhetes!A5:H600', 'Logs!A5:I1500', 'Pedidos!A5:M1000'],
     }));
     const v = r.result.valueRanges.map(x => x.values || []);
     const cfg = locateConfig(v[0]);
-    return { passe: cfg.passe, weeklyRaw: cfg.weekly, firstRow: cfg.firstRow, ticketsRaw: v[1], logsRaw: v[2] };
+    return { passe: cfg.passe, weeklyRaw: cfg.weekly, firstRow: cfg.firstRow, ticketsRaw: v[1], logsRaw: v[2], requestsRaw: v[3] };
   },
   /* lê a tabela atual, troca só as linhas da semana e escreve TUDO num único pedido (atómico) */
   async saveWeek(weekStart, newRows) {
@@ -482,10 +499,23 @@ const REAL_API = {
     const existing = loc.weekly;
     const all = mergeWeek(existing, weekStart, newRows);
     const n = Math.max(all.length, existing.length);
-    const values = Array.from({ length: n }, (_, i) => all[i] || ['', '', '', '', '', '', '', '']);
+    const values = Array.from({ length: n }, (_, i) => all[i] || ['', '', '', '', '', '']);
     await gcall(() => gapi.client.sheets.spreadsheets.values.update({
-      spreadsheetId: SHEET_ID, range: `Config!${colLetter(loc.colStart)}${loc.firstRow}:${colLetter(loc.colStart + 7)}${loc.firstRow + n - 1}`,
+      spreadsheetId: SHEET_ID, range: `Config!${colLetter(loc.colStart)}${loc.firstRow}:${colLetter(loc.colStart + 5)}${loc.firstRow + n - 1}`,
       valueInputOption: 'RAW', resource: { values } }));
+  },
+  /* "Tentar agora": força uma única tentativa (Forcar=SIM, coluna I) */
+  async forcarPedido(row) {
+    await gcall(() => gapi.client.sheets.spreadsheets.values.update({
+      spreadsheetId: SHEET_ID, range: `Pedidos!I${row}`, valueInputOption: 'RAW', resource: { values: [['SIM']] } }));
+  },
+  /* liga/desliga a repetição automática e o intervalo (Retry=G, Intervalo_Minutos=H), por pedido */
+  async setPedidoRetry(row, on, minutos) {
+    await gcall(() => gapi.client.sheets.spreadsheets.values.batchUpdate({
+      spreadsheetId: SHEET_ID, resource: { valueInputOption: 'RAW', data: [
+        { range: `Pedidos!G${row}`, values: [[on ? 'SIM' : 'NAO']] },
+        { range: `Pedidos!H${row}`, values: [[minutos]] },
+      ] } }));
   },
 };
 const api = window.__BCP_API || REAL_API;   // (o teste injeta uma API falsa)
@@ -496,7 +526,7 @@ function mergeWeek(existing, weekStart, newRows) {
   const kept = existing.filter(r => {
     if (!r || r.every(c => c === '' || c == null)) return false;
     const d = sheetDate(r[0]); return !(d && d >= weekStart && d <= end);
-  }).map(r => { const c = [...r]; while (c.length < 8) c.push(''); return c.slice(0, 8); });
+  }).map(r => { const c = [...r]; while (c.length < 6) c.push(''); return c.slice(0, 6); });
   const key = (r) => sheetDate(r[0]) || '9999-99-99';
   return [...kept, ...newRows].map((r, i) => [r, i]).sort((a, b) => key(a[0]).localeCompare(key(b[0])) || a[1] - b[1]).map(x => x[0]);
 }
@@ -504,10 +534,10 @@ function mergeWeek(existing, weekStart, newRows) {
 /* ---------- interpretação dos dados ---------- */
 function parseData(raw) {
   const weekly = raw.weeklyRaw.map((r, i) => {
-    const c = [...r]; while (c.length < 8) c.push('');
+    const c = [...r]; while (c.length < 6) c.push('');
     return { row: (raw.firstRow ?? 12) + i, date: sheetDate(c[0]), origin: normStation(c[1]), dest: normStation(c[2]),
-      trainIda: toNum(c[3]), horaIda: sheetTime(c[4]), trainVolta: toNum(c[5]), horaVolta: sheetTime(c[6]),
-      ativo: String(c[7]).trim().toUpperCase() === 'SIM', empty: c.every(x => x === '' || x == null) };
+      train: toNum(c[3]), hora: sheetTime(c[4]),
+      ativo: String(c[5]).trim().toUpperCase() === 'SIM', empty: c.every(x => x === '' || x == null) };
   }).filter(r => !r.empty);
   const tickets = raw.ticketsRaw.filter(r => r.some(c => c !== '')).map(c => ({
     date: sheetDate(c[0]), train: toNum(c[1]), origin: String(c[2] ?? ''), dest: String(c[3] ?? ''),
@@ -515,17 +545,25 @@ function parseData(raw) {
   const logs = raw.logsRaw.filter(r => r.some(c => c !== '')).map(c => ({
     ts: String(c[0] ?? ''), tipo: String(c[1] ?? ''), date: sheetDate(c[2]), leg: String(c[3] ?? ''), train: c[4] ?? '',
     http: c[5] ?? '', result: String(c[6] ?? ''), ref: String(c[7] ?? ''), err: String(c[8] ?? '') }));
-  return { passe: raw.passe, weekly, tickets, logs };
+  const requests = (raw.requestsRaw || []).map((r, i) => {
+    const c = [...r]; while (c.length < 13) c.push('');
+    return { row: 5 + i, date: sheetDate(c[0]), origin: String(c[1] ?? ''), dest: String(c[2] ?? ''),
+      train: toNum(c[3]), hora: sheetTime(c[4]) || String(c[4] ?? ''), ativo: String(c[5]).trim().toUpperCase() === 'SIM',
+      retry: String(c[6]).trim().toUpperCase() === 'SIM', intervalo: toNum(c[7]) ?? '',
+      forcar: String(c[8]).trim().toUpperCase() === 'SIM', estado: String(c[9] ?? '').trim().toUpperCase() || 'PENDENTE',
+      ultima: String(c[10] ?? ''), ref: String(c[11] ?? ''), msg: String(c[12] ?? ''),
+      empty: c.every(x => x === '' || x == null) };
+  }).filter(r => !r.empty);
+  return { passe: raw.passe, weekly, tickets, logs, requests };
 }
 const boughtSet = () => new Set(S.data.tickets.filter(t => t.date && t.train).map(t => `${t.date}|${t.train}`));
 
-/* pernas futuras das linhas ativas */
+/* viagens futuras das linhas ativas */
 function upcomingLegs() {
   const today = todayISO(), out = [];
   for (const r of S.data.weekly) {
-    if (!r.ativo || !r.date || r.date < today) continue;
-    if (r.trainIda && r.horaIda) out.push({ date: r.date, leg: 'ida', origin: r.origin, dest: r.dest, train: r.trainIda, hhmm: r.horaIda });
-    if (r.trainVolta && r.horaVolta) out.push({ date: r.date, leg: 'volta', origin: r.dest, dest: r.origin, train: r.trainVolta, hhmm: r.horaVolta });
+    if (!r.ativo || !r.date || r.date < today || !r.train || !r.hora) continue;
+    out.push({ date: r.date, origin: r.origin, dest: r.dest, train: r.train, hhmm: r.hora });
   }
   return out.map(l => {
     const a = S.anchors[`${l.train}|${l.date}|${l.origin}`];
@@ -533,7 +571,7 @@ function upcomingLegs() {
     return { ...l, fireDay, fireHM, showHM: a?.board || l.hhmm, showDay: a?.boardDate || l.date, fire: lisbonInstant(fireDay, fireHM) };
   }).sort((a, b) => a.fire - b.fire || a.hhmm.localeCompare(b.hhmm));
 }
-const weekActiveCount = (mon) => S.data.weekly.filter(r => r.ativo && r.date && r.date >= mon && r.date <= addDays(mon, 6)).length;
+const weekActiveCount = (mon) => new Set(S.data.weekly.filter(r => r.ativo && r.date && r.date >= mon && r.date <= addDays(mon, 6)).map(r => r.date)).size;
 const nextMonday = () => addDays(mondayOf(todayISO()), 7);
 
 /* histórico de comboios já usados (para o dropdown do editor) */
@@ -543,7 +581,7 @@ function trainHistory() {
     if (!train) return; const k = `${train}|${origin}|${dest}`; const e = map.get(k) || { train, origin, dest, hora: '', n: 0 };
     e.n++; if (hora) e.hora = hora; map.set(k, e);
   };
-  for (const r of S.data.weekly) { add(r.trainIda, r.origin, r.dest, r.horaIda); add(r.trainVolta, r.dest, r.origin, r.horaVolta); }
+  for (const r of S.data.weekly) add(r.train, r.origin, r.dest, r.hora);
   for (const t of S.data.tickets) add(t.train, normStation(t.origin), normStation(t.dest), sheetTime(t.hora));
   return [...map.values()].sort((a, b) => b.n - a.n || a.train - b.train);
 }
@@ -588,6 +626,7 @@ const IC = {
   back: '<svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg>',
   swap: '<svg viewBox="0 0 24 24"><path d="M7 4L3.5 7.5 7 11M3.5 7.5H15M17 13l3.5 3.5L17 20M20.5 16.5H9"/></svg>',
   trash: '<svg viewBox="0 0 24 24"><path d="M4 7h16M9.5 7V4.5h5V7M6.5 7l1 13h9l1-13M10 11v6M14 11v6"/></svg>',
+  copy: '<svg viewBox="0 0 24 24"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></svg>',
 };
 
 /* ---------- vistas ---------- */
@@ -595,7 +634,7 @@ function render() {
   $$('#tabs button').forEach(b => b.setAttribute('aria-selected', String(b.dataset.tab === S.tab)));
   const v = $('#view');
   if (!S.loaded && !S.error) { v.innerHTML = '<div class="skel"></div><div class="skel"></div><div class="skel"></div>'; return; }
-  v.innerHTML = ({ semana: viewSemana, bilhetes: viewBilhetes, registo: viewRegisto }[S.tab])();
+  v.innerHTML = ({ semana: viewSemana, bilhetes: viewBilhetes, pedidos: viewPedidos, registo: viewRegisto }[S.tab])();
 }
 
 function ticketHtml(t, cls = '') {
@@ -632,7 +671,7 @@ function viewSemana() {
     else if (l.fire > nowMs) chip = `<span class="chip">Compra ${esc(fmtDay(l.fireDay))} ${esc(l.fireHM)}</span>`;
     else chip = '<span class="chip warn">Sem bilhete</span>';
     rows += `<div class="row"><div><div class="t">${esc(l.showHM)}</div><div class="d">${esc(fmtDay(l.showDay))}</div></div>
-      <div><div class="r">${esc(stationLabel(l.origin))} → ${esc(stationLabel(l.dest))}</div><div class="m"><span>${l.leg === 'ida' ? 'Ida' : 'Volta'} · comboio ${l.train}</span>${chip}</div></div></div>`;
+      <div><div class="r">${esc(stationLabel(l.origin))} → ${esc(stationLabel(l.dest))}</div><div class="m"><span>comboio ${l.train}</span>${chip}</div></div></div>`;
   }
   parts.push(`<div><div class="section-title"><h2>Próximas compras</h2><button class="link" data-act="edit-week" data-week="${mondayOf(today)}">Esta semana</button></div>
     ${rows ? `<div class="rows">${rows}</div>` : '<div class="empty">Sem viagens ativas a partir de hoje.</div>'}</div>`);
@@ -664,6 +703,59 @@ function viewBilhetes() {
 
 const LOG_RESULT = { CONFIRMED: 'Comprado', SALE_CREATED: 'Venda criada', SOLD_OUT: 'Esgotado', FAILED: 'Falhou', AMBIGUOUS: 'Estado incerto', OK: 'OK', FALHA: 'Falha', EXCECAO: 'Erro inesperado' };
 const LOG_TIPO = { COMPRA: 'Compra', ERRO: 'Erro', PREFLIGHT: 'Verificação' };
+/* ---------- pedidos avulsos (3.2.1) ---------- */
+/* Só viagens da Config que esgotaram a validação/retry (espelhadas automaticamente pelo RPi) —
+   sem formulário manual aqui. "Tentar agora" força uma única tentativa; o interruptor liga uma
+   repetição leve de X em X minutos (por pedido, sem rajada nem hotstart). */
+const PEDIDO_ESTADO = { PENDENTE: 'Pendente', A_TENTAR: 'A tentar…', ESGOTADO: 'Esgotado', FALHOU: 'Falhou', AMBIGUO: 'Confirmar na App CP', CONFIRMADO: 'Comprado' };
+const pedidoClass = (r) => r.estado === 'AMBIGUO' ? 'warn' : (r.estado === 'ESGOTADO' || r.estado === 'FALHOU') ? 'err' : r.estado === 'CONFIRMADO' ? 'ok' : '';
+function pedidoHtml(r) {
+  const busy = r.estado === 'A_TENTAR', ambiguo = r.estado === 'AMBIGUO';
+  return `<article class="pedido" data-row="${r.row}">
+    <div class="pd-top">
+      <div><div class="t">${r.date ? esc(fmtDay(r.date)) : 'Data por definir'} · ${esc(r.hora || '--:--')}</div>
+        <div class="r">${esc(r.origin || '—')}<span class="arrow">→</span>${esc(r.dest || '—')} <span class="muted">· comboio ${esc(r.train ?? '—')}</span></div></div>
+      <span class="chip ${pedidoClass(r)}">${esc(PEDIDO_ESTADO[r.estado] || r.estado || 'Pendente')}</span>
+    </div>
+    ${r.msg ? `<div class="muted small pd-msg">${esc(r.msg)}</div>` : ''}
+    ${ambiguo
+      ? `<p class="muted small pd-msg">Confirma na App CP se a compra chegou a ser feita antes de tentares outra vez.</p>`
+      : `<div class="pd-actions">
+          <button class="btn quiet" data-act="pedido-force" data-row="${r.row}" ${busy ? 'disabled' : ''}>${busy ? 'A tentar…' : 'Tentar agora'}</button>
+          <label class="switch small"><input type="checkbox" data-pedido-retry="${r.row}" ${r.retry ? 'checked' : ''}>Repetir de</label>
+          <input class="in pd-min" type="number" min="1" max="1440" inputmode="numeric" data-pedido-min="${r.row}" value="${r.intervalo || 15}" ${r.retry ? '' : 'disabled'}><span class="muted small">min</span>
+        </div>`}
+  </article>`;
+}
+function viewPedidos() {
+  const today = todayISO();
+  const pend = S.data.requests.filter(r => r.estado !== 'CONFIRMADO' && (!r.date || r.date >= today))
+    .sort((a, b) => ((a.date || '') + (a.hora || '')).localeCompare((b.date || '') + (b.hora || '')));
+  if (!pend.length) return '<div class="empty">Sem pedidos pendentes.<br>Aparecem aqui viagens da Config que esgotaram as tentativas normais — podes forçar uma nova tentativa, ou deixar o RPi repetir sozinho.</div>';
+  return `<div class="pedidos">${pend.map(pedidoHtml).join('')}</div>`;
+}
+async function pedidoForce(row) {
+  const r = S.data.requests.find(x => x.row === row); if (!r || r.estado === 'A_TENTAR') return;
+  const prev = r.estado; r.estado = 'A_TENTAR'; render();
+  try {
+    await api.forcarPedido(row);
+    toast('Pedido marcado para tentar já. O RPi corre a fila a cada minuto.');
+  } catch (e) {
+    console.error(e); r.estado = prev; render(); toast('Não consegui marcar: ' + explainError(e));
+  }
+}
+async function pedidoRetryChange(row, on, minutos) {
+  const r = S.data.requests.find(x => x.row === row); if (!r) return;
+  const prevRetry = r.retry, prevInt = r.intervalo;
+  r.retry = on; r.intervalo = minutos; render();
+  try {
+    await api.setPedidoRetry(row, on, minutos);
+    toast(on ? `Repetição automática ligada, de ${minutos} em ${minutos} min.` : 'Repetição automática desligada.');
+  } catch (e) {
+    console.error(e); r.retry = prevRetry; r.intervalo = prevInt; render(); toast('Não consegui guardar: ' + explainError(e));
+  }
+}
+
 const logClass = (r) => /^(OK|CONFIRMED|SALE_CREATED)$/i.test(r.result) ? 'ok' : /SOLD_OUT/i.test(r.result) ? 'warn' : /FAIL|FALHA|AMBIG|EXCECAO|ERRO/i.test(r.result + r.tipo) ? 'err' : '';
 function viewRegisto() {
   let logs = S.data.logs.slice().reverse();
@@ -676,17 +768,26 @@ function viewRegisto() {
     const d = new Date(l.ts), ok = !isNaN(d), dKey = ok ? new Intl.DateTimeFormat('en-CA', { timeZone: TZ }).format(d) : '';
     if (dKey !== day) { day = dKey; html += `<div class="day-h">${dKey ? esc(fmtDay(dKey)) : 'Sem data'}</div>`; }
     const hh = ok ? new Intl.DateTimeFormat('pt-PT', { timeZone: TZ, hour: '2-digit', minute: '2-digit' }).format(d) : '--:--';
-    const what = [l.leg && (l.leg === 'ida' ? 'Ida' : 'Volta'), l.train && `comboio ${l.train}`, l.date && fmtDM(l.date)].filter(Boolean).join(' · ');
+    const what = [l.train && `comboio ${l.train}`, l.date && fmtDM(l.date)].filter(Boolean).join(' · ');
     html += `<div class="log"><div class="h">${esc(hh)}</div><div class="tx"><span class="chip ${logClass(l)}">${esc(LOG_RESULT[l.result] || l.result || LOG_TIPO[l.tipo] || l.tipo)}</span> <span class="muted">${esc(LOG_TIPO[l.tipo] || l.tipo)}</span>${what ? `<div class="muted small">${esc(what)}</div>` : ''}${l.err ? `<div class="err-msg">${esc(l.err)}</div>` : ''}</div></div>`;
   }
   return html;
 }
 
 /* ---------- editor da semana ---------- */
-const emptyLeg = () => ({ train: '', time: '' });
-function dayFromRow(r) {
-  return { date: r.date, origin: r.origin, dest: r.dest, ida: { train: r.trainIda ?? '', time: r.horaIda ?? '' },
-    volta: { train: r.trainVolta ?? '', time: r.horaVolta ?? '' }, soIda: !r.trainVolta && !r.horaVolta, ativo: r.ativo };
+/* Um dia é uma lista de viagens (sem par ida/volta, decisão de Bruno 22/09): 0..N viagens, cada
+   uma com a sua própria origem/destino/comboio/hora. O interruptor "Ativo" continua por dia (como
+   sempre foi), e aplica-se a todas as viagens desse dia ao guardar. */
+const emptyViagem = () => ({ origin: '', dest: '', train: '', time: '', anchor: null });
+function daysFromRows(rows) {
+  const byDate = new Map();
+  for (const r of rows) {
+    if (!byDate.has(r.date)) byDate.set(r.date, { date: r.date, ativo: false, viagens: [] });
+    const day = byDate.get(r.date);
+    day.ativo = day.ativo || r.ativo;
+    day.viagens.push({ origin: r.origin, dest: r.dest, train: r.train ?? '', time: r.hora ?? '', anchor: null });
+  }
+  return [...byDate.values()].sort((a, b) => a.date.localeCompare(b.date));
 }
 function rowsInWeek(mon) { return S.data.weekly.filter(r => r.date && r.date >= mon && r.date <= addDays(mon, 6)); }
 function defaultRoute() {
@@ -695,7 +796,7 @@ function defaultRoute() {
 }
 function openEditor(mon) {
   mon = mondayOf(mon || nextMonday());
-  S.editor = { week: mon, days: rowsInWeek(mon).map(dayFromRow), dirty: false, saving: false, tt: {} };
+  S.editor = { week: mon, days: daysFromRows(rowsInWeek(mon)), dirty: false, saving: false, tt: {} };
   $('#editor').hidden = false; renderEditor();
   history.replaceState(null, '', location.pathname);
 }
@@ -711,24 +812,35 @@ function optionsHistory() {
   return `<option value="">Comboios que já usei…</option>` + trainHistory().slice(0, 30).map((h, i) =>
     `<option value="${i}">${esc(h.train)} — ${esc(stationLabel(h.origin))} → ${esc(stationLabel(h.dest))}${h.hora ? ` (${esc(h.hora)})` : ''}</option>`).join('');
 }
-function fireText(d, leg) {
-  const l = d[leg]; if (!d.date || !/^\d{2}:\d{2}$/.test(l.time)) return '';
-  const a = l.anchor;      /* partida do comboio na 1.ª estação, se a CP a devolveu */
-  if (!a) return `Compra automática ${fmtDay(addDays(d.date, -1))} às ${l.time}`;
-  const nota = a.time !== l.time ? ` (partida em ${a.station || '1.ª estação'})`
+function fireText(d, vi) {
+  const v = d.viagens[vi]; if (!d.date || !/^\d{2}:\d{2}$/.test(v.time)) return '';
+  const a = v.anchor;      /* partida do comboio na 1.ª estação, se a CP a devolveu */
+  if (!a) return `Compra automática ${fmtDay(addDays(d.date, -1))} às ${v.time}`;
+  const nota = a.time !== v.time ? ` (partida em ${a.station || '1.ª estação'})`
     : (a.board && a.board !== a.time ? ` · embarque às ${a.board}` : '');
   return `Compra automática ${fmtDay(addDays(a.startDate, -1))} às ${a.time}${nota}`;
 }
-function legHtml(d, i, leg) {
-  const label = leg === 'ida' ? 'Ida' : 'Volta', l = d[leg];
-  return `<div class="leg" data-leg="${leg}">
-    <div class="leg-h"><h3>${label}</h3><span class="fire" data-fire="${leg}">${esc(fireText(d, leg))}</span></div>
-    <div class="leg-row">
-      <label class="f"><span>Comboio</span><input class="in num" inputmode="numeric" pattern="[0-9]*" autocomplete="off" data-f="${leg}.train" value="${esc(l.train)}" placeholder="524"></label>
-      <label class="f"><span>Partida (1.ª estação)</span><input class="in time" type="time" data-f="${leg}.time" value="${esc(l.time)}"></label>
+function viagemHtml(d, i, vi) {
+  const v = d.viagens[vi];
+  return `<div class="leg" data-vi="${vi}">
+    <div class="leg-h"><h3>Viagem ${vi + 1}</h3>
+      <span class="leg-h-acts">
+        <button class="icon-btn small" data-act="dup-viagem" data-i="${i}" data-vi="${vi}" aria-label="Duplicar com origem e destino trocados">${IC.copy}</button>
+        ${d.viagens.length > 1 ? `<button class="icon-btn small" style="color:var(--err)" data-act="del-viagem" data-i="${i}" data-vi="${vi}" aria-label="Remover esta viagem">${IC.trash}</button>` : ''}
+      </span>
     </div>
-    <select class="in hist" data-f="${leg}.hist" aria-label="Escolher um comboio já usado">${optionsHistory()}</select>
-    <p class="tt" data-tt="${leg}" aria-live="polite"></p>
+    <div class="fire" data-fire="${vi}">${esc(fireText(d, vi))}</div>
+    <div class="route">
+      <label class="f"><span>De</span><select class="in" data-f="origin" data-vi="${vi}">${optionsStations(v.origin)}</select></label>
+      <button class="swap" data-act="swap-viagem" data-i="${i}" data-vi="${vi}" aria-label="Trocar origem e destino">${IC.swap}</button>
+      <label class="f"><span>Para</span><select class="in" data-f="dest" data-vi="${vi}">${optionsStations(v.dest)}</select></label>
+    </div>
+    <div class="leg-row">
+      <label class="f"><span>Comboio</span><input class="in num" inputmode="numeric" pattern="[0-9]*" autocomplete="off" data-f="train" data-vi="${vi}" value="${esc(v.train)}" placeholder="524"></label>
+      <label class="f"><span>Partida (1.ª estação)</span><input class="in time" type="time" data-f="time" data-vi="${vi}" value="${esc(v.time)}"></label>
+    </div>
+    <select class="in hist" data-f="hist" data-vi="${vi}" aria-label="Escolher um comboio já usado">${optionsHistory()}</select>
+    <p class="tt" data-tt="${vi}" aria-live="polite"></p>
   </div>`;
 }
 function dayHtml(d, i) {
@@ -739,14 +851,8 @@ function dayHtml(d, i) {
       <label class="switch"><input type="checkbox" data-f="ativo" ${d.ativo ? 'checked' : ''}>Ativo</label>
       <button class="icon-btn" style="color:var(--err)" data-act="del-day" aria-label="Remover este dia">${IC.trash}</button>
     </div>
-    <div class="route">
-      <label class="f"><span>De</span><select class="in" data-f="origin">${optionsStations(d.origin)}</select></label>
-      <button class="swap" data-act="swap" aria-label="Trocar origem e destino">${IC.swap}</button>
-      <label class="f"><span>Para</span><select class="in" data-f="dest">${optionsStations(d.dest)}</select></label>
-    </div>
-    ${legHtml(d, i, 'ida')}
-    <label class="check"><input type="checkbox" data-f="soIda" ${d.soIda ? 'checked' : ''}>Só ida (sem volta)</label>
-    ${d.soIda ? '' : legHtml(d, i, 'volta')}
+    ${d.viagens.map((_, vi) => viagemHtml(d, i, vi)).join('')}
+    <button class="btn ghost" style="margin-top:12px" data-act="add-viagem" data-i="${i}">+ Adicionar viagem</button>
     <div class="errs" data-errs="${i}"></div>
   </section>`;
 }
@@ -771,40 +877,50 @@ function renderEditor() {
     </div>
     <div class="savebar"><div class="note">O RPi lê a Sheet de 5 em 5 minutos e agenda as compras.</div>
       <button class="btn" data-act="save-week" ${E.saving ? 'disabled' : ''}>${E.saving ? 'A guardar…' : 'Guardar'}</button></div>`;
-  E.days.forEach((_, i) => { refreshDayMeta(i); ['ida', 'volta'].forEach(l => scheduleVerify(i, l, 0)); });
+  E.days.forEach((d, i) => { refreshDayMeta(i); d.viagens.forEach((_, vi) => scheduleVerify(i, vi, 0)); });
 }
 function refreshDayMeta(i) {
   const E = S.editor, d = E?.days[i], el = $(`.dayc[data-i="${i}"]`); if (!d || !el) return;
-  ['ida', 'volta'].forEach(l => { const f = $(`[data-fire="${l}"]`, el); if (f) f.textContent = fireText(d, l); });
+  d.viagens.forEach((_, vi) => { const f = $(`[data-fire="${vi}"]`, el); if (f) f.textContent = fireText(d, vi); });
   el.classList.toggle('off', !d.ativo);
 }
 
 /* validação (espelha a do RPi, 3.10.3) */
 function validateDays(E) {
-  const errs = E.days.map(() => []), seen = new Map(), end = addDays(E.week, 6), today = todayISO();
+  const errs = E.days.map(() => []), end = addDays(E.week, 6), today = todayISO();
   E.days.forEach((d, i) => {
     if (!d.ativo) return; const e = errs[i];
     if (!d.date) e.push('Escolhe o dia.');
     else {
       if (d.date < E.week || d.date > end) e.push('O dia não pertence a esta semana.');
       if (d.date < today) e.push('Este dia já passou.');
-      if (seen.has(d.date)) e.push(`O dia ${fmtDay(d.date)} está repetido.`); else seen.set(d.date, i);
     }
-    if (!d.origin || !d.dest) e.push('Escolhe a origem e o destino.');
-    else if (d.origin === d.dest) e.push('A origem e o destino são iguais.');
-    const chk = (leg, name) => {
-      if (!toNum(d[leg].train)) e.push(`Comboio de ${name} inválido.`);
-      if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(d[leg].time)) e.push(`Hora de ${name} inválida.`);
-    };
-    chk('ida', 'ida'); if (!d.soIda) chk('volta', 'volta');
-    if (!d.soIda && /^\d{2}:\d{2}$/.test(d.ida.time) && /^\d{2}:\d{2}$/.test(d.volta.time) && d.volta.time <= d.ida.time) e.push('A volta tem de ser depois da ida.');
+    if (!d.viagens.length) e.push('Adiciona pelo menos uma viagem.');
+    const seen = new Map();
+    d.viagens.forEach((v, vi) => {
+      if (!v.origin || !v.dest) e.push(`Viagem ${vi + 1}: escolhe a origem e o destino.`);
+      else if (v.origin === v.dest) e.push(`Viagem ${vi + 1}: a origem e o destino são iguais.`);
+      if (!toNum(v.train)) e.push(`Viagem ${vi + 1}: comboio inválido.`);
+      if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(v.time)) e.push(`Viagem ${vi + 1}: hora inválida.`);
+      if (toNum(v.train) && /^\d{2}:\d{2}$/.test(v.time)) {
+        const key = `${v.train}|${v.time}`;
+        if (seen.has(key)) e.push(`Viagem ${vi + 1}: repete a viagem ${seen.get(key) + 1}.`); else seen.set(key, vi);
+      }
+    });
   });
   return errs;
 }
 const outName = (key) => S.cfg.names[key] || (S.cfg.stations[key] ? stationLabel(key) : key);
 function rowsForSheet(E) {
-  return E.days.filter(d => d.date && d.origin && d.dest).map(d => [d.date, outName(d.origin), outName(d.dest), toNum(d.ida.train) ?? '', d.ida.time,
-    d.soIda ? '' : (toNum(d.volta.train) ?? ''), d.soIda ? '' : d.volta.time, d.ativo ? 'SIM' : 'NAO']);
+  const rows = [];
+  for (const d of E.days) {
+    if (!d.date) continue;
+    for (const v of d.viagens) {
+      if (!v.origin || !v.dest) continue;
+      rows.push([d.date, outName(v.origin), outName(v.dest), toNum(v.train) ?? '', v.time, d.ativo ? 'SIM' : 'NAO']);
+    }
+  }
+  return rows;
 }
 async function saveWeek() {
   const E = S.editor; if (!E || E.saving) return;
@@ -855,13 +971,14 @@ async function fetchJourneys(orgCode, dstCode, date) {
 const tripWithTrain = (data, train) =>
   (data?.outwardTrip || []).find(t => (t.travelSections || []).some(s => s.trainNumber === train)) || null;
 
-function scheduleVerify(i, leg, delay = 450) { const dd = S.editor?.days[i]; if (dd?.[leg]) dd[leg].anchor = null; clearTimeout(ttTimers[i + leg]); ttTimers[i + leg] = setTimeout(() => verifyLeg(i, leg), delay); }
-async function verifyLeg(i, leg) {
-  const E = S.editor, d = E?.days[i]; if (!d) return; const box = $(`.dayc[data-i="${i}"] [data-tt="${leg}"]`); if (!box) return;
-  const train = toNum(d[leg].train); box.className = 'tt'; box.textContent = '';
+function scheduleVerify(i, vi, delay = 450) { const dd = S.editor?.days[i]; if (dd?.viagens[vi]) dd.viagens[vi].anchor = null; clearTimeout(ttTimers[`${i}-${vi}`]); ttTimers[`${i}-${vi}`] = setTimeout(() => verifyLeg(i, vi), delay); }
+async function verifyLeg(i, vi) {
+  const E = S.editor, d = E?.days[i]; if (!d) return; const v0 = d.viagens[vi]; if (!v0) return;
+  const box = $(`.dayc[data-i="${i}"] [data-tt="${vi}"]`); if (!box) return;
+  const train = toNum(v0.train); box.className = 'tt'; box.textContent = '';
   if (!train || !d.date || !cpKeys()) return;
-  const res = await fetchTimetable(train, d.date); if (S.editor !== E || !$(`.dayc[data-i="${i}"] [data-tt="${leg}"]`)) return;
-  const org = leg === 'ida' ? d.origin : d.dest, dst = leg === 'ida' ? d.dest : d.origin;
+  const res = await fetchTimetable(train, d.date); if (S.editor !== E || !$(`.dayc[data-i="${i}"] [data-tt="${vi}"]`)) return;
+  const org = v0.origin, dst = v0.dest;
   const set = (cls, html) => { box.className = 'tt ' + cls; box.innerHTML = html; };
   if (res.none) return set('warn', `A CP não tem o comboio ${train} em ${esc(fmtDay(d.date))}.`);
   if (res.error || !res.stops) return;
@@ -876,7 +993,7 @@ async function verifyLeg(i, leg) {
     info = (oi === 0 ? '' : `${esc(firstName)} ${esc(first)} → `) + `${esc(stationLabel(org))} ${esc(dep)} → ${esc(stationLabel(dst))} ${esc(arr)}`;
   } else {
     const trip = tripWithTrain(await fetchJourneys(stationCode(org), stationCode(dst), d.date), train);
-    if (S.editor !== E || !$(`.dayc[data-i="${i}"] [data-tt="${leg}"]`)) return;
+    if (S.editor !== E || !$(`.dayc[data-i="${i}"] [data-tt="${vi}"]`)) return;
     if (!trip) {
       return set('warn', oi < 0 ? `O comboio ${train} não para em ${esc(stationLabel(org))}.`
                                 : `O comboio ${train} não segue de ${esc(stationLabel(org))} para ${esc(stationLabel(dst))}.`);
@@ -892,16 +1009,17 @@ async function verifyLeg(i, leg) {
   }
 
   const code = anchorStops === res.stops ? stationCode(org) : anchorStops[0].station?.code;
-  const typed = d[leg].time;
+  const v = d.viagens[vi]; if (!v) return;   // pode ter sido removida enquanto a pesquisa corria
+  const typed = v.time;
   if (!typed) {          /* a Config leva a hora da 1.ª estação: é a que abre a venda */
-    const v = first || dep; d[leg].time = v; d[leg].anchor = anchorFromStops(anchorStops, code, v, d.date);
-    const inp = $(`.dayc[data-i="${i}"] [data-f="${leg}.time"]`); if (inp) inp.value = v;
+    const t = first || dep; v.time = t; v.anchor = anchorFromStops(anchorStops, code, t, d.date);
+    const inp = $(`.dayc[data-i="${i}"] [data-f="time"][data-vi="${vi}"]`); if (inp) inp.value = t;
     refreshDayMeta(i); E.dirty = true;
-    return set('ok', `Preenchido pela CP com a partida do comboio (${esc(firstName || stationLabel(org))}) às ${esc(v)}: ${info}`);
+    return set('ok', `Preenchido pela CP com a partida do comboio (${esc(firstName || stationLabel(org))}) às ${esc(t)}: ${info}`);
   }
-  d[leg].anchor = anchorFromStops(anchorStops, code, typed, d.date); refreshDayMeta(i);
+  v.anchor = anchorFromStops(anchorStops, code, typed, d.date); refreshDayMeta(i);
   if (typed === first || typed === dep) return set('ok', `Confirmado pela CP: ${info}`);
-  set('warn', `A CP indica ${esc(first)} (${esc(firstName)}) e ${esc(dep)} (${esc(stationLabel(org))}); tens ${esc(typed)}. <button data-act="use-time" data-i="${i}" data-leg="${leg}" data-time="${esc(first)}">Usar ${esc(first)}</button>`);
+  set('warn', `A CP indica ${esc(first)} (${esc(firstName)}) e ${esc(dep)} (${esc(stationLabel(org))}); tens ${esc(typed)}. <button data-act="use-time" data-i="${i}" data-vi="${vi}" data-time="${esc(first)}">Usar ${esc(first)}</button>`);
 }
 
 /* ---------- definições ---------- */
@@ -938,15 +1056,28 @@ document.addEventListener('click', async (e) => {
     case 'add-day': {
       const used = new Set(E.days.map(d => d.date)), free = Array.from({ length: 7 }, (_, k) => addDays(E.week, k)).find(x => !used.has(x) && x >= todayISO()) || '';
       const last = E.days[E.days.length - 1], r = defaultRoute();
-      E.days.push({ date: free, origin: last?.origin || r.origin, dest: last?.dest || r.dest, ida: last ? { ...last.ida } : emptyLeg(), volta: last ? { ...last.volta } : emptyLeg(), soIda: last?.soIda || false, ativo: true });
+      const v0 = last?.viagens[0] ? { ...last.viagens[0], anchor: null } : { ...emptyViagem(), origin: r.origin, dest: r.dest };
+      E.days.push({ date: free, ativo: true, viagens: [v0] });
       E.dirty = true; renderEditor(); requestAnimationFrame(() => $(`.dayc[data-i="${E.days.length - 1}"]`)?.scrollIntoView({ block: 'start', behavior: 'smooth' })); break;
     }
-    case 'copy-prev': E.days = rowsInWeek(addDays(E.week, -7)).map(r => { const d = dayFromRow(r); return { ...d, date: d.date ? addDays(d.date, 7) : d.date }; }); E.dirty = true; renderEditor(); break;
+    case 'add-viagem': {
+      const d = E.days[+b.dataset.i], last = d.viagens[d.viagens.length - 1];
+      d.viagens.push(last ? { ...last, anchor: null } : emptyViagem());
+      E.dirty = true; renderEditor(); requestAnimationFrame(() => $(`.dayc[data-i="${b.dataset.i}"] .leg:last-of-type`)?.scrollIntoView({ block: 'nearest', behavior: 'smooth' })); break;
+    }
+    case 'dup-viagem': {
+      const d = E.days[+b.dataset.i], v = d.viagens[+b.dataset.vi];
+      d.viagens.splice(+b.dataset.vi + 1, 0, { ...v, origin: v.dest, dest: v.origin, anchor: null });
+      E.dirty = true; renderEditor(); break;
+    }
+    case 'del-viagem': { const d = E.days[+b.dataset.i]; d.viagens.splice(+b.dataset.vi, 1); E.dirty = true; renderEditor(); break; }
+    case 'copy-prev': E.days = daysFromRows(rowsInWeek(addDays(E.week, -7))).map(d => ({ ...d, date: d.date ? addDays(d.date, 7) : d.date, viagens: d.viagens.map(v => ({ ...v })) })); E.dirty = true; renderEditor(); break;
     case 'del-day': if (confirm('Remover este dia?')) { E.days.splice(di(), 1); E.dirty = true; renderEditor(); } break;
-    case 'swap': { const d = E.days[di()]; [d.origin, d.dest] = [d.dest, d.origin]; E.dirty = true; renderEditor(); break; }
-    case 'use-time': { const d = E.days[+b.dataset.i]; d[b.dataset.leg].time = b.dataset.time; E.dirty = true; renderEditor(); break; }
+    case 'swap-viagem': { const v = E.days[+b.dataset.i].viagens[+b.dataset.vi]; [v.origin, v.dest] = [v.dest, v.origin]; E.dirty = true; renderEditor(); break; }
+    case 'use-time': { E.days[+b.dataset.i].viagens[+b.dataset.vi].time = b.dataset.time; E.dirty = true; renderEditor(); break; }
     case 'save-week': saveWeek(); break;
     case 'log-filter': S.logFilter = b.dataset.f; render(); break;
+    case 'pedido-force': pedidoForce(+b.dataset.row); break;
     case 'sign-in': $('#btnSignIn').disabled = true; if (await ensureAuth(true)) { hideAuth(); refresh(); } else showAuth('Não foi possível entrar. Tenta outra vez.'); break;
     case 'sign-out': { const t = accessToken; lsDel(TOKEN_KEY); accessToken = null; try { if (t) google.accounts.oauth2.revoke(t, () => { }); } catch { /* ok */ } $('#settings').hidden = true; showAuth('Sessão terminada.'); break; }
     case 'clear-keys': lsDel(KEYS_KEY); ttCache.clear(); openSettings(); toast('Chaves da CP apagadas deste telemóvel.'); break;
@@ -956,20 +1087,30 @@ document.addEventListener('click', async (e) => {
 document.addEventListener('input', (e) => {
   const E = S.editor, f = e.target.dataset?.f; if (!E || !f) return;
   const i = +e.target.closest('.dayc')?.dataset.i; const d = E.days[i]; if (!d) return;
-  if (f === 'ida.train' || f === 'volta.train') { d[f.split('.')[0]].train = e.target.value.replace(/\D/g, ''); if (e.target.value !== d[f.split('.')[0]].train) e.target.value = d[f.split('.')[0]].train; scheduleVerify(i, f.split('.')[0]); }
-  else if (f === 'ida.time' || f === 'volta.time') { d[f.split('.')[0]].time = e.target.value; refreshDayMeta(i); scheduleVerify(i, f.split('.')[0]); }
+  const vi = e.target.dataset.vi; if (vi === undefined) return; const v = d.viagens[+vi]; if (!v) return;
+  if (f === 'train') { v.train = e.target.value.replace(/\D/g, ''); if (e.target.value !== v.train) e.target.value = v.train; scheduleVerify(i, +vi); }
+  else if (f === 'time') { v.time = e.target.value; refreshDayMeta(i); scheduleVerify(i, +vi); }
   else return; E.dirty = true;
 });
 document.addEventListener('change', (e) => {
+  const pr = e.target.closest('[data-pedido-retry]');
+  if (pr) { const row = +pr.dataset.pedidoRetry; pedidoRetryChange(row, pr.checked, +($(`[data-pedido-min="${row}"]`)?.value || 15)); return; }
+  const pm = e.target.closest('[data-pedido-min]');
+  if (pm) { pedidoRetryChange(+pm.dataset.pedidoMin, true, +pm.value || 15); return; }
   const E = S.editor, f = e.target.dataset?.f; if (!E || !f) return;
   const i = +e.target.closest('.dayc')?.dataset.i; const d = E.days[i]; if (!d) return;
-  if (f === 'date' || f === 'origin' || f === 'dest') { d[f] = e.target.value; refreshDayMeta(i); ['ida', 'volta'].forEach(l => scheduleVerify(i, l, 0)); }
+  const vi = e.target.dataset.vi;
+  if (f === 'date') { d.date = e.target.value; refreshDayMeta(i); d.viagens.forEach((_, k) => scheduleVerify(i, k, 0)); }
   else if (f === 'ativo') { d.ativo = e.target.checked; refreshDayMeta(i); }
-  else if (f === 'soIda') { d.soIda = e.target.checked; renderEditor(); }
-  else if (f.endsWith('.hist')) {
-    const leg = f.split('.')[0], h = trainHistory().slice(0, 30)[+e.target.value];
-    if (h) { d[leg].train = String(h.train); d[leg].time = h.hora || d[leg].time; renderEditor(); }
-  } else return;
+  else if (vi === undefined) return;
+  else {
+    const v = d.viagens[+vi]; if (!v) return;
+    if (f === 'origin' || f === 'dest') { v[f] = e.target.value; scheduleVerify(i, +vi, 0); }
+    else if (f === 'hist') {
+      const h = trainHistory().slice(0, 30)[+e.target.value];
+      if (h) { v.train = String(h.train); v.time = h.hora || v.time; renderEditor(); }
+    } else return;
+  }
   E.dirty = true;
 });
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') { if (!$('#settings').hidden) $('#settings').hidden = true; else if (S.editor) closeEditor(); } });

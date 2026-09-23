@@ -17,3 +17,8 @@ PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 # Vigilância do comboio nos últimos 30 min antes da partida: sai logo se não houver nenhum bilhete
 # nessa janela, por isso corre bem a cada minuto (Bruno, 22/09).
 * * * * * bpereira /home/bpereira/bilhetes_cp/.venv/bin/python /home/bpereira/bilhetes_cp/scripts/live_delay.py >> /home/bpereira/bilhetes_cp/logs/cron.log 2>&1
+
+# Fila de pedidos avulsos (aba Pedidos): forçar/repetir compras que esgotaram a Config, leve
+# (sem hotstart nem rajada), até comprar ou o comboio partir. Independente do daemon do
+# Scheduler, de propósito (Bruno, 22-23/09).
+* * * * * bpereira /home/bpereira/bilhetes_cp/.venv/bin/python /home/bpereira/bilhetes_cp/scripts/pedidos.py >> /home/bpereira/bilhetes_cp/logs/cron.log 2>&1

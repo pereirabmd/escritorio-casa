@@ -245,12 +245,14 @@ Um **serviço systemd único** (`cp-scheduler.service`, `Restart=always`,
 `WatchdogSec` com `sd_notify`, arranque com o sistema) substitui os jobs
 individuais por disparo. **Não há `at`, nem `atq`, nem um timer por perna**:
 o daemon calcula tudo a partir da config e do estado local, em ciclo:
-1. A cada ~5 min lê a aba Config (tabela semanal, linhas com `Ativo = SIM`),
-   valida (3.10.3) e grava a cache (3.10.2). Uma leitura falhada conta como
-   "sem novidade", nunca como "config vazia"
-2. Para cada perna (ida/volta) de cada dia configurado, calcula o instante
-   de disparo (T-24h da partida, timezone-aware — ver 3.4) e os marcos
-   seguintes (pre-flight T-5 min, processo "quente" ~T-3 min, 3.3)
+1. A cada ~5 min lê a aba Config (tabela semanal, linhas com `Ativo = SIM`;
+   **uma linha = uma viagem, sem par ida/volta** — decisão de Bruno, 22/23-09:
+   mais do que uma viagem no mesmo dia é só mais do que uma linha com a mesma
+   Data), valida (3.10.3) e grava a cache (3.10.2). Uma leitura falhada conta
+   como "sem novidade", nunca como "config vazia"
+2. Para cada viagem configurada, calcula o instante de disparo (T-24h da
+   partida, timezone-aware — ver 3.4) e os marcos seguintes (pre-flight T-5
+   min, processo "quente" ~T-3 min, 3.3)
 3. Dorme até ao próximo marco (ou ao próximo poll da Sheet, o que vier
    primeiro). Uma alteração da config é apanhada no poll seguinte e a
    lista de disparos é recalculada — desativar ou mudar uma linha depois de
@@ -295,6 +297,54 @@ inundar durante uma indisponibilidade da CP.
 
 Os lembretes de sábado (3.6) e a verificação diária do Passe (3.9) continuam
 a ser jobs periódicos separados (cron, `/etc/cron.d/bilhetes-cp`).
+
+### 3.2.1 Pedidos avulsos: retentativa leve, sem hotstart nem rajada (Bruno, 22-23/09)
+
+Uma viagem da Config que esgota a validação/retry normal (3.3.1, 3.10) e
+acaba `ESGOTADO`, `FALHOU` ou `AMBIGUO` — com a partida ainda no futuro — é
+**espelhada automaticamente** para a aba **Pedidos** (4), por `hot_buy.py`
+(`Buyer.terminate()`). Não há formulário manual: só viagens que a Config já
+tentou aparecem ali. Cada linha permite:
+- **"Tentar agora"** (PWA, escreve `Forcar=SIM`): força uma única tentativa.
+- **Repetir de X em X minutos** (PWA, escreve `Retry=SIM` e
+  `Intervalo_Minutos`): repetição automática, **por pedido** — não há um
+  valor global único como numa primeira versão descartada; sem valor
+  preenchido cai no `pedido_retry_interval_minutes` de reserva
+  (`app_config.example.json`).
+- Continua até a compra ficar `CONFIRMADO` ou o comboio partir. `AMBIGUO`
+  nunca se relança sozinho (nem por `Retry` nem por `Forcar`) — fica só para
+  leitura, como o estado AMBÍGUO em qualquer outro sítio (3.3.1).
+
+**Deliberadamente leve, e deliberadamente NÃO o `Buyer`:** uma primeira
+versão reaproveitava toda a máquina do `Buyer` (login antecipado/"hotstart",
+rajada de ~12 min para esgotado) — pensada para a precisão ao segundo do
+T-24h, onde cada tentativa é rara e cada segundo conta. Para um pedido
+avulso isso é complexidade a mais, e teve um bug real em produção (`--leg`
+só aceitava `ida`/`volta`, herdado de antes da Config deixar de ter esse
+conceito). Por isso `scripts/hot_buy.py` tem uma classe à parte,
+`PedidoAttempt`: login e compra logo (`leg.fire` de um pedido é sempre
+"agora" — `Leg.is_request`), **sem** pre-flight nem espera por um instante
+preciso, e **no máximo uma repetição por passo** — nunca a rajada do
+esgotado nem os ~16 retries por passo da Config. Um "esgotado" ou uma
+recusa terminam já a tentativa; a próxima oportunidade é o intervalo
+agendado ou um novo "Tentar agora". Reaproveita só o `cp_ticket.py` e os
+utilitários puros de lugar/notificação do `Buyer` (nunca o seu *state
+machine*).
+
+**`scripts/pedidos.py`** (cron a cada minuto, `/etc/cron.d/bilhetes-cp`,
+**independente do `cp-scheduler.service`** de propósito — mesmo princípio
+de isolamento da 3.2: um bug aqui nunca arrisca o caminho crítico do T-24h)
+lê a aba Pedidos, decide quais linhas estão devidas (`Forcar`, ou `Retry`
+com o intervalo já passado desde `Ultima_Tentativa` — a própria Sheet é a
+fonte da última tentativa, não estado local, por isso sobrevive a um
+reboot) e lança `hot_buy.py --leg pedidoN` como subprocesso, com o mesmo
+lock por linha de sempre (nunca duas tentativas em curso para o mesmo
+pedido). Tem um **disjuntor**: se o processo morrer sempre sem gravar nada
+de novo no lock (ex.: outro bug de argumentos), para ao fim de
+`MAX_LAUNCHES` (5) e avisa — nunca volta a ficar a repetir sem fim e em
+silêncio, como aconteceu em produção a 22/09. Uma retentativa legítima
+(mesmo falhada ou esgotada — o lock mostra que a tentativa fez algo real)
+nunca conta para esse limite.
 
 ### 3.3 Processo "quente" por disparo (precisão ao segundo)
 
@@ -790,18 +840,35 @@ Bloco do Passe (topo, linhas 4-6):
 `Dias_Restantes = Data_Expira − TODAY()`.
 
 Tabela semanal (a partir da linha 11):
-| Data | Origem | Destino | Comboio_Ida | Hora_Ida | Comboio_Volta | Hora_Volta | Ativo |
+| Data | Origem | Destino | Comboio | Hora | Ativo |
 
-Datas em ISO e horas em texto `HH:MM` (ver 3.5). `Hora_Ida` e `Hora_Volta` são as horas a que o comboio parte da sua 1.ª estação (3.11). A posição fixa das linhas
-(bloco do passe nas linhas 4-6, tabela a partir da 11) torna a leitura
-frágil a inserções de linhas: o RPi deve procurar os cabeçalhos pelo nome em
-vez de confiar só nos números de linha.
+**Uma linha = uma viagem, sem par ida/volta** (decisão de Bruno, 22/23-09):
+mais do que uma viagem no mesmo dia é só mais do que uma linha com a mesma
+Data — não há limite de 2. Datas em ISO e horas em texto `HH:MM` (ver 3.5).
+`Hora` é a hora a que o comboio parte da sua 1.ª estação (3.11). A posição
+fixa das linhas (bloco do passe nas linhas 4-6, tabela a partir da 11) torna
+a leitura frágil a inserções de linhas: o RPi deve procurar os cabeçalhos
+pelo nome em vez de confiar só nos números de linha.
 
 ### Aba "Logs"
 | Timestamp | Tipo | Data_Viagem | Perna | Comboio | Status_HTTP | Resultado | Referencia | Mensagem_Erro |
 
+`Perna` identifica a viagem que originou o registo: `vN` (linha N da
+Config) ou `pedidoN` (linha N dos Pedidos) — já não `ida`/`volta`.
+
 ### Aba "Bilhetes"
 | Data | Comboio | Origem | Destino | Hora_Partida | Carruagem | Lugar | Referencia |
+
+### Aba "Pedidos" (3.2.1)
+| Data | Origem | Destino | Comboio | Hora | Ativo | Retry | Intervalo_Minutos | Forcar | Estado | Ultima_Tentativa | Referencia | Mensagem |
+
+Uma linha por viagem da Config que esgotou a validação/retry
+(`ESGOTADO`/`FALHOU`/`AMBIGUO`) e cujo comboio ainda não partiu — espelhada
+automaticamente pelo RPi, sem formulário manual. `Retry`/`Intervalo_Minutos`/
+`Forcar` são escritos pela PWA; `Estado` (`PENDENTE` / `A_TENTAR` /
+`CONFIRMADO` / `ESGOTADO` / `FALHOU` / `AMBIGUO`), `Ultima_Tentativa`,
+`Referencia` e `Mensagem` só pelo RPi. `Intervalo_Minutos` é por pedido —
+sem valor cai no `pedido_retry_interval_minutes` de reserva.
 
 ---
 
@@ -911,8 +978,9 @@ bilhetes_cp/
 │   ├── pass_expiry_check.py     validade do Passe (3.9)
 │   ├── heartbeat.py             ping ao healthchecks.io (secção 6); inativo até haver URL no .env
 │   ├── live_delay.py            vigilância do comboio nos últimos 30 min (3.2), a cada minuto
+│   ├── pedidos.py               fila de pedidos avulsos (3.2.1), a cada minuto, à parte do daemon
 │   └── pwa_link.py              link que liga a PWA às chaves da CP
-├── tests/                       unittest (179) e teste da PWA em Chromium real (pwa_smoke.mjs)
+├── tests/                       unittest (209) e teste da PWA em Chromium real (pwa_smoke.mjs, 57 verificações)
 └── deploy/                      configs aplicadas no RPi, sem segredos (ver deploy/README.md); inclui o `cp-scheduler.service` do daemon
 ```
 
@@ -1006,6 +1074,9 @@ Os 12 pontos de alinhamento que este plano pedia, com o estado real
 | — | Lembrete de partida com carruagem e lugar (3.2; decisão de 22/09) | ✅ no título e na mensagem; fontes: `confirm`, `seatData` do `POST /sale`, `GET /sales/{id}`; sem lugar em lado nenhum a compra não falha e o lembrete diz onde ver |
 | — | Compra atrasada inicia-se de imediato (3.2, decisão de 22/09) | ✅ sem tolerância nem "conhecida antes": qualquer disparo já passado com a partida ainda futura é lançado já; só recusa se a partida já passou ou se uma venda em curso excedeu os 15 min |
 | — | "Ainda não aberto" repete-se na iteração seguinte (3.3.1, decisão de 22/09) | ✅ janela de 10 min, fase rápida e lenta; os padrões de texto são um palpite até haver respostas reais |
+| — | Rajada de retentativa do esgotado mais agressiva, ~12 min (3.10, decisão de 22/09) | ✅ `sold_out_retry_delays_s` (25 valores, 0 a 120 s) segue o esquema manual que Bruno já fazia; reautentica a meio se o token passar dos 4 min |
+| — | Config sem par ida/volta, N viagens por dia (3.2, 4, decisão de 22/23-09) | ✅ uma linha = uma viagem; editor da PWA com lista dinâmica de viagens por dia (duplicar/remover); `leg.leg` passa a `vN` (id estável pela linha) |
+| — | Pedidos avulsos: forçar/repetir leve, sem hotstart nem rajada (3.2.1, decisão de 22/23-09) | ✅ `PedidoAttempt` (nova, não reaproveita o `Buyer`), no máximo 1 repetição por passo; `scripts/pedidos.py` (cron, disjuntor contra relançamentos sem progresso); PWA com aba própria (Tentar agora, intervalo por pedido); **por verificar com uma compra real** (9.4) |
 
 Fora da lista de 9.8, por secção:
 - **3.3.1** categoria "ainda não aberto": ✅ repete-se (decisão de 22/09); só os padrões de texto que a detetam são um palpite (ver 9.4).
@@ -1025,9 +1096,11 @@ Fora da lista de 9.8, por secção:
 - `chrony` (substituiu o `systemd-timesyncd`, que o `chrony` remove) e fuso `Europe/Lisbon`.
 - Código em `~/bilhetes_cp` (venv Python). Daemon `cp-scheduler.service`; cron novo em
   `/etc/cron.d/bilhetes-cp` (não toca no crontab do utilizador) para os lembretes de
-  sábado, a validade do passe, o heartbeat e a vigilância do comboio a cada minuto
-  (`live_delay.py`, 3.2); `logrotate` para o `cron.log`.
-- PWA completa (Semana, Bilhetes, Registo, editor da semana, definições).
+  sábado, a validade do passe, o heartbeat, a vigilância do comboio a cada minuto
+  (`live_delay.py`, 3.2) e a fila de pedidos avulsos a cada minuto (`pedidos.py`, 3.2.1);
+  `logrotate` para o `cron.log`.
+- Aba "Pedidos" criada na Sheet real (cabeçalho na linha 4, 4).
+- PWA completa (Semana, Bilhetes, Pedidos, Registo, editor da semana, definições).
 
 ### 9.3 Verificado com o mundo real
 Login na CP a partir do RPi; `journeys` sem login; `timetable` sem login e com CORS
@@ -1036,8 +1109,9 @@ ponta a ponta com token e com entrega agendada; pre-flight; daemon a correr sob 
 systemd; validação da Config contra o horário oficial (apanhou a linha de exemplo e, por um
 erro meu, a hora da 1.ª estação: corrigido, ver 3.11); `--search-only` e simulação da
 Config real (520 às 06:45 com embarque às 07:27; 731 às 17:30 com embarque às 17:39) com a
-CP real, sem lançar nada. 179 testes unitários (também no RPi, com a rede bloqueada) e 47 verificações da
-PWA em Chromium (offline, teclado, 360 px, manifest, service worker).
+CP real, sem lançar nada; `pedidos.py --plan-only` contra a aba Pedidos real, sem lançar nada.
+209 testes unitários (também no RPi, com a rede bloqueada) e 57 verificações da
+PWA em Chromium (offline, teclado, 360 px, manifest, service worker, N viagens/dia, aba Pedidos).
 
 ### 9.4 Por verificar — nunca exercitado contra a CP real
 - **`POST /sale` e os passos seguintes**: cobertos por testes com uma CP falsa; nenhuma
@@ -1050,6 +1124,10 @@ PWA em Chromium (offline, teclado, 360 px, manifest, service worker).
 - **Recuperação de reboot a meio de uma compra** (3.10.6): testada com estados
   simulados, não com um reboot verdadeiro. **`DELETE /sale/{id}`** e **`GET /trips`
   com `PENDING`**: por testar.
+- **`PedidoAttempt` (3.2.1)**: coberta por testes com uma CP falsa; a canalização está toda
+  no ar (cron a correr, aba Pedidos criada) mas nenhuma linha de Pedidos foi ainda
+  lançada nem confirmada contra a CP real — a primeira vez que Bruno usar "Tentar agora"
+  ou uma viagem da Config esgotar é o primeiro teste real do caminho completo.
 
 ### 9.5 Ações que dependem de Bruno
 1. **Pôr as viagens reais na Config** (ver 9.6), com `Ativo = SIM` e **antes** da hora do
@@ -1095,6 +1173,14 @@ esteja por chegar **gera uma compra real** no instante T-24h.
   da CP entram por um link (`scripts/pwa_link.py`), nunca no código público. Ícones
   gerados de `assets/icon-source.png` (o ícone do comboio com bilhete) sobre o verde
   claro da paleta; o service worker sobe de versão sempre que a página muda (`VERSION`).
+- Config sem par ida/volta: uma linha = uma viagem (3.2, 4). O editor da PWA mantém o
+  interruptor "Ativo" por dia (aplica-se a todas as viagens desse dia ao guardar), mas
+  cada viagem tem a sua própria origem/destino/comboio/hora, com "Duplicar" a substituir
+  o antigo botão de trocar ida/volta.
+- Pedidos avulsos redesenhados como uma tentativa leve (`PedidoAttempt`), deliberadamente
+  separada do `Buyer`: sem hotstart, no máximo 1 repetição por passo, intervalo de
+  repetição por pedido (3.2.1) — uma primeira versão que reaproveitava o `Buyer` teve um
+  bug real em produção e foi revertida.
 
 **Decisões de Bruno nesta implementação** (22/09), todas já refletidas nas secções indicadas:
 1. `PLANO_FINAL.md` é o plano de referência; `PLANO.md` fica como histórico (secção 9, cabeçalho).
@@ -1105,6 +1191,11 @@ esteja por chegar **gera uma compra real** no instante T-24h.
 6. O lembrete de partida leva carruagem e lugar (3.2).
 7. Todas as notificações levam popup (`Priority: high`) (3.6).
 8. O `--dry-run` fica adiado até se testar o `DELETE /sale/{id}` (3.10.7).
+9. O esgotado confirma-se com uma rajada de ~12 min antes de desistir, igual ao que Bruno
+   já fazia à mão (3.10) — só na Config; os Pedidos nunca fazem rajada (3.2.1).
+10. Config sem par ida/volta: N viagens por dia, cada uma na sua linha (3.2, 4).
+11. Pedidos avulsos: sem hotstart, no máximo 1 repetição por passo, intervalo por pedido —
+    não reaproveita o `Buyer` (3.2.1).
 
 ### 9.8 Operação
 ```
@@ -1115,9 +1206,10 @@ CHROMIUM=/snap/bin/chromium node tests/pwa_smoke.mjs
 # no RPi (ssh casamento-pi; cd ~/bilhetes_cp)
 systemctl status cp-scheduler                       # o daemon; journalctl -u cp-scheduler -f
 .venv/bin/python scripts/scheduler.py --plan-only   # o plano, sem lançar nem notificar
-.venv/bin/python scripts/hot_buy.py --date AAAA-MM-DD --leg ida --search-only   # o que compraria, sem venda
+.venv/bin/python scripts/hot_buy.py --date AAAA-MM-DD --leg vN --search-only   # o que compraria, sem venda
 .venv/bin/python scripts/pre_flight.py --no-ntfy    # diagnóstico do RPi
-tail -f logs/scheduler.log logs/hot_buy.log         # logs
+.venv/bin/python scripts/pedidos.py --plan-only     # a fila de pedidos avulsos, sem lançar (3.2.1)
+tail -f logs/scheduler.log logs/hot_buy.log logs/pedidos.log   # logs
 sudo fail2ban-client set ntfy-auth unbanip <IP>     # desbanir
 ```
 
@@ -1132,5 +1224,7 @@ sudo fail2ban-client set ntfy-auth unbanip <IP>     # desbanir
 | `not_open_retry_window_s` | 600 | quanto tempo se repete uma venda "ainda não aberta" |
 | `not_open_fast_phase_s` / `_fast_interval_s` / `_slow_interval_s` | 20 / 0,25 / 2 | ritmo dessas repetições |
 | `unrecognized_4xx_retry_s` | 15 | quanto tempo se repete uma recusa não reconhecida |
+| `sold_out_retry_delays_s` | 0 … 120 (25 valores) | rajada de ~12 min antes de confirmar esgotado — só na Config; os Pedidos nunca fazem rajada (3.2.1) |
 | `timetable_check_days` | 14 | a partir de quantos dias antes se valida a Config e se descobre a 1.ª estação |
 | `clock_max_offset_ms` / `cp_date_max_offset_s` | 150 / 3 | limites do pre-flight (3.10.1, 3.11.1) |
+| `pedido_retry_interval_minutes` | 15 | intervalo de reserva quando um pedido não define o seu próprio `Intervalo_Minutos` (3.2.1) |

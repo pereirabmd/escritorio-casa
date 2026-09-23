@@ -1,8 +1,8 @@
-"""Processo "quente" de compra de UMA perna (PLANO_FINAL.md 3.3, 3.3.1, 3.10).
+"""Processo "quente" de compra de UMA viagem da Config (PLANO_FINAL.md 3.3, 3.3.1, 3.10).
 
 Lançado pelo Scheduler (scheduler.py) uns minutos antes do instante T-24h:
 
-    python scripts/hot_buy.py --date 2026-09-22 --leg ida
+    python scripts/hot_buy.py --date 2026-09-22 --leg v12
 
 Linha temporal:
     T-6min  arranque; pre-flight (3.10.4) e notificação de estado
@@ -20,6 +20,7 @@ na aba Logs; erros inesperados também.
 from __future__ import annotations
 
 import argparse
+import re
 import sys
 import time
 import traceback
@@ -124,6 +125,28 @@ def to_amount(v: Any) -> float | None:
         return None
 
 
+def already_bought(sheets_client: Any, leg: Leg) -> bool:
+    """A viagem já consta em Bilhetes? Protege contra comprar duas vezes (Buyer e PedidoAttempt)."""
+    try:
+        rows = sheets_client.read_tickets()
+    except Exception as e:  # noqa: BLE001
+        log.error("Não consegui verificar duplicados na Sheet: %s", type(e).__name__)
+        notify_once("dup-check-failed", "Não consegui verificar compras anteriores",
+                    "Falhou a leitura da aba Bilhetes; o bloqueio local por lock continua ativo.",
+                    cooldown_s=3600, logger=log)
+        return False
+    for r in rows:
+        r = list(r) + [""] * 2
+        d = common.parse_sheet_date(r[0])
+        try:
+            train = int(float(r[1]))
+        except (TypeError, ValueError):
+            continue
+        if d == leg.date and train == leg.train:
+            return True
+    return False
+
+
 class Buyer:
     def __init__(self, leg: Leg, lock: PurchaseLock, *, sheets: Any = None,
                  login_fn: Callable[[], dict] = login,
@@ -142,7 +165,8 @@ class Buyer:
         self.login_at = 0.0
         self.origin_code = station_code(leg.origin) or ""
         self.dest_code = station_code(leg.destination) or ""
-        self.label = f"comboio {leg.train} ({leg.leg}) {leg.date.strftime('%d/%m')} {leg.hhmm}"
+        rota = f"{common.station_label(leg.origin)}→{common.station_label(leg.destination)}"
+        self.label = f"comboio {leg.train} ({rota}) {leg.date.strftime('%d/%m')} {leg.hhmm}"
 
     # ---- utilitários ----------------------------------------------------
 
@@ -204,12 +228,22 @@ class Buyer:
 
     # ---- terminar -------------------------------------------------------
 
+    REQUEST_ESTADO = {"SOLD_OUT": "ESGOTADO", "FAILED": "FALHOU", "AMBIGUOUS": "AMBIGUO"}
+
     def terminate(self, state: str, title: str, message: str, tipo: str, *, tags: list[str] | None = None,
                   status: Any = "", ref: str = "") -> int:
         self.lock.update(state=state, final_message=message)
         log.error("%s | %s | %s", state, title, message) if state != "CONFIRMED" else log.info("%s | %s", title, message)
         self.slog(tipo, state, status=status, ref=ref, err="" if state == "CONFIRMED" else message)
         self.notify(title, message, tags=tags or ["warning"], logger=log)
+        # Uma viagem da Config que esgota a validação/retry e ainda tem tempo para comprar é
+        # espelhada para a fila de Pedidos (3.2.1) — lá pode ser forçada ou agendada, mais leve,
+        # sem repetir sozinha aqui (decisão de Bruno, 22/09).
+        if state in self.REQUEST_ESTADO and self.leg.departure.timestamp() > time.time():
+            leg = self.leg
+            pretty = lambda k: k.replace("_", " ").title()  # noqa: E731
+            self.sheet("append_request", leg.date.isoformat(), pretty(leg.origin), pretty(leg.destination),
+                      leg.train, leg.board or leg.hhmm, ativo="SIM", retry="NAO", estado=self.REQUEST_ESTADO[state])
         return 0 if state in ("CONFIRMED", "SOLD_OUT") else 2
 
     # ---- fluxo principal ------------------------------------------------
@@ -622,29 +656,298 @@ class Buyer:
     # ---- proteção contra compra duplicada -------------------------------
 
     def already_bought(self) -> bool:
+        return already_bought(self._sheets(), self.leg)
+
+
+# ---------------------------------------------------------------------------
+# Pedido avulso (3.2.1): tentativa leve, sem hotstart nem rajada
+# ---------------------------------------------------------------------------
+
+REQUEST_ESTADO = {"CONFIRMED": "CONFIRMADO", "SOLD_OUT": "ESGOTADO", "FAILED": "FALHOU", "AMBIGUOUS": "AMBIGUO"}
+
+
+class PedidoAttempt:
+    """Uma única tentativa de compra de um pedido avulso (aba Pedidos, 3.2.1): login e compra
+    já, sem esperar por T-24h (`leg.fire` já é "agora" para um pedido) e sem hotstart (nada de
+    pre-flight nem de login antecipado). No máximo UMA repetição por passo — nunca a rajada de
+    ~12 min do esgotado nem os ~16 retries por passo da Config: se falhar, a tentativa acaba já e
+    não volta a tentar sozinha (a próxima vez é o intervalo agendado, ou "Tentar agora" outra vez).
+    Deliberadamente NÃO reaproveita o `Buyer` (pensado para a precisão ao segundo do T-24h) —
+    reaproveita só o `cp_ticket` e os utilitários de lugar/notificação, que são genéricos."""
+
+    def __init__(self, leg: Leg, lock: PurchaseLock, *, sheets: Any = None,
+                 login_fn: Callable[[], dict] = login,
+                 cp_factory: Callable[[str], CPClient] = CPClient,
+                 clock: Callable[[], float] = time.time,
+                 sleep: Callable[[float], None] = time.sleep,
+                 notify_fn: Callable[..., bool] = notify) -> None:
+        self.leg = leg
+        self.lock = lock
+        self.sheets = sheets
+        self.login_fn, self.cp_factory = login_fn, cp_factory
+        self.clock, self.sleep, self.notify = clock, sleep, notify_fn
+        self.cp: CPClient | None = None
+        self.origin_code = station_code(leg.origin) or ""
+        self.dest_code = station_code(leg.destination) or ""
+        rota = f"{common.station_label(leg.origin)}→{common.station_label(leg.destination)}"
+        self.label = f"comboio {leg.train} ({rota}) {leg.date.strftime('%d/%m')} {leg.hhmm} — pedido"
+
+    def _sheets(self):
+        if self.sheets is None:
+            self.sheets = common.SheetsClient()
+        return self.sheets
+
+    def sheet(self, method: str, *args: Any, **kwargs: Any) -> bool:
         try:
-            rows = self._sheets().read_tickets()
+            getattr(self._sheets(), method)(*args, **kwargs)
+            return True
         except Exception as e:  # noqa: BLE001
-            log.error("Não consegui verificar duplicados na Sheet: %s", type(e).__name__)
-            notify_once("dup-check-failed", "Não consegui verificar compras anteriores",
-                        "Falhou a leitura da aba Bilhetes; o bloqueio local por lock continua ativo.",
-                        cooldown_s=3600, logger=log)
+            log.error("Sheet (%s) falhou: %s: %s", method, type(e).__name__, e)
             return False
-        for r in rows:
-            r = list(r) + [""] * 2
-            d = common.parse_sheet_date(r[0])
+
+    def slog(self, tipo: str, resultado: str, *, status: Any = "", ref: str = "", err: str = "") -> None:
+        self.sheet("append_log", tipo, self.leg.date.isoformat(), self.leg.leg, self.leg.train,
+                   status, resultado, ref, err)
+
+    def _update_request(self, **fields: Any) -> None:
+        self.sheet("update_request", self.leg.row, ultima_tentativa=datetime.now(TZ).isoformat(timespec="seconds"),
+                   **fields)
+
+    def terminate(self, state: str, title: str, message: str, tipo: str, *,
+                  tags: list[str] | None = None, status: Any = "", ref: str = "") -> int:
+        self.lock.update(state=state, final_message=message)
+        (log.error if state != "CONFIRMED" else log.info)("%s | %s | %s", state, title, message)
+        self.slog(tipo, state, status=status, ref=ref, err="" if state == "CONFIRMED" else message)
+        self.notify(title, message, tags=tags or ["warning"], logger=log)
+        self._update_request(estado=REQUEST_ESTADO.get(state, state), referencia=ref,
+                             mensagem=common.sanitize(message)[:400], forcar="NAO")
+        return 0 if state in ("CONFIRMED", "SOLD_OUT") else 2
+
+    def run(self) -> int:
+        if not self.lock.acquire():
+            log.info("%s: já há outra tentativa em curso — a sair.", self.label)
+            return 0
+        try:
+            return self._run()
+        except Exception as e:  # noqa: BLE001 — rede de segurança: nada falha calado
+            log.error("Erro inesperado no pedido: %s\n%s", e, traceback.format_exc())
+            notify_once(f"pedido-unexpected-{self.leg.lock_key}-{type(e).__name__}",
+                        f"Erro inesperado no pedido — {self.label}", f"{type(e).__name__}: {e}.",
+                        cooldown_s=1800, logger=log)
+            self.slog("ERRO", "EXCECAO", err=f"{type(e).__name__}: {e}")
+            self._update_request(estado="FALHOU", mensagem=common.sanitize(f"{type(e).__name__}: {e}")[:400], forcar="NAO")
+            return 1
+        finally:
+            self.lock.release()
+
+    def _run(self) -> int:
+        self.lock.update(state="A_TENTAR", leg=self.leg.key, train=self.leg.train)
+        self._update_request(estado="A_TENTAR", forcar="NAO")
+        if already_bought(self._sheets(), self.leg):
+            self.lock.update(state="CONFIRMED", note="já constava em Bilhetes")
+            self.notify(f"Já comprado — {self.label}",
+                        "Este bilhete já consta na aba Bilhetes; não comprei outra vez.",
+                        tags=["white_check_mark"], logger=log)
+            self._update_request(estado="CONFIRMADO", forcar="NAO")
+            return 0
+
+        try:
+            tokens = self.login_fn()
+            self.cp = self.cp_factory(tokens["access_token"])
+            common.save_tokens(tokens)
+            log.info("Login na CP bem-sucedido (pedido).")
+        except Exception as e:  # noqa: BLE001
+            return self.terminate("FAILED", f"Login na CP falhou — {self.label}",
+                                  f"{type(e).__name__}: {e}.", "ERRO")
+
+        sections = self.search_trip()
+        if sections is None:
+            return 2   # search_trip() já terminou (sem serviço em cache para tentar às cegas)
+
+        outcome, resp = self.fire_sale(sections)
+        if outcome != "ok":
+            return 0 if outcome == "sold_out" else 2
+        return self.complete_sale(resp.body["saleID"])
+
+    def search_trip(self) -> list | None:
+        cache_path = common._state_file("trains.json")
+        trains = common._read_json(cache_path, {})
+        ckey = f"{self.leg.train}|{self.leg.origin}|{self.leg.destination}"
+        try:
+            journeys = self.cp.search_journeys(self.origin_code, self.dest_code, self.leg.date.isoformat())
+            trip = pick_trip(journeys, train_number=self.leg.train, require_saleable=False)
+            sections = trip_sections(trip, self.origin_code, self.dest_code)
+            trains[ckey] = sections
+            common._write_json_atomic(cache_path, trains)
+        except (CPError, RuntimeError, KeyError, TypeError) as e:
+            log.error("Pesquisa falhou (pedido): %s: %s", type(e).__name__, e)
+            sections = trains.get(ckey)
+            if sections is None:
+                self.terminate("FAILED", f"Não encontrei o comboio — {self.label}",
+                               f"{e}. Sem dados do serviço não consigo comprar; verifica nº e data.", "ERRO")
+                return None
+        self.lock.update(sections=sections)
+        return sections
+
+    def fire_sale(self, sections: list) -> tuple[str, Any]:
+        """UM disparo, com no máximo 1 repetição — só para um erro técnico (nunca esgotado/
+        recusa: aí a tentativa acaba já, sem rajada nem espera)."""
+        target = self.clock()
+        for attempt in (1, 2):
             try:
-                train = int(float(r[1]))
-            except (TypeError, ValueError):
+                resp = self.cp.create_sale_request(self.leg.date.isoformat(), sections)
+            except CPError as e:
+                if e.kind == "not_sent" and attempt == 1:
+                    log.warning("POST /sale (pedido) não chegou a sair (%s) — 1 repetição", e)
+                    self.sleep(0.5)
+                    continue
+                if e.kind == "not_sent":
+                    self.terminate("FAILED", f"Compra falhou — {self.label}", f"Sem ligação à CP ({e}).", "ERRO")
+                    return "failed", None
+                self.terminate("AMBIGUOUS", f"Estado AMBÍGUO — {self.label}",
+                               "O pedido de compra pode ter chegado à CP mas perdi a resposta. NÃO repeti. "
+                               "Confirma na App CP se o bilhete existe.", "ERRO", tags=["question"])
+                return "ambiguous", None
+
+            kind, detail = classify_sale_response(resp)
+            timing = f"alvo {hms(target)} | resposta {hms(resp.received_at)} ({resp.elapsed_ms:.0f} ms)"
+            log.info("POST /sale (pedido) #%d -> HTTP %s [%s] %s", attempt, resp.status, kind, timing)
+            if kind == "ok":
+                sale_id = resp.body["saleID"]
+                seats = collect_seats(resp.body)
+                self.lock.update(seats=seats, state="SALE_CREATED", sale_id=sale_id, timing=timing)
+                self.slog("COMPRA", "SALE_CREATED", status=resp.status, ref=str(sale_id), err=timing)
+                return "ok", resp
+            if kind == "transient" and attempt == 1:
+                self.sleep(0.5)
                 continue
-            if d == self.leg.date and train == self.leg.train:
-                return True
-        return False
+            if kind == "sold_out":
+                self.terminate("SOLD_OUT", f"Esgotado — {self.label}", f"Não há lugares. {detail}", "COMPRA",
+                               tags=["no_entry"], status=resp.status)
+                return "sold_out", None
+            self.terminate("FAILED", f"Compra falhou — {self.label}", f"{detail}. Resposta: {resp.text[:300]}",
+                           "ERRO", status=resp.status)
+            return "failed", None
+        return "failed", None  # inalcançável (o loop cobre os 2 casos), só para o type-checker
+
+    def _step_once(self, name: str, fn: Callable[[int], Any], sale_id: int) -> Any:
+        for attempt in (1, 2):
+            try:
+                return fn(sale_id)
+            except CPError as e:
+                status = e.response.status if e.response is not None else None
+                if status in (401, 403) and attempt == 1:
+                    try:
+                        tokens = refresh_tokens(common.load_tokens()["refresh_token"])
+                        self.cp.access_token = tokens["access_token"]
+                        common.save_tokens(tokens)
+                    except Exception:  # noqa: BLE001 — se o refresh falhar, a repetição abaixo falha na mesma
+                        pass
+                    continue
+                retryable = e.kind in ("not_sent", "ambiguous") or (status is not None and status >= 500)
+                if retryable and attempt == 1:
+                    self.sleep(1)
+                    continue
+                if name == "CONFIRMED" and e.kind == "ambiguous":
+                    self.terminate("AMBIGUOUS", f"Confirmação incerta — {self.label}",
+                                   f"A venda {sale_id} existe mas não sei se foi confirmada. "
+                                   "Confirma na App CP antes de repetir.", "ERRO", tags=["question"])
+                    return None
+                self.terminate("FAILED", f"Venda por concluir — {self.label}",
+                               f"Falhou no passo {name} da venda {sale_id}: {e}. A venda pode expirar ao "
+                               "fim de 15 min: conclui na App CP se ainda a vires.", "ERRO")
+                return None
+        return None
+
+    def complete_sale(self, sale_id: int) -> int:
+        methods = {"PASSENGERS_OK": self.cp.set_passengers, "CLIENT_OK": self.cp.set_client,
+                   "FISCAL_OK": self.cp.set_fiscal, "DISCOUNT_OK": self.cp.apply_green_pass,
+                   "CONFIRMED": self.cp.confirm}
+        resp = None
+        for name in ("PASSENGERS_OK", "CLIENT_OK", "FISCAL_OK", "DISCOUNT_OK", "CONFIRMED"):
+            resp = self._step_once(name, methods[name], sale_id)
+            if resp is None:
+                return 2   # _step_once já terminou
+            if resp.messages:
+                log.warning("Mensagens da CP em %s (pedido): %s", name, " | ".join(resp.messages))
+            if name == "DISCOUNT_OK":
+                total = to_amount(find_key(resp.body, "totalAmount"))
+                if total is not None and total != 0.0:
+                    self.terminate("FAILED", f"Desconto do passe não aplicado — {self.label}",
+                                   f"Total da venda {sale_id} ficou {total}€ em vez de 0€. Não confirmei. "
+                                   "Verifica o passe (validade/número).", "ERRO")
+                    return 2
+            if name == "CONFIRMED":
+                status = resp.body.get("status") if isinstance(resp.body, dict) else None
+                status_code = status.get("code") if isinstance(status, dict) else None
+                if status_code != "CONFIRMED":
+                    self.terminate("FAILED", f"Venda não confirmada — {self.label}",
+                                   f"Estado devolvido pela CP: {status_code!r}.", "ERRO", status=resp.status)
+                    return 2
+            self.lock.update(state=name)
+        return self.on_confirmed(resp)
+
+    def find_seats(self, body: Any) -> list[dict]:
+        st = self.lock.state
+        seats = merge_seats(list(st.get("seats") or []), collect_seats(body))
+        if not seats and st.get("sale_id"):
+            try:
+                seats = collect_seats(self.cp.get_sale(st["sale_id"]).body)
+            except Exception as e:  # noqa: BLE001 — último recurso, nunca impede a confirmação
+                log.warning("Não consegui ler a venda %s para obter o lugar: %s", st["sale_id"], type(e).__name__)
+        if not seats:
+            c = find_key(body, "carriageNumber") or st.get("carriage")
+            s_ = find_key(body, "seatNumber") or st.get("seat")
+            if c or s_:
+                seats = [{"carriage": c, "seat": s_, "train": None}]
+        return seats
+
+    def on_confirmed(self, resp: Any) -> int:
+        body = resp.body if resp is not None else {}
+        ref = str(body.get("reference", "")) if isinstance(body, dict) else ""
+        seats = self.find_seats(body)
+        complete = [x for x in seats if x["carriage"] not in (None, "") and x["seat"] not in (None, "")]
+        carriages = [x["carriage"] for x in seats if x["carriage"] not in (None, "")]
+        pieces = [x["seat"] for x in seats if x["seat"] not in (None, "")]
+        carriage = carriages[0] if len(carriages) == 1 else (" / ".join(str(c) for c in carriages) or None)
+        seat = pieces[0] if len(pieces) == 1 else (" / ".join(str(p) for p in pieces) or None)
+        self.lock.update(reference=ref, carriage=carriage, seat=seat, seats=seats)
+        leg = self.leg
+        pretty = lambda k: k.replace("_", " ").title()  # noqa: E731
+        boarding = leg.board or leg.hhmm
+        self.sheet("append_ticket", leg.date.isoformat(), leg.train, pretty(leg.origin),
+                   pretty(leg.destination), boarding, carriage or "", seat or "", ref)
+        have_seat = bool(complete)
+        seat_txt = (seat_phrase(complete) if have_seat else
+                    f"carruagem {carriage}" if carriage else f"lugar {seat}" if seat else
+                    "carruagem e lugar não devolvidos pela CP — vê na App CP")
+        route = f"Comboio {leg.train} · {pretty(leg.origin)} → {pretty(leg.destination)}"
+        remind_ts = leg.departure.timestamp() - 30 * 60
+        remind_at = datetime.fromtimestamp(remind_ts, TZ)
+        reminder_ok = False
+        if remind_ts > time.time() + 120:
+            title = f"Partida às {boarding} · {seat_txt}" if have_seat else f"Partida às {boarding} (daqui a 30 min)"
+            reminder_ok = self.notify(title, f"{route}. {seat_txt[0].upper() + seat_txt[1:]}.",
+                                      tags=["train"], at=remind_at, logger=log)
+        self.lock.update(reminder_scheduled=reminder_ok, seat_known=have_seat)
+        extra = "" if reminder_ok else " (lembrete de partida não agendado)"
+        return self.terminate("CONFIRMED", f"Bilhete comprado — {self.label}",
+                              f"{pretty(leg.origin)} → {pretty(leg.destination)} às {boarding} · {seat_txt} · "
+                              f"ref. {ref}{extra}", "COMPRA", tags=["white_check_mark"], ref=ref)
+
+
+def load_pedido_leg(leg_name: str) -> Leg | None:
+    row = int(leg_name.removeprefix("pedido"))
+    rows = common.SheetsClient().read_requests()
+    legs, _ = common.parse_request_rows(rows, common.now_local().date())
+    return next((l for l in legs if l.row == row), None)
 
 
 # ---------------------------------------------------------------------------
 
 def load_leg(d: str, leg_name: str) -> Leg | None:
+    if leg_name.startswith("pedido"):
+        return load_pedido_leg(leg_name)
     today = common.now_local().date()
     target = datetime.strptime(d, "%Y-%m-%d").date()
     for source in ("cache", "sheet"):
@@ -696,10 +999,17 @@ def search_only(leg: Leg, cp_factory=CPClient, out=print) -> int:
     return 0
 
 
+def _leg_arg(v: str) -> str:
+    """'vN' (linha N da Config, 3.10.3) ou 'pedidoN' (linha N da aba Pedidos, 3.2.1)."""
+    if re.fullmatch(r"v\d+", v) or re.fullmatch(r"pedido\d+", v):
+        return v
+    raise argparse.ArgumentTypeError(f"leg inválida: {v!r} (vN ou pedidoN)")
+
+
 def main() -> int:
-    ap = argparse.ArgumentParser(description="Compra de uma perna (lançado pelo Scheduler)")
+    ap = argparse.ArgumentParser(description="Compra de uma viagem (lançado pelo Scheduler ou pela fila de Pedidos)")
     ap.add_argument("--date", required=True, help="data da viagem YYYY-MM-DD")
-    ap.add_argument("--leg", required=True, choices=("ida", "volta"))
+    ap.add_argument("--leg", required=True, type=_leg_arg)
     ap.add_argument("--search-only", action="store_true",
                     help="só pesquisa e mostra o que compraria; nunca cria uma venda")
     args = ap.parse_args()
@@ -715,6 +1025,8 @@ def main() -> int:
         return 1
     if args.search_only:
         return search_only(leg)
+    if leg.is_request:
+        return PedidoAttempt(leg, PurchaseLock(leg.lock_key)).run()
     return Buyer(leg, PurchaseLock(leg.lock_key)).run()
 
 

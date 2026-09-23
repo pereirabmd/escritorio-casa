@@ -89,10 +89,13 @@ class FakeCP:
 class FakeSheets:
     def __init__(self, tickets=None):
         self.tickets, self.logs, self.bilhetes = tickets or [], [], []
+        self.requests, self.request_updates = [], []
 
     def read_tickets(self): return self.tickets
     def append_log(self, *row): self.logs.append(row)
     def append_ticket(self, *row): self.bilhetes.append(row)
+    def append_request(self, *row, **kw): self.requests.append((row, kw))
+    def update_request(self, row, **fields): self.request_updates.append((row, fields))
 
 
 class FlowBase(unittest.TestCase):
@@ -642,6 +645,133 @@ class LoginTests(FlowBase):
             code, st = self.run_buyer(FakeCP(), sheets=BrokenSheets())
         self.assertEqual(st["state"], "CONFIRMED")
         self.assertTrue(n.called)   # avisou que não conseguiu escrever na Sheet
+
+
+class RequestMirrorTests(FlowBase):
+    """Uma viagem da Config que esgota a validação/retry é espelhada para a fila de Pedidos
+    (3.2.1), desde que o comboio ainda não tenha partido; uma confirmada nunca é."""
+
+    def test_esgotado_e_espelhado_para_pedidos(self):
+        cp = FakeCP(sale_script=[resp(409, {}, messages=[{"message": "Comboio esgotado"}])]
+                    * (len(hot_buy.cfg("sold_out_retry_delays_s", [])) + 1))
+        _, st = self.run_buyer(cp, advancing=True)
+        self.assertEqual(st["state"], "SOLD_OUT")
+        self.assertEqual(len(self.sheets.requests), 1)
+        row = self.sheets.requests[0]
+        self.assertEqual(row[0][0], self.leg.date.isoformat())
+        self.assertEqual(row[0][3], self.leg.train)
+        self.assertEqual(row[1]["estado"], "ESGOTADO")
+
+    def test_falhou_e_espelhado_para_pedidos(self):
+        cp = FakeCP(sale_script=[resp(400, {}, messages=["Pedido inválido"])])
+        _, st = self.run_buyer(cp, clock_offset=100)
+        self.assertEqual(st["state"], "FAILED")
+        self.assertEqual(len(self.sheets.requests), 1)
+
+    def test_confirmada_nunca_e_espelhada(self):
+        _, st = self.run_buyer(FakeCP())
+        self.assertEqual(st["state"], "CONFIRMED")
+        self.assertEqual(self.sheets.requests, [])
+
+    def test_viagem_ja_passada_nao_e_espelhada(self):
+        self.leg = common.Leg(DAY, "v12", "aveiro", "lisboa_oriente", self.train, "06:45", 12,
+                              board="06:45", board_date=DAY - timedelta(days=400))
+        common.lock_path(self.leg.lock_key).unlink(missing_ok=True)
+        cp = FakeCP(sale_script=[resp(400, {}, messages=["Pedido inválido"])])
+        self.run_buyer(cp, clock_offset=100)
+        self.assertEqual(self.sheets.requests, [])
+
+
+class PedidoFlowBase(unittest.TestCase):
+    """Como o FlowBase, mas para o `PedidoAttempt` — leve, sem hotstart nem rajada (3.2.1)."""
+    train = 524
+
+    def setUp(self):
+        self.leg = common.Leg(DAY, "pedido5", "aveiro", "lisboa_oriente", self.train, "06:45", 5)
+        common.lock_path(self.leg.lock_key).unlink(missing_ok=True)
+        common._state_file("trains.json").unlink(missing_ok=True)
+        self.notes = []
+        self.sheets = FakeSheets()
+        self.sleeps = []
+
+    def notify_fn(self, title, message, **kw):
+        self.notes.append((title, message, kw))
+        return True
+
+    def run_pedido(self, cp, login_fn=None, sheets=None):
+        lock = common.PurchaseLock(self.leg.lock_key)
+        attempt = hot_buy.PedidoAttempt(
+            self.leg, lock, sheets=sheets or self.sheets,
+            login_fn=login_fn or (lambda: {"access_token": "a", "refresh_token": "r"}),
+            cp_factory=lambda tok: cp, clock=lambda: 1_800_000_000.0, sleep=self.sleeps.append,
+            notify_fn=self.notify_fn)
+        code = attempt.run()
+        return code, common.peek_state(self.leg.lock_key)
+
+    def titles(self):
+        return [n[0] for n in self.notes]
+
+
+class PedidoAttemptTests(PedidoFlowBase):
+    def test_compra_completa_sem_esperas(self):
+        code, st = self.run_pedido(FakeCP())
+        self.assertEqual((code, st["state"]), (0, "CONFIRMED"))
+        self.assertEqual(self.sheets.bilhetes[0][:2], (DAY.isoformat(), 524))
+        self.assertTrue(any("Bilhete comprado" in t for t in self.titles()))
+        # sem hotstart: nenhuma espera longa (só pausas curtas de retry, que aqui nem chegam a existir)
+        self.assertEqual(self.sleeps, [])
+        # escreve A_TENTAR logo no arranque e o resultado final, sempre com Ultima_Tentativa
+        estados = [f["estado"] for _, f in self.sheets.request_updates]
+        self.assertEqual(estados, ["A_TENTAR", "CONFIRMADO"])
+        self.assertTrue(all("ultima_tentativa" in f for _, f in self.sheets.request_updates))
+        self.assertEqual(self.sheets.request_updates[-1][1]["forcar"], "NAO")
+
+    def test_esgotado_nao_faz_rajada_uma_so_tentativa(self):
+        # a diferença central para a Config (3.10): aqui nunca há rajada de ~12 min — um "esgotado"
+        # termina já a tentativa, mesmo que seja rede condicionada; a próxima oportunidade é o
+        # intervalo agendado ou "Tentar agora" outra vez.
+        cp = FakeCP(sale_script=[resp(409, {}, messages=[{"message": "Comboio esgotado"}])])
+        code, st = self.run_pedido(cp)
+        self.assertEqual((code, st["state"]), (0, "SOLD_OUT"))
+        self.assertEqual(cp.calls.count("sale"), 1)
+        self.assertEqual(self.sheets.request_updates[-1][1]["estado"], "ESGOTADO")
+
+    def test_erro_tecnico_tem_no_maximo_uma_repeticao(self):
+        cp = FakeCP(sale_script=[resp(503, {}), resp(200, {"saleID": 9})])
+        code, st = self.run_pedido(cp)
+        self.assertEqual((code, st["state"]), (0, "CONFIRMED"))
+        self.assertEqual(cp.calls.count("sale"), 2)
+
+    def test_erro_tecnico_duas_vezes_seguidas_falha_sem_terceira_tentativa(self):
+        cp = FakeCP(sale_script=[resp(503, {}), resp(503, {})])
+        code, st = self.run_pedido(cp)
+        self.assertEqual((code, st["state"]), (2, "FAILED"))
+        self.assertEqual(cp.calls.count("sale"), 2)   # nunca uma 3.ª
+
+    def test_ambiguo_nunca_repete(self):
+        cp = FakeCP(sale_script=[CPError("ambiguous", "ReadTimeout")])
+        code, st = self.run_pedido(cp)
+        self.assertEqual((code, st["state"]), (2, "AMBIGUOUS"))
+        self.assertEqual(cp.calls.count("sale"), 1)
+        self.assertEqual(self.sheets.request_updates[-1][1]["estado"], "AMBIGUO")
+
+    def test_falha_num_passo_pos_venda_tem_no_maximo_uma_repeticao(self):
+        cp = FakeCP(steps={"passengers": [CPError("http", "HTTP 500", resp(500, {}))]})
+        code, st = self.run_pedido(cp)
+        self.assertEqual((code, st["state"]), (0, "CONFIRMED"))   # a repetição do passo salvou
+        self.assertEqual(cp.calls.count("passengers"), 2)
+
+    def test_login_impossivel_falha_ja_sem_esperar_pelo_disparo(self):
+        code, st = self.run_pedido(FakeCP(), login_fn=lambda: (_ for _ in ()).throw(RuntimeError("CAPTCHA")))
+        self.assertEqual((code, st["state"]), (2, "FAILED"))
+        self.assertEqual(self.sleeps, [])   # sem hotstart: falha logo, não fica à espera de nada
+
+    def test_ja_comprado_nao_repete(self):
+        sheets = FakeSheets(tickets=[[self.leg.date.isoformat(), self.leg.train, "Aveiro", "Lisboa Oriente"]])
+        cp = FakeCP()
+        code, st = self.run_pedido(cp, sheets=sheets)
+        self.assertEqual((code, st["state"]), (0, "CONFIRMED"))
+        self.assertEqual(cp.calls, [])
 
 
 class ClassifyTests(unittest.TestCase):

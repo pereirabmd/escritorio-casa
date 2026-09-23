@@ -15,33 +15,33 @@ import pass_expiry_check
 TODAY = date(2026, 9, 21)
 
 
-def row(data="2026-09-22", org="aveiro", dst="lisboa_oriente", t_ida=524, h_ida="06:45",
-        t_volta=525, h_volta="18:30", ativo="SIM"):
-    return [data, org, dst, t_ida, h_ida, t_volta, h_volta, ativo]
+def row(data="2026-09-22", org="aveiro", dst="lisboa_oriente", train=524, hora="06:45", ativo="SIM"):
+    return [data, org, dst, train, hora, ativo]
 
 
 class ConfigValidationTests(unittest.TestCase):
+    """Uma linha = uma viagem, sem par ida/volta (decisão de Bruno, 22/09)."""
+
     def parse(self, *rows):
         return common.parse_config_rows(list(rows), TODAY)
 
-    def test_linha_valida_gera_ida_e_volta(self):
+    def test_linha_valida_gera_uma_viagem(self):
         legs, issues = self.parse(row())
         self.assertEqual(issues, [])
         self.assertEqual([(l.leg, l.origin, l.destination, l.train, l.hhmm) for l in legs],
-                         [("ida", "aveiro", "lisboa_oriente", 524, "06:45"),
-                          ("volta", "lisboa_oriente", "aveiro", 525, "18:30")])
-        self.assertEqual(legs[0].key, "2026-09-22-ida")
-        self.assertEqual(legs[0].lock_key, "2026-09-22-ida-524")
+                         [("v12", "aveiro", "lisboa_oriente", 524, "06:45")])
+        self.assertEqual(legs[0].key, "2026-09-22-v12")
+        self.assertEqual(legs[0].lock_key, "2026-09-22-v12-524")
 
     def test_inativa_e_ignorada_mesmo_se_invalida(self):
-        self.assertEqual(self.parse(row(ativo="NAO", h_ida="25:90")), ([], []))
+        self.assertEqual(self.parse(row(ativo="NAO", hora="25:90")), ([], []))
         self.assertEqual(self.parse(row(ativo="")), ([], []))
 
     def test_problemas_sao_reportados_sem_bloquear_as_outras_linhas(self):
-        legs, issues = self.parse(row(h_ida="25:90"), row(data="2026-09-23"))
+        legs, issues = self.parse(row(hora="25:90"), row(data="2026-09-23"))
         self.assertEqual(len(issues), 1)
         self.assertIn("Linha 12", issues[0])
-        self.assertIn("hora de ida inválida", issues[0])
+        self.assertIn("hora inválida", issues[0])
         self.assertEqual({l.date for l in legs}, {date(2026, 9, 23)})
 
     def test_varios_problemas_tipicos(self):
@@ -50,32 +50,32 @@ class ConfigValidationTests(unittest.TestCase):
             "data inválida": row(data="lixo"),
             "origem igual ao destino": row(dst="aveiro"),
             "origem desconhecida": row(org="marte"),
-            "comboio de ida inválido": row(t_ida="abc"),
-            "hora de ida inválida": row(h_ida="6.45"),
-            "comboio de volta inválido": row(t_volta=""),  # hora preenchida, comboio não
-            "hora de volta inválida": row(h_volta="99:99"),
-            "não é depois da ida": row(h_volta="06:00"),
+            "comboio inválido": row(train="abc"),
+            "hora inválida": row(hora="6.45"),
         }
         for expected, r in cases.items():
             legs, issues = self.parse(r)
             self.assertEqual(legs, [], expected)
             self.assertTrue(any(expected in i for i in issues), f"{expected!r} não em {issues}")
 
-    def test_datas_duplicadas(self):
-        legs, issues = self.parse(row(), row(t_ida=999))
-        self.assertEqual(len(legs), 2)  # só a primeira
-        self.assertIn("repetida", issues[0])
-        self.assertIn("Linha 13", issues[0])
-
-    def test_volta_vazia_significa_so_ida(self):
-        legs, issues = self.parse(row(t_volta="", h_volta=""))
+    def test_mais_de_duas_viagens_no_mesmo_dia_sao_todas_aceites(self):
+        # a Config já não tem o par fixo ida/volta: quantas viagens quiseres no mesmo dia
+        # (decisão de Bruno, 22/09), desde que não repitam o mesmo comboio à mesma hora.
+        legs, issues = self.parse(row(train=520), row(train=731, hora="17:30"), row(train=723, hora="19:30"))
         self.assertEqual(issues, [])
-        self.assertEqual([l.leg for l in legs], ["ida"])
+        self.assertEqual(len(legs), 3)
+        self.assertEqual({l.date for l in legs}, {date(2026, 9, 22)})
+        self.assertEqual([l.leg for l in legs], ["v12", "v13", "v14"])  # ids estáveis pela linha da Sheet
+
+    def test_mesmo_comboio_a_mesma_hora_no_mesmo_dia_e_erro(self):
+        legs, issues = self.parse(row(), row())
+        self.assertEqual(len(legs), 1)  # só a primeira
+        self.assertIn("já na linha 12", issues[0])
 
     def test_valores_como_a_sheet_os_devolve(self):
         serial = (date(2026, 9, 22) - date(1899, 12, 30)).days
-        legs, issues = self.parse(row(data=serial, t_ida=524.0, h_ida=(6 * 60 + 45) / 1440,
-                                      h_volta=(18 * 60 + 30) / 1440, org="Lisboa Oriente", dst="Aveiro"))
+        legs, issues = self.parse(row(data=serial, train=524.0, hora=(6 * 60 + 45) / 1440,
+                                      org="Lisboa Oriente", dst="Aveiro"))
         self.assertEqual(issues, [])
         self.assertEqual(legs[0].origin, "lisboa_oriente")
         self.assertEqual(legs[0].hhmm, "06:45")
@@ -293,12 +293,13 @@ class HeartbeatTests(unittest.TestCase):
 
 class LocateConfigTests(unittest.TestCase):
     P = ["Data_Ultima_Compra", "Validade_Dias", "Data_Expira", "Dias_Restantes"]
-    W = ["Data", "Origem", "Destino", "Comboio_Ida", "Hora_Ida", "Comboio_Volta", "Hora_Volta", "Ativo"]
+    W = ["Data", "Origem", "Destino", "Comboio", "Hora", "Ativo"]
 
     def sheet(self, prefix=0):
         top = [["Passe"]] * prefix
         return top + [["Título"], [], self.P, [45000, 30, 45029, 5], [], [], self.W,
-                      ["2026-09-22", "Aveiro", "Lisboa Oriente", 524, "06:45", 525, "18:30", "SIM"], []]
+                      ["2026-09-22", "Aveiro", "Lisboa Oriente", 524, "06:45", "SIM"],
+                      ["2026-09-22", "Lisboa Oriente", "Aveiro", 525, "18:30", "SIM"], []]
 
     def test_encontra_os_blocos_pelo_nome(self):
         passe, weekly, first = common.locate_config(self.sheet())
@@ -310,15 +311,15 @@ class LocateConfigTests(unittest.TestCase):
         passe, weekly, first = common.locate_config(self.sheet(prefix=3))
         self.assertEqual((passe[1], first), (30, 11))
         legs, issues = common.parse_snapshot({"weekly": weekly, "first_row": first}, TODAY)
-        self.assertEqual((len(legs), issues), (2, []))
+        self.assertEqual((len(legs), issues), (2, []))   # duas viagens, cada uma na sua linha
 
     def test_colunas_trocadas_ou_com_extras_sao_lidas_pelo_nome(self):
-        w = ["Extra"] + [self.W[i] for i in (7, 0, 1, 2, 3, 4, 5, 6)]      # Ativo primeiro, coluna extra antes
+        w = ["Extra"] + [self.W[i] for i in (5, 0, 1, 2, 3, 4)]      # Ativo primeiro, coluna extra antes
         vals = [["Extra"] + self.P, ["x", 45000, 30, 45029, 5], w,
-                ["x", "SIM", "2026-09-22", "Aveiro", "Lisboa Oriente", 524, "06:45", 525, "18:30"]]
+                ["x", "SIM", "2026-09-22", "Aveiro", "Lisboa Oriente", 524, "06:45"]]
         passe, weekly, _ = common.locate_config(vals)
         self.assertEqual(passe, [45000, 30, 45029, 5])
-        self.assertEqual(weekly[0], ["2026-09-22", "Aveiro", "Lisboa Oriente", 524, "06:45", 525, "18:30", "SIM"])
+        self.assertEqual(weekly[0], ["2026-09-22", "Aveiro", "Lisboa Oriente", 524, "06:45", "SIM"])
 
     def test_cabecalho_em_falta_nunca_le_as_cegas(self):
         for vals, falta in (([self.W], "bloco do passe"), ([self.P], "tabela semanal"), ([], "bloco do passe")):

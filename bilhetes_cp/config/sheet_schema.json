@@ -13,21 +13,29 @@
       "weekly_table": {
         "header_row": 11,
         "first_data_row": 12,
-        "columns": ["Data", "Origem", "Destino", "Comboio_Ida", "Hora_Ida", "Comboio_Volta", "Hora_Volta", "Ativo"],
-        "notes": "Ativo = SIM/NAO. Uma linha por dia de viagem configurado pelo PWA."
+        "columns": ["Data", "Origem", "Destino", "Comboio", "Hora", "Ativo"],
+        "notes": "Ativo = SIM/NAO. Uma linha = uma viagem (sem par ida/volta): mais do que uma viagem no mesmo dia e so mais do que uma linha com a mesma Data (decisao de Bruno, 22/09). O 'Perna' das abas Logs/Pedidos passa a identificar a linha da Config (ex. 'v12'), nao ida/volta."
       }
     },
     "Logs": {
       "description": "Escrita pelo RPi a cada tentativa/disparo de compra. Nao editar manualmente.",
       "header_row": 4,
       "first_data_row": 5,
-      "columns": ["Timestamp", "Tipo", "Data_Viagem", "Perna", "Comboio", "Status_HTTP", "Resultado", "Referencia", "Mensagem_Erro"]
+      "columns": ["Timestamp", "Tipo", "Data_Viagem", "Perna", "Comboio", "Status_HTTP", "Resultado", "Referencia", "Mensagem_Erro"],
+      "notes": "Perna identifica a viagem que originou o registo: 'vN' (linha N da Config) ou 'pedidoN' (linha N dos Pedidos)."
     },
     "Bilhetes": {
       "description": "Escrita pelo RPi apos cada compra confirmada. O e-ticket em si fica na App CP, nao aqui.",
       "header_row": 4,
       "first_data_row": 5,
       "columns": ["Data", "Comboio", "Origem", "Destino", "Hora_Partida", "Carruagem", "Lugar", "Referencia"]
+    },
+    "Pedidos": {
+      "description": "Fila de retentativa leve (3.2.1): uma linha por viagem da Config que esgotou a validacao/retry (ESGOTADO/FALHOU/AMBIGUO) e cujo comboio ainda nao partiu — espelhada automaticamente pelo RPi. Sem formulario manual: so viagens que ja foram tentadas pela Config. Cada tentativa aqui e leve (sem hotstart, sem rajada) — no maximo uma so tentativa por disparo.",
+      "header_row": 4,
+      "first_data_row": 5,
+      "columns": ["Data", "Origem", "Destino", "Comboio", "Hora", "Ativo", "Retry", "Intervalo_Minutos", "Forcar", "Estado", "Ultima_Tentativa", "Referencia", "Mensagem"],
+      "notes": "Ativo=SIM/NAO (como a Config). Retry=SIM liga a repeticao automatica de Intervalo_Minutos em minutos (por pedido, sem valor global). Forcar=SIM (escrito pela PWA) forca uma unica tentativa ja; o RPi limpa-o para NAO assim que a tentativa arranca. Estado: PENDENTE (nunca tentado) / A_TENTAR / CONFIRMADO / ESGOTADO / FALHOU / AMBIGUO — escrito so pelo RPi. AMBIGUO nunca se relanca (nem por Retry nem por Forcar)."
     }
   }
 }
