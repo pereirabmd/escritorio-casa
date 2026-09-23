@@ -37,6 +37,10 @@ log = get_logger("servidor")
 
 VERSAO = "RPi v1"
 
+# Ao tocar na notificação (fora dos botões de ação), o ntfy abre este URL em
+# vez do próprio ecrã de detalhe do ntfy — mesmo URL usado em recalcular.py.
+URL_APP = common.env("TAREFAS_APP_URL", "https://pereirabmd.github.io/escritorio-casa/tarefas/")
+
 
 # ---------------------------------------------------------------------------
 # Núcleo dos handlers — sem nada de HTTP, para os testes chamarem direto
@@ -158,7 +162,7 @@ def handle_testar(sheets: SheetsClient, params: dict[str, Any]) -> dict[str, Any
         return {"ok": False, "erro": "pessoa é obrigatória"}
     resp = common.ntfy_publish(
         title="Teste", message=f"Notificação de teste para {pessoa} — Tarefas de Casa 👋",
-        tags=["test_tube"],
+        tags=["test_tube"], click=URL_APP,
     )
     if resp is None:
         return {"ok": False, "erro": "Falha ao publicar no ntfy — ver logs do Pi."}
