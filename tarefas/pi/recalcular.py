@@ -32,6 +32,10 @@ log = get_logger("recalcular")
 HORIZONTE_NTFY_DIAS = 3
 MARGEM_SEGURANCA_HORAS = 6  # nunca tentar agendar mais perto do limite do ntfy que isto
 
+# Ao tocar na notificação (fora dos botões de ação), o ntfy abre este URL em
+# vez do próprio ecrã de detalhe do ntfy — assim vai direto para a app.
+URL_APP = common.env("TAREFAS_APP_URL", "https://pereirabmd.github.io/escritorio-casa/tarefas/")
+
 
 # ---------------------------------------------------------------------------
 # Ação "Marcar feita" / "Daqui a 1h" na própria notificação — assinada por
@@ -126,7 +130,7 @@ def alvo_piscina(linha: dict, config: dict[str, Any]) -> datetime | None:
 
 def reconciliar_chave(chave: str, alvo: datetime | None, titulo: str, corpo: str,
                       acoes: list[dict] | None, estado: dict[str, dict], agora: datetime,
-                      plan_only: bool) -> str:
+                      plan_only: bool, click: str | None = None) -> str:
     """Devolve o que aconteceu: agendado / reagendado / cancelado / entregue /
     presumivelmente_entregue / sem_alteracao / fora_do_horizonte / falhou."""
     anterior = estado.get(chave)
@@ -155,7 +159,7 @@ def reconciliar_chave(chave: str, alvo: datetime | None, titulo: str, corpo: str
             common.ntfy_cancel(anterior["message_id"])
         if plan_only:
             return "entregue"
-        resp = common.ntfy_publish(title=titulo, message=corpo, actions=acoes)
+        resp = common.ntfy_publish(title=titulo, message=corpo, actions=acoes, click=click)
         estado.pop(chave, None)
         return "entregue" if resp else "falhou"
 
@@ -171,7 +175,7 @@ def reconciliar_chave(chave: str, alvo: datetime | None, titulo: str, corpo: str
 
     if plan_only:
         return "reagendado" if reagendado else "agendado"
-    resp = common.ntfy_publish(title=titulo, message=corpo, delay_at=alvo, actions=acoes)
+    resp = common.ntfy_publish(title=titulo, message=corpo, delay_at=alvo, actions=acoes, click=click)
     if resp and resp.get("id"):
         estado[chave] = {"message_id": resp["id"], "alvo": alvo_iso}
         return "reagendado" if reagendado else "agendado"
@@ -268,7 +272,7 @@ def _recalcular_sem_lock(sheets: SheetsClient, plan_only: bool) -> dict[str, int
         corpo = f"{inst.get('Pessoa')}: é a vez de \"{nome_tarefa}\" hoje."
         acoes = acoes_notificacao(instancia_id) if alvo is not None else None
 
-        resultado = reconciliar_chave(chave, alvo, titulo, corpo, acoes, estado, agora, plan_only)
+        resultado = reconciliar_chave(chave, alvo, titulo, corpo, acoes, estado, agora, plan_only, click=URL_APP)
         contar(resultado)
         if resultado in ("entregue", "presumivelmente_entregue") and not plan_only:
             sheets.update_cells("Instancias", inst["_rowIndex"], NotificacaoEnviada="TRUE")
@@ -280,7 +284,7 @@ def _recalcular_sem_lock(sheets: SheetsClient, plan_only: bool) -> dict[str, int
         titulo = "🏊 Piscina — manutenção anual" if aviso_longo else "🏊 Piscina"
         corpo = (f"Está a aproximar-se: {linha.get('Nome')} (previsto para {linha.get('ProximaData')})."
                 if aviso_longo else f"Sugestão de hoje: {linha.get('Nome')}.")
-        resultado = reconciliar_chave(chave, alvo, titulo, corpo, None, estado, agora, plan_only)
+        resultado = reconciliar_chave(chave, alvo, titulo, corpo, None, estado, agora, plan_only, click=URL_APP)
         contar(resultado)
         if resultado in ("entregue", "presumivelmente_entregue") and not plan_only:
             sheets.update_cells("Piscina", linha["_rowIndex"], NotificacaoEnviada="TRUE")

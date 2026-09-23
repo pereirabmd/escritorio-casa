@@ -149,6 +149,14 @@
           </div>
           <button class="btn" id="btn-guardar-ntfy">Guardar</button>
           <button class="btn secondary" id="btn-testar-notif">Testar</button>
+
+          <div id="aviso-ntfy-instalado" style="display:none; margin-top:12px; padding:10px; border-radius:10px; background:rgba(239,174,0,.12);">
+            <p style="font-size:12px; color:var(--warning); margin:0 0 8px;">
+              ⚠️ Já instalaste e configuraste a app <strong>ntfy</strong> neste telemóvel? Sem
+              ela, as notificações não chegam — não há forma de a app confirmar isto sozinha.
+            </p>
+            <button class="btn secondary" id="btn-ntfy-ja-tenho" style="font-size:12px; padding:6px 14px;">Já tenho</button>
+          </div>
         </div>
       </div>
 
@@ -2651,13 +2659,35 @@ function preencherNtfy() {
   const pessoaObj = state.pessoasObjs?.find(p => p.nome === pessoaAtual);
   const elUser = document.getElementById('f-ntfy-user');
   const elPass = document.getElementById('f-ntfy-password');
-  if (!elUser || !elPass) return;
-  elPass.value = '';
-  if (!pessoaObj) { elUser.value = ''; elPass.placeholder = ''; return; }
-  elUser.value = state.config[`Pessoa${pessoaObj.num}_NtfyUser`] || '';
-  elPass.placeholder = state.config[`Pessoa${pessoaObj.num}_NtfyPasswordEnc`]
-    ? '(já configurada — deixa em branco para manter)' : '';
+  if (elUser && elPass) {
+    elPass.value = '';
+    if (!pessoaObj) { elUser.value = ''; elPass.placeholder = ''; }
+    else {
+      elUser.value = state.config[`Pessoa${pessoaObj.num}_NtfyUser`] || '';
+      elPass.placeholder = state.config[`Pessoa${pessoaObj.num}_NtfyPasswordEnc`]
+        ? '(já configurada — deixa em branco para manter)' : '';
+    }
+  }
+  atualizarAvisoNtfyInstalado();
 }
+
+// Não há forma de o browser confirmar sozinho se a app ntfy está instalada
+// no telemóvel (os browsers não expõem isso, de propósito) — por isso é um
+// lembrete que se pede à própria pessoa para confirmar, uma vez, por
+// dispositivo (não por pessoa: uma app instalada é uma coisa do telemóvel).
+function atualizarAvisoNtfyInstalado() {
+  const el = document.getElementById('aviso-ntfy-instalado');
+  if (!el) return;
+  const confirmado = lsGet('tarefas.ntfyInstaladoConfirmado') === 'TRUE';
+  const aplica = pessoaAtual && pessoaAtual !== 'Convidado';
+  el.style.display = (aplica && !confirmado) ? '' : 'none';
+}
+
+document.getElementById('btn-ntfy-ja-tenho').addEventListener('click', () => {
+  lsSet('tarefas.ntfyInstaladoConfirmado', 'TRUE');
+  atualizarAvisoNtfyInstalado();
+  toast('Combinado — não voltamos a perguntar neste telemóvel');
+});
 
 document.getElementById('btn-guardar-ntfy').addEventListener('click', async () => {
   if (!pessoaAtual || pessoaAtual === 'Convidado') { toast('Escolhe primeiro quem és, em cima'); return; }

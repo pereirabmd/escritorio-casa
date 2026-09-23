@@ -74,6 +74,14 @@ class ReconciliarChaveTests(unittest.TestCase):
         self.assertEqual(estado["inst:I1"]["message_id"], "m1")
         self.assertEqual(publicar.call_args.kwargs["delay_at"], alvo)
 
+    @mock.patch.object(common, "ntfy_publish")
+    def test_click_e_passado_ao_ntfy_para_abrir_a_app(self, publicar) -> None:
+        publicar.return_value = {"id": "m1"}
+        alvo = self.agora + timedelta(hours=1)
+        recalcular.reconciliar_chave("inst:I1", alvo, "T", "c", None, {}, self.agora, False,
+                                     click="https://exemplo.invalido/tarefas/")
+        self.assertEqual(publicar.call_args.kwargs["click"], "https://exemplo.invalido/tarefas/")
+
     @mock.patch.object(common, "ntfy_cancel")
     @mock.patch.object(common, "ntfy_publish")
     def test_sem_alteracao_nao_toca_no_ntfy(self, publicar, cancelar) -> None:
