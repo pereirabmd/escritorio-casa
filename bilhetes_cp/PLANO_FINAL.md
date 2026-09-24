@@ -848,7 +848,7 @@ até T−7 ms, aceite no pedido enviado a T+119 ms, total 0,00 €; a aceitaçã
 venda (200 «CANCELLED»). Uma venda pendente de ensaio ainda estava PENDENTE 29 min depois (não expira aos 15 min).
 
 **Novo fluxo do `Buyer`** (`hold_before_open`, por omissão ligado): login a T−5 min → pesquisa → **retenção**
-(`hold_sale`, a `hold_lead_seconds`=150 s de T; repete de `hold_retry_interval_s`=15 s se esgotado; se não conseguir,
+(`hold_sale`, a `hold_lead_seconds`=600 s (10 min) de T, com `login_lead_minutes`=12 e `launch_lead_minutes`=13 para haver login e pré-voo antes; o token de 5 min é renovado durante a espera; repete de `hold_retry_interval_s`=15 s se esgotado; se não conseguir,
 segue o fluxo antigo a T com a rajada do esgotado) → passageiro/cliente/fiscal → **corrida ao desconto**
 (`race_discount`: de T−0,6 s a T+1,6 s de 0,1 em 0,1 s, depois 0,3 s até 48 pedidos, depois 1,5 s, até
 `discount_window_s`=180 s; o PUT é idempotente) → confirmar. Arranque atrasado (já depois de T−3 s) não retém: fluxo normal.

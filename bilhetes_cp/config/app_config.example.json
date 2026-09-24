@@ -12,8 +12,8 @@
   "travel_class": 2,
   "purchase": {
     "hours_before_departure": 24,
-    "launch_lead_minutes": 6,
-    "login_lead_minutes": 5,
+    "launch_lead_minutes": 13,
+    "login_lead_minutes": 12,
     "fire_offset_ms": 0,
     "max_sale_attempts": 3,
     "step_retry_delays_s": [
@@ -73,7 +73,7 @@
     ],
     "pedido_retry_interval_minutes": 15,
     "hold_before_open": true,
-    "hold_lead_seconds": 150,
+    "hold_lead_seconds": 600,
     "hold_retry_interval_s": 15,
     "warm_interval_s": 10,
     "discount_lead_s": 0.6,

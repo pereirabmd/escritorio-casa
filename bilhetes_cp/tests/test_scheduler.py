@@ -64,7 +64,7 @@ class PlanTests(Base):
         self.assertEqual({i.leg.train for i in items}, {524, 525})
         ida = [i for i in items if i.leg.train == 524][0]
         self.assertEqual(ida.fire_ts, datetime(2026, 9, 21, 6, 45, tzinfo=common.TZ).timestamp())
-        self.assertEqual(ida.fire_ts - ida.launch_ts, 6 * 60)          # launch_lead_minutes
+        self.assertEqual(ida.fire_ts - ida.launch_ts, 13 * 60)         # launch_lead_minutes (13: retenção 10 min antes de T)
 
     def test_linha_desativada_ou_alterada_nao_exige_remover_nada(self):
         self.snap = {"weekly": [row(ativo="NAO"), row_volta()], "passe": []}
@@ -102,7 +102,7 @@ class AnchorTests(Base):
             items = self.ev()
         ida = [i for i in items if i.leg.train == 524][0]
         self.assertEqual(ida.fire_ts, datetime(2026, 9, 21, 6, 10, tzinfo=common.TZ).timestamp())     # não 06:45
-        self.assertEqual(ida.fire_ts - ida.launch_ts, 6 * 60)
+        self.assertEqual(ida.fire_ts - ida.launch_ts, 13 * 60)
         self.assertNotIn(f"anchor-{ida.leg.key}", self.keys())          # a ida foi ancorada: sem aviso
         volta = [i for i in items if i.leg.train == 525][0]
         self.assertIn(f"anchor-{volta.leg.key}", self.keys())           # a volta não foi: avisa

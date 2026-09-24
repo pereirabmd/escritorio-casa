@@ -570,7 +570,7 @@ class Buyer:
     def hold_sale(self) -> bool:
         """Cria a venda `hold_lead_seconds` antes de T. Devolve True se o lugar ficou retido; False (sem terminar nada)
         se não foi possível — então o fluxo normal a T (com a rajada do esgotado) continua como antes."""
-        lead = float(cfg("hold_lead_seconds", 150))
+        lead = float(cfg("hold_lead_seconds", 600))
         deadline = self.fire_ts - 3.0
         if self.clock() >= deadline:
             return False                        # sem tempo (arranque atrasado): fluxo normal
