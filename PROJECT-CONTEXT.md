@@ -386,6 +386,14 @@ Pedido do utilizador: liberdade total para reinventar o layout, só duas constra
 
 ---
 
+## Horário escolar e ícone nas notificações (Beta 50–51, 2026-09-24)
+
+- **Deslizar removido** (Beta 51): o gesto de deslizar para concluir/saltar nas linhas de tarefa deixou de existir; ficam os botões. O pull-to-refresh mantém-se.
+- **Horário escolar**: tabela `tarefas_horario` (`dados/migrations/005_tarefas_horario.sql`; uma linha por aula, `dia_semana` ISO 1 = 2.ª feira). **Duas aulas no mesmo dia e hora não são erro** (turma dividida): contam ambas. Importa-se com `python3 dados/importar_horario.py <ficheiro.txt> [--gravar]` (CSV `;`: `nome_aluno;ano_letivo;dia_semana;hora_inicio;hora_fim;disciplina;sala`; idempotente; "Sem sala" = sala vazia). A PWA lê por `GET /tarefas/horario` (só leitura) e mostra a aba **Horário** (vista Dia com a aula em curso e a saída, vista Semana em grelha).
+- **Aviso 30 min antes de acabar a última aula do dia** (`tarefas/pi/horario.py`, chamado por `recalcular.py`): a última aula é a que acaba mais tarde (contam as duas da turma dividida); só seg–sex dentro do ano letivo (1 set – 31 jul); agendado no ntfy para os próximos 3 dias e reagendado/cancelado se o horário mudar; **nunca avisa tarde** (se a hora já passou e não estava agendado, esse dia fica sem aviso). Config `HorarioAvisos=FALSE` pausa (botão na aba) e `HorarioAvisoMinutos` muda os 30. Não há calendário de férias/feriados: pausar à mão. Destinatários: ver o painel Admin.
+- **Ícone da app nas notificações**: `bilhetes_cp/scripts/common.py:notify` e `tarefas/pi/common.py:ntfy_publish` enviam o campo `icon` (ícones no GitHub Pages; `NTFY_ICON_URL` no `.env` sobrepõe). O alerta de falha do backup (tópico `backup`) não tem ícone.
+- **fail2ban do ntfy** (`ntfy-auth`): 5 falhas de autorização em 10 min bloqueiam o IP 1 h (o que deu "timeout" ao configurar contas com o utilizador errado). Desbloquear: `sudo fail2ban-client set ntfy-auth unbanip <ip>`.
+
 ## Notificações ntfy por pessoa (Beta 52, 2026-09-24)
 
 Cada pessoa tem o seu tópico, `tarefas_<utilizador>` (o utilizador é o `Pessoa<N>_NtfyUser` da Config, configurado na app; se já começar por `tarefas_` usa-se tal e qual). O Pi (`common.topico_da_pessoa`) publica cada instância no tópico da pessoa da instância, o aviso do horário no da pessoa com o nome do aluno, e a piscina (sem responsável) no de todas. Quem ainda não tem utilizador ntfy cai no tópico legado `tarefas` (`NTFY_TOPIC`). O estado (`ntfy_agendados.json`) guarda o tópico de cada mensagem agendada: se mudar, cancela no antigo e reagenda no novo. No ntfy: `tarefas-pi` escreve em `tarefas_*` e cada utilizador lê só o seu tópico.
