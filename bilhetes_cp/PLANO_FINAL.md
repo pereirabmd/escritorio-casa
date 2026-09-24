@@ -874,6 +874,8 @@ retenção antes de T (a T já não se perde tempo). `seat_preference: "aisle"` 
 Bruno: seguir o comportamento e retirar se falhar por causa disto. Por confirmar: se o `confirm` e o bilhete refletem o lugar mudado
 (o `confirm` devolve o lugar final e é esse que vai no lembrete; o lock fica com o lugar novo em `seat_changed`).
 
+**Viagens passadas (25/09/2026).** `parse_config_rows` ignora em silêncio as linhas ativas com data passada (são histórico: cada linha é uma viagem única); os problemas reais das linhas futuras continuam a gerar o aviso «Linha da Config com problema».
+
 **Ferramenta de ensaio:** `scripts/ensaio_compra.py` corre o `Buyer` verdadeiro contra a CP verdadeira, mas o «confirmar»
 cancela a venda (nada é comprado); `--sem-ancora` inventa um T daqui a uns minutos para ensaiar a retenção.
 
