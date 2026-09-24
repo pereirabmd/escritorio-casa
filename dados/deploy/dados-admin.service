@@ -1,0 +1,35 @@
+# Página web para consultar/editar as bases SQLite — SÓ na rede local (porta 8890; firewall: ufw allow from 192.168.68.0/24).
+# Fora do nginx e nunca exposta à Internet. Sandbox como a API; escreve em data/ (bases + undo/), state/, logs/ e, para o
+# «Backup agora», no clone do repositório privado e em ~/.ssh (deploy key).
+[Unit]
+Description=dados — consulta/edição das bases SQLite (só LAN)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=bpereira
+WorkingDirectory=/home/bpereira/dados
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/usr/bin/python3 admin_db.py
+Restart=always
+RestartSec=10
+
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/home/bpereira/dados/data /home/bpereira/dados/state /home/bpereira/dados/logs /home/bpereira/dados-backup /home/bpereira/.ssh
+PrivateTmp=true
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+RestrictNamespaces=true
+LockPersonality=true
+CapabilityBoundingSet=
+SystemCallFilter=@system-service
+MemoryMax=200M
+
+[Install]
+WantedBy=multi-user.target

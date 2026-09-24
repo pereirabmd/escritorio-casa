@@ -10,6 +10,7 @@ Só usa a biblioteca padrão do Python (Debian: 3.11, SQLite ≥ 3.40) — sem v
   com tabelas prefixadas (`peso_…`, `rto_…`); nunca editar uma migração já aplicada.
 - `backup.py` — export SQL determinístico → só publica se mudou → cifra com `age` → push.
 - `api.py` + `auth.py` + `apps/<app>.py` — API HTTP (ver secção API). Cada app nova = um módulo em `apps/` + uma migração.
+- `admin_db.py` + `admin_web/` — página web para **consultar e editar** as duas bases (ver secção abaixo). `deploy/dados-admin.service`.
 - `deploy/` — `dados-backup.service` + `.timer` (diário, 03:30).
 
 **Convenções**: datas em texto ISO (`YYYY-MM-DD HH:MM:SS`, hora local), nunca serial do Sheets;
@@ -130,3 +131,22 @@ sudo systemctl daemon-reload && sudo systemctl enable --now dados-api
 curl -s https://bmdpereira.duckdns.org/dados-api/saude            # {"ok":true}
 curl -si https://bmdpereira.duckdns.org/dados-api/peso/registos   # 401
 ```
+
+
+## Página de consulta/edição das bases (`admin_db.py`)
+
+`http://192.168.68.103:8890/` (só na rede local; serviço `dados-admin`). Escolhe a base (`dados` ou `bilhetes`), navega as tabelas
+(pesquisa, ordenação, paginação, esquema), edita/cria/apaga linhas, corre consultas SELECT, vê as alterações e faz **backup agora** para o
+repositório privado `pereirabmd/backup_database`.
+
+- **Segurança (por camadas):** só aceita endereços privados (`ADMIN_DB_REDES`) e a firewall só abre a porta à LAN (`ufw allow from
+  192.168.68.0/24 to any port 8890`); nunca passa pelo nginx; login com password (PBKDF2, `ADMIN_DB_PASSWORD_HASH` no `.env`; trocar com
+  `python3 admin_db.py --set-password`), cookie HttpOnly/SameSite=Strict, CSRF nas escritas, 5 falhas bloqueiam o IP 10 min, CSP estrita
+  (sem JS inline). É HTTP simples: a password viaja em claro na LAN (para TLS, pôr atrás do nginx com certificado interno).
+- **Escrita segura:** nomes de tabelas/colunas só do esquema, valores por parâmetros; as restrições CHECK/UNIQUE/FK da base recusam o inválido;
+  formatos de data/hora conhecidos (`quando`, `data`, `hora_*`…) são validados (a base não os verifica; só a API das apps o fazia);
+  segredos (`*password*`, `*token*`, `*secret*`, `Pessoa*_NtfyPasswordEnc`) saem mascarados e não se editam.
+- **Rede de segurança:** antes de escrever guarda um instantâneo da base em `data/undo/` (no máximo 1/min, 20 mais recentes); cada alteração fica em
+  `logs/admin_edits.jsonl` (antes/depois) e **«Reverter»** desfaz uma alteração de uma linha (só se a linha ainda estiver como a deixámos).
+- **Consola SQL:** só SELECT/WITH, base aberta em modo `ro` + autorizador; 500 linhas e 3 s no máximo.
+- Edita-se a base **por baixo das apps**: regras que só as apps garantem (ids sequenciais, estados, dependências entre tabelas) não são verificadas.

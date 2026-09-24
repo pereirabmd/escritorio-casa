@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="pt">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Bases de dados do Pi</title>
+<link rel="stylesheet" href="/app.css">
+</head>
+<body>
+<div id="login" class="centro" hidden>
+  <form id="form-login" class="cartao" autocomplete="on">
+    <h1>Bases de dados do Pi</h1>
+    <p class="mut">Só na rede local. Consulta e edição do SQLite.</p>
+    <label>Password <input type="password" id="pw" autocomplete="current-password" required autofocus></label>
+    <button type="submit" class="primario">Entrar</button>
+    <p id="erro-login" class="erro" role="alert"></p>
+  </form>
+</div>
+
+<div id="app" hidden>
+  <header>
+    <strong>🗄️ Bases de dados</strong>
+    <select id="sel-db" aria-label="Base de dados"></select>
+    <nav id="abas">
+      <button data-aba="tabelas" class="ativa">Tabelas</button>
+      <button data-aba="sql">Consulta SQL</button>
+      <button data-aba="alteracoes">Alterações</button>
+      <button data-aba="backup">Backup</button>
+    </nav>
+    <button id="sair" class="sec">Sair</button>
+  </header>
+  <div id="aviso" class="aviso" hidden></div>
+
+  <main>
+    <section id="aba-tabelas" class="aba">
+      <aside id="lista-tabelas"></aside>
+      <div id="painel">
+        <div id="vazio" class="mut">Escolhe uma tabela.</div>
+        <div id="tabela-vista" hidden>
+          <div class="barra">
+            <h2 id="titulo-tabela"></h2>
+            <input id="pesquisa" type="search" placeholder="Pesquisar em todas as colunas…">
+            <button id="ver-esquema" class="sec">Esquema</button>
+            <button id="nova-linha" class="primario">+ Nova linha</button>
+          </div>
+          <pre id="esquema" hidden></pre>
+          <div class="rolagem"><table id="grelha"></table></div>
+          <div class="barra rodape">
+            <button id="ant" class="sec">◀</button>
+            <span id="paginacao"></span>
+            <button id="seg" class="sec">▶</button>
+            <label>por página <select id="tamanho"><option>25</option><option selected>50</option><option>100</option><option>200</option></select></label>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="aba-sql" class="aba" hidden>
+      <div class="coluna">
+        <p class="mut">Só leitura (SELECT). Máximo 500 linhas e 3 s. Colunas de segredos saem vazias.</p>
+        <textarea id="sql" rows="6" spellcheck="false" placeholder="SELECT * FROM peso_registos ORDER BY quando DESC LIMIT 20"></textarea>
+        <div><button id="correr-sql" class="primario">Correr</button> <span id="sql-info" class="mut"></span></div>
+        <div class="rolagem"><table id="grelha-sql"></table></div>
+      </div>
+    </section>
+
+    <section id="aba-alteracoes" class="aba" hidden>
+      <div class="coluna">
+        <p class="mut">Cada alteração feita aqui fica registada. «Reverter» desfaz uma alteração de uma linha se a linha ainda estiver como a deixámos.</p>
+        <div class="rolagem"><table id="grelha-alt"></table></div>
+        <h3>Instantâneos antes de escrever (últimos 20)</h3>
+        <div class="rolagem"><table id="grelha-snap"></table></div>
+      </div>
+    </section>
+
+    <section id="aba-backup" class="aba" hidden>
+      <div class="coluna">
+        <div id="info-backup" class="cartao"></div>
+        <p><button id="backup-agora" class="primario">Fazer backup agora</button> <label><input type="checkbox" id="backup-forcar"> mesmo sem alterações</label></p>
+        <pre id="saida-backup" hidden></pre>
+        <p class="mut">O backup diário corre às ~03:30. Cada backup vai cifrado (age) para o repositório privado <code>pereirabmd/backup_database</code>; a chave para decifrar não está no Pi.</p>
+      </div>
+    </section>
+  </main>
+</div>
+
+<dialog id="dlg">
+  <form id="form-linha" method="dialog">
+    <h3 id="dlg-titulo"></h3>
+    <div id="campos"></div>
+    <p id="dlg-erro" class="erro" role="alert"></p>
+    <div class="botoes">
+      <button type="button" id="dlg-apagar" class="perigo" hidden>Apagar linha</button>
+      <span class="esp"></span>
+      <button type="button" id="dlg-cancelar" class="sec">Cancelar</button>
+      <button type="submit" class="primario" id="dlg-guardar">Guardar</button>
+    </div>
+  </form>
+</dialog>
+<div id="toast" role="status"></div>
+<script src="/app.js"></script>
+</body>
+</html>
