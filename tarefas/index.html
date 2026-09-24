@@ -132,6 +132,7 @@
         <button type="button" class="chip" data-configsub="sistema">Sistema</button>
         <button type="button" class="chip" data-configsub="resumo">Resumo</button>
         <button type="button" class="chip" data-configsub="aparencia">Aparência</button>
+        <button type="button" class="chip" data-configsub="admin" id="chip-admin" style="display:none">Admin</button>
       </div>
 
       <div class="config-subtab" data-sub="perfil">
@@ -168,6 +169,11 @@
             <button class="btn secondary" id="btn-ntfy-ja-tenho" style="font-size:12px; padding:6px 14px;">Já tenho</button>
           </div>
         </div>
+      </div>
+
+      <div class="config-subtab" data-sub="admin" style="display:none">
+        <h2 class="section-title">Administração</h2>
+        <div id="admin-conteudo"><div class="empty">A carregar...</div></div>
       </div>
 
       <div class="config-subtab" data-sub="sistema" style="display:none">
@@ -393,7 +399,7 @@
 <script src="https://cdn.jsdelivr.net/npm/animejs@4.5.0/dist/bundles/anime.umd.min.js" integrity="sha384-InMmvD3VoYcY7hGjSC80aLb2bNNE4CzpX+Eq6FVDlmB0IKgDvmfPw4UY8L/M++iG" crossorigin="anonymous"></script>
 
 <script>
-const APP_VERSION = 'Beta 52';
+const APP_VERSION = 'Beta 53';
 
 // ---------------------------------------------------------------
 // PISCINA — catálogo estático (não editável pela UI; ver PROJECT-CONTEXT.md)
@@ -707,7 +713,7 @@ const DIAS_SEMANA = ['Dom','Seg','Ter','Qua','Qui','Sex','Sab'];
 // ---------------------------------------------------------------
 let accessToken = null;
 let tokenClient = null;
-let state = { tarefas: [], tarefasTodas: [], instancias: [], config: {}, pessoas: [], categorias: [], piscina: [], horario: null };
+let state = { tarefas: [], tarefasTodas: [], instancias: [], config: {}, pessoas: [], categorias: [], piscina: [], horario: null, souAdmin: false };
 let pessoaAtual = lsGet('tarefas.pessoa') || null;
 let ultimaSincronizacao = null;
 
@@ -1058,6 +1064,7 @@ async function carregarTudo() {
       .map(r => String(r.Valor || '').trim())
       .filter(Boolean);
     state.piscina = d.piscina.map(piscinaDaApi);
+    state.souAdmin = d.souAdmin === true;   // só apresentação: a API volta a verificar em cada pedido do painel
     try { state.horario = (await apiChamar('GET', '/tarefas/horario')).aulas; } catch (e) { console.warn('Horário indisponível:', e); }
 
     if (!state.pessoas.length) {
@@ -1094,6 +1101,7 @@ function renderTudo() {
   renderAuditoria();
   renderPiscina();
   renderHorario();
+  renderAdmin();
 }
 
 // ---------------------------------------------------------------
@@ -1220,6 +1228,76 @@ async function alternarAvisosHorario() {
   state.config.HorarioAvisos = ativos ? 'FALSE' : 'TRUE';
   toast(ativos ? 'Avisos do horário pausados (os já agendados são cancelados em poucos minutos)' : 'Avisos do horário ativos');
   renderHorario();
+}
+
+// ---------------------------------------------------------------
+// PAINEL DE ADMINISTRAÇÃO — só para administradores (a API recusa os outros com 403; esconder o separador é só
+// apresentação). Escolhe quem administra e quem recebe cada notificação geral (sem responsável: piscina, horário).
+// Novas notificações gerais aparecem aqui sozinhas: vêm da lista do servidor (NOTIFICACOES_GERAIS).
+// ---------------------------------------------------------------
+let painelAdmin = null;
+
+async function renderAdmin() {
+  const chip = document.getElementById('chip-admin');
+  const cont = document.getElementById('admin-conteudo');
+  if (!chip || !cont) return;
+  chip.style.display = state.souAdmin ? '' : 'none';
+  if (!state.souAdmin) {
+    cont.innerHTML = '';
+    if (chip.classList.contains('selected')) document.querySelector('[data-configsub="perfil"]').click();
+    return;
+  }
+  try {
+    painelAdmin = await apiChamar('GET', '/tarefas/admin');
+  } catch (e) {
+    cont.innerHTML = `<div class="empty">${esc(e.message || 'Não foi possível carregar.')}</div>`;
+    return;
+  }
+  const p = painelAdmin;
+  const semUser = (x) => !x.topico;
+  const estado = `<div class="card"><div id="admin-saude" style="font-size:13px; color:var(--text-secondary)">A verificar...</div></div>`;
+  const admins = `<h2 class="section-title" style="margin-top:18px">Administradores</h2><div class="card">
+    <p class="adm-nota">Quem pode ver este painel. Só se pode escolher pessoas com e-mail registado (Config → Gerir pessoas).</p>
+    ${p.pessoas.map(x => `<label class="adm-linha"><input type="checkbox" data-adm-admin value="${esc(x.email)}" ${x.admin ? 'checked' : ''}
+        ${x.fixo || !x.email ? 'disabled' : ''}><span>${esc(x.nome)}</span>
+        <em>${x.fixo ? 'administrador fixo' : (x.email ? esc(x.email) : 'sem e-mail')}</em></label>`).join('')}</div>`;
+  const notifs = `<h2 class="section-title" style="margin-top:18px">Notificações gerais</h2><div class="card">
+    <p class="adm-nota">Avisos sem responsável. Escolhe quem recebe cada um, no tópico <b>tarefas_&lt;utilizador&gt;</b> da pessoa.</p>
+    ${p.notificacoes.map(n => `<div class="adm-notif"><b>${esc(n.nome)}</b>${n.padrao ? ' <em>(predefinição)</em>' : ''}
+      <div class="adm-nota">${esc(n.descricao)}</div>
+      ${p.pessoas.map(x => `<label class="adm-linha"><input type="checkbox" data-adm-notif="${esc(n.id)}" value="${esc(x.nome)}"
+          ${n.destinatarios.includes(x.nome) ? 'checked' : ''}><span>${esc(x.nome)}</span>
+          ${semUser(x) ? '<em class="adm-aviso">sem utilizador ntfy: não recebe</em>' : `<em>${esc(x.topico)}</em>`}</label>`).join('')}
+      </div>`).join('')}</div>`;
+  cont.innerHTML = estado + admins + notifs +
+    '<button class="btn" id="btn-admin-guardar" style="margin-top:14px">Guardar</button>';
+  cont.querySelector('#btn-admin-guardar').addEventListener('click', guardarAdmin);
+  adminSaude();
+}
+
+async function adminSaude() {
+  const el = document.getElementById('admin-saude');
+  if (!el) return;
+  try {
+    const d = await (await fetch(`${TAREFAS_API_URL}/saude`)).json();
+    const c = d.contagens || {};
+    el.innerHTML = `<span style="color:${d.saudavel ? 'var(--success)' : 'var(--urgent)'}">${d.saudavel ? '✓' : '⚠️'} Pi: última reconciliação há ${esc(d.minutosDesde)} min</span><br>` +
+      `Mensagens ntfy: ${esc(c.sem_alteracao || 0)} agendadas em dia · ${esc(c.agendado || 0)} novas · ${esc(c.reagendado || 0)} reagendadas · ${esc(c.cancelado || 0)} canceladas · ${esc(c.fora_do_horizonte || 0)} para depois (fora dos 3 dias)`;
+  } catch (e) { el.textContent = 'Não foi possível verificar o estado do Pi.'; }
+}
+
+async function guardarAdmin() {
+  const cont = document.getElementById('admin-conteudo');
+  const admins = [...cont.querySelectorAll('[data-adm-admin]:checked')].map(i => i.value);
+  const notificacoes = {};
+  painelAdmin.notificacoes.forEach(n => {
+    notificacoes[n.id] = [...cont.querySelectorAll(`[data-adm-notif="${n.id}"]:checked`)].map(i => i.value);
+  });
+  const ok = await api('PUT', '/tarefas/admin', { admins, notificacoes });
+  if (!ok) { toast('Falha ao guardar: ' + (ultimoErro || 'erro desconhecido')); return; }
+  toast('Guardado. Os avisos agendados são ajustados em poucos minutos.');
+  await carregarTudo();
+  try { await apiChamar('POST', '/recalcularAgora', {}, TAREFAS_API_URL); } catch (e) { /* o ciclo de 5 min trata */ }
 }
 
 // ---------------------------------------------------------------

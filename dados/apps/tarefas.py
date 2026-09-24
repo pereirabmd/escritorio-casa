@@ -14,6 +14,7 @@ Regras que este módulo garante e a PWA sozinha não garantia:
 
 from __future__ import annotations
 
+import os
 import re
 from datetime import date, datetime, timezone
 
@@ -35,6 +36,20 @@ _CONCL = re.compile(r"^\d{4}-\d{2}-\d{2} ([01]\d|2[0-3]):[0-5]\d$")
 _CHAVE = re.compile(r"^[A-Za-z][A-Za-z0-9_]{0,79}$")
 _SEGREDO = re.compile(r"_NtfyPasswordEnc$")
 MASCARA = "********"
+
+# --- administração --------------------------------------------------------------
+# Administrador "fixo": vem do .env (ADMIN_TAREFAS) e não se remove pela app. Os restantes ficam em Config.Admins
+# (e-mails de pessoas registadas). Só admins leem/alteram estas definições, e a Config genérica não lhes toca.
+ADMIN_RAIZ_PADRAO = "pereirabmd@gmail.com"
+# Notificações "gerais" (sem responsável): quem recebe cada uma escolhe-se no painel. Config `Notif_<id>`:
+# ausente = padrão, "-" = ninguém, "Bruno,Camila" = essas pessoas. O Pi lê as mesmas chaves (tarefas/pi/common.py:
+# destinatarios_geral) — alterar aqui = alterar lá.
+NOTIFICACOES_GERAIS = {
+    "piscina": {"nome": "Piscina", "descricao": "Sugestão de manutenção da piscina (hora padrão do dia)."},
+    "horario": {"nome": "Horário escolar", "descricao": "Aviso antes de acabar a última aula do dia."},
+}
+_RESERVADA = re.compile(r"^(Admins|Notif_.*)$")
+_EMAIL = re.compile(r"^[^@\s,]+@[^@\s,]+\.[^@\s,]+$")
 
 
 # --- validação ------------------------------------------------------------------
@@ -138,9 +153,118 @@ def _proximo(conn, tabela: str, prefixo: str, largura: int) -> str:
 
 # --- leitura --------------------------------------------------------------------
 
+def _config(conn) -> dict[str, str]:
+    return {r["chave"]: r["valor"] for r in conn.execute("SELECT chave, valor FROM tarefas_config")}
+
+
+def _pessoas(cfg: dict[str, str]) -> list[dict]:
+    out = []
+    for k, v in cfg.items():
+        m = re.fullmatch(r"Pessoa(\d+)_Nome", k)
+        if m and v.strip():
+            n = m.group(1)
+            user = cfg.get(f"Pessoa{n}_NtfyUser", "").strip().lower()
+            out.append({"num": int(n), "nome": v.strip(), "email": cfg.get(f"Pessoa{n}_Email", "").strip().lower(),
+                        "ntfyUser": user, "topico": (user if user.startswith("tarefas_") else f"tarefas_{user}") if user else ""})
+    return sorted(out, key=lambda p: p["num"])
+
+
+def _raiz() -> set[str]:
+    return {e.strip().lower() for e in os.environ.get("ADMIN_TAREFAS", ADMIN_RAIZ_PADRAO).split(",") if e.strip()}
+
+
+def _admins(cfg: dict[str, str]) -> set[str]:
+    extra = {e.strip().lower() for e in cfg.get("Admins", "").split(",") if e.strip()}
+    return _raiz() | extra
+
+
+def _exigir_admin(ctx, cfg=None) -> dict[str, str]:
+    cfg = cfg if cfg is not None else _config(ctx.db())
+    if ctx.user.lower() not in _admins(cfg):
+        raise ApiError(403, "so_admin", "só os administradores podem ver ou alterar isto")
+    return cfg
+
+
+def _destinatarios(cfg: dict[str, str], tipo: str, pessoas: list[dict]) -> tuple[list[str], bool]:
+    """(nomes que recebem, é_padrão). Igual a `destinatarios_geral` do Pi."""
+    bruto = cfg.get(f"Notif_{tipo}", "").strip()
+    nomes = [p["nome"] for p in pessoas]
+    if not bruto:
+        return (nomes, True)   # padrão do painel (horário: no Pi o padrão é a pessoa do aluno; ver _painel)
+    if bruto == "-":
+        return ([], False)
+    return ([n.strip() for n in bruto.split(",") if n.strip() in nomes], False)
+
+
+def _painel(conn) -> dict:
+    cfg = _config(conn)
+    pessoas = _pessoas(cfg)
+    admins = _admins(cfg)
+    alunos = sorted({r[0] for r in conn.execute("SELECT DISTINCT aluno FROM tarefas_horario")})
+    nomes = [p["nome"] for p in pessoas]
+    notifs = []
+    for tipo, meta in NOTIFICACOES_GERAIS.items():
+        dest, padrao = _destinatarios(cfg, tipo, pessoas)
+        if padrao and tipo == "horario":
+            dest = [a for a in alunos if a in nomes]           # padrão do horário: a pessoa com o nome do aluno
+        notifs.append({"id": tipo, "nome": meta["nome"], "descricao": meta["descricao"], "destinatarios": dest, "padrao": padrao})
+    return {
+        "raiz": sorted(_raiz()),
+        "admins": sorted(admins),
+        "pessoas": [dict(p, admin=p["email"] in admins, fixo=p["email"] in _raiz()) for p in pessoas],
+        "notificacoes": notifs,
+    }
+
+
+def admin_ver(ctx):
+    _exigir_admin(ctx)
+    return 200, _painel(ctx.db())
+
+
+def admin_gravar(ctx):
+    b = ctx.body
+    _so(b, {"admins", "notificacoes"})
+    conn = ctx.db()
+    cfg = _exigir_admin(ctx)
+    pessoas = _pessoas(cfg)
+    nomes = {p["nome"] for p in pessoas}
+    if "admins" not in b and "notificacoes" not in b:
+        raise ApiError(400, "vazio", "envia admins e/ou notificacoes")
+    novos: dict[str, str] = {}
+    if "admins" in b:
+        lista = b["admins"]
+        emails_pessoas = {p["email"] for p in pessoas if p["email"]}
+        if not isinstance(lista, list) or not all(isinstance(e, str) for e in lista) or len(lista) > 20:
+            raise ApiError(400, "admins_invalido", "admins tem de ser uma lista de e-mails")
+        escolhidos = {e.strip().lower() for e in lista} - _raiz()
+        desconhecidos = escolhidos - emails_pessoas
+        if desconhecidos:
+            raise ApiError(400, "admin_desconhecido", "só se pode escolher quem está registado com e-mail nas pessoas: " + ", ".join(sorted(desconhecidos)))
+        novos["Admins"] = ",".join(sorted(escolhidos))
+    if "notificacoes" in b:
+        nt = b["notificacoes"]
+        if not isinstance(nt, dict) or not set(nt) <= set(NOTIFICACOES_GERAIS):
+            raise ApiError(400, "notificacoes_invalido", "notificacoes: objeto com " + ", ".join(NOTIFICACOES_GERAIS))
+        for tipo, lista in nt.items():
+            if not isinstance(lista, list) or not all(isinstance(n, str) for n in lista):
+                raise ApiError(400, "notificacoes_invalido", f"{tipo}: lista de nomes")
+            if set(lista) - nomes:
+                raise ApiError(400, "pessoa_desconhecida", f"{tipo}: pessoa desconhecida: " + ", ".join(sorted(set(lista) - nomes)))
+            if any("," in n for n in lista):
+                raise ApiError(400, "nome_invalido", "nomes com vírgula não são suportados")
+            novos[f"Notif_{tipo}"] = ",".join(sorted(set(lista), key=lista.index)) or "-"
+    with _tx(conn):
+        for k, v in novos.items():
+            conn.execute("INSERT INTO tarefas_config (chave, valor) VALUES (?, ?) ON CONFLICT(chave) DO UPDATE SET valor=excluded.valor", (k, v))
+        conn.execute("INSERT INTO tarefas_auditoria (ts, acao, tarefa, pessoa, instancia_id) VALUES (?, ?, ?, ?, '')",
+                     (datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.000Z"), "admin", ", ".join(sorted(novos))[:200], ctx.user[:60]))
+    return 200, _painel(conn)
+
+
 def dados(ctx):
     conn = ctx.db()
     return 200, {
+        "souAdmin": ctx.user.lower() in _admins(_config(conn)),
         "tarefas": [_tarefa_json(r) for r in conn.execute("SELECT * FROM tarefas_tarefas ORDER BY rowid")],
         "instancias": [_inst_json(r) for r in conn.execute("SELECT * FROM tarefas_instancias ORDER BY rowid")],
         "config": [_config_json(r) for r in conn.execute("SELECT * FROM tarefas_config ORDER BY rowid")],
@@ -410,9 +534,14 @@ def gravar_config(ctx):
         raise ApiError(400, "config_invalida", "envia valores (objeto) e/ou apagar (lista), até 100 chaves")
     limpos = {}
     for k, v in valores.items():
+        if _RESERVADA.match(k):
+            raise ApiError(403, "chave_reservada", "as definições de administração alteram-se no painel de administração")
         if not _CHAVE.match(k) or _SEGREDO.search(k):
             raise ApiError(400, "chave_invalida", f"chave não permitida: {k[:40]!r}")
         limpos[k] = _txt(v if v is not None else "", "valor", 500)
+    for k in apagar:
+        if isinstance(k, str) and _RESERVADA.match(k):
+            raise ApiError(403, "chave_reservada", "as definições de administração alteram-se no painel de administração")
     for k in apagar:                      # apagar a password cifrada é permitido (remover uma pessoa); escrevê-la não
         if not isinstance(k, str) or not _CHAVE.match(k):
             raise ApiError(400, "chave_invalida", f"chave não permitida: {str(k)[:40]!r}")
@@ -477,6 +606,8 @@ def catalogo_piscina(ctx):
 ROUTES = [
     ("GET", r"^/tarefas/dados$", dados),
     ("GET", r"^/tarefas/horario$", horario),
+    ("GET", r"^/tarefas/admin$", admin_ver),
+    ("PUT", r"^/tarefas/admin$", admin_gravar),
     ("GET", r"^/tarefas/auditoria$", auditoria),
     ("POST", r"^/tarefas/auditoria$", registar_auditoria),
     ("POST", r"^/tarefas/tarefas$", criar_tarefa),

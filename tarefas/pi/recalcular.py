@@ -230,11 +230,6 @@ def registar_snooze(instancia_id: str, minutos: int = 60) -> datetime:
     return ate
 
 
-def nomes_pessoas(config: dict[str, Any]) -> list[str]:
-    import re
-    return [str(v).strip() for k, v in config.items() if re.fullmatch(r"Pessoa\d+_Nome", str(k).strip()) and str(v or "").strip()]
-
-
 def recalcular(sheets: SheetsClient | None = None, plan_only: bool = False) -> dict[str, int]:
     lock = FileLock("recalcular")
     if not lock.acquire(timeout_s=15):
@@ -295,9 +290,8 @@ def _recalcular_sem_lock(sheets: SheetsClient, plan_only: bool) -> dict[str, int
         if resultado in ("entregue", "presumivelmente_entregue") and not plan_only:
             sheets.update_cells("Instancias", inst["_rowIndex"], NotificacaoEnviada="TRUE")
 
-    # A piscina não tem responsável: vai para o tópico de TODAS as pessoas com utilizador ntfy (ou, se ninguém tem, para o
-    # tópico legado). Uma chave de estado por tópico, para cada mensagem poder ser cancelada no sítio certo.
-    topicos_piscina = sorted({t for t in (common.topico_da_pessoa(config, n) for n in nomes_pessoas(config)) if t}) or [None]
+    # A piscina não tem responsável: vai para quem o painel de administração escolher (por omissão todas as pessoas). Uma chave de estado por tópico, para cada mensagem poder ser cancelada no sítio certo.
+    topicos_piscina = common.topicos_de(config, common.destinatarios_geral(config, "piscina", common.nomes_pessoas(config)))
     chaves_piscina: set[str] = set()
     for linha in sheets.read_objects("Piscina"):
         alvo = alvo_piscina(linha, config)

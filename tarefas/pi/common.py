@@ -241,6 +241,31 @@ def topico_da_pessoa(config: dict[str, Any], nome: str) -> str | None:
     return None
 
 
+def nomes_pessoas(config: dict[str, Any]) -> list[str]:
+    return [str(v).strip() for k, v in config.items() if re.fullmatch(r"Pessoa\d+_Nome", str(k).strip()) and str(v or "").strip()]
+
+
+def destinatarios_geral(config: dict[str, Any], tipo: str, padrao: list[str]) -> list[str]:
+    """Quem recebe uma notificação geral (sem responsável: piscina, horário...). Config `Notif_<tipo>` (definida no painel
+    de administração): ausente = `padrao`, "-" = ninguém, "Bruno,Camila" = essas (as que existirem). Igual a
+    `_destinatarios` de dados/apps/tarefas.py."""
+    bruto = str(config.get(f"Notif_{tipo}") or "").strip()
+    if not bruto:
+        return list(padrao)
+    if bruto == "-":
+        return []
+    conhecidos = set(nomes_pessoas(config))
+    return [n.strip() for n in bruto.split(",") if n.strip() in conhecidos]
+
+
+def topicos_de(config: dict[str, Any], nomes: list[str]) -> list[str | None]:
+    """Tópicos distintos destas pessoas. Quem ainda não tem utilizador ntfy não recebe avisos gerais (não os leria);
+    só se NINGUÉM tiver, usa-se o tópico legado (None) para nada se perder. Sem destinatários: lista vazia."""
+    todos = {topico_da_pessoa(config, n) for n in nomes}
+    com_topico = sorted(t for t in todos if t)
+    return com_topico or ([None] if todos else [])
+
+
 NTFY_ICON_URL = "https://pereirabmd.github.io/escritorio-casa/tarefas/icon-192.png"
 
 

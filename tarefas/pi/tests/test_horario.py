@@ -87,5 +87,53 @@ class ReconciliarTests(unittest.TestCase):
         self.assertEqual(estado, {})
 
 
+CFG = {"Pessoa1_Nome": "Bruno", "Pessoa1_NtfyUser": "tarefas_bruno", "Pessoa2_Nome": "Camila", "Pessoa2_NtfyUser": "tarefas_camila"}
+
+
+class DestinatariosTests(unittest.TestCase):
+    def test_padrao_ninguem_e_lista(self):
+        self.assertEqual(common.destinatarios_geral(CFG, "piscina", ["Bruno", "Camila"]), ["Bruno", "Camila"])
+        self.assertEqual(common.destinatarios_geral({**CFG, "Notif_piscina": "-"}, "piscina", ["Bruno"]), [])
+        self.assertEqual(common.destinatarios_geral({**CFG, "Notif_piscina": "Camila,Fantasma"}, "piscina", ["Bruno"]), ["Camila"])
+
+    def test_topicos(self):
+        self.assertEqual(common.topicos_de(CFG, ["Camila", "Bruno"]), ["tarefas_bruno", "tarefas_camila"])
+        semuser = {"Pessoa1_Nome": "Bruno", "Pessoa2_Nome": "Camila", "Pessoa2_NtfyUser": "camila"}
+        self.assertEqual(common.topicos_de(semuser, ["Bruno", "Camila"]), ["tarefas_camila"])   # quem não tem utilizador fica de fora
+        self.assertEqual(common.topicos_de(semuser, ["Bruno"]), [None])                          # ninguém tem: tópico legado
+        self.assertEqual(common.topicos_de(CFG, []), [])
+
+
+class HorarioDestinatariosTests(unittest.TestCase):
+    agora = datetime(2026, 9, 28, 8, 0, tzinfo=TZ)
+
+    def correr(self, config, estado):
+        store = FakeSheetsClient({"Horario": [dict(a, _rowIndex=i + 2) for i, a in enumerate(HORARIO)]})
+        with mock.patch.object(common, "ntfy_publish", return_value={"id": "m"}) as pub, mock.patch.object(common, "ntfy_cancel") as canc:
+            horario.reconciliar(store, config, estado, self.agora, False, recalcular.reconciliar_chave, "http://x", dias=0)
+        return pub, canc
+
+    def test_por_omissao_so_a_pessoa_do_aluno(self):
+        estado = {}
+        pub, _ = self.correr(CFG, estado)
+        self.assertEqual([c.kwargs["topic"] for c in pub.call_args_list], ["tarefas_bruno"])
+
+    def test_admin_escolhe_varios_e_depois_retira(self):
+        estado = {}
+        pub, _ = self.correr({**CFG, "Notif_horario": "Bruno,Camila"}, estado)
+        self.assertEqual(sorted(c.kwargs["topic"] for c in pub.call_args_list), ["tarefas_bruno", "tarefas_camila"])
+        pub, canc = self.correr({**CFG, "Notif_horario": "Bruno"}, estado)          # tira a Camila
+        pub.assert_not_called()
+        canc.assert_called_once()
+        self.assertEqual(list(estado), ["horario:Bruno:2026-09-28:tarefas_bruno"])
+
+    def test_ninguem_cancela_tudo(self):
+        estado = {}
+        self.correr(CFG, estado)
+        _, canc = self.correr({**CFG, "Notif_horario": "-"}, estado)
+        canc.assert_called_once()
+        self.assertEqual(estado, {})
+
+
 if __name__ == "__main__":
     unittest.main()
