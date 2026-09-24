@@ -399,7 +399,7 @@
 <script src="https://cdn.jsdelivr.net/npm/animejs@4.5.0/dist/bundles/anime.umd.min.js" integrity="sha384-InMmvD3VoYcY7hGjSC80aLb2bNNE4CzpX+Eq6FVDlmB0IKgDvmfPw4UY8L/M++iG" crossorigin="anonymous"></script>
 
 <script>
-const APP_VERSION = 'Beta 54';
+const APP_VERSION = 'Beta 55';
 
 // ---------------------------------------------------------------
 // PISCINA — catálogo estático (não editável pela UI; ver PROJECT-CONTEXT.md)
@@ -463,13 +463,13 @@ function lsSet(chave, valor) {
 function lsRemove(chave) {
   try { localStorage.removeItem(chave); } catch (e) {}
 }
-// O token de acesso fica só na sessão do separador (sessionStorage), nunca em localStorage:
-// um XSS não o encontra depois de a app fechar e não sobrevive entre visitas.
+// O token de acesso (validade 1 h) fica em localStorage para a sessão sobreviver ao fecho da app; a renovação silenciosa
+// (ao abrir, 5 min antes de expirar, ao voltar à app e no 401) faz o resto. Ver `agendarRenovacaoToken`.
 function tokenGet(chave) {
-  try { return sessionStorage.getItem(chave); } catch (e) { return null; }
+  try { return localStorage.getItem(chave); } catch (e) { return null; }
 }
 function tokenSet(chave, valor) {
-  try { sessionStorage.setItem(chave, valor); } catch (e) {}
+  try { localStorage.setItem(chave, valor); } catch (e) {}
 }
 
 // Escapa texto introduzido por utilizadores (nomes de tarefas, pessoas,
@@ -881,19 +881,42 @@ function esconderLoginScreen() {
   document.getElementById('app').style.display = '';
 }
 
+/* Renovação de fundo do token (1 h de validade, sem refresh token no browser): 5 min antes de expirar e ao voltar à app.
+   Só atualiza o token (não recarrega os dados). Precisa da sessão Google ativa; se falhar, o 401 tenta uma vez e depois
+   mostra o login, como antes. */
+let renovacaoTimerToken = null, soAtualizarToken = false;
+function agendarRenovacaoToken() {
+  clearTimeout(renovacaoTimerToken);
+  const exp = Number(tokenGet('tarefas.tokenExpiry.v2') || 0);
+  if (!exp) return;
+  renovacaoTimerToken = setTimeout(renovarTokenDeFundo, Math.max(15000, exp - Date.now() - 240000));
+}
+async function renovarTokenDeFundo() {
+  if (!accessToken || !tokenClient || navigator.onLine === false || soAtualizarToken) return;
+  soAtualizarToken = true;
+  try { await renovarTokenSilenciosamente(); } finally { soAtualizarToken = false; }
+}
+function verificarSessaoToken() {
+  if (accessToken && Number(tokenGet('tarefas.tokenExpiry.v2') || 0) - Date.now() < 240000) renovarTokenDeFundo();
+}
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') verificarSessaoToken(); });
+window.addEventListener('online', verificarSessaoToken);
+
 function initAuth() {
   tokenClient = google.accounts.oauth2.initTokenClient({
     client_id: CLIENT_ID,
     scope: SCOPE,
     callback: (resp) => {
       if (resp.error) {
-        if (accessToken) { toast('Erro de autenticação'); return; } // já estava dentro da app — falha a meio, não bloqueia
+        if (accessToken) { if (!soAtualizarToken) toast('Erro de autenticação'); return; } // já estava dentro da app — falha a meio, não bloqueia
         mostrarLoginScreen();
         return;
       }
       accessToken = resp.access_token;
       tokenSet('tarefas.token.v2', accessToken);
       tokenSet('tarefas.tokenExpiry.v2', String(Date.now() + (resp.expires_in - 60) * 1000));
+      agendarRenovacaoToken();
+      if (soAtualizarToken) return;   // renovação de fundo: não recarrega os dados
       esconderLoginScreen();
       carregarTudo();
     }
@@ -929,14 +952,22 @@ const MSGS_API = {
 // Pede um token novo em silêncio (sem mostrar nada ao utilizador) e só
 // resolve depois de a resposta chegar — permite repetir o pedido original
 // a seguir com o token novo, em vez de desistir logo.
-function renovarTokenSilenciosamente() {
+async function esperarTokenClient(ms = 8000) {   // a app arranca com o token em cache antes de a biblioteca de login carregar
+  const t0 = Date.now();
+  while (!tokenClient && Date.now() - t0 < ms) await new Promise(r => setTimeout(r, 100));
+  return !!tokenClient;
+}
+async function renovarTokenSilenciosamente() {
+  if (!(await esperarTokenClient())) return false;
   return new Promise((resolve) => {
     if (!tokenClient) { resolve(false); return; }
     const callbackOriginal = tokenClient.callback;
     let respondido = false;
+    const limite = setTimeout(() => concluir(false), 15000);   // o GIS às vezes nunca responde
     const concluir = (ok) => {
       if (respondido) return;
       respondido = true;
+      clearTimeout(limite);
       tokenClient.callback = callbackOriginal;
       resolve(ok);
     };
@@ -2996,10 +3027,10 @@ window.addEventListener('load', () => {
   // Com sessão em cache a app arranca já (a API não precisa da biblioteca de login da Google para nada,
   // só para renovar a sessão); sem ela, espera pela biblioteca.
   lsRemove('tarefas.token'); lsRemove('tarefas.tokenExpiry');       // tokens antigos (sem e-mail)
-  lsRemove('tarefas.token.v2'); lsRemove('tarefas.tokenExpiry.v2'); // versão anterior guardava o token em localStorage
   const guardado = tokenGet('tarefas.token.v2');
   if (guardado && Date.now() < Number(tokenGet('tarefas.tokenExpiry.v2') || 0)) {
     accessToken = guardado;
+    agendarRenovacaoToken();
     carregarTudo();
   }
   const esperarGoogle = setInterval(() => {

@@ -519,14 +519,31 @@ function lerTokenGuardado(){
   }
 }
 
+let tokenExpiraEm = 0, renovandoLista = null;   // renovandoLista = resolvers à espera de uma renovação em curso
 function agendarRenovacaoSilenciosa(expiraEm){
+  tokenExpiraEm = expiraEm;
   if (renovacaoTimer) clearTimeout(renovacaoTimer);
   const antecedencia = 5 * 60 * 1000; // renova 5 min antes de expirar
   const espera = Math.max(10 * 1000, expiraEm - Date.now() - antecedencia);
-  renovacaoTimer = setTimeout(() => {
-    tokenClient.requestAccessToken({ prompt: '' }); // silencioso; sem popup
-  }, espera);
+  renovacaoTimer = setTimeout(() => { renovarAgora(); }, espera);
 }
+function fimRenovacao(ok){ const r = renovandoLista; renovandoLista = null; if (r) r.forEach(f => f(ok)); }
+// Renovação silenciosa (prompt:'', sem popup) que só atualiza o token: não recarrega a app. Devolve true/false.
+function renovarAgora(){
+  return new Promise(resolve => {
+    if (!tokenClient || !navigator.onLine){ resolve(false); return; }
+    if (renovandoLista){ renovandoLista.push(resolve); return; }
+    const t = setTimeout(() => fimRenovacao(false), 15000);
+    renovandoLista = [resolve, () => clearTimeout(t)];
+    try { tokenClient.requestAccessToken({ prompt: '' }); } catch (e){ fimRenovacao(false); }
+  });
+}
+// ao voltar à app (ou à rede) com o token a expirar (ou já expirado), renova-se logo
+function verificarSessao(){
+  if (accessToken && tokenClient && tokenExpiraEm - Date.now() < 5 * 60 * 1000) renovarAgora();
+}
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') verificarSessao(); });
+window.addEventListener('online', verificarSessao);
 
 /* ---------- Auth (Google Identity Services), mesmo padrão da app RTO ---------- */
 /* ---------- Deteção de offline ---------- */
@@ -560,7 +577,17 @@ window.onload = () => {
   tokenClient = google.accounts.oauth2.initTokenClient({
     client_id: CLIENT_ID,
     scope: SCOPES,
+    error_callback: () => { if (renovandoLista) fimRenovacao(false); },
     callback: (resp) => {
+      if (renovandoLista){   // renovação a meio da sessão: só atualiza o token, não recarrega os dados
+        if (!resp.error){
+          accessToken = resp.access_token;
+          guardarToken(accessToken, resp.expires_in || 3600);
+          agendarRenovacaoSilenciosa(Date.now() + (resp.expires_in || 3600) * 1000);
+        }
+        fimRenovacao(!resp.error);
+        return;
+      }
       if (resp.error){
         // pedido silencioso falhou (ex: sem sessão Google ativa) — mostra
         // login manual em vez de rebentar com erro.
@@ -618,7 +645,12 @@ async function fetchComLigacao(url, options){
     throw new Error(MSG_OFFLINE);
   }
   try {
-    return await fetch(url, options);
+    const res = await fetch(url, options);
+    if (res.status === 401 && options && !options._repetido && options.headers && options.headers.Authorization && await renovarAgora()){
+      // token expirado: uma renovação silenciosa e repete-se o pedido com o token novo
+      return await fetch(url, Object.assign({}, options, { _repetido: true, headers: Object.assign({}, options.headers, { Authorization: 'Bearer ' + accessToken }) }));
+    }
+    return res;
   } catch (err){
     // TypeError "Failed to fetch" costuma significar mesmo falta de rede
     throw new Error(MSG_OFFLINE);

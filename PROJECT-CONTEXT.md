@@ -386,6 +386,10 @@ Pedido do utilizador: liberdade total para reinventar o layout, só duas constra
 
 ---
 
+## Sessão Google persistente em todas as PWAs (2026-09-24)
+
+O token de acesso Google dura **1 h** e no browser (fluxo GIS) não há refresh token, por isso "persistente" = token em cache + renovação silenciosa (`requestAccessToken({prompt:''})`, sem popup; só funciona com a sessão Google ativa no browser e cookies de terceiros permitidos — no Safari/iOS falha muitas vezes e aparece o login). Padrão comum a **peso, RTO, convidados, bilhetes_cp, tarefas (Beta 55), ciclismo, receitas e enfermagem**: (1) token em `localStorage` (a Beta 50 do tarefas tinha-o em `sessionStorage`, o que piorava a persistência; revertido); (2) ao abrir, usa o token em cache e, se expirou, tenta renovar em silêncio antes de mostrar o login; (3) **renova 5 min antes de expirar** (timer); (4) renova ao voltar à app (`visibilitychange`) e ao voltar a rede (`online`); (5) se a API/Drive/Sheets responder **401**, renova UMA vez e repete o pedido, só depois mostra o login. A renovação de fundo só atualiza o token (não recarrega dados: flag `renovando`/`soAtualizarToken`; pedidos simultâneos partilham a mesma renovação; timeout de 15 s porque o GIS às vezes nunca responde). No ciclismo o `ensureDriveToken` tinha um bug (o callback ficava preso à 1.ª promessa); corrigido com lista de pendentes. O tarefas espera até 8 s pela biblioteca de login quando arranca com token em cache. Verificado no browser com um GIS falso: 401 → 1 renovação → pedido repetido com o token novo (peso, RTO, convidados, tarefas, bilhetes_cp, enfermagem, ciclismo). **Limite conhecido:** sem sessão Google ativa a renovação falha; persistência real exigiria uma sessão própria no Pi (login uma vez, o Pi guarda o refresh token) — não implementado.
+
 ## Horário escolar e ícone nas notificações (Beta 50–51, 2026-09-24)
 
 - **Deslizar removido** (Beta 51): o gesto de deslizar para concluir/saltar nas linhas de tarefa deixou de existir; ficam os botões. O pull-to-refresh mantém-se.

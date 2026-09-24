@@ -849,22 +849,47 @@
     return false;
   }
 
+  /* Sessão: o token Google dura 1 h e no browser não há refresh token. Renova-se em silêncio (prompt:"") ao precisar dele,
+     5 min antes de expirar e ao voltar à app; o consentimento (popup) só se pede quando uma ação do utilizador o exige. */
+  var tokenPendentes = null, tokenRenovTimer = null;
+  function fimToken(token, erro){
+    var p = tokenPendentes; tokenPendentes = null;
+    if(!p) return;
+    clearTimeout(p.limite);
+    p.forEach(function(x){ if(token){ x.resolve(token); } else { x.reject(erro); } });
+  }
+  function agendarRenovacaoToken(){
+    clearTimeout(tokenRenovTimer);
+    if(!state.tokenExpiresAt) return;
+    tokenRenovTimer = setTimeout(function(){ if(navigator.onLine && state.tokenClient){ ensureToken(false).catch(function(){}); } },
+      Math.max(15000, state.tokenExpiresAt - Date.now() - 240000));
+  }
+  function verificarSessaoToken(){
+    if(state.accessToken && state.tokenClient && navigator.onLine && state.tokenExpiresAt - Date.now() < 240000){
+      ensureToken(false).catch(function(){});
+    }
+  }
+  document.addEventListener("visibilitychange", function(){ if(document.visibilityState === "visible"){ verificarSessaoToken(); } });
+  window.addEventListener("online", verificarSessaoToken);
+
   function ensureToken(interactive){
     return new Promise(function(resolve, reject){
+      if(tokenPendentes){ tokenPendentes.push({ resolve: resolve, reject: reject }); return; }
+      tokenPendentes = [{ resolve: resolve, reject: reject }];
+      tokenPendentes.limite = setTimeout(function(){ fimToken(null, new Error("timeout")); }, interactive ? 120000 : 15000);
       state.tokenClient.callback = function(resp){
-        if(resp.error){ reject(resp); return; }
+        if(resp.error){ fimToken(null, resp); return; }
         var expiresAt = Date.now() + (resp.expires_in * 1000) - 60000;
         state.accessToken = resp.access_token;
         state.tokenExpiresAt = expiresAt;
         try{ localStorage.setItem(TOKEN_KEY, JSON.stringify({ access_token: resp.access_token, expires_at: expiresAt })); }catch(e){}
-        resolve(resp.access_token);
+        agendarRenovacaoToken();
+        fimToken(resp.access_token);
       };
-      state.tokenClient.error_callback = function(err){
-        reject(err);
-      };
+      state.tokenClient.error_callback = function(err){ fimToken(null, err); };
       try{
         state.tokenClient.requestAccessToken({ prompt: interactive ? "consent" : "" });
-      }catch(e){ reject(e); }
+      }catch(e){ fimToken(null, e); }
     });
   }
 
@@ -2029,6 +2054,7 @@
     var gisReady = function(){
       initTokenClient();
       if(loadCachedToken()){
+        agendarRenovacaoToken();
         bootAuthenticated();
         return;
       }

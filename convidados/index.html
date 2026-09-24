@@ -751,6 +751,37 @@ function cacheToken(access_token, expires_in){
   }));
 }
 
+/* ---------- Sessão: renovação silenciosa ----------
+   O token Google dura 1 h e no browser não há refresh token. Renova-se 5 min antes de expirar, ao voltar à app
+   (visibilitychange/online) e UMA vez se a API responder 401. Só funciona com a sessão Google ativa no browser
+   (prompt:""); se falhar, aparece o login como antes. */
+let renovacaoTimer = null, renovando = null;   // renovando = resolvers à espera de uma renovação em curso
+function expiraEm(){
+  try{ const t = JSON.parse(localStorage.getItem(TOKEN_KEY) || "null"); return (t && t.expires_at) || 0; }catch(e){ return 0; }
+}
+function agendarRenovacao(){
+  clearTimeout(renovacaoTimer);
+  const exp = expiraEm();
+  if(!exp) return;
+  renovacaoTimer = setTimeout(() => { renovarSilencioso(); }, Math.max(15000, exp - Date.now() - 300000));
+}
+function fimRenovacao(ok){ const r = renovando; renovando = null; if(r) r.forEach(f => f(ok)); }
+function renovarSilencioso(){
+  return new Promise(resolve => {
+    if(!(window.google && google.accounts && google.accounts.oauth2) || navigator.onLine === false){ resolve(false); return; }
+    if(renovando){ renovando.push(resolve); return; }
+    const t = setTimeout(() => fimRenovacao(false), 15000);
+    renovando = [resolve, () => clearTimeout(t)];
+    try{ ensureTokenClient().requestAccessToken({ prompt: "" }); }catch(e){ fimRenovacao(false); }
+  });
+}
+function verificarSessao(){
+  if(!accessToken) return;
+  if(expiraEm() - Date.now() < 300000) renovarSilencioso();
+}
+document.addEventListener("visibilitychange", () => { if(document.visibilityState === "visible") verificarSessao(); });
+window.addEventListener("online", verificarSessao);
+
 // Verdadeiro só enquanto decorre a tentativa silenciosa (prompt:"") disparada
 // sozinha ao abrir a app — controla se uma falha mostra o botão em silêncio
 // (silenciosa, esperada) ou com um toast de erro (falha de um clique real).
@@ -761,7 +792,13 @@ function ensureTokenClient(){
   tokenClient = google.accounts.oauth2.initTokenClient({
     client_id: CLIENT_ID,
     scope: SCOPE,
+    error_callback: () => { if(renovando) fimRenovacao(false); },
     callback: (resp) => {
+      if(renovando){   // renovação a meio da sessão: só atualiza o token, não recarrega a app
+        if(!resp.error){ accessToken = resp.access_token; cacheToken(resp.access_token, resp.expires_in || 3600); agendarRenovacao(); }
+        fimRenovacao(!resp.error);
+        return;
+      }
       const wasSilent = silentAuthAttempt;
       silentAuthAttempt = false;
       if(resp.error){
@@ -772,6 +809,7 @@ function ensureTokenClient(){
       }
       accessToken = resp.access_token;
       cacheToken(resp.access_token, resp.expires_in || 3600);
+      agendarRenovacao();
       startApp();
     }
   });
@@ -783,6 +821,7 @@ function initAuth(){
   const cached = getCachedToken();
   if(cached){
     accessToken = cached;
+    agendarRenovacao();
     authSpinner.style.display = "none";
     startApp();
     return;
@@ -812,7 +851,7 @@ const MSGS_API = {
   429: "Demasiados pedidos — tenta daqui a um minuto.",
   502: "Servidor indisponível.", 503: "Servidor ocupado — tenta de novo.", 504: "Servidor indisponível."
 };
-async function api(method, path, body){
+async function api(method, path, body, repetir = true){
   if(navigator.onLine === false) throw new ApiErro("Sem ligação à internet", 0);
   const ctl = new AbortController();
   const timer = setTimeout(() => ctl.abort(), 15000);
@@ -829,6 +868,7 @@ async function api(method, path, body){
     clearTimeout(timer);
   }
   if(res.status === 401){
+    if(repetir && await renovarSilencioso()) return api(method, path, body, false);   // uma vez, com o token novo
     localStorage.removeItem(TOKEN_KEY);
     accessToken = null;
     showAuthScreen();

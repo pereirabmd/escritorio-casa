@@ -119,7 +119,7 @@ try {
     console.log('  problemas:', JSON.stringify(problems.slice(0, 4)));
   }
   check('a app arranca e mostra conteúdo', await ev(`document.querySelector('#view').innerText.length>40`));
-  check('título e versão', (await ev('document.title')) === 'Bilhetes CP' && (await ev('__BCP.VERSION')) === 'v2.0.1');
+  check('título e versão', (await ev('document.title')) === 'Bilhetes CP' && (await ev('__BCP.VERSION')) === 'v2.0.2');
   check('sem scroll horizontal', await ev(`document.documentElement.scrollWidth<=innerWidth && document.querySelector('#view').scrollWidth<=document.querySelector('#view').clientWidth+1`));
   const home = await text('#view');
   check('ação em destaque: falta configurar a semana seguinte', /Falta configurar a semana de \d\d\/\d\d a \d\d\/\d\d/.test(home), home.slice(0, 80));

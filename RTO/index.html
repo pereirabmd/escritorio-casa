@@ -357,6 +357,37 @@ function clearSavedToken(){
   } catch(e){}
 }
 
+/* ---------- Sessão: renovação silenciosa ----------
+   O token Google dura 1 h e no browser não há refresh token. Por isso: renova-se 5 min antes de expirar, ao voltar
+   à app (visibilitychange/online) e UMA vez se a API responder 401. Só funciona com a sessão Google ativa no browser
+   (prompt:''); se falhar, aparece o login como antes. */
+let renovacaoTimer = null, renovando = null;   // renovando = resolvers à espera de uma renovação em curso
+function agendarRenovacao(){
+  clearTimeout(renovacaoTimer);
+  let exp = 0;
+  try{ exp = Number(localStorage.getItem(TOKEN_EXPIRY_KEY) || 0); } catch(e){}
+  if (!exp) return;
+  renovacaoTimer = setTimeout(() => { renovarSilencioso(); }, Math.max(15000, exp - Date.now() - 180000));
+}
+function fimRenovacao(ok){ const r = renovando; renovando = null; if (r) r.forEach(f => f(ok)); }
+function renovarSilencioso(){
+  return new Promise(resolve => {
+    if (!tokenClient || !estaOnline()){ resolve(false); return; }
+    if (renovando){ renovando.push(resolve); return; }
+    const t = setTimeout(() => fimRenovacao(false), 15000);
+    renovando = [resolve, () => clearTimeout(t)];
+    try{ tokenClient.requestAccessToken({ prompt: '' }); } catch(e){ fimRenovacao(false); }
+  });
+}
+function verificarSessao(){
+  if (!accessToken || !tokenClient) return;
+  let exp = 0;
+  try{ exp = Number(localStorage.getItem(TOKEN_EXPIRY_KEY) || 0); } catch(e){}
+  if (exp - Date.now() < 180000) renovarSilencioso();
+}
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') verificarSessao(); });
+window.addEventListener('online', verificarSessao);
+
 /* ---------- Cópia local dos últimos dados sincronizados (só leitura, para modo offline) ---------- */
 const CACHE_KEY_DAYS = 'rto_cache_daydata_v2';
 const CACHE_KEY_NOTES = 'rto_cache_notas_v2';
@@ -436,7 +467,13 @@ window.onload = () => {
     tokenClient = google.accounts.oauth2.initTokenClient({
       client_id: CLIENT_ID,
       scope: SCOPES,
+      error_callback: () => { if (renovando) fimRenovacao(false); },
       callback: (resp) => {
+        if (renovando){   // renovação silenciosa a meio da sessão: só atualiza o token, não recarrega a app
+          if (!resp.error){ accessToken = resp.access_token; saveToken(accessToken, resp.expires_in); agendarRenovacao(); }
+          fimRenovacao(!resp.error);
+          return;
+        }
         if (resp.error){
           // sessão silenciosa falhou (ou é a 1ª vez) — mostra o botão normal
           document.getElementById('authChecking').classList.add('hidden');
@@ -445,6 +482,7 @@ window.onload = () => {
         }
         accessToken = resp.access_token;
         saveToken(accessToken, resp.expires_in);
+        agendarRenovacao();
         onSignedIn();
       }
     });
@@ -504,6 +542,7 @@ window.onload = () => {
   const savedToken = loadSavedToken();
   if (savedToken){
     accessToken = savedToken;
+    agendarRenovacao();
     onSignedIn();
   } else if (tokenClient) {
     // tentativa silenciosa: se a pessoa já tiver sessão Google ativa e tiver autorizado antes,
@@ -765,7 +804,7 @@ const MSGS_API = {
   429: 'Demasiados pedidos — tenta daqui a um minuto.',
   502: 'Servidor indisponível.', 503: 'Servidor ocupado — tenta de novo.', 504: 'Servidor indisponível.',
 };
-async function api(method, path, body){
+async function api(method, path, body, repetir = true){
   if (!navigator.onLine) throw new ApiErro('Sem ligação à internet', 0);
   const ctl = new AbortController();
   const timer = setTimeout(() => ctl.abort(), 15000);
@@ -781,7 +820,10 @@ async function api(method, path, body){
   } finally {
     clearTimeout(timer);
   }
-  if (res.status === 401){ onSessaoExpirada(); throw new ApiErro('Sessão expirada', 401); }
+  if (res.status === 401){
+    if (repetir && await renovarSilencioso()) return api(method, path, body, false);   // uma vez, com o token novo
+    onSessaoExpirada(); throw new ApiErro('Sessão expirada', 401);
+  }
   let dados = null;
   try{ dados = await res.json(); } catch(e){}
   if (!res.ok){

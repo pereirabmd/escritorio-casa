@@ -2115,32 +2115,70 @@
     var opts = options || {};
     opts.headers = Object.assign({}, opts.headers || {}, {'Authorization': 'Bearer ' + token});
     return fetch(url, opts).then(function(res){
-      if (res.status === 401){ lsRemove(DRIVE_TOKEN_KEY); throw new Error('unauthorized'); }
+      if (res.status === 401){
+        lsRemove(DRIVE_TOKEN_KEY);
+        if (options && options._repetido) throw new Error('unauthorized');
+        // uma renovação silenciosa e repete-se o pedido com o token novo
+        return pedirDriveToken().then(function(){
+          var novo = Object.assign({}, options || {}); novo._repetido = true; novo.headers = Object.assign({}, (options && options.headers) || {});
+          return driveFetch(url, novo);
+        }).catch(function(){ throw new Error('unauthorized'); });
+      }
       return res;
     });
   }
 
-  function ensureDriveToken(){
-    var cached = getCachedDriveToken();
-    if (cached) return Promise.resolve(cached);
+  /* Sessão: o token Google dura 1 h e no browser não há refresh token. Pede-se um novo em silêncio (prompt:'') ao abrir,
+     5 min antes de expirar, ao voltar à app e uma vez se o Drive responder 401. Só funciona com a sessão Google ativa. */
+  var drivePendentes = null, driveRenovTimer = null;
+  function pedirDriveToken(){
     return new Promise(function(resolve, reject){
-      if (!window.google || !google.accounts || !google.accounts.oauth2){
-        reject(new Error('gis-not-ready')); return;
-      }
+      if (!window.google || !google.accounts || !google.accounts.oauth2){ reject(new Error('gis-not-ready')); return; }
+      if (drivePendentes){ drivePendentes.push({resolve: resolve, reject: reject}); return; }
+      var limite = setTimeout(function(){ fimDrive(null, new Error('timeout')); }, 15000);
+      drivePendentes = [{resolve: resolve, reject: reject}];
+      drivePendentes.limite = limite;
       if (!driveTokenClient){
         driveTokenClient = google.accounts.oauth2.initTokenClient({
           client_id: DRIVE_CLIENT_ID,
           scope: DRIVE_SCOPE,
+          error_callback: function(err){ fimDrive(null, err || new Error('popup')); },
           callback: function(resp){
-            if (resp.error){ reject(resp); return; }
+            if (resp.error){ fimDrive(null, resp); return; }
             cacheDriveToken(resp.access_token, resp.expires_in);
-            resolve(resp.access_token);
+            agendarRenovacaoDrive();
+            fimDrive(resp.access_token);
           }
         });
       }
-      driveTokenClient.requestAccessToken({prompt: ''});
+      try { driveTokenClient.requestAccessToken({prompt: ''}); } catch(e){ fimDrive(null, e); }
     });
   }
+  function fimDrive(token, erro){
+    var p = drivePendentes; drivePendentes = null;
+    if (!p) return;
+    clearTimeout(p.limite);
+    p.forEach(function(x){ if (token) x.resolve(token); else x.reject(erro); });
+  }
+  function ensureDriveToken(){
+    var cached = getCachedDriveToken();
+    if (cached) return Promise.resolve(cached);
+    return pedirDriveToken();
+  }
+  function agendarRenovacaoDrive(){
+    clearTimeout(driveRenovTimer);
+    var obj = null;
+    try { obj = JSON.parse(lsGet(DRIVE_TOKEN_KEY) || 'null'); } catch(e){}
+    if (!obj || typeof obj.expiresAt !== 'number') return;
+    driveRenovTimer = setTimeout(function(){ if (navigator.onLine) pedirDriveToken().catch(function(){}); }, Math.max(15000, obj.expiresAt - Date.now() - 240000));
+  }
+  function verificarSessaoDrive(){
+    var obj = null;
+    try { obj = JSON.parse(lsGet(DRIVE_TOKEN_KEY) || 'null'); } catch(e){}
+    if (obj && navigator.onLine && (typeof obj.expiresAt !== 'number' || obj.expiresAt - Date.now() < 240000)) pedirDriveToken().catch(function(){});
+  }
+  document.addEventListener('visibilitychange', function(){ if (document.visibilityState === 'visible') verificarSessaoDrive(); });
+  window.addEventListener('online', verificarSessaoDrive);
 
   function findCiclismoFolder(){
     var q = encodeURIComponent("name = 'ciclismo' and mimeType = 'application/vnd.google-apps.folder' and trashed = false");
@@ -2526,7 +2564,17 @@
 
   if (getCachedDriveToken()){
     $('driveBtn').classList.add('linked');
+    agendarRenovacaoDrive();
     syncDrive(false);
+  } else if (lsGet(DRIVE_TOKEN_KEY)){
+    // já houve sessão mas o token expirou: tenta renová-la em silêncio (espera até 10 s pela biblioteca de login)
+    var tentativas = 0;
+    var esperar = setInterval(function(){
+      if (window.google && google.accounts && google.accounts.oauth2){
+        clearInterval(esperar);
+        syncDrive(false).catch(function(){});
+      } else if (++tentativas > 50){ clearInterval(esperar); }
+    }, 200);
   }
   setInterval(function(){
     if (getCachedDriveToken() && navigator.onLine) syncDrive(false);

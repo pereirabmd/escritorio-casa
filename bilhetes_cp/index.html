@@ -275,7 +275,7 @@ body.kb-open #toast{--toast-b:84px}
    Nenhuma credencial neste ficheiro: as chaves da CP (só para preencher
    horários) ficam no localStorage do telemóvel, importadas por um link.
    ===================================================================== */
-const VERSION = 'v2.0.1';
+const VERSION = 'v2.0.2';
 const CLIENT_ID = '108256538530-fgunbb52s7f3s9aurfpjtaf01v8fjbph.apps.googleusercontent.com';
 const API_URL = 'https://bmdpereira.duckdns.org/dados-api';
 // só a identidade: a API reconhece quem chama pelo e-mail do token (a app já não acede ao Google Sheets)
@@ -426,11 +426,24 @@ function ensureTokenClient(onOk, onFail) {
     if (resp.error) return onFail(resp);
     accessToken = resp.access_token;
     lsSet(TOKEN_KEY, JSON.stringify({ access_token: accessToken, scope: SCOPE, expires_at: Date.now() + (resp.expires_in || 3600) * 1000 }));
+    agendarRenovacao();
     onOk();
   };
   tokenClient.error_callback = (err) => onFail(err || { error: 'popup' });
   return tokenClient;
 }
+/* Sessão: o token Google dura 1 h e no browser não há refresh token. Renova-se em silêncio 5 min antes de expirar e ao voltar
+   à app (além do retry único no 401, em apiCall). Só funciona com a sessão Google ativa; se falhar, o login aparece como antes. */
+let renovacaoTimer = null;
+const expiraEm = () => { try { return JSON.parse(lsGet(TOKEN_KEY) || 'null')?.expires_at || 0; } catch { return 0; } };
+function agendarRenovacao() {
+  clearTimeout(renovacaoTimer);
+  const exp = expiraEm();
+  if (exp) renovacaoTimer = setTimeout(() => { if (navigator.onLine) requestToken('').catch(() => { }); }, Math.max(15000, exp - Date.now() - 300000));
+}
+function verificarSessao() { if (accessToken && navigator.onLine && expiraEm() - Date.now() < 300000) requestToken('').catch(() => { }); }
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') verificarSessao(); });
+window.addEventListener('online', verificarSessao);
 const requestToken = (prompt) => new Promise((res, rej) => ensureTokenClient(res, rej).requestAccessToken({ prompt }));
 function showAuth(msg) { $('#authMsg').textContent = msg || 'Entra com a conta Google autorizada.'; $('#auth').hidden = false; $('#btnSignIn').disabled = false; }
 const hideAuth = () => { $('#auth').hidden = true; };
@@ -441,7 +454,7 @@ async function initGapi() {   // (nome mantido) já só espera pela biblioteca d
 }
 async function ensureAuth(interactive) {
   const c = cachedToken();
-  if (c) { accessToken = c; return true; }
+  if (c) { accessToken = c; agendarRenovacao(); return true; }
   try { await requestToken(interactive ? (lsGet(TOKEN_KEY) ? '' : 'consent') : ''); return true; } catch { return false; }
 }
 
