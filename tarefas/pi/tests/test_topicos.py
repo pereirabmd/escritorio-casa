@@ -71,6 +71,7 @@ class ClickTests(unittest.TestCase):
     def test_url_por_separador(self):
         self.assertTrue(recalcular.url_tab("horario").endswith("/tarefas/#horario"))
         self.assertTrue(recalcular.url_tab("hoje").endswith("#hoje"))
+        self.assertTrue(recalcular.url_tab("hoje", "I0076").endswith("/tarefas/#hoje/I0076"))
 
     def test_mudar_o_click_reagenda_e_o_estado_guarda_o_click(self):
         estado = {"k": {"message_id": "m1", "alvo": self.alvo.isoformat(), "topico": "tarefas"}}      # estado antigo, sem click

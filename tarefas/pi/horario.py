@@ -88,7 +88,7 @@ def reconciliar(store, config: dict[str, Any], estado: dict[str, dict], agora: d
                 if (alvo is not None and topicos) or chave_t in estado:
                     chaves_vivas.add(chave_t)
                     resultados.append(reconciliar_chave(chave_t, alvo if topicos else None, titulo, corpo, None, estado, agora,
-                                                        plan_only, click=url_app, topico=topico))
+                                                        plan_only, click=f"{url_app}/{dia.isoweekday()}", topico=topico))
     # avisos de dias/alunos que deixaram de existir (horário apagado ou alterado): cancelam-se
     for chave in [k for k in estado if k.startswith(PREFIXO) and k not in chaves_vivas]:
         resultados.append(reconciliar_chave(chave, None, "", "", None, estado, agora, plan_only))

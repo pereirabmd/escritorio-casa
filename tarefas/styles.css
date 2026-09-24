@@ -334,3 +334,7 @@ table.hor-semana{border-collapse:collapse; width:100%; font-size:12px;}
 .adm-linha em.adm-aviso{color:var(--warning);}
 .adm-notif{padding:8px 0; border-top:1px solid var(--border);}
 .adm-notif:first-of-type{border-top:none;}
+
+/* Ligação profunda (toque numa notificação): realça o item durante uns segundos */
+@keyframes linkflash{0%,60%{box-shadow:0 0 0 3px var(--primary); background:var(--primary-light);}100%{box-shadow:0 0 0 0 transparent;}}
+.destaque-link{animation:linkflash 3.6s ease-out; border-radius:12px;}

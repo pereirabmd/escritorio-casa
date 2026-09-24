@@ -399,7 +399,7 @@
 <script src="https://cdn.jsdelivr.net/npm/animejs@4.5.0/dist/bundles/anime.umd.min.js" integrity="sha384-InMmvD3VoYcY7hGjSC80aLb2bNNE4CzpX+Eq6FVDlmB0IKgDvmfPw4UY8L/M++iG" crossorigin="anonymous"></script>
 
 <script>
-const APP_VERSION = 'Beta 56';
+const APP_VERSION = 'Beta 57';
 
 // ---------------------------------------------------------------
 // PISCINA — catálogo estático (não editável pela UI; ver PROJECT-CONTEXT.md)
@@ -1120,6 +1120,45 @@ async function carregarTudo() {
 // ---------------------------------------------------------------
 // RENDER — HOJE
 // ---------------------------------------------------------------
+// ---------------------------------------------------------------
+// LIGAÇÃO PROFUNDA — o toque numa notificação leva à tarefa/cartão concreto:
+//   #hoje/<id da instância>   #piscina/<id>   #horario/<dia ISO 1-7>   (só #<separador> também vale)
+// Os dados chegam depois do arranque: tenta-se no fim de cada renderTudo e a ligação gasta-se numa só tentativa com dados.
+// ---------------------------------------------------------------
+let ligacaoPendente = null;
+function lerLigacao() {
+  const [tab, alvo] = location.hash.replace('#', '').split('/');
+  if (!tab || !document.getElementById('tab-' + tab)) return null;
+  return { tab, alvo: alvo ? decodeURIComponent(alvo) : null };
+}
+function destacarElemento(el) {
+  el.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  el.classList.remove('destaque-link');
+  void el.offsetWidth;                       // reinicia a animação se já estava marcado
+  el.classList.add('destaque-link');
+  setTimeout(() => el.classList.remove('destaque-link'), 3600);
+}
+function aplicarLigacaoPendente() {
+  const l = ligacaoPendente;
+  if (!l || !l.alvo) { ligacaoPendente = null; return; }
+  ligacaoPendente = null;
+  if (l.tab === 'hoje') {
+    const achar = () => document.querySelector(`#tab-hoje [data-flip-id="inst-${CSS.escape(l.alvo)}"]`);
+    let el = achar();
+    if (!el && filtroPessoaHoje !== 'todas') { filtroPessoaHoje = 'todas'; renderHoje(); el = achar(); }   // o filtro escondia-a
+    if (el) destacarElemento(el);
+  } else if (l.tab === 'piscina') {
+    const el = document.getElementById('piscina-card-' + l.alvo);
+    if (!el) return;
+    const sub = el.closest('.piscina-subtab');
+    if (sub && sub.style.display === 'none') document.querySelector(`[data-piscinasub="${sub.dataset.sub}"]`)?.click();
+    destacarElemento(el);
+  } else if (l.tab === 'horario') {
+    const dia = Number(l.alvo);
+    if (dia >= 1 && dia <= 7) { horarioDia = dia; horarioVista = 'dia'; renderHorario(); }
+  }
+}
+
 function renderTudo() {
   renderHoje();
   renderCalendario();
@@ -1133,6 +1172,7 @@ function renderTudo() {
   renderPiscina();
   renderHorario();
   renderAdmin();
+  aplicarLigacaoPendente();
 }
 
 // ---------------------------------------------------------------
@@ -1486,7 +1526,7 @@ function renderPiscinaCard(item, estacao) {
     : '';
 
   return `
-    <div class="card${ehHojeOuAntes ? ' card-destaque' : ''}">
+    <div class="card${ehHojeOuAntes ? ' card-destaque' : ''}" id="piscina-card-${esc(item.id)}">
       <div class="task-nome">${esc(item.nome)}${nota}</div>
       <div class="task-meta">${statusHtml}</div>
       ${notaLonga}
@@ -1502,7 +1542,7 @@ function renderPiscinaCardLog(item) {
   const statusHtml = ultima ? `Última vez: ${esc(formatarDataCurta(ultima))}` : 'Ainda não registada';
 
   return `
-    <div class="card">
+    <div class="card" id="piscina-card-${esc(item.id)}">
       <div class="task-nome">${esc(item.nome)}${nota}</div>
       <div class="task-meta">${statusHtml}</div>
       <button type="button" class="btn secondary" id="btn-piscina-${item.id}" style="margin-top:8px; width:auto; padding:8px 14px; font-size:12.5px;">Registar agora</button>
@@ -3012,14 +3052,21 @@ window.addEventListener('load', () => {
   verificarSaude();
   atualizarBannerOffline();
 
-  // Ligação profunda: as notificações abrem a app com #hoje / #piscina / #horario / #config e isso ganha à última aba usada.
-  const tabDoHash = () => { const h = location.hash.replace('#', ''); return document.getElementById('tab-' + h) ? h : null; };
+  // Ligação profunda: as notificações abrem a app com #hoje/<instância>, #piscina/<id>, #horario/<dia>, #config... e isso ganha à última aba usada.
+  const tabDoHash = () => { const l = lerLigacao(); return l ? l.tab : null; };
+  ligacaoPendente = lerLigacao();
   const ultimaTab = tabDoHash() || lsGet('tarefas.ultimaTab');
   if (ultimaTab && document.getElementById('tab-' + ultimaTab)) {
     ativarTab(ultimaTab, { animar: false });
   }
   // app já aberta em segundo plano quando se toca noutra notificação: o URL só muda o fragmento
-  window.addEventListener('hashchange', () => { const h = tabDoHash(); if (h) ativarTab(h); });
+  window.addEventListener('hashchange', () => {
+    const l = lerLigacao();
+    if (!l) return;
+    ligacaoPendente = l;
+    ativarTab(l.tab);
+    aplicarLigacaoPendente();
+  });
 
   if ('serviceWorker' in navigator) {
     // Único service worker da app — agora só cache da app shell; a entrega

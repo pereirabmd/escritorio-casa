@@ -37,10 +37,11 @@ MARGEM_SEGURANCA_HORAS = 6  # nunca tentar agendar mais perto do limite do ntfy 
 URL_APP = common.env("TAREFAS_APP_URL", "https://pereirabmd.github.io/escritorio-casa/tarefas/")
 
 
-def url_tab(tab: str) -> str:
-    """Toque na notificação: abre a app já no separador a que a mensagem se refere (`#hoje`, `#piscina`, `#horario`).
+def url_tab(tab: str, alvo: str | None = None) -> str:
+    """Toque na notificação: abre a app já no separador a que a mensagem se refere (`#hoje`, `#piscina`, `#horario`) e, com `alvo`,
+    no item concreto (`#hoje/<instância>`, `#piscina/<id>`, `#horario/<dia ISO>`), que a app realça.
     Só o fragmento muda (o caminho é o mesmo), por isso a app instalada continua a reconhecer o URL como seu."""
-    return f"{URL_APP}#{tab}"
+    return f"{URL_APP}#{tab}" + (f"/{alvo}" if alvo else "")
 
 
 # ---------------------------------------------------------------------------
@@ -291,7 +292,7 @@ def _recalcular_sem_lock(sheets: SheetsClient, plan_only: bool) -> dict[str, int
         corpo = f"{inst.get('Pessoa')}: é a vez de \"{nome_tarefa}\" hoje."
         acoes = acoes_notificacao(instancia_id) if alvo is not None else None
 
-        resultado = reconciliar_chave(chave, alvo, titulo, corpo, acoes, estado, agora, plan_only, click=url_tab("hoje"),
+        resultado = reconciliar_chave(chave, alvo, titulo, corpo, acoes, estado, agora, plan_only, click=url_tab("hoje", instancia_id),
                                       topico=common.topico_da_pessoa(config, str(inst.get('Pessoa', ''))))
         contar(resultado)
         if resultado in ("entregue", "presumivelmente_entregue") and not plan_only:
@@ -310,7 +311,7 @@ def _recalcular_sem_lock(sheets: SheetsClient, plan_only: bool) -> dict[str, int
         for topico in topicos_piscina:
             chave = f"piscina:{linha.get('ID')}" + (f":{topico}" if topico else "")
             chaves_piscina.add(chave)
-            resultado = reconciliar_chave(chave, alvo, titulo, corpo, None, estado, agora, plan_only, click=url_tab("piscina"), topico=topico)
+            resultado = reconciliar_chave(chave, alvo, titulo, corpo, None, estado, agora, plan_only, click=url_tab("piscina", str(linha.get("ID"))), topico=topico)
             contar(resultado)
             entregue = entregue or resultado in ("entregue", "presumivelmente_entregue")
         if entregue and not plan_only:

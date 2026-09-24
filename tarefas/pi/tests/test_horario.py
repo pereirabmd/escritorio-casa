@@ -65,6 +65,10 @@ class ReconciliarTests(unittest.TestCase):
         self.assertEqual(res, ["agendado"])                               # só amanhã
         pub.assert_called_once()
 
+    def test_click_abre_o_dia_do_aviso(self):
+        _, estado, pub, _ = self.correr(datetime(2026, 9, 28, 8, 0, tzinfo=TZ))
+        self.assertEqual([c.kwargs["click"] for c in pub.call_args_list], ["http://x/1", "http://x/2"])   # 2.ª e 3.ª feira
+
     def test_segunda_passagem_nao_repete(self):
         agora = datetime(2026, 9, 28, 8, 0, tzinfo=TZ)
         _, estado, _, _ = self.correr(agora)
