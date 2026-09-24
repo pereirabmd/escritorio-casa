@@ -13,6 +13,21 @@ Environment=PYTHONUNBUFFERED=1
 ExecStart=/home/bpereira/tarefas/pi/.venv/bin/python servidor.py
 Restart=always
 RestartSec=10
+# Endurecimento (systemd-analyze security: 2.5 OK). Só escreve onde precisa.
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/home/bpereira/tarefas/pi /home/bpereira/dados/data
+PrivateTmp=true
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+RestrictNamespaces=true
+LockPersonality=true
+CapabilityBoundingSet=
+SystemCallFilter=@system-service
 
 [Install]
 WantedBy=multi-user.target

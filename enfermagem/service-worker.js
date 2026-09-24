@@ -10,7 +10,7 @@
 // falhar e não houver nada em cache, devolve-se sempre uma resposta válida
 // (nunca undefined), para nunca causar ERR_FAILED.
 
-const CACHE_NAME = 'turnos-shell-v2';
+const CACHE_NAME = 'turnos-shell-v3';
 const APP_SHELL = [
   './index.html',
   './icon-192.png',

@@ -2,6 +2,8 @@
 <html lang="pt-PT">
 <head>
 <meta charset="UTF-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://accounts.google.com https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://accounts.google.com/gsi/style; font-src https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' https://bmdpereira.duckdns.org https://accounts.google.com https://www.googleapis.com https://api.open-meteo.com https://oauth2.googleapis.com; frame-src https://accounts.google.com; worker-src 'self' blob:; object-src 'none'; base-uri 'none'; form-action 'self'">
+<meta name="referrer" content="no-referrer">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#0E5A6E">
 <title>Ciclismo · Plano de Treino</title>
@@ -520,8 +522,8 @@
      ✓ de sessão feita a desenhar-se) — únicas duas bibliotecas com uso
      concreto nesta app; sem gráfico/lista com gestos/marcos que
      justificassem Motion ou Three.js (ver PROJECT-CONTEXT.md). -->
-<script src="https://cdn.jsdelivr.net/npm/gsap@3.15.0/dist/gsap.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/animejs@4.5.0/dist/bundles/anime.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/gsap@3.15.0/dist/gsap.min.js" integrity="sha384-XmJ9SoHtVOHoQUcKvFAzVXwdkKo1Ie3bhmSoIAkcdsHGaIrVJIkmozyq0FJeb/Ly" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/animejs@4.5.0/dist/bundles/anime.umd.min.js" integrity="sha384-InMmvD3VoYcY7hGjSC80aLb2bNNE4CzpX+Eq6FVDlmB0IKgDvmfPw4UY8L/M++iG" crossorigin="anonymous"></script>
 
 <script>
 (function(){
@@ -1819,7 +1821,7 @@
      ESTADO DA APP
      ============================================================ */
 
-  var PESO_SHEET_ID = '1UzEXtl7w6jMsk-c7Pkt3kq97AXL6XIiwTrjOYUaYFLs';
+  var PESO_API_URL = 'https://bmdpereira.duckdns.org/dados-api';
   var PESO_CACHE_KEY = 'ciclismo.pesoLatest';
 
   function $(id){ return document.getElementById(id); }
@@ -2074,7 +2076,7 @@
      ============================================================ */
 
   var DRIVE_CLIENT_ID = '108256538530-fgunbb52s7f3s9aurfpjtaf01v8fjbph.apps.googleusercontent.com';
-  var DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.readonly https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/spreadsheets.readonly';
+  var DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.readonly https://www.googleapis.com/auth/drive.file openid email';
   var DRIVE_TOKEN_KEY = 'ciclismo.driveToken';
   var driveTokenClient = null;
   var driveItems = [];
@@ -2324,22 +2326,26 @@
     });
   }
 
+  /* Peso atual: vem da API própria (SQLite no Pi), não do Sheet antigo, que deixou de ser atualizado.
+     O mesmo access token identifica o utilizador (scope "email"); o ACL do peso decide o acesso. */
   function fetchPesoLatest(){
-    return driveFetch('https://sheets.googleapis.com/v4/spreadsheets/' + PESO_SHEET_ID + '?fields=sheets.properties.title')
-      .then(function(res){ return res.json(); })
-      .then(function(meta){
-        var title = (meta.sheets && meta.sheets[0] && meta.sheets[0].properties.title) || 'Sheet1';
-        return driveFetch('https://sheets.googleapis.com/v4/spreadsheets/' + PESO_SHEET_ID +
-          '/values/' + encodeURIComponent(title + '!A:B'));
+    var token = getCachedDriveToken();
+    if (!token) return Promise.reject(new Error('no-token'));
+    var d = new Date(Date.now() - 90 * 86400000);
+    var desde = d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2);
+    return fetch(PESO_API_URL + '/peso/registos?desde=' + desde, {headers: {'Authorization': 'Bearer ' + token}})
+      .then(function(res){
+        if (res.status === 401){ lsRemove(DRIVE_TOKEN_KEY); throw new Error('unauthorized'); }
+        if (!res.ok) throw new Error('peso-' + res.status);
+        return res.json();
       })
-      .then(function(res){ return res.json(); })
       .then(function(data){
-        var rows = data.values || [], found = [];
-        for (var i = rows.length - 1; i >= 1 && found.length < 2; i--){
+        var rows = (data && data.registos) || [], found = [];
+        for (var i = rows.length - 1; i >= 0 && found.length < 2; i--){
           var row = rows[i];
-          if (row && row[0] && row[1] && /^\d{4}-\d{2}-\d{2}/.test(safeStr(row[0]))){
-            var kg = parseFloat(safeStr(row[1]).replace(',', '.'));
-            if (isFinite(kg) && kg > 0 && kg < 500) found.push({date: safeStr(row[0]), kg: kg});
+          if (row && row.quando && /^\d{4}-\d{2}-\d{2}/.test(safeStr(row.quando))){
+            var kg = Number(row.peso);
+            if (isFinite(kg) && kg > 0 && kg < 500) found.push({date: safeStr(row.quando), kg: kg});
           }
         }
         if (!found.length) return null;

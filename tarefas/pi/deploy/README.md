@@ -116,7 +116,7 @@ Checklist manual ponta-a-ponta (ver PLANO):
 
 ## Migração faseada — não desligar o Apps Script já
 
-Deixar o `pi/tarefas-job.sh`/trigger horário do Apps Script a correr em
+Deixar o trigger horário (o cron `tarefas-job.sh` já foi removido) do Apps Script a correr em
 paralelo por uns dias. Só depois de confirmar que o `recalcular.py` está a
 notificar corretamente:
 1. Desativar o trigger horário no editor do Apps Script

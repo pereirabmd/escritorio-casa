@@ -2,6 +2,8 @@
 <html lang="pt-PT">
 <head>
 <meta charset="UTF-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://accounts.google.com/gsi/style; font-src https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://unpkg.com; frame-src https://accounts.google.com; worker-src 'self' blob:; object-src 'none'; base-uri 'none'; form-action 'self'">
+<meta name="referrer" content="no-referrer">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <meta name="theme-color" content="#7E9C83">
 <title>Jogos de Tabuleiro · BP</title>
@@ -395,7 +397,7 @@
   </div>
 </div>
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js" integrity="sha384-aH7F59TKSh8OEAivbclch9UUnWn/Uy8AQlYYKzpVaQkAp8W6IF2VocW/knEeRwT0" crossorigin="anonymous"></script>
 <script>
 /* =========================================================
    JOGOS DE TABULEIRO — v2.0.0
@@ -505,7 +507,7 @@ async function initEngine(){
   let lastError = null;
   for (const url of STOCKFISH_CDN_URLS){
     try{
-      const response = await fetch(url);
+      const response = await fetch(url, {integrity: 'sha384-VtbI9eXlyH0iLETxBo+yJZD0egEZcin9R4ntQlcrrKjRYSTQmdhoiY/jGV9SGw4Q'});   // o motor corre num Worker: só arranca se o ficheiro for o esperado
       if (!response.ok) throw new Error('HTTP ' + response.status + ' em ' + url);
       const code = await response.text();
       const blob = new Blob([code], {type:'application/javascript'});

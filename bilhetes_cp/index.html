@@ -2,6 +2,8 @@
 <html lang="pt-PT">
 <head>
 <meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://accounts.google.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://accounts.google.com/gsi/style; font-src https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' https://bmdpereira.duckdns.org https://accounts.google.com https://oauth2.googleapis.com https://api-gateway.cp.pt; frame-src https://accounts.google.com; worker-src 'self' blob:; object-src 'none'; base-uri 'none'; form-action 'self'">
+<meta name="referrer" content="no-referrer">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
 <title>Bilhetes CP</title>
 <meta name="description" content="Configura a semana e acompanha a compra automática de bilhetes CP com o Passe Verde">
@@ -273,7 +275,7 @@ body.kb-open #toast{--toast-b:84px}
    Nenhuma credencial neste ficheiro: as chaves da CP (só para preencher
    horários) ficam no localStorage do telemóvel, importadas por um link.
    ===================================================================== */
-const VERSION = 'v2.0.0';
+const VERSION = 'v2.0.1';
 const CLIENT_ID = '108256538530-fgunbb52s7f3s9aurfpjtaf01v8fjbph.apps.googleusercontent.com';
 const API_URL = 'https://bmdpereira.duckdns.org/dados-api';
 // só a identidade: a API reconhece quem chama pelo e-mail do token (a app já não acede ao Google Sheets)

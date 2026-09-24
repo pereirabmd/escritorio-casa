@@ -10,3 +10,18 @@ User=bpereira
 WorkingDirectory=/home/bpereira/dados
 Environment=PYTHONUNBUFFERED=1
 ExecStart=/usr/bin/python3 backup.py
+# Endurecimento (systemd-analyze security: 2.5 OK). Só escreve onde precisa.
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/home/bpereira/dados/state /home/bpereira/dados/logs /home/bpereira/dados/data /home/bpereira/dados-backup /home/bpereira/.ssh
+PrivateTmp=true
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+RestrictNamespaces=true
+LockPersonality=true
+CapabilityBoundingSet=
+SystemCallFilter=@system-service

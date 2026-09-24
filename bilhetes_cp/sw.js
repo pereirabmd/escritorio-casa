@@ -12,7 +12,7 @@
  */
 importScripts('https://storage.googleapis.com/workbox-cdn/releases/7.3.0/workbox-sw.js');
 
-const VERSION = 'v2.0.0';
+const VERSION = 'v2.0.1';
 
 workbox.core.setCacheNameDetails({ prefix: 'bilhetes-cp', suffix: VERSION });
 workbox.core.clientsClaim();

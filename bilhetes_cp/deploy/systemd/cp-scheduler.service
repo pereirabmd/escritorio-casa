@@ -18,6 +18,21 @@ WatchdogSec=300
 # Um `systemctl restart` NÃO pode matar um processo de compra a meio: os hot_buy são subprocessos
 # em sessão própria e só o processo principal é terminado.
 KillMode=process
+# Endurecimento (systemd-analyze security: 2.5 OK). Só escreve onde precisa.
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/home/bpereira/bilhetes_cp /home/bpereira/dados/data
+PrivateTmp=true
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+RestrictNamespaces=true
+LockPersonality=true
+CapabilityBoundingSet=
+SystemCallFilter=@system-service
 
 [Install]
 WantedBy=multi-user.target
