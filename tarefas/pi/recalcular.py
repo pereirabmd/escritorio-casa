@@ -292,6 +292,15 @@ def _recalcular_sem_lock(sheets: SheetsClient, plan_only: bool) -> dict[str, int
         if resultado in ("entregue", "presumivelmente_entregue") and not plan_only:
             sheets.update_cells("Piscina", linha["_rowIndex"], NotificacaoEnviada="TRUE")
 
+    if sheets.tab_exists("Horario"):
+        import horario
+        try:
+            for resultado in horario.reconciliar(sheets, config, estado, agora, plan_only, reconciliar_chave, URL_APP):
+                contar(resultado)
+        except Exception:   # o horário nunca pode impedir as notificações das tarefas (ex.: migração 005 por aplicar)
+            log.exception("Horário escolar: falhou a reconciliação dos avisos")
+            contar("horario_falhou")
+
     if not plan_only:
         common._write_json_atomic(estado_path, estado)
         common._write_json_atomic(common._state_file("saude.json"), {

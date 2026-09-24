@@ -1,5 +1,5 @@
 """Endpoints da app tarefas (Tarefas de Casa). Tabelas: tarefas_tarefas, tarefas_instancias, tarefas_config,
-tarefas_piscina, tarefas_auditoria.
+tarefas_piscina, tarefas_auditoria, tarefas_horario (só leitura).
 
 O Pi (instancias.py, recalcular.py, manutencao.py, servidor.py) lê e escreve as MESMAS tabelas em SQL direto
 (`tarefas/pi/store.py`); a notificação agendada no ntfy e os botões "Marcar feita"/"Daqui a 1h" continuam a
@@ -146,6 +146,16 @@ def dados(ctx):
         "config": [_config_json(r) for r in conn.execute("SELECT * FROM tarefas_config ORDER BY rowid")],
         "piscina": [_piscina_json(r) for r in conn.execute("SELECT * FROM tarefas_piscina ORDER BY rowid")],
     }
+
+
+def horario(ctx):
+    """Horário escolar (só leitura: importa-se com importar_horario.py). Aulas do mesmo dia e hora são a turma dividida."""
+    rows = ctx.db().execute(
+        "SELECT id, aluno, ano_letivo, dia_semana, hora_inicio, hora_fim, disciplina, sala FROM tarefas_horario "
+        "ORDER BY ano_letivo, aluno, dia_semana, hora_inicio, hora_fim, disciplina")
+    return 200, {"aulas": [{"id": r["id"], "aluno": r["aluno"], "anoLetivo": r["ano_letivo"], "diaSemana": r["dia_semana"],
+                            "horaInicio": r["hora_inicio"], "horaFim": r["hora_fim"], "disciplina": r["disciplina"],
+                            "sala": r["sala"]} for r in rows]}
 
 
 def auditoria(ctx):
@@ -466,6 +476,7 @@ def catalogo_piscina(ctx):
 
 ROUTES = [
     ("GET", r"^/tarefas/dados$", dados),
+    ("GET", r"^/tarefas/horario$", horario),
     ("GET", r"^/tarefas/auditoria$", auditoria),
     ("POST", r"^/tarefas/auditoria$", registar_auditoria),
     ("POST", r"^/tarefas/tarefas$", criar_tarefa),

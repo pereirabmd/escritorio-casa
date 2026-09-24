@@ -22,7 +22,9 @@ import store
 from tests.base import TarefasTestCase
 from tests.fakes import FakeSheetsClient
 
-SCHEMA = Path(__file__).resolve().parents[3] / "dados" / "migrations" / "004_tarefas.sql"
+MIGRACOES = Path(__file__).resolve().parents[3] / "dados" / "migrations"
+SCHEMA = MIGRACOES / "004_tarefas.sql"
+SCHEMA_HORARIO = MIGRACOES / "005_tarefas_horario.sql"
 
 
 class SqliteBase(TarefasTestCase):
@@ -33,6 +35,7 @@ class SqliteBase(TarefasTestCase):
         self.path = Path(self.dir.name) / "dados.db"
         c = sqlite3.connect(self.path)
         c.executescript(SCHEMA.read_text())
+        c.executescript(SCHEMA_HORARIO.read_text())
         c.close()
         self.st = store.SqliteStore(self.path)
 

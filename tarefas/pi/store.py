@@ -39,6 +39,11 @@ TABELAS: dict[str, tuple[str, list[tuple[str, str, str]]]] = {
         ("ID", "id", "txt"), ("Nome", "nome", "txt"), ("AvisoLongo", "aviso_longo", "bool"), ("UltimaData", "ultima_data", "data"),
         ("ProximaData", "proxima_data", "data"), ("NotificacaoEnviada", "notificacao_enviada", "bool"),
         ("UsarIntervaloLongo", "usar_intervalo_longo", "bool")]),
+    # só leitura no Pi (a importação é dados/importar_horario.py); dia_semana é ISO: 1 = 2ª feira
+    "Horario": ("tarefas_horario", [
+        ("ID", "id", "int"), ("Aluno", "aluno", "txt"), ("AnoLetivo", "ano_letivo", "txt"), ("DiaSemana", "dia_semana", "int"),
+        ("HoraInicio", "hora_inicio", "txt"), ("HoraFim", "hora_fim", "txt"), ("Disciplina", "disciplina", "txt"),
+        ("Sala", "sala", "txt")]),
 }
 
 
