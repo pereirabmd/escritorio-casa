@@ -417,8 +417,11 @@ Separador **Admin** em Config, só para administradores (fixo: `ADMIN_TAREFAS` n
 
 ## Pendências que exigem ação manual do utilizador
 
-1. **`tarefas/InstanciasGenerator.gs`**, **`tarefas/NotificationSender.gs`** e **`tarefas/Piscina.gs`** (novo, Beta 34) — copiar o conteúdo atual para o projeto Apps Script em script.google.com e reimplementar. Sem isto, o lock contra duplicação de tarefas, a tolerância a falhas de notificação e as notificações da manutenção da piscina não têm efeito real, apesar de já estarem no repositório. `Piscina.gs` só é chamado a partir de `NotificationSender.gs` (`jobPeriodico()`), por isso os dois têm de ser copiados juntos.
+1. ~~Copiar os `.gs` para o Apps Script~~ — **obsoleto desde a Beta 49**: os `.gs` já não são usados. O que falta é **desligar o trigger horário** do Apps Script (editor do Apps Script → Acionadores), para não haver dois sistemas a notificar/escrever.
 2. **Cliente OAuth partilhado** (`108256538530-...apps.googleusercontent.com`) — para o botão "Enviar para o Drive" do `~/garmin-dashboard` funcionar, é preciso adicionar `http://127.0.0.1:8787` a "Authorized JavaScript origins" desse cliente, na Google Cloud Console. Até lá, esse botão específico falha; o resto do `garmin-dashboard`, incluindo o download do ficheiro, funciona sem este passo.
+3. **Guardar a chave privada `age`** (`~/.age/dados-backup.key`, só na máquina de desenvolvimento) no gestor de passwords: sem ela os backups (`dados.sql.age`, `bilhetes.sql.age`) e os `*.tgz.age` do Pi não abrem.
+4. **Revogar a chave da service account do Sheets** (Google Cloud → IAM → Contas de serviço → Chaves) quando o recuo `BILHETES_BACKEND=sheets`/`TAREFAS_BACKEND=sheets` deixar de ser preciso; depois retirar esse código e o `bilhetes_cp/config/service-account.json`.
+5. **Trocar a password ntfy da Camila** por uma mais forte (guardá-la na app atualiza a conta ntfy sozinha) e remover a tarefa de teste "Teste" do Bruno (repete-se todos os dias às 20:10).
 
 ## Backlog
 
