@@ -205,6 +205,12 @@
         <button class="btn btn-primary btn-block" id="btnGuardarConfig">Guardar configuração</button>
         <button class="btn btn-ghost btn-block" id="btnTerminarSessao" style="margin-top:8px;">Terminar sessão</button>
 
+        <div id="cardMigracao">
+          <div class="card-title" style="margin-top:16px;">Migração</div>
+          <p style="font-size:.85rem;color:var(--text-muted);margin:0 0 8px;">Os dados agora vivem no servidor de casa. Importa uma vez o histórico e a configuração que ainda estão no Google Sheets — podes repetir sem duplicar registos.</p>
+          <button class="btn btn-ghost btn-block" id="btnImportar">Importar do Google Sheets</button>
+        </div>
+
         <div class="card-title" style="margin-top:16px;">Sobre</div>
         <div class="about-block">
           <img class="footer-logo" src="data:image/png;base64,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" alt="Logótipo" width="80" height="76" loading="lazy">
@@ -288,15 +294,18 @@
 
 <script>
 /* ============================================================
-   CONFIGURAÇÃO — não alterar CLIENT_ID / SPREADSHEET_ID / ranges:
-   é a ligação à folha de cálculo Google Sheets já em uso.
+   CONFIGURAÇÃO — CLIENT_ID e API_URL: login Google + servidor no Raspberry Pi.
+   SPREADSHEET_ID / SHEET_*: só para a importação única do Google Sheets
+   (Configurações > Migração); a app já não escreve na folha.
    ============================================================ */
-const APP_VERSION = 'v4.1.0';
+const APP_VERSION = 'v5.0.0';
 const CLIENT_ID = '108256538530-fgunbb52s7f3s9aurfpjtaf01v8fjbph.apps.googleusercontent.com';
+const API_URL = 'https://bmdpereira.duckdns.org/dados-api';
 const SPREADSHEET_ID = '1UzEXtl7w6jMsk-c7Pkt3kq97AXL6XIiwTrjOYUaYFLs';
 const SHEET_REGISTOS = 'Registos';
 const SHEET_CONFIG = 'Config';
-const SCOPES = 'https://www.googleapis.com/auth/spreadsheets';
+// openid+email: a API identifica quem chama pelo e-mail do token; spreadsheets.readonly: só a importação única
+const SCOPES = 'openid email https://www.googleapis.com/auth/spreadsheets.readonly';
 const DIAS_ABREV = ['DOM', 'SEG', 'TER', 'QUA', 'QUI', 'SEX', 'SAB'];
 const DIAS_NOMES = ['Domingo', 'Segunda-feira', 'Terça-feira', 'Quarta-feira', 'Quinta-feira', 'Sexta-feira', 'Sábado'];
 
@@ -306,12 +315,11 @@ const ICON_TRASH = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" 
 
 let tokenClient;
 let accessToken = null;
-let registos = [];   // [{row, date: Date, peso: Number, nota: String}]
+let registos = [];   // [{id, quando: 'AAAA-MM-DD HH:MM:SS', date: Date, peso: Number, nota: String, pendente?: true}]
 let config = { altura: null, nascimento: null, sexo: '', pesoAlvo: null, atividade: 1.2, diaControlo: 1, pesoMin: null, pesoMax: null };
 let currentTab = 'resumo';
 let currentPeriod = 'all';
 let weightChart = null;
-let editingRow = null;
 let cargaComErro = false; // sinaliza se loadConfig/loadRegistos tiveram algum erro nesta sessão de carregamento
 
 function setStatus(msg, isErr=false){
@@ -378,8 +386,8 @@ function garantirXLSX(){
 }
 
 /* ---------- Sessão persistente ---------- */
-const TOKEN_KEY = 'peso_access_token';
-const TOKEN_EXPIRY_KEY = 'peso_token_expiry';
+const TOKEN_KEY = 'peso_access_token_v2';   // v2: o token antigo não tinha o e-mail, que a API exige
+const TOKEN_EXPIRY_KEY = 'peso_token_expiry_v2';
 
 function saveToken(token, expiresInSeconds){
   try{
@@ -403,12 +411,17 @@ function clearSavedToken(){
 }
 
 /* ---------- Cópia local dos últimos dados sincronizados (só leitura, para modo offline) ---------- */
-const CACHE_KEY_REG = 'peso_cache_registos';
-const CACHE_KEY_CFG = 'peso_cache_config';
+const CACHE_KEY_REG = 'peso_cache_registos_v2';
+const CACHE_KEY_CFG = 'peso_cache_config_v2';
+const FILA_KEY = 'peso_fila_v2';              // registos criados sem ligação, à espera de sincronizar
+const IMPORTADO_KEY = 'peso_importado_v2';
+function limparChavesAntigas(){
+  try{ ['peso_access_token','peso_token_expiry','peso_cache_registos','peso_cache_config'].forEach(k => localStorage.removeItem(k)); } catch(e){}
+}
 
 function saveLocalCache(){
   try{
-    const regsSerializaveis = registos.map(r => ({ row: r.row, date: r.date.toISOString(), peso: r.peso, nota: r.nota }));
+    const regsSerializaveis = registos.filter(r => !r.pendente).map(r => ({ id: r.id, quando: r.quando, peso: r.peso, nota: r.nota }));
     localStorage.setItem(CACHE_KEY_REG, JSON.stringify(regsSerializaveis));
     localStorage.setItem(CACHE_KEY_CFG, JSON.stringify(config));
   } catch(e){}
@@ -420,8 +433,9 @@ function loadLocalCache(){
     const regsParsed = JSON.parse(regsRaw);
     if (!Array.isArray(regsParsed)) return false;
     registos = regsParsed
-      .map(r => ({ row: r.row, date: new Date(r.date), peso: Number(r.peso), nota: r.nota || '' }))
-      .filter(r => r.date instanceof Date && !isNaN(r.date.getTime()) && isFinite(r.peso));
+      .map(r => ({ id: r.id, quando: r.quando, date: quandoParaDate(r.quando), peso: Number(r.peso), nota: r.nota || '' }))
+      .filter(r => r.date && !isNaN(r.date.getTime()) && isFinite(r.peso));
+    juntarPendentes();
     registos.sort((a,b) => a.date - b.date);
     const cfgRaw = localStorage.getItem(CACHE_KEY_CFG);
     if (cfgRaw){
@@ -429,7 +443,7 @@ function loadLocalCache(){
       if (c && typeof c === 'object'){
         config = {
           altura: isFinite(c.altura) ? c.altura : null,
-          nascimento: c.nascimento ? new Date(c.nascimento) : null,
+          nascimento: c.nascimento ? (parseDataLocal(c.nascimento) || new Date(c.nascimento)) : null,
           sexo: c.sexo || '',
           pesoAlvo: isFinite(c.pesoAlvo) ? c.pesoAlvo : null,
           atividade: normalizaAtividade(Number(c.atividade)),
@@ -445,6 +459,7 @@ function loadLocalCache(){
 
 window.addEventListener('load', () => {
   document.getElementById('footerVersion').textContent = APP_VERSION;
+  limparChavesAntigas();
   initTheme();
   document.getElementById('btnTheme').onclick = toggleTheme;
 
@@ -479,6 +494,8 @@ window.addEventListener('load', () => {
   document.getElementById('formAdd').addEventListener('submit', onRegistarNovo);
   document.getElementById('fabRegistar').onclick = () => document.getElementById('formAdd').requestSubmit();
   document.getElementById('btnGuardarConfig').onclick = onGuardarConfig;
+  document.getElementById('btnImportar').onclick = importarDoSheets;
+  try{ if (localStorage.getItem(IMPORTADO_KEY) === '1') document.getElementById('cardMigracao').classList.add('hidden'); } catch(e){}
   document.getElementById('btnToggleNota').onclick = () => {
     const campo = document.getElementById('notaField');
     const btn = document.getElementById('btnToggleNota');
@@ -520,7 +537,7 @@ window.addEventListener('load', () => {
     else if (!document.getElementById('changelogOverlay').classList.contains('hidden')) closeChangelog();
   });
 
-  window.addEventListener('online', () => { atualizarOfflineBanner(); if (accessToken) setStatus(''); });
+  window.addEventListener('online', () => { atualizarOfflineBanner(); if (accessToken){ setStatus(''); sincronizarFila(); } });
   window.addEventListener('offline', atualizarOfflineBanner);
   atualizarOfflineBanner();
 
@@ -737,6 +754,7 @@ async function onSignedIn(){
   renderAll();
   animateNumbersNow = false;
   overlay.classList.add('hidden');
+  sincronizarFila();
 }
 
 /* ---------- Animação de contagem dos números (só no carregamento inicial) ---------- */
@@ -759,7 +777,7 @@ function animateValues(el, targets, formatFn, duration = 900){
   requestAnimationFrame(tick);
 }
 
-/* ---------- Sheets API ---------- */
+/* ---------- Google Sheets (só leitura, só para a importação única) ---------- */
 async function sheetsGet(range){
   if (!estaOnline()) throw new Error('Sem ligação à internet');
   const url = `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/${encodeURIComponent(range)}?valueRenderOption=UNFORMATTED_VALUE`;
@@ -768,29 +786,109 @@ async function sheetsGet(range){
   if (!res.ok) throw new Error('Erro a ler a folha (' + res.status + ')');
   return res.json();
 }
-async function sheetsPut(range, values){
-  if (!estaOnline()) throw new Error('Sem ligação à internet');
-  const url = `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/${encodeURIComponent(range)}?valueInputOption=USER_ENTERED`;
-  const res = await fetch(url, {
-    method: 'PUT',
-    headers: { Authorization: 'Bearer ' + accessToken, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ range, values })
-  });
-  if (res.status === 401){ onSessaoExpirada(); throw new Error('Sessão expirada'); }
-  if (!res.ok) throw new Error('Erro a gravar (' + res.status + ')');
-  return res.json();
+/* ---------- API do servidor (Raspberry Pi) ---------- */
+class ApiErro extends Error {
+  constructor(msg, status){ super(msg); this.status = status; }
 }
-async function sheetsAppend(range, values){
-  if (!estaOnline()) throw new Error('Sem ligação à internet');
-  const url = `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/${encodeURIComponent(range)}:append?valueInputOption=USER_ENTERED`;
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: { Authorization: 'Bearer ' + accessToken, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ range, values })
+// falhas de rede / servidor em baixo: o pedido pode ser repetido mais tarde
+function ehErroDeRede(e){
+  return e instanceof ApiErro && (e.status === 0 || e.status === 502 || e.status === 503 || e.status === 504);
+}
+const MSGS_API = {
+  403: 'Esta conta não tem acesso à app do peso.',
+  429: 'Demasiados pedidos — tenta daqui a um minuto.',
+  502: 'Servidor indisponível.', 503: 'Servidor ocupado — tenta de novo.', 504: 'Servidor indisponível.',
+};
+async function api(method, path, body){
+  if (!estaOnline()) throw new ApiErro('Sem ligação à internet', 0);
+  const ctl = new AbortController();
+  const timer = setTimeout(() => ctl.abort(), 15000);
+  let res;
+  try{
+    res = await fetch(API_URL + path, {
+      method, signal: ctl.signal,
+      headers: Object.assign({ Authorization: 'Bearer ' + accessToken }, body !== undefined ? { 'Content-Type': 'application/json' } : {}),
+      body: body !== undefined ? JSON.stringify(body) : undefined,
+    });
+  } catch(e){
+    throw new ApiErro('Não foi possível contactar o servidor', 0);
+  } finally {
+    clearTimeout(timer);
+  }
+  if (res.status === 401){ onSessaoExpirada(); throw new ApiErro('Sessão expirada', 401); }
+  let dados = null;
+  try{ dados = await res.json(); } catch(e){}
+  if (!res.ok){
+    const doServidor = dados && dados.erro && dados.erro.mensagem;
+    throw new ApiErro(MSGS_API[res.status] || doServidor || ('Erro do servidor (' + res.status + ')'), res.status);
+  }
+  return dados;
+}
+
+/* ---------- Datas do servidor ('AAAA-MM-DD HH:MM:SS', hora local) ---------- */
+function quandoParaDate(q){
+  if (typeof q !== 'string') return null;
+  const d = new Date(q.replace(' ', 'T'));
+  return isNaN(d.getTime()) ? null : d;
+}
+function dateParaQuando(d){
+  return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate())+' '+pad(d.getHours())+':'+pad(d.getMinutes())+':'+pad(d.getSeconds());
+}
+function parseDataLocal(s){
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s || '');
+  return m ? new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])) : null;
+}
+function novoCid(){
+  return (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : 'c' + Date.now().toString(36) + Math.random().toString(36).slice(2, 12);
+}
+
+/* ---------- Fila de registos criados sem ligação (o POST é idempotente por `cid`) ---------- */
+function lerFila(){
+  try{
+    const f = JSON.parse(localStorage.getItem(FILA_KEY) || '[]');
+    return Array.isArray(f) ? f.filter(x => x && typeof x.cid === 'string' && typeof x.quando === 'string' && isFinite(x.peso)) : [];
+  } catch(e){ return []; }
+}
+function guardarFila(f){
+  try{ if (f.length) localStorage.setItem(FILA_KEY, JSON.stringify(f)); else localStorage.removeItem(FILA_KEY); } catch(e){}
+}
+function juntarPendentes(){
+  lerFila().forEach(p => {
+    const d = quandoParaDate(p.quando);
+    if (d) registos.push({ id: null, cid: p.cid, quando: p.quando, date: d, peso: Number(p.peso), nota: p.nota || '', pendente: true });
   });
-  if (res.status === 401){ onSessaoExpirada(); throw new Error('Sessão expirada'); }
-  if (!res.ok) throw new Error('Erro a adicionar (' + res.status + ')');
-  return res.json();
+}
+let aSincronizar = false;
+async function sincronizarFila(){
+  if (aSincronizar || !accessToken || !estaOnline()) return;
+  let fila = lerFila();
+  if (!fila.length) return;
+  aSincronizar = true;
+  let enviados = 0, descartados = 0;
+  try{
+    for (const p of [...fila]){
+      try{
+        await api('POST', '/peso/registos', { quando: p.quando, peso: Number(p.peso), nota: p.nota || '', cid: p.cid });
+        enviados++;
+      } catch(e){
+        if (e instanceof ApiErro && (e.status === 400 || e.status === 409)) descartados++;  // inválido: não bloquear a fila
+        else throw e;                                                                      // rede/sessão: fica para a próxima
+      }
+      fila = fila.filter(x => x.cid !== p.cid);
+      guardarFila(fila);
+    }
+  } catch(e){
+    /* fica na fila */
+  } finally {
+    aSincronizar = false;
+  }
+  if (enviados || descartados){
+    await loadRegistos();
+    saveLocalCache();
+    renderAll();
+    if (enviados) showConfirmToast(enviados === 1 ? '1 registo sincronizado' : enviados + ' registos sincronizados');
+    if (descartados) setStatus(descartados + ' registo(s) guardado(s) sem ligação foram recusados pelo servidor.', true);
+  }
 }
 
 function onSessaoExpirada(){
@@ -844,30 +942,16 @@ function normalizaAtividade(raw){
 /* ---------- Config ---------- */
 async function loadConfig(){
   try{
-    const data = await sheetsGet(`${SHEET_CONFIG}!B2:B9`);
-    const v = data.values || [];
-    const alturaRaw = v[0] && v[0][0] !== '' ? Number(v[0][0]) : null;
-    config.altura = (alturaRaw !== null && !isNaN(alturaRaw)) ? alturaRaw : null;
-    const nasc = v[1] ? v[1][0] : '';
-    if (typeof nasc === 'number') {
-      config.nascimento = serialToDate(nasc);
-    } else if (typeof nasc === 'string' && nasc.trim() !== '') {
-      const d = new Date(nasc);
-      config.nascimento = isNaN(d.getTime()) ? null : d;
-    } else {
-      config.nascimento = null;
-    }
-    config.sexo = v[2] ? String(v[2][0]) : '';
-    const pesoAlvoRaw = v[3] && v[3][0] !== '' ? Number(v[3][0]) : null;
-    config.pesoAlvo = (pesoAlvoRaw !== null && !isNaN(pesoAlvoRaw)) ? pesoAlvoRaw : null;
-    const atividadeRaw = v[4] && v[4][0] !== '' ? Number(v[4][0]) : 1.2;
-    config.atividade = normalizaAtividade(atividadeRaw);
-    const diaRaw = v[5] && v[5][0] !== '' ? Number(v[5][0]) : 1;
-    config.diaControlo = (Number.isInteger(diaRaw) && diaRaw >= 0 && diaRaw <= 6) ? diaRaw : 1;
-    const pesoMinRaw = v[6] && v[6][0] !== '' ? Number(v[6][0]) : null;
-    config.pesoMin = (pesoMinRaw !== null && !isNaN(pesoMinRaw)) ? pesoMinRaw : null;
-    const pesoMaxRaw = v[7] && v[7][0] !== '' ? Number(v[7][0]) : null;
-    config.pesoMax = (pesoMaxRaw !== null && !isNaN(pesoMaxRaw)) ? pesoMaxRaw : null;
+    const c = await api('GET', '/peso/config');
+    const num = v => (typeof v === 'number' && isFinite(v)) ? v : null;
+    config.altura = num(c.altura);
+    config.nascimento = typeof c.nascimento === 'string' ? parseDataLocal(c.nascimento) : null;
+    config.sexo = (c.sexo === 'M' || c.sexo === 'F') ? c.sexo : '';
+    config.pesoAlvo = num(c.pesoAlvo);
+    config.atividade = normalizaAtividade(Number(c.atividade));
+    config.diaControlo = (Number.isInteger(c.diaControlo) && c.diaControlo >= 0 && c.diaControlo <= 6) ? c.diaControlo : 1;
+    config.pesoMin = num(c.pesoMin);
+    config.pesoMax = num(c.pesoMax);
   } catch(e){
     setStatus('Não foi possível ler a Config: ' + e.message, true);
   }
@@ -914,12 +998,19 @@ async function onGuardarConfig(){
   const textoOriginal = btn.textContent;
   btn.textContent = 'A guardar…';
   try{
-    await sheetsPut(`${SHEET_CONFIG}!B2:B9`, [[altura],[nascimento],[sexo],[pesoAlvo],[atividade],[diaControlo],[pesoMin],[pesoMax]]);
-    // atualiza o estado local diretamente com o que se acabou de gravar, em vez de reler do Sheets:
-    // a API pode cortar células vazias no fim do intervalo, o que faria um campo recém-gravado
-    // (como o peso mínimo) parecer "perdido" logo a seguir a gravar
+    await api('PUT', '/peso/config', {
+      altura: altura !== '' ? Number(altura) : null,
+      nascimento: nascimento || null,
+      sexo: sexo || null,
+      pesoAlvo: pesoAlvo !== '' ? Number(pesoAlvo) : null,
+      atividade: Number(atividade),
+      diaControlo: Number(diaControlo),
+      pesoMin: pesoMin !== '' ? Number(pesoMin) : null,
+      pesoMax: pesoMax !== '' ? Number(pesoMax) : null,
+    });
+    // atualiza o estado local com o que se acabou de gravar (o servidor devolveu o mesmo)
     config.altura = altura !== '' ? Number(altura) : null;
-    config.nascimento = nascimento ? new Date(nascimento) : null;
+    config.nascimento = nascimento ? parseDataLocal(nascimento) : null;
     config.sexo = sexo;
     config.pesoAlvo = pesoAlvo !== '' ? Number(pesoAlvo) : null;
     config.atividade = normalizaAtividade(Number(atividade));
@@ -942,17 +1033,14 @@ async function onGuardarConfig(){
 async function loadRegistos(){
   registos = [];
   try{
-    const data = await sheetsGet(`${SHEET_REGISTOS}!A2:C100000`);
-    const v = data.values || [];
-    v.forEach((row, i) => {
-      const dateVal = row[0];
-      const pesoVal = row[1];
-      if (dateVal === undefined || dateVal === '' || pesoVal === undefined || pesoVal === '') return;
-      const d = serialToDate(dateVal);
-      const p = Number(pesoVal);
-      if (!d || isNaN(p) || !isFinite(p)) return;
-      registos.push({ row: i + 2, date: d, peso: p, nota: row[2] || '' });
+    const data = await api('GET', '/peso/registos');
+    (data.registos || []).forEach(r => {
+      const d = quandoParaDate(r.quando);
+      const p = Number(r.peso);
+      if (!d || !isFinite(p)) return;
+      registos.push({ id: r.id, quando: r.quando, date: d, peso: p, nota: r.nota || '' });
     });
+    juntarPendentes();
     registos.sort((a,b) => a.date - b.date);
   } catch(e){
     setStatus('Não foi possível ler os Registos: ' + e.message, true);
@@ -987,6 +1075,7 @@ async function onRegistarNovo(ev){
   const nota = notaInput.value.trim();
   const now = new Date();
   const dataStr = now.getFullYear()+'-'+pad(now.getMonth()+1)+'-'+pad(now.getDate())+' '+pad(now.getHours())+':'+pad(now.getMinutes())+':00';
+  const cid = novoCid();
   // Capturado antes de gravar, para saber a seguir se este registo cruzou
   // um marco (novo mínimo / objetivo atingido pela primeira vez) — ver
   // celebrarNovoMinimo()/celebrarObjetivoAtingido() mais abaixo.
@@ -997,13 +1086,29 @@ async function onRegistarNovo(ev){
   btn.textContent = 'A gravar…';
   try{
     setStatus('A gravar...');
-    await sheetsAppend(`${SHEET_REGISTOS}!A:C`, [[dataStr, peso, nota]]);
+    let naFila = false;
+    try{
+      await api('POST', '/peso/registos', { quando: dataStr, peso, nota, cid });
+    } catch(e){
+      if (!ehErroDeRede(e)) throw e;
+      // sem ligação ou servidor em baixo: guarda neste aparelho e sincroniza mais tarde
+      guardarFila(lerFila().concat([{ cid, quando: dataStr, peso, nota }]));
+      naFila = true;
+    }
     pesoInput.value = '';
     notaInput.value = '';
-    await loadRegistos();
-    saveLocalCache();
-    setStatus('');
-    showConfirmToast('Peso registado');
+    if (naFila){
+      registos.push({ id: null, cid, quando: dataStr, date: quandoParaDate(dataStr), peso, nota, pendente: true });
+      registos.sort((a,b) => a.date - b.date);
+      saveLocalCache();
+      setStatus('');
+      showConfirmToast('Sem ligação ao servidor — guardado neste aparelho, sincroniza depois');
+    } else {
+      await loadRegistos();
+      saveLocalCache();
+      setStatus('');
+      showConfirmToast('Peso registado');
+    }
     renderAll();
     const atingidoAgora = !!(config.pesoAlvo && Math.abs(peso - config.pesoAlvo) < 0.05);
     if (atingidoAgora && !atingidoAntes) celebrarObjetivoAtingido();
@@ -1016,8 +1121,83 @@ async function onRegistarNovo(ev){
   }
 }
 
+/* ---------- Importação única do Google Sheets para o servidor ---------- */
+// Idempotente: cada registo leva um `cid` derivado da linha da folha ('imp-000012'),
+// por isso repetir a importação nunca duplica. A configuração só é importada se o
+// servidor ainda não tiver nenhuma (para não pisar alterações feitas depois).
+async function importarDoSheets(){
+  const btn = document.getElementById('btnImportar');
+  if (!confirm('Importar os registos e a configuração do Google Sheets para o servidor? Podes repetir sem duplicar.')) return;
+  btn.disabled = true;
+  const textoOriginal = btn.textContent;
+  btn.textContent = 'A importar…';
+  try{
+    setStatus('A ler o Google Sheets…');
+    const dReg = await sheetsGet(`${SHEET_REGISTOS}!A2:C100000`);
+    const itens = [];
+    let ignorados = 0;
+    (dReg.values || []).forEach((row, i) => {
+      if (row[0] === undefined || row[0] === '' || row[1] === undefined || row[1] === '') return;  // linha vazia/eliminada
+      const d = serialToDate(row[0]);
+      const p = Number(row[1]);
+      if (!d || isNaN(d.getTime()) || !isFinite(p) || p <= 0 || p > 1000){ ignorados++; return; }
+      itens.push({ quando: dateParaQuando(d), peso: p, nota: String(row[2] || '').slice(0, 500), cid: 'imp-' + String(i + 2).padStart(6, '0') });
+    });
+
+    let criados = 0, existentes = 0, rejeitados = 0;
+    for (let i = 0; i < itens.length; i += 100){
+      setStatus(`A importar registos… ${Math.min(i + 100, itens.length)}/${itens.length}`);
+      const r = await api('POST', '/peso/importar', { registos: itens.slice(i, i + 100) });
+      criados += r.criados; existentes += r.existentes; rejeitados += r.rejeitados.length;
+    }
+
+    let cfgImportada = false;
+    const cfgServidor = await api('GET', '/peso/config');
+    if (Object.keys(cfgServidor).length === 0){
+      const dCfg = await sheetsGet(`${SHEET_CONFIG}!B2:B9`);
+      const v = (dCfg.values || []).map(l => (l && l[0] !== undefined) ? l[0] : '');
+      const num = x => (x !== '' && isFinite(Number(x)) && Number(x) > 0) ? Number(x) : null;
+      let nasc = null;
+      if (typeof v[1] === 'number'){ const d = serialToDate(v[1]); nasc = d ? isoDateOnly(d) : null; }
+      else if (typeof v[1] === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v[1].trim())) nasc = v[1].trim();
+      const cfg = {
+        altura: num(v[0]), nascimento: nasc, sexo: (v[2] === 'M' || v[2] === 'F') ? v[2] : null,
+        pesoAlvo: num(v[3]), atividade: v[4] !== undefined && v[4] !== '' ? normalizaAtividade(Number(v[4])) : null,
+        diaControlo: (Number.isInteger(Number(v[5])) && v[5] !== '' && Number(v[5]) >= 0 && Number(v[5]) <= 6) ? Number(v[5]) : null,
+        pesoMin: num(v[6]), pesoMax: num(v[7]),
+      };
+      Object.keys(cfg).forEach(k => { if (cfg[k] === null) delete cfg[k]; });
+      if (Object.keys(cfg).length){ await api('PUT', '/peso/config', cfg); cfgImportada = true; }
+    }
+
+    await loadConfig();
+    await loadRegistos();
+    saveLocalCache();
+    renderAll();
+    try{ localStorage.setItem(IMPORTADO_KEY, '1'); } catch(e){}
+    document.getElementById('cardMigracao').classList.add('hidden');
+    setStatus('');
+    const partes = [`${criados} registos importados`];
+    if (existentes) partes.push(`${existentes} já existiam`);
+    if (ignorados + rejeitados) partes.push(`${ignorados + rejeitados} ignorados por dados inválidos`);
+    if (cfgImportada) partes.push('configuração importada');
+    showConfirmToast(partes.join(' · '));
+  } catch(e){
+    setStatus('Falha na importação: ' + e.message, true);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = textoOriginal;
+  }
+}
+
 /* ---------- Histórico de versões (mais recente primeiro) ---------- */
 const CHANGELOG = [
+  { v:'v5.0.0', itens:[
+    'Os dados passaram do Google Sheets para o servidor de casa (Raspberry Pi): mais rápido, e a folha deixa de ser um ponto de falha',
+    'Novo: se não houver ligação ao servidor, o registo fica guardado neste aparelho e sincroniza sozinho quando voltar — nunca duplica',
+    'Configurações > Migração: importa uma vez o histórico e a configuração que ainda estão no Google Sheets',
+    'É preciso voltar a iniciar sessão uma vez (a app passa a pedir também o teu e-mail, que o servidor usa para saber quem és)',
+  ]},
   { v:'v4.1.0', itens:[
     'Arrastar um registo da lista para a esquerda elimina-o (com "Desfazer" como sempre) — os botões de editar/eliminar continuam lá',
     'Ao registares um peso que bate o mínimo, ou que atinge o objetivo pela primeira vez, o valor destaca-se por instantes',
@@ -1101,8 +1281,8 @@ let editingReg = null;
 let pendingDelete = null; // { reg, timeoutId }
 
 function openModal(reg){
+  if (reg.pendente){ showConfirmToast('Este registo ainda está a sincronizar'); return; }
   if (pendingDelete) commitPendingDelete();
-  editingRow = reg.row;
   editingReg = reg;
   document.getElementById('editPeso').value = reg.peso;
   document.getElementById('editNota').value = reg.nota;
@@ -1110,7 +1290,6 @@ function openModal(reg){
   document.getElementById('editPeso').focus();
 }
 function closeModal(){
-  editingRow = null;
   editingReg = null;
   document.getElementById('modalOverlay').classList.add('hidden');
 }
@@ -1118,10 +1297,12 @@ async function onGuardarEdit(){
   const peso = Number(document.getElementById('editPeso').value);
   const nota = document.getElementById('editNota').value.trim();
   if (!isFinite(peso) || peso <= 0){ setStatus('Peso inválido.', true); return; }
+  const reg = editingReg;
+  if (!reg) return;
   const btn = document.getElementById('btnGuardarEdit');
   btn.disabled = true;
   try{
-    await sheetsPut(`${SHEET_REGISTOS}!B${editingRow}:C${editingRow}`, [[peso, nota]]);
+    await api('PUT', '/peso/registos/' + reg.id, { quando: reg.quando, peso, nota });
     closeModal();
     await loadRegistos();
     saveLocalCache();
@@ -1144,6 +1325,7 @@ function eliminarRegistoDireto(reg){ iniciarEliminacao(reg); }
 // Eliminação otimista: some da lista já, e só grava a eliminação na folha
 // se a pessoa não carregar em "Desfazer" dentro de alguns segundos.
 function iniciarEliminacao(reg){
+  if (reg.pendente){ showConfirmToast('Este registo ainda está a sincronizar'); return; }
   if (pendingDelete) commitPendingDelete();
   const idx = registos.indexOf(reg);
   if (idx === -1) return;
@@ -1165,7 +1347,11 @@ async function commitPendingDelete(){
   pendingDelete = null;
   hideUndoToast();
   try{
-    await sheetsPut(`${SHEET_REGISTOS}!A${reg.row}:C${reg.row}`, [['','','']]);
+    try{
+      await api('DELETE', '/peso/registos/' + reg.id);
+    } catch(e){
+      if (!(e instanceof ApiErro && e.status === 404)) throw e;   // já não existia: o resultado pretendido
+    }
     saveLocalCache();
   } catch(e){
     setStatus('Erro ao eliminar: ' + e.message, true);

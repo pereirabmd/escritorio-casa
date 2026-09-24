@@ -27,7 +27,15 @@ O utilizador por vezes escreve um pedido para o domínio de uma app enquanto nom
 
 ## `peso/` — Controlo de peso
 
-Registo diário de peso sincronizado com Google Sheets (API direta, sem Apps Script). `SPREADSHEET_ID: 1UzEXtl7w6jMsk-c7Pkt3kq97AXL6XIiwTrjOYUaYFLs`. Versão `v4.1.0`.
+Registo diário de peso. Versão `v5.0.0`. **Desde a v5.0.0 os dados vivem numa base SQLite no Raspberry Pi** (pasta `dados/`, API em `https://bmdpereira.duckdns.org/dados-api/`), já não no Google Sheets (`SPREADSHEET_ID: 1UzEXtl7w6jMsk-c7Pkt3kq97AXL6XIiwTrjOYUaYFLs`, mantido só para a importação única).
+
+**Migração Sheets → SQLite (v5.0.0)**: primeira app migrada, piloto da migração das outras (ver `dados/README.md` e a memória `sheets-to-sqlite-migration-decisions`). Pontos a não estragar:
+- **Login**: a app pede agora os scopes `openid email https://www.googleapis.com/auth/spreadsheets.readonly`; a API identifica quem chama pelo e-mail do access token e só aceita os e-mails de `ACL_PESO` (no `.env` do Pi, nunca no repo). Os tokens e caches em `localStorage` passaram a `..._v2` (o token antigo não tinha e-mail; a primeira abertura pede novo login) e as chaves antigas são apagadas no arranque.
+- **`row` deixou de existir**: os registos têm `id` do servidor e `quando` (`AAAA-MM-DD HH:MM:SS`, hora local). Acabaram as armadilhas de serial/`USER_ENTERED` do Sheets.
+- **Fila offline**: se o `POST` falhar por rede/502/503/504, o registo fica em `peso_fila_v2` (mostrado como pendente na lista, sem editar/eliminar) e sincroniza no `online`/no arranque. É idempotente: cada registo leva um `cid` e o servidor devolve o já criado em vez de duplicar. Só a criação é enfileirada; editar/eliminar exigem ligação.
+- **Importação única** (Configurações > Migração, `importarDoSheets()`): lê o Sheets com o token, envia em blocos de 100 para `POST /peso/importar` (`cid = imp-<linha>`, idempotente) e só importa a configuração se o servidor ainda não tiver nenhuma. Depois de importado, esconde o cartão (`peso_importado_v2`). Pode apagar-se este código e o scope `spreadsheets.readonly` quando já não for preciso.
+- Service worker: `duckdns.org` foi para `NUNCA_CACHEAR` (a API nunca vai a cache).
+- **Estado no Pi (24/09/2026)**: `~/dados/` copiado por `rsync`; serviço systemd `dados-api` (porta 8898, só loopback, sandbox ativa) a correr e ligado ao arranque; `location /dados-api/` acrescentado ao vhost do ntfy (backup do original em `/root/backup-nginx-20260924-084022/`) mais a zona `dados_api` em `/etc/nginx/conf.d/dados-api.conf`; jail `dados-api-auth` no fail2ban (conta 401/403/429, nunca 503). Dados importados do Sheets com `dados/importar_peso.py --gravar` (147 registos + 8 valores de config, verificados contra os valores formatados da folha: 0 diferenças). O Sheets foi mantido intacto. **Ainda por fazer**: o backup para o GitHub privado (`dados/backup.py`), e o primeiro login real na app v5.0.0 (o `tokeninfo` da Google só foi testado com tokens falsos).
 
 Funcionalidades: tendência por regressão linear (não apenas os dois últimos pesos), evolução mensal, melhor/pior semana, previsão de data ao objetivo, TDEE (Mifflin-St Jeor) e IMC classificados, sequência de dias, e desfazer eliminação com undo otimista.
 
