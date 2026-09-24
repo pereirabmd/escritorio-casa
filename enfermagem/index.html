@@ -429,6 +429,10 @@ const SCOPES = 'https://www.googleapis.com/auth/spreadsheets';
    Cada entidade tem sempre um "parser" associado: é isso que decide
    o algoritmo usado para ler o ficheiro carregado. Para adicionar uma
    entidade nova é preciso adicionar aqui uma entrada + o parser dela. */
+// Escapa texto vindo de ficheiros (XLSX/PDF/OCR), do nome do ficheiro ou da Sheet antes de o pôr em innerHTML.
+function esc(v){
+  return String(v == null ? '' : v).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
 const ENTIDADES = [
   {
     id: 'UCC', nome: 'UCC Oliveira do Bairro', cor: '#0D6E7A',
@@ -513,10 +517,6 @@ function lerTokenGuardado(){
   } catch (e) {
     return null;
   }
-}
-
-function limparTokenGuardado(){
-  try { localStorage.removeItem(TOKEN_STORAGE_KEY); } catch (e) {}
 }
 
 function agendarRenovacaoSilenciosa(expiraEm){
@@ -1063,7 +1063,7 @@ function renderHistoricoImportacoes(){
     <div class="histRow">
       <div>
         <div><span class="dot" style="background:${corEntidade(g.entidadeId)};display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px;"></span><strong>${nomeEntidade(g.entidadeId)}</strong></div>
-        <div class="histInfo">${g.origem} · ${g.count} turno(s) · ${g.min} a ${g.max}</div>
+        <div class="histInfo">${esc(g.origem)} · ${g.count} turno(s) · ${esc(g.min)} a ${esc(g.max)}</div>
       </div>
     </div>`).join('');
 }
@@ -1671,7 +1671,7 @@ function mostrarPreview(turnos, avisos, entidadeId){
     warnEl = document.createElement('div');
     warnEl.id = 'previewWarnings';
     warnEl.className = 'warnBox';
-    warnEl.innerHTML = avisos.slice(0, 6).map(a => `• ${a}`).join('<br>') +
+    warnEl.innerHTML = avisos.slice(0, 6).map(a => `• ${esc(a)}`).join('<br>') +
       (avisos.length > 6 ? `<br>+ ${avisos.length - 6} avisos...` : '');
     area.insertBefore(warnEl, document.getElementById('confirmBtn'));
   }
@@ -1700,9 +1700,9 @@ function renderPreviewTable(){
   const turnos = previewTurnosPendentes ? previewTurnosPendentes.turnos : [];
   tbody.innerHTML = turnos.map((t, i) => `
     <tr data-idx="${i}">
-      <td><input type="date" value="${t.data}" data-campo="data"></td>
-      <td><input type="time" value="${t.entrada}" data-campo="entrada"></td>
-      <td><input type="time" value="${t.saida}" data-campo="saida"></td>
+      <td><input type="date" value="${esc(t.data)}" data-campo="data"></td>
+      <td><input type="time" value="${esc(t.entrada)}" data-campo="entrada"></td>
+      <td><input type="time" value="${esc(t.saida)}" data-campo="saida"></td>
       <td class="previewDuracao">${calcDuracaoH(t.entrada, t.saida)}h</td>
       <td><button type="button" class="previewRemoveBtn" data-remove-preview="${i}" title="Remover esta linha">✕</button></td>
     </tr>
