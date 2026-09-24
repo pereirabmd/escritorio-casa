@@ -219,6 +219,9 @@ class FileLock:
 # ntfy: publicar (com agendamento opcional) e cancelar
 # ---------------------------------------------------------------------------
 
+NTFY_ICON_URL = "https://pereirabmd.github.io/escritorio-casa/tarefas/icon-192.png"
+
+
 def ntfy_publish(*, title: str, message: str, delay_at: datetime | None = None,
                  actions: list[dict] | None = None, tags: list[str] | None = None,
                  priority: int = 4, click: str | None = None) -> dict | None:
@@ -234,7 +237,9 @@ def ntfy_publish(*, title: str, message: str, delay_at: datetime | None = None,
     base = env("NTFY_SERVER_URL").rstrip("/")
     topic = env("NTFY_TOPIC", "tarefas")
     body: dict[str, Any] = {"topic": topic, "title": title, "message": message,
-                            "priority": priority}
+                            "priority": priority,
+                            # ícone da app na notificação (GitHub Pages serve-o ao telemóvel)
+                            "icon": env("NTFY_ICON_URL", NTFY_ICON_URL)}
     if tags:
         body["tags"] = tags
     if click:

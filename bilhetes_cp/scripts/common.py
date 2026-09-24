@@ -169,6 +169,9 @@ def get_logger(name: str) -> logging.Logger:
 # Notificações ntfy (nunca em silêncio; todas com popup — Priority high)
 # ---------------------------------------------------------------------------
 
+NTFY_ICON_URL = "https://pereirabmd.github.io/escritorio-casa/bilhetes_cp/assets/icon-192.png"
+
+
 def notify(title: str, message: str, *, tags: Iterable[str] = (), at: datetime | None = None,
            logger: logging.Logger | None = None) -> bool:
     """Publica no ntfy com Priority high (popup no Android). Devolve True se 2xx.
@@ -186,6 +189,8 @@ def notify(title: str, message: str, *, tags: Iterable[str] = (), at: datetime |
         "message": sanitize(message),
         "priority": 4,
         "tags": list(tags),
+        # ícone da app na notificação (o telemóvel vai buscá-lo por HTTPS; GitHub Pages serve-o)
+        "icon": env("NTFY_ICON_URL", NTFY_ICON_URL),
     }
     if at is not None:
         payload["delay"] = str(int(at.timestamp()))
