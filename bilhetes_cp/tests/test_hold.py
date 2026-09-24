@@ -10,12 +10,61 @@ import unittest
 from unittest import mock
 
 import _env  # noqa: F401
+import cp_ticket
 import hot_buy
 from cp_ticket import CPClient, CPError
 from test_purchase_flow import FakeCP, FlowBase, resp
 
 RECUSA = lambda: resp(500, {"error": "SIV:DIS:I:302", "description": "Sale item not available"})  # noqa: E731
 ESGOTADO = lambda: resp(500, {"error": "WS:RES:114", "description": "Não há lugares disponíveis para a classe selecionada"})  # noqa: E731
+
+
+def place(seat, status=0, ptype=1):
+    return {"placeType": ptype, "seatNumber": seat, "rowCode": 1, "plugType": 0, "withTable": False, "statusCode": status, "changeable": True}
+
+
+def carriage(number, lines):
+    """`lines`: 5 listas de lugares (janela, corredor, [corredor vazio], corredor, janela) como no mapa real da CP."""
+    rows = [{"number": i, "places": pl} for i, pl in enumerate(lines)]
+    return {"number": number, "attributes": ["WC"], "rows": rows}
+
+
+AISLE_ROW = [{"placeType": 0, "withTable": False}] * 3     # a linha do corredor: sem `seatNumber`
+
+
+def mapa(status_corredor=(0, 0), atual=(21, 112)):
+    """Carruagem 21, 2+2: janela (112,111), corredor (118,113), corredor (114,117), janela (116,115)."""
+    def seat(n, st=0):
+        return place(n, 2) if (21, n) == atual else place(n, st)
+    linhas = [[seat(112), seat(111)], [seat(118, status_corredor[0]), seat(113, status_corredor[1])], AISLE_ROW,
+              [seat(114), seat(117)], [seat(116), seat(115)]]
+    return {"trainNumber": 731, "carriages": [carriage(21, linhas)]}
+
+
+class SeatMapTests(unittest.TestCase):
+    def test_deteta_janela_e_corredor_pela_linha_vazia(self):
+        seats = {s["seat"]: s["position"] for s in cp_ticket.seats_by_position(mapa())}
+        self.assertEqual((seats[112], seats[118], seats[114], seats[116]), ("janela", "corredor", "corredor", "janela"))
+
+    def test_escolhe_livres_ao_corredor_perto_do_atual(self):
+        cand = cp_ticket.pick_aisle_seats(mapa(), 21, 112)
+        self.assertTrue(all(c[1] in (118, 113, 114, 117) for c in cand))
+        self.assertEqual(cand[0], (21, 113))            # |113−112| = 1: o mais perto
+
+    def test_ignora_ocupados_e_lugares_especiais(self):
+        cand = cp_ticket.pick_aisle_seats(mapa(status_corredor=(1, 3)), 21, 112)
+        self.assertNotIn((21, 118), cand); self.assertNotIn((21, 113), cand)
+        m = mapa(); m["carriages"][0]["rows"][1]["places"][1]["placeType"] = 7
+        self.assertNotIn((21, 113), cp_ticket.pick_aisle_seats(m, 21, 112))
+
+    def test_ja_no_corredor_nao_muda(self):
+        self.assertEqual(cp_ticket.pick_aisle_seats(mapa(atual=(21, 118)), 21, 118), [])
+
+    def test_mapa_estranho_nao_rebenta(self):
+        for m in (None, {}, {"carriages": []}, {"carriages": [{"number": 1, "rows": []}]}, "x"):
+            self.assertEqual(cp_ticket.pick_aisle_seats(m, 21, 112), [])
+        sem_corredor = {"carriages": [carriage(21, [[place(1)], [place(2)]])]}
+        self.assertEqual(cp_ticket.pick_aisle_seats(sem_corredor, 21, 1), [])
 
 
 class ToAmountTests(unittest.TestCase):
@@ -126,6 +175,74 @@ class HoldTests(HoldBase):
         _, st = self.run_early(cp)
         self.assertEqual(st["state"], "FAILED")
         self.assertIn("cancel", cp.calls)
+
+
+SALE_COM_LUGAR = {"saleID": 777, "seatData": {"carriageNumber": 21, "seatNumber": 112}}
+
+
+class SeatTests(HoldBase):
+    def cp(self, **kw):
+        cp = FakeCP(sale_script=[resp(200, SALE_COM_LUGAR)], **kw)
+        cp.seat_map = mapa()
+        return cp
+
+    def test_muda_para_o_corredor_com_a_venda_retida_e_antes_do_desconto(self):
+        cp = self.cp()
+        _, st = self.run_early(cp)
+        self.assertEqual(st["state"], "CONFIRMED")
+        self.assertIn(("change_seat", 21, 113), cp.calls)
+        calls = [c for c in cp.calls if c != "warm"]
+        self.assertLess(calls.index(("change_seat", 21, 113)), calls.index("passengers"))   # logo depois de reter
+        self.assertEqual((st["carriage"], st["seat"]), (3, 42))    # no fim vale o lugar que o confirm devolve
+        self.assertEqual(st["seat_changed"], "21/112 → 21/113 (corredor)")
+
+    def test_lugar_ocupado_tenta_o_seguinte(self):
+        cp = self.cp()
+        cp.seat_changes = [resp(500, {"error": "WS:RES:120", "message": "lugar ocupado"})]
+        _, st = self.run_early(cp)
+        self.assertEqual(st["state"], "CONFIRMED")
+        tentativas = [c for c in cp.calls if isinstance(c, tuple)]
+        self.assertEqual(len(tentativas), 2)
+        self.assertIn("→", st["seat_changed"])
+
+    def test_todos_ocupados_segue_com_o_lugar_atribuido(self):
+        cp = self.cp()
+        cp.seat_changes = [resp(500, {"error": "WS:RES:120"})] * 10
+        _, st = self.run_early(cp)
+        self.assertEqual(st["state"], "CONFIRMED")
+        self.assertNotIn("seat_changed", st)
+
+    def test_erro_no_mapa_nunca_estraga_a_compra(self):
+        cp = self.cp()
+        cp.seat_map = CPError("http", "mapa indisponível")
+        _, st = self.run_early(cp)
+        self.assertEqual(st["state"], "CONFIRMED")
+        self.assertEqual(cp.calls.count("sale"), 1)
+
+    def test_excecao_inesperada_nunca_estraga_a_compra(self):
+        cp = self.cp()
+        cp.seat_map = {"carriages": "lixo"}
+        self.assertEqual(self.run_early(cp)[1]["state"], "CONFIRMED")
+
+    def test_ja_ao_corredor_nao_muda(self):
+        cp = FakeCP(sale_script=[resp(200, {"saleID": 777, "seatData": {"carriageNumber": 21, "seatNumber": 118}})])
+        cp.seat_map = mapa(atual=(21, 118))
+        _, st = self.run_early(cp)
+        self.assertEqual(st["state"], "CONFIRMED")
+        self.assertFalse([c for c in cp.calls if isinstance(c, tuple)])
+
+    def test_desligada_por_configuracao(self):
+        real = hot_buy.cfg
+        cp = self.cp()
+        with mock.patch.object(hot_buy, "cfg", lambda n, d: "none" if n == "seat_preference" else real(n, d)):
+            _, st = self.run_early(cp)
+        self.assertEqual(st["state"], "CONFIRMED")
+        self.assertNotIn("seat_map", cp.calls)
+
+    def test_sem_retencao_a_compra_a_T_nao_perde_tempo_com_lugares(self):
+        cp = self.cp()
+        _, st = self.run_buyer(cp, clock_offset=100)       # T já passou: fluxo normal
+        self.assertNotIn("seat_map", cp.calls)
 
 
 class SafetyTests(HoldBase):

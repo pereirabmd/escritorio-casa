@@ -30,7 +30,7 @@ from typing import Any, Callable
 import common
 from common import (STATES, TERMINAL, TZ, Leg, PurchaseLock, app_config, get_logger,
                     notify, notify_once, short_hash, station_code)
-from cp_ticket import (CPClient, CPError, classify_sale_response, login, pick_trip,
+from cp_ticket import (CPClient, CPError, classify_sale_response, login, pick_aisle_seats, pick_trip,
                        refresh_tokens, trip_sections)
 import pre_flight
 import timetable
@@ -321,6 +321,7 @@ class Buyer:
 
         # 3b) reter o lugar ANTES de T e só disputar o desconto a T (ver hold_sale); se não for possível, fluxo normal
         if cfg("hold_before_open", True) and self.hold_sale():
+            self.improve_seat(self.lock.state["sale_id"])    # lugar ao corredor, com a venda retida (antes de T)
             early = self.complete_sale(pre_only=True)        # passageiro, cliente, fiscal (antes de T)
             if early is not None:
                 return early
@@ -598,6 +599,43 @@ class Buyer:
                 log.warning("Não consegui reter o lugar antes de T; sigo para o disparo normal a T.")
                 return False
             self.sleep(interval)
+
+    def improve_seat(self, sale_id: Any) -> None:
+        """Preferência de lugar (por omissão «corredor»; `seat_preference` = aisle|none): com a venda RETIDA antes de T, muda o
+        lugar atribuído para um livre ao corredor (`PUT /train-seats`, testado a 24/09/2026). Nunca faz falhar a compra: qualquer
+        erro fica em log e a compra segue com o lugar que a CP deu. Se isto vier a atrapalhar, desliga-se com
+        `seat_preference: "none"` (decisão de 24/09: seguir o comportamento e retirar se falhar por causa disto)."""
+        if str(cfg("seat_preference", "aisle")).lower() not in ("aisle", "corredor"):
+            return
+        try:
+            seats = list(self.lock.state.get("seats") or [])
+            for cur in seats:
+                train = cur.get("train") or self.leg.train
+                if cur.get("carriage") in (None, "") or cur.get("seat") in (None, ""):
+                    continue
+                seat_map = self.cp.get_seat_map(sale_id, train)
+                candidatos = pick_aisle_seats(seat_map, int(cur["carriage"]), int(cur["seat"]),
+                                              limit=int(cfg("seat_change_max_tries", 4)))
+                if not candidatos:
+                    log.info("Lugar %s/%s: já é corredor (ou não há corredor livre); não mudo.", cur["carriage"], cur["seat"])
+                    continue
+                for carriage, seat in candidatos:
+                    try:
+                        resp = self.cp.change_seat(sale_id, train, int(cur["carriage"]), int(cur["seat"]), carriage, seat)
+                    except CPError as e:
+                        log.info("Lugar %s/%s ocupado ou recusado (%s); tento o seguinte.", carriage, seat,
+                                 (e.response.text[:80] if e.response is not None else e))
+                        continue
+                    novo = dict(cur, carriage=carriage, seat=seat)
+                    seats = [novo if s is cur else s for s in seats]
+                    self.lock.update(seats=seats, carriage=(seats[0]["carriage"] if len(seats) == 1 else self.lock.state.get("carriage")),
+                                     seat=(seats[0]["seat"] if len(seats) == 1 else self.lock.state.get("seat")),
+                                     seat_changed=f"{cur['carriage']}/{cur['seat']} → {carriage}/{seat} (corredor)")
+                    log.info("Lugar mudado para o corredor: %s/%s → %s/%s (%.0f ms)", cur["carriage"], cur["seat"], carriage, seat,
+                             resp.elapsed_ms)
+                    break
+        except Exception as e:  # noqa: BLE001 — a preferência nunca pode estragar a compra
+            log.warning("Preferência de lugar falhou (%s: %s); sigo com o lugar atribuído.", type(e).__name__, e)
 
     def cancel_sale(self, sale_id: Any, why: str) -> None:
         """Liberta o lugar de uma venda que sabemos que não vai ser confirmada (nunca em estados incertos)."""

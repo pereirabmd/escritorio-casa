@@ -79,7 +79,7 @@ def main() -> int:
     code = buyer.run()
     st = common.peek_state(leg.lock_key)
     print("resultado:", code, st.get("state"), "|", st.get("final_message", "")[:200], "|", st.get("timing", "")[:300],
-          "|", st.get("discount_timing", "")[:300], "| pedidos ao desconto:", st.get("discount_attempts"), flush=True)
+          "|", st.get("discount_timing", "")[:300], "| pedidos ao desconto:", st.get("discount_attempts"), "| lugar:", st.get("seat_changed") or "não mudado", st.get("seats"), flush=True)
     common.lock_path(leg.lock_key).unlink(missing_ok=True)
     return code
 

@@ -861,6 +861,19 @@ nunca esteve ativo (as 4 compras reais registaram «totalAmount não encontrado�
 **Limite de pedidos da CP:** HTTP 429 depois de ~120 pedidos em ~30 s (ensaio de 24/09). O orçamento acima cumpre-o; um 429 no
 desconto espera `Retry-After` (≥ 1 s) e continua (desiste ao 9.º).
 
+**Lugar ao corredor (24/09/2026).** O `POST /sale` atribui um lugar mas não deixa escolher; o site tem, porém, o mapa
+(`GET /ticketing-api/train-seats/{venda}/trains/{n}`) e a mudança (`PUT /ticketing-api/train-seats/{venda}`, corpo descoberto pelas
+mensagens de erro da CP: `{"originalSeats":[{trainNumber,carriageNumber,seatNumber}], "requestedSeats":[{…}]}`; lugar ocupado →
+500 `WS:RES:120 «lugar ocupado»`). Funciona numa venda pendente **antes de T** (testado: 21/105 → 21/98 em 160 ms). Leitura do
+mapa: cada carruagem tem `rows` = **linhas da disposição** (num 2+2, cinco: janela, corredor, **linha vazia = o corredor**, corredor,
+janela); `statusCode` 0 = livre, 1/3 = ocupado/fora de venda, 2 = o lugar desta venda; `placeType` 1/2 = normais (7/9 = especiais,
+não escolher). `cp_ticket.pick_aisle_seats` devolve os lugares livres ao corredor (mesma carruagem primeiro, depois os mais
+perto). `Buyer.improve_seat` corre logo depois de reter o lugar (antes do passageiro/cliente/fiscal e do desconto), tenta até
+`seat_change_max_tries`=4 lugares e **nunca faz falhar a compra** (qualquer erro fica em log e segue com o lugar dado). Só na
+retenção antes de T (a T já não se perde tempo). `seat_preference: "aisle"` (por omissão) | `"none"` desliga. Decisão de
+Bruno: seguir o comportamento e retirar se falhar por causa disto. Por confirmar: se o `confirm` e o bilhete refletem o lugar mudado
+(o `confirm` devolve o lugar final e é esse que vai no lembrete; o lock fica com o lugar novo em `seat_changed`).
+
 **Ferramenta de ensaio:** `scripts/ensaio_compra.py` corre o `Buyer` verdadeiro contra a CP verdadeira, mas o «confirmar»
 cancela a venda (nada é comprado); `--sem-ancora` inventa um T daqui a uns minutos para ensaiar a retenção.
 

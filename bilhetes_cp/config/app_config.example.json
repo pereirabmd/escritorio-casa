@@ -83,7 +83,9 @@
     "discount_max_fast_attempts": 48,
     "discount_slow_interval_s": 1.5,
     "discount_window_s": 180,
-    "discount_unknown_s": 10
+    "discount_unknown_s": 10,
+    "seat_preference": "aisle",
+    "seat_change_max_tries": 4
   },
   "reminders": {
     "config_missing_check_times": [

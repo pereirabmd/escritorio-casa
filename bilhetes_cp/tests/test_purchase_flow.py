@@ -44,6 +44,24 @@ class FakeCP:
         self.calls.append("cancel")
         return resp(200, {"status": {"code": "CANCELLED"}})
 
+    seat_map = None
+    seat_changes = None          # respostas/exceções do PUT de lugar (uma por chamada)
+
+    def get_seat_map(self, sid, train):
+        self.calls.append("seat_map")
+        if isinstance(self.seat_map, Exception):
+            raise self.seat_map
+        return self.seat_map
+
+    def change_seat(self, sid, train, fc, fs, tc, ts):
+        self.calls.append(("change_seat", tc, ts))
+        item = self.seat_changes.pop(0) if self.seat_changes else resp(200, {})
+        if isinstance(item, Exception):
+            raise item
+        if not item.ok:
+            raise CPError("http", f"HTTP {item.status}", item)
+        return item
+
     trip = None
 
     def search_journeys(self, *a):

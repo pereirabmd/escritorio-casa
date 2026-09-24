@@ -218,6 +218,56 @@ def classify_sale_response(resp: CPResponse) -> tuple[str, str]:
 
 
 # ---------------------------------------------------------------------------
+# Mapa de lugares (24/09/2026)
+# ---------------------------------------------------------------------------
+# Cada carruagem tem `rows` = LINHAS da disposição (não filas): num 2+2 são 5 — duas de lugares, uma de CORREDOR (todos os
+# `places` sem `seatNumber`), duas de lugares. Os lugares nas linhas vizinhas do corredor são «corredor»; os das pontas, «janela».
+# `statusCode`: 0 livre · 1 e 3 ocupado/fora de venda («lugar ocupado») · 2 o lugar desta venda. `placeType` 1/2 = os lugares
+# normais (7/9 = lugares especiais: não os escolher).
+
+FREE, MINE = 0, 2
+
+
+def seat_position(rows: list[dict], i: int) -> str | None:
+    """'corredor' | 'janela' | None para a linha i de uma carruagem (None se a linha for o próprio corredor ou não há corredor)."""
+    def is_aisle(r: dict) -> bool:
+        return bool(r.get("places")) and all("seatNumber" not in p for p in r["places"])
+    if is_aisle(rows[i]):
+        return None
+    aisles = [k for k, r in enumerate(rows) if is_aisle(r)]
+    if not aisles:
+        return None
+    return "corredor" if any(abs(i - k) == 1 for k in aisles) else "janela"
+
+
+def seats_by_position(seat_map: Any) -> list[dict]:
+    """Todos os lugares normais do mapa como dicts {carriage, seat, position, status, placeType, table, plug}."""
+    out: list[dict] = []
+    for c in (seat_map or {}).get("carriages", []) if isinstance(seat_map, dict) else []:
+        rows = c.get("rows") or []
+        for i, r in enumerate(rows):
+            pos = seat_position(rows, i)
+            for p in r.get("places", []):
+                if "seatNumber" not in p:
+                    continue
+                out.append({"carriage": c.get("number"), "seat": p["seatNumber"], "position": pos, "status": p.get("statusCode"),
+                            "placeType": p.get("placeType"), "table": bool(p.get("withTable")), "plug": bool(p.get("plugType"))})
+    return out
+
+
+def pick_aisle_seats(seat_map: Any, cur_carriage: Any, cur_seat: Any, limit: int = 6) -> list[tuple[int, int]]:
+    """Lugares livres ao corredor, do melhor para o pior: na mesma carruagem primeiro e depois os mais perto do lugar
+    atual. [] se o lugar atual já é corredor (ou não se percebe o mapa): nada a mudar."""
+    seats = seats_by_position(seat_map)
+    mine = next((s for s in seats if s["carriage"] == cur_carriage and s["seat"] == cur_seat), None)
+    if mine is None or mine["position"] in (None, "corredor"):
+        return []
+    livres = [s for s in seats if s["status"] == FREE and s["position"] == "corredor" and s["placeType"] in (1, 2)]
+    livres.sort(key=lambda s: (s["carriage"] != cur_carriage, abs((s["seat"] or 0) - (cur_seat or 0))))
+    return [(s["carriage"], s["seat"]) for s in livres[:limit]]
+
+
+# ---------------------------------------------------------------------------
 # PKCE helpers
 # ---------------------------------------------------------------------------
 
@@ -400,6 +450,20 @@ class CPClient:
             return self.request("GET", path, api_key=X_API_KEY_TRAVEL, with_token=False, timeout=(4.0, 6.0))
         except CPError:
             return None
+
+    def get_seat_map(self, sale_id: int, train: int) -> Any:
+        """Mapa de lugares do comboio para esta venda (`GET /train-seats/{venda}/trains/{n}`, ~40 KB, ~280 ms)."""
+        return self._checked("GET", f"/ticketing-api/train-seats/{sale_id}/trains/{train}",
+                             api_key=X_API_KEY_TICKETING, with_client_id=True).body
+
+    def change_seat(self, sale_id: int, train: int, from_carriage: int, from_seat: int,
+                    to_carriage: int, to_seat: int) -> CPResponse:
+        """Muda o lugar de uma venda PENDENTE (`PUT /train-seats/{venda}`; descoberto em 24/09/2026 pelas mensagens de erro:
+        `originalSeats` + `requestedSeats`). Lugar ocupado → 500 `WS:RES:120 «lugar ocupado»` (CPError)."""
+        body = {"originalSeats": [{"trainNumber": train, "carriageNumber": from_carriage, "seatNumber": from_seat}],
+                "requestedSeats": [{"trainNumber": train, "carriageNumber": to_carriage, "seatNumber": to_seat}]}
+        return self._checked("PUT", f"/ticketing-api/train-seats/{sale_id}", api_key=X_API_KEY_TICKETING,
+                             body=body, with_client_id=True)
 
     def cancel_sale(self, sale_id: int) -> CPResponse | None:
         """Cancela uma venda pendente e liberta o lugar (`DELETE /sale/{id}` → 200 «CANCELLED»; testado 24/09/2026).
