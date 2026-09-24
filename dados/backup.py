@@ -110,19 +110,25 @@ def _git(repo: Path, *args: str) -> str:
     return r.stdout
 
 
+def _tem_commits(repo: Path) -> bool:
+    return subprocess.run(["git", "-C", str(repo), "rev-parse", "--verify", "-q", "HEAD"],
+                          capture_output=True).returncode == 0
+
+
 def publicar(texto: str) -> bool:
     """Cifra para o clone do repo privado e faz push. False se não houve alteração no Git."""
     repo = Path(env("BACKUP_REPO_DIR"))
     if not (repo / ".git").is_dir():
         raise BackupError(f"BACKUP_REPO_DIR não é um clone git: {repo}")
-    _git(repo, "pull", "--ff-only")
+    if _tem_commits(repo):
+        _git(repo, "pull", "--ff-only")   # num repositório ainda vazio (1º backup) não há nada para puxar
     cifrar(texto, repo / BACKUP_FILE)
     _git(repo, "add", BACKUP_FILE)
     if not _git(repo, "status", "--porcelain").strip():
         return False
     _git(repo, "-c", "user.name=dados-backup", "-c", "user.email=dados-backup@localhost",
          "commit", "-m", f"backup {datetime.now():%Y-%m-%d %H:%M}")
-    _git(repo, "push")
+    _git(repo, "push", "-u", "origin", "HEAD")
     return True
 
 

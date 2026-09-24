@@ -72,6 +72,36 @@ class DumpTest(unittest.TestCase):
                 backup.verificar(truncado, conn, {"logs_x"})
 
 
+class PublicarTest(unittest.TestCase):
+    """Percurso git completo contra um remoto local (sem rede): repositório vazio, e depois alterações."""
+
+    def _git(self, *a, cwd=None):
+        import subprocess
+        return subprocess.run(["git", *a], cwd=cwd, capture_output=True, text=True, check=True).stdout
+
+    def test_repo_vazio_e_depois_so_se_mudou(self):
+        import os, stat, subprocess
+        with tempfile.TemporaryDirectory() as d:
+            d = Path(d)
+            (d / "bin").mkdir()
+            age = d / "bin" / "age"
+            age.write_text('#!/bin/sh\nwhile [ $# -gt 0 ]; do [ "$1" = "-o" ] && out="$2"; shift; done\ncat > "$out"\n')
+            age.chmod(age.stat().st_mode | stat.S_IEXEC)
+            self._git("init", "-q", "--bare", "-b", "main", str(d / "remoto.git"))
+            self._git("clone", "-q", str(d / "remoto.git"), str(d / "clone"))     # clone vazio, como no Pi
+            env = {"PATH": f"{d / 'bin'}:{os.environ['PATH']}", "BACKUP_REPO_DIR": str(d / "clone"),
+                   "AGE_RECIPIENT": "age1teste", "BACKUP_SSH_KEY": "/dev/null",
+                   "GIT_CONFIG_GLOBAL": "/dev/null"}
+            with mock.patch.dict("os.environ", env):
+                self.assertTrue(backup.publicar("texto v1"))                        # 1º backup num repo vazio
+                self.assertFalse(backup.publicar("texto v1"))                       # igual: nada a commitar
+                self.assertTrue(backup.publicar("texto v2"))
+            log = self._git("log", "--format=%s", cwd=d / "remoto.git").splitlines()
+            self.assertEqual(len(log), 2)
+            self.assertEqual(self._git("show", "main:dados.sql.age", cwd=d / "remoto.git"), "texto v2")
+            self.assertEqual(self._git("ls-tree", "--name-only", "main", cwd=d / "remoto.git").split(), ["dados.sql.age"])
+
+
 class FluxoTest(unittest.TestCase):
     def _correr(self, d, **extra):
         env = {"DADOS_DB": str(Path(d) / "a.db"), "BACKUP_EXCLUIR": "logs_x", **extra}

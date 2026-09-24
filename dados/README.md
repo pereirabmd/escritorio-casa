@@ -25,6 +25,10 @@ cd ~/dados && cp .env.example .env && chmod 600 .env
 python3 db.py init
 ```
 
+### Estado atual do backup (24/09/2026)
+
+Instalado: repositório privado `pereirabmd/backup_database`, timer diário, alerta no tópico ntfy `backup`, restauro testado. A chave privada `age` está **só** em `~/.age/dados-backup.key` na máquina do utilizador (não no Pi). Para restaurar: descarregar `dados.sql.age` do repositório e `python3 backup.py restore dados.sql.age --identity ~/.age/dados-backup.key --out novo.db`. Os passos abaixo são o procedimento genérico para repetir a instalação.
+
 ### Repositório de backup
 
 1. Criar no GitHub um repositório **privado** novo (nunca o `escritorio-casa`, que é público).
