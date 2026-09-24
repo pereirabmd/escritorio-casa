@@ -103,6 +103,19 @@ def encrypt(plain: str) -> str:
     return Fernet(key.encode()).encrypt(plain.encode()).decode()
 
 
+def pedir_provisionamento_ntfy(user: str, password: str) -> Path:
+    """Deixa um pedido para o `provisionar_ntfy.py` (root, via `tarefas-ntfy-provision.path`) criar/atualizar a conta ntfy
+    de leitura desta pessoa com este utilizador/password. O ficheiro (600, pasta 700) só existe até ser processado."""
+    import secrets
+    pasta = _state_file("ntfy_provision")
+    pasta.mkdir(mode=0o700, exist_ok=True)
+    alvo = pasta / f"{secrets.token_hex(8)}.json"
+    fd = os.open(alvo, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    with os.fdopen(fd, "w", encoding="utf-8") as f:
+        json.dump({"user": user, "password": password}, f)
+    return alvo
+
+
 def decrypt(token: str) -> str:
     from cryptography.fernet import Fernet
     key = env("FERNET_KEY")

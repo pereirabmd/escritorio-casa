@@ -147,6 +147,11 @@ def handle_configurar_ntfy(sheets: SheetsClient, params: dict[str, Any]) -> dict
     ntfy_password = str(params.get("ntfyPassword") or "")
     if not pessoa or not ntfy_user or not ntfy_password:
         return {"ok": False, "erro": "pessoa, ntfyUser e ntfyPassword são obrigatórios"}
+    try:
+        import provisionar_ntfy
+        provisionar_ntfy.validar({"user": ntfy_user, "password": ntfy_password})   # as mesmas regras do serviço que cria a conta
+    except ValueError as e:
+        return {"ok": False, "erro": f"{e} — utilizador: letras minúsculas, números, _ ou - (2 a 40); password: 6 a 100 caracteres"}
     n = _numero_pessoa(sheets.read_objects("Config"), pessoa)
     if n is None:
         return {"ok": False, "erro": f'pessoa "{pessoa}" não encontrada em Config (Pessoa{{N}}_Nome)'}
@@ -155,7 +160,14 @@ def handle_configurar_ntfy(sheets: SheetsClient, params: dict[str, Any]) -> dict
     # em paralelo, sempre sequenciais, para não repetir o bug da Beta 35.
     sheets.set_config(f"Pessoa{n}_NtfyUser", ntfy_user)
     sheets.set_config(f"Pessoa{n}_NtfyPasswordEnc", cifrado)
-    return {"ok": True}
+    # o utilizador/password da app passam a ser a conta ntfy da pessoa (só lê o tópico dela): pedido para o serviço root
+    try:
+        common.pedir_provisionamento_ntfy(ntfy_user, ntfy_password)
+        aviso = "Conta ntfy criada/atualizada em segundos; subscreve o tópico " + (common.topico_da_pessoa({f"Pessoa{n}_Nome": pessoa, f"Pessoa{n}_NtfyUser": ntfy_user}, pessoa) or "") + " na app ntfy."
+    except OSError:
+        log.exception("não consegui deixar o pedido de conta ntfy")
+        aviso = "Guardado, mas a conta ntfy não foi criada (ver logs do Pi)."
+    return {"ok": True, "aviso": aviso}
 
 
 def handle_testar(sheets: SheetsClient, params: dict[str, Any]) -> dict[str, Any]:

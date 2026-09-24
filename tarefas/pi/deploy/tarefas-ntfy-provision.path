@@ -1,0 +1,10 @@
+# Dispara o provisionamento quando o servidor.py deixa um pedido (ver provisionar_ntfy.py).
+[Unit]
+Description=tarefas de casa — pedidos de contas ntfy
+
+[Path]
+PathExistsGlob=/home/bpereira/tarefas/pi/state/ntfy_provision/*.json
+Unit=tarefas-ntfy-provision.service
+
+[Install]
+WantedBy=multi-user.target

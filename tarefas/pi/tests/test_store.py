@@ -230,9 +230,11 @@ class ServidorTest(SqliteBase):
         self.assertEqual(self.sql("SELECT estado, data_conclusao <> '' FROM tarefas_instancias WHERE id='I0001'"), [("Feita", 1)])
         self.assertEqual(self.sql("SELECT notificacao_enviada FROM tarefas_instancias WHERE id='I0002'")[0][0], 0)
 
-    def test_configurar_ntfy_cifra_e_grava_nas_chaves_da_pessoa(self):
+    @mock.patch.object(common, "pedir_provisionamento_ntfy")
+    def test_configurar_ntfy_cifra_e_grava_nas_chaves_da_pessoa(self, pedir):
         r = servidor.handle_configurar_ntfy(self.st, {"pessoa": "Camila", "ntfyUser": "tarefas_camila", "ntfyPassword": "segredo123"})
-        self.assertEqual(r, {"ok": True})
+        self.assertTrue(r["ok"])
+        pedir.assert_called_once_with("tarefas_camila", "segredo123")
         cfg = {x["Chave"]: x["Valor"] for x in self.st.read_objects("Config")}
         self.assertEqual(cfg["Pessoa2_NtfyUser"], "tarefas_camila")
         self.assertNotIn("segredo123", cfg["Pessoa2_NtfyPasswordEnc"])

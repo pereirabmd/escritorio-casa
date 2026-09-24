@@ -1,0 +1,15 @@
+# Corre como root (é preciso para gerir contas do ntfy). O script vive em /usr/local/sbin (dono root) e valida tudo.
+#   sudo install -o root -g root -m 755 provisionar_ntfy.py /usr/local/sbin/tarefas-ntfy-provision
+[Unit]
+Description=tarefas de casa — criar/atualizar contas ntfy
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/tarefas-ntfy-provision
+NoNewPrivileges=true
+ProtectHome=read-only
+ReadWritePaths=/home/bpereira/tarefas/pi/state/ntfy_provision /var/lib/ntfy
+PrivateTmp=true
+ProtectKernelTunables=true
+ProtectControlGroups=true
+RestrictAddressFamilies=AF_UNIX

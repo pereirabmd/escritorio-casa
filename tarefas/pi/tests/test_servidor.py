@@ -82,16 +82,27 @@ class ConfigurarNtfyTests(TarefasTestCase):
                       {"Chave": "Pessoa2_Nome", "Valor": "Ana"}],
         })
 
-    def test_cria_as_linhas_quando_ainda_nao_existem(self) -> None:
+    @mock.patch.object(common, "pedir_provisionamento_ntfy")
+    def test_cria_as_linhas_quando_ainda_nao_existem(self, pedir) -> None:
         sheets = self._sheets()
         resultado = servidor.handle_configurar_ntfy(
             sheets, {"pessoa": "Bruno", "ntfyUser": "bruno_leitor", "ntfyPassword": "abc123"})
-        self.assertEqual(resultado, {"ok": True})
+        self.assertTrue(resultado["ok"])
+        self.assertIn("tarefas_bruno_leitor", resultado["aviso"])
+        pedir.assert_called_once_with("bruno_leitor", "abc123")          # a conta ntfy é criada com o que a app recebeu
         user = sheets.find_config("Pessoa1_NtfyUser")
         senha = sheets.find_config("Pessoa1_NtfyPasswordEnc")
         self.assertEqual(user["Valor"], "bruno_leitor")
         self.assertNotEqual(senha["Valor"], "abc123")  # tem de ir cifrada
         self.assertEqual(common.decrypt(senha["Valor"]), "abc123")
+
+    def test_utilizador_ou_password_invalidos_nao_gravam_nem_pedem_conta(self) -> None:
+        sheets = self._sheets()
+        with mock.patch.object(common, "pedir_provisionamento_ntfy") as pedir:
+            for u, p in (("tarefas-pi", "abc123"), ("Bruno Silva", "abc123"), ("bruno", "curta")):
+                self.assertFalse(servidor.handle_configurar_ntfy(sheets, {"pessoa": "Bruno", "ntfyUser": u, "ntfyPassword": p})["ok"])
+            pedir.assert_not_called()
+        self.assertIsNone(sheets.find_config("Pessoa1_NtfyUser"))
 
     def test_pessoa_desconhecida_falha(self) -> None:
         sheets = self._sheets()
