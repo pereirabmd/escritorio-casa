@@ -123,7 +123,7 @@ class TestarTests(TarefasTestCase):
         resultado = servidor.handle_testar(FakeSheetsClient(), {"pessoa": "Bruno"})
         self.assertTrue(resultado["ok"])
         self.assertIn("Bruno", publicar.call_args.kwargs["message"])
-        self.assertEqual(publicar.call_args.kwargs.get("click"), servidor.URL_APP)
+        self.assertEqual(publicar.call_args.kwargs.get("click"), servidor.URL_APP + "#config")
 
     @mock.patch.object(common, "ntfy_publish")
     def test_falha_do_ntfy_e_reportada(self, publicar) -> None:

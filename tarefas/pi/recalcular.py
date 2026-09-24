@@ -37,6 +37,12 @@ MARGEM_SEGURANCA_HORAS = 6  # nunca tentar agendar mais perto do limite do ntfy 
 URL_APP = common.env("TAREFAS_APP_URL", "https://pereirabmd.github.io/escritorio-casa/tarefas/")
 
 
+def url_tab(tab: str) -> str:
+    """Toque na notificação: abre a app já no separador a que a mensagem se refere (`#hoje`, `#piscina`, `#horario`).
+    Só o fragmento muda (o caminho é o mesmo), por isso a app instalada continua a reconhecer o URL como seu."""
+    return f"{URL_APP}#{tab}"
+
+
 # ---------------------------------------------------------------------------
 # Ação "Marcar feita" / "Daqui a 1h" na própria notificação — assinada por
 # HMAC (chave só no .env), sem precisar de guardar um segredo por instância.
@@ -152,7 +158,8 @@ def reconciliar_chave(chave: str, alvo: datetime | None, titulo: str, corpo: str
         return "sem_alteracao"
 
     alvo_iso = alvo.isoformat()
-    igual = bool(anterior) and anterior.get("alvo") == alvo_iso and topico_anterior == destino
+    # (o click faz parte da identidade: mudar para onde a notificação leva reagenda-a; estado antigo sem click conta como diferente)
+    igual = bool(anterior) and anterior.get("alvo") == alvo_iso and topico_anterior == destino and anterior.get("click") == click
 
     if alvo <= agora:
         if igual:
@@ -186,7 +193,7 @@ def reconciliar_chave(chave: str, alvo: datetime | None, titulo: str, corpo: str
         return "reagendado" if reagendado else "agendado"
     resp = common.ntfy_publish(title=titulo, message=corpo, delay_at=alvo, actions=acoes, click=click, topic=topico)
     if resp and resp.get("id"):
-        estado[chave] = {"message_id": resp["id"], "alvo": alvo_iso, "topico": destino}
+        estado[chave] = {"message_id": resp["id"], "alvo": alvo_iso, "topico": destino, "click": click}
         return "reagendado" if reagendado else "agendado"
     estado.pop(chave, None)
     return "falhou"
@@ -284,7 +291,7 @@ def _recalcular_sem_lock(sheets: SheetsClient, plan_only: bool) -> dict[str, int
         corpo = f"{inst.get('Pessoa')}: é a vez de \"{nome_tarefa}\" hoje."
         acoes = acoes_notificacao(instancia_id) if alvo is not None else None
 
-        resultado = reconciliar_chave(chave, alvo, titulo, corpo, acoes, estado, agora, plan_only, click=URL_APP,
+        resultado = reconciliar_chave(chave, alvo, titulo, corpo, acoes, estado, agora, plan_only, click=url_tab("hoje"),
                                       topico=common.topico_da_pessoa(config, str(inst.get('Pessoa', ''))))
         contar(resultado)
         if resultado in ("entregue", "presumivelmente_entregue") and not plan_only:
@@ -303,7 +310,7 @@ def _recalcular_sem_lock(sheets: SheetsClient, plan_only: bool) -> dict[str, int
         for topico in topicos_piscina:
             chave = f"piscina:{linha.get('ID')}" + (f":{topico}" if topico else "")
             chaves_piscina.add(chave)
-            resultado = reconciliar_chave(chave, alvo, titulo, corpo, None, estado, agora, plan_only, click=URL_APP, topico=topico)
+            resultado = reconciliar_chave(chave, alvo, titulo, corpo, None, estado, agora, plan_only, click=url_tab("piscina"), topico=topico)
             contar(resultado)
             entregue = entregue or resultado in ("entregue", "presumivelmente_entregue")
         if entregue and not plan_only:
@@ -314,7 +321,7 @@ def _recalcular_sem_lock(sheets: SheetsClient, plan_only: bool) -> dict[str, int
     if sheets.tab_exists("Horario"):
         import horario
         try:
-            for resultado in horario.reconciliar(sheets, config, estado, agora, plan_only, reconciliar_chave, URL_APP):
+            for resultado in horario.reconciliar(sheets, config, estado, agora, plan_only, reconciliar_chave, url_tab("horario")):
                 contar(resultado)
         except Exception:   # o horário nunca pode impedir as notificações das tarefas (ex.: migração 005 por aplicar)
             log.exception("Horário escolar: falhou a reconciliação dos avisos")

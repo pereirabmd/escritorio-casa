@@ -178,7 +178,7 @@ def handle_testar(sheets: SheetsClient, params: dict[str, Any]) -> dict[str, Any
     topico = common.topico_da_pessoa(config, pessoa)
     resp = common.ntfy_publish(
         title="Teste", message=f"Notificação de teste para {pessoa} — Tarefas de Casa 👋",
-        tags=["test_tube"], click=URL_APP, topic=topico,
+        tags=["test_tube"], click=recalcular.url_tab("config"), topic=topico,
     )
     if resp is None:
         return {"ok": False, "erro": "Falha ao publicar no ntfy — ver logs do Pi."}

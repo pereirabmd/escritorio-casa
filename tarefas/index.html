@@ -399,7 +399,7 @@
 <script src="https://cdn.jsdelivr.net/npm/animejs@4.5.0/dist/bundles/anime.umd.min.js" integrity="sha384-InMmvD3VoYcY7hGjSC80aLb2bNNE4CzpX+Eq6FVDlmB0IKgDvmfPw4UY8L/M++iG" crossorigin="anonymous"></script>
 
 <script>
-const APP_VERSION = 'Beta 55';
+const APP_VERSION = 'Beta 56';
 
 // ---------------------------------------------------------------
 // PISCINA — catálogo estático (não editável pela UI; ver PROJECT-CONTEXT.md)
@@ -3012,10 +3012,14 @@ window.addEventListener('load', () => {
   verificarSaude();
   atualizarBannerOffline();
 
-  const ultimaTab = lsGet('tarefas.ultimaTab');
+  // Ligação profunda: as notificações abrem a app com #hoje / #piscina / #horario / #config e isso ganha à última aba usada.
+  const tabDoHash = () => { const h = location.hash.replace('#', ''); return document.getElementById('tab-' + h) ? h : null; };
+  const ultimaTab = tabDoHash() || lsGet('tarefas.ultimaTab');
   if (ultimaTab && document.getElementById('tab-' + ultimaTab)) {
     ativarTab(ultimaTab, { animar: false });
   }
+  // app já aberta em segundo plano quando se toca noutra notificação: o URL só muda o fragmento
+  window.addEventListener('hashchange', () => { const h = tabDoHash(); if (h) ativarTab(h); });
 
   if ('serviceWorker' in navigator) {
     // Único service worker da app — agora só cache da app shell; a entrega

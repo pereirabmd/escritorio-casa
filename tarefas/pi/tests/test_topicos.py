@@ -64,5 +64,23 @@ class ReconciliarComTopicoTests(unittest.TestCase):
         canc.assert_called_once_with("m1", "tarefas_bruno")
 
 
+class ClickTests(unittest.TestCase):
+    agora = datetime(2026, 9, 28, 8, 0, tzinfo=TZ)
+    alvo = agora + timedelta(hours=5)
+
+    def test_url_por_separador(self):
+        self.assertTrue(recalcular.url_tab("horario").endswith("/tarefas/#horario"))
+        self.assertTrue(recalcular.url_tab("hoje").endswith("#hoje"))
+
+    def test_mudar_o_click_reagenda_e_o_estado_guarda_o_click(self):
+        estado = {"k": {"message_id": "m1", "alvo": self.alvo.isoformat(), "topico": "tarefas"}}      # estado antigo, sem click
+        with mock.patch.object(common, "ntfy_publish", return_value={"id": "novo"}) as pub, mock.patch.object(common, "ntfy_cancel") as canc:
+            r = recalcular.reconciliar_chave("k", self.alvo, "t", "c", None, estado, self.agora, False, click="http://x/#hoje")
+            self.assertEqual(r, "reagendado")
+            canc.assert_called_once()
+            self.assertEqual((pub.call_args.kwargs["click"], estado["k"]["click"]), ("http://x/#hoje",) * 2)
+            self.assertEqual(recalcular.reconciliar_chave("k", self.alvo, "t", "c", None, estado, self.agora, False, click="http://x/#hoje"), "sem_alteracao")
+
+
 if __name__ == "__main__":
     unittest.main()
