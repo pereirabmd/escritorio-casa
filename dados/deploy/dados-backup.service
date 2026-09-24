@@ -1,0 +1,12 @@
+# Backup da base de dados para o repositório privado (cifrado com age).
+[Unit]
+Description=dados — backup para o GitHub privado
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=bpereira
+WorkingDirectory=/home/bpereira/dados
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/usr/bin/python3 backup.py

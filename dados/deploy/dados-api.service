@@ -1,0 +1,34 @@
+# API HTTP da base de dados — atrás do nginx (deploy/nginx-dados-api.conf).
+# Sandbox systemd: o processo só consegue escrever em data/, state/ e logs/.
+[Unit]
+Description=dados — API HTTP (api.py)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=bpereira
+WorkingDirectory=/home/bpereira/dados
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/usr/bin/python3 api.py
+Restart=always
+RestartSec=10
+
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/home/bpereira/dados/data /home/bpereira/dados/state /home/bpereira/dados/logs
+PrivateTmp=true
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+RestrictNamespaces=true
+LockPersonality=true
+CapabilityBoundingSet=
+SystemCallFilter=@system-service
+MemoryMax=150M
+
+[Install]
+WantedBy=multi-user.target
