@@ -486,6 +486,15 @@ def get_store():
     return SheetsClient()
 
 
+def _pedir_cancelamento(topic: str, message_id: str) -> None:
+    import secrets
+    pasta = _state_file("ntfy_provision")
+    pasta.mkdir(mode=0o700, exist_ok=True)
+    fd = os.open(pasta / f"cancel-{secrets.token_hex(6)}.json", os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    with os.fdopen(fd, "w", encoding="utf-8") as f:
+        json.dump({"cancelar": {"topic": topic, "id": message_id}}, f)
+
+
 def ntfy_cancel(message_id: str, topic: str | None = None) -> bool:
     """Cancela uma mensagem ainda agendada (antes da hora). Uma mensagem que já
     foi entregue não pode ser cancelada — a resposta é simplesmente ignorada
@@ -498,6 +507,9 @@ def ntfy_cancel(message_id: str, topic: str | None = None) -> bool:
     auth = (env("NTFY_WRITE_USER"), env("NTFY_WRITE_PASSWORD"))
     try:
         r = requests.delete(f"{base}/{topic}/{message_id}", auth=auth, timeout=(4, 10))
+        if r.status_code in (404, 405):
+            # o ntfy 2.11 não sabe cancelar por API (404): pede-se ao serviço root que apague a linha agendada da cache
+            _pedir_cancelamento(topic, message_id)
         return r.status_code < 500
     except requests.RequestException as e:
         log.warning("Cancelar mensagem %s falhou: %s: %s", message_id, type(e).__name__, e)

@@ -170,6 +170,7 @@ def get_logger(name: str) -> logging.Logger:
 # ---------------------------------------------------------------------------
 
 NTFY_ICON_URL = "https://pereirabmd.github.io/escritorio-casa/bilhetes_cp/assets/icon-192.png"
+NTFY_CLICK_URL = "https://pereirabmd.github.io/escritorio-casa/bilhetes_cp/"
 
 
 def notify(title: str, message: str, *, tags: Iterable[str] = (), at: datetime | None = None,
@@ -191,6 +192,8 @@ def notify(title: str, message: str, *, tags: Iterable[str] = (), at: datetime |
         "tags": list(tags),
         # ícone da app na notificação (o telemóvel vai buscá-lo por HTTPS; GitHub Pages serve-o)
         "icon": env("NTFY_ICON_URL", NTFY_ICON_URL),
+        # tocar na notificação abre a app (e não o ecrã de detalhe do ntfy)
+        "click": env("NTFY_CLICK_URL", NTFY_CLICK_URL),
     }
     if at is not None:
         payload["delay"] = str(int(at.timestamp()))

@@ -81,6 +81,48 @@ class ProcessarTests(unittest.TestCase):
             self.assertEqual([c[0][:2] for c in f.chamadas if c[0][0] == "user" and c[0][1] != "list"], [("user", "add")])   # só a conta válida foi tocada
 
 
+class CancelarTests(unittest.TestCase):
+    def cache(self, d):
+        import sqlite3
+        f = Path(d) / "cache.db"
+        c = sqlite3.connect(f)
+        c.execute("CREATE TABLE messages (mid TEXT, topic TEXT, published INT)")
+        c.executemany("INSERT INTO messages VALUES (?, ?, ?)", [("abcdef123456", "tarefas_bruno", 0), ("zzzzzz123456", "tarefas_bruno", 0),
+                                                              ("pubpub123456", "tarefas_bruno", 1), ("cpcpcp123456", "bpereira_cp", 0)])
+        c.commit(); c.close()
+        return f
+
+    def linhas(self, f):
+        import sqlite3
+        return sorted(r[0] for r in sqlite3.connect(f).execute("SELECT mid FROM messages"))
+
+    def test_apaga_so_a_agendada_do_topico_pedido(self):
+        with tempfile.TemporaryDirectory() as d:
+            f = self.cache(d)
+            self.assertEqual(pv.cancelar_agendada("tarefas_bruno", "abcdef123456", f), 1)
+            self.assertEqual(pv.cancelar_agendada("tarefas_bruno", "pubpub123456", f), 0)       # já publicada: não se mexe
+            self.assertEqual(pv.cancelar_agendada("tarefas_camila", "zzzzzz123456", f), 0)      # tópico errado: não se mexe
+            self.assertEqual(self.linhas(f), ["cpcpcp123456", "pubpub123456", "zzzzzz123456"])
+
+    def test_validacao(self):
+        self.assertEqual(pv.validar_cancelar({"cancelar": {"topic": "tarefas_x", "id": "abcdef123456"}}), ("tarefas_x", "abcdef123456"))
+        for p in ({"cancelar": {"topic": "bpereira_cp", "id": "abcdef123456"}}, {"cancelar": {"topic": "tarefas_x", "id": "a'; drop"}},
+                  {"cancelar": {"topic": "tarefas_x", "id": "abcdef123456", "x": 1}}, {"cancelar": "x"}, {"cancelar": {}, "y": 1}):
+            with self.assertRaises(ValueError, msg=p):
+                pv.validar_cancelar(p)
+
+    def test_processar_cancela_e_apaga_o_pedido(self):
+        with tempfile.TemporaryDirectory() as d:
+            f = self.cache(d)
+            pasta = Path(d) / "p"; pasta.mkdir()
+            (pasta / "cancel-1.json").write_text(json.dumps({"cancelar": {"topic": "tarefas_bruno", "id": "abcdef123456"}}))
+            (pasta / "cancel-2.json").write_text(json.dumps({"cancelar": {"topic": "bpereira_cp", "id": "cpcpcp123456"}}))
+            saidas = pv.processar(pasta, Falso(), f)
+            self.assertIn("1 apagada", saidas[0]); self.assertTrue(saidas[1].startswith("ERRO"))
+            self.assertIn("cpcpcp123456", self.linhas(f))               # o do bilhetes nunca é tocado
+            self.assertEqual(list(pasta.glob("*.json")), [])
+
+
 class PedidoTests(unittest.TestCase):
     def test_ficheiro_600_numa_pasta_700(self):
         with tempfile.TemporaryDirectory() as d:

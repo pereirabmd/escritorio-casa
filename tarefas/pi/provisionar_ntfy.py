@@ -1,10 +1,14 @@
 #!/usr/bin/python3
-"""provisionar_ntfy.py — cria/atualiza a conta de LEITURA de uma pessoa no servidor ntfy.
+"""provisionar_ntfy.py — cria/atualiza a conta de LEITURA de uma pessoa no servidor ntfy e cancela mensagens agendadas.
 
 Corre como ROOT, disparado por `tarefas-ntfy-provision.path` quando o `servidor.py` (utilizador normal, sandbox
 sem sudo) deixa um pedido em `<pi>/state/ntfy_provision/*.json` depois de a pessoa guardar o utilizador/password na
 app (Config → Notificações). O utilizador e a password escritos na app passam assim a ser os do ntfy — a pessoa
 usa-os na app ntfy do telemóvel — e a conta só lê o tópico dela, `tarefas_<utilizador>`.
+
+Também cancela mensagens AGENDADAS: o ntfy 2.11 não tem `DELETE /<tópico>/<id>` (404), por isso reagendar deixava a mensagem
+antiga a disparar (duplicados). Pedido `{"cancelar": {"topic": "tarefas_x", "id": "<id>"}}` → apaga essa linha ainda por
+publicar (`published=0`) da cache do ntfy (só tópicos `tarefas*`).
 
 Instalado em /usr/local/sbin (dono root; nunca executar um ficheiro de uma pasta que o utilizador altera).
 Como um utilizador normal escreve os pedidos, TUDO é validado aqui: nomes restritos, tópico sempre `tarefas_*`,
@@ -25,6 +29,9 @@ PEDIDOS = Path(os.environ.get("TAREFAS_PROVISION_DIR", "/home/bpereira/tarefas/p
 PROTEGIDOS = {"tarefas-pi", "bpereira", "admin", "root", "everyone", "*"}
 _USER = re.compile(r"^[a-z0-9][a-z0-9_-]{1,39}$")
 MAX_BYTES = 2048
+CACHE_NTFY = Path(os.environ.get("NTFY_CACHE_DB", "/var/cache/ntfy/cache.db"))
+_MID = re.compile(r"^[A-Za-z0-9]{6,20}$")
+_TOPICO = re.compile(r"^tarefas(_[a-z0-9_-]{1,40})?$")
 
 
 def topico_de(user: str) -> str:
@@ -45,6 +52,27 @@ def validar(pedido: object) -> tuple[str, str, str]:
     return user, password, topico_de(user)
 
 
+def validar_cancelar(pedido: object) -> tuple[str, str]:
+    c = pedido.get("cancelar") if isinstance(pedido, dict) and set(pedido) == {"cancelar"} else None
+    if not isinstance(c, dict) or set(c) != {"topic", "id"} or not isinstance(c["topic"], str) or not isinstance(c["id"], str):
+        raise ValueError("pedido de cancelamento mal formado")
+    if not _TOPICO.match(c["topic"]) or not _MID.match(c["id"]):
+        raise ValueError("tópico ou id de mensagem não permitidos")
+    return c["topic"], c["id"]
+
+
+def cancelar_agendada(topic: str, mid: str, cache: Path = CACHE_NTFY) -> int:
+    """Apaga a mensagem AINDA POR PUBLICAR (published=0). Devolve quantas linhas apagou (0 se já saiu)."""
+    import sqlite3
+    conn = sqlite3.connect(cache, timeout=20)
+    try:
+        n = conn.execute("DELETE FROM messages WHERE mid = ? AND topic = ? AND published = 0", (mid, topic)).rowcount
+        conn.commit()
+        return n
+    finally:
+        conn.close()
+
+
 def ntfy(*args: str, password: str | None = None) -> subprocess.CompletedProcess:
     env = dict(os.environ, **({"NTFY_PASSWORD": password} if password is not None else {}))
     return subprocess.run(["ntfy", *args], env=env, capture_output=True, text=True, timeout=30)
@@ -61,16 +89,21 @@ def aplicar(user: str, password: str, topico: str, run=ntfy) -> str:
     return "atualizada" if existe else "criada"
 
 
-def processar(pasta: Path = PEDIDOS, run=ntfy) -> list[str]:
+def processar(pasta: Path = PEDIDOS, run=ntfy, cache: Path = CACHE_NTFY) -> list[str]:
     resultados = []
     for f in sorted(pasta.glob("*.json")):
         try:
             st = f.lstat()
             if not stat.S_ISREG(st.st_mode) or st.st_size > MAX_BYTES:
                 raise ValueError("ficheiro não regular ou demasiado grande")
-            user, password, topico = validar(json.loads(f.read_text(encoding="utf-8")))
+            bruto = json.loads(f.read_text(encoding="utf-8"))
+            if isinstance(bruto, dict) and "cancelar" in bruto:
+                topic, mid = validar_cancelar(bruto)
+                resultados.append(f"cancelar {topic}/{mid}: {cancelar_agendada(topic, mid, cache)} apagada(s)")
+                continue
+            user, password, topico = validar(bruto)
             resultados.append(f"conta {user}: {aplicar(user, password, topico, run)} (só lê {topico})")
-        except (ValueError, RuntimeError, OSError) as e:
+        except (ValueError, RuntimeError, OSError, json.JSONDecodeError) as e:
             resultados.append(f"ERRO em {f.name}: {e}")
         finally:
             try:
