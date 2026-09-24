@@ -102,7 +102,7 @@ class ReconciliarChaveTests(unittest.TestCase):
         estado = {"inst:I1": {"message_id": "m1", "alvo": alvo_antigo.isoformat()}}
         resultado = recalcular.reconciliar_chave("inst:I1", alvo_novo, "T", "c", None, estado, self.agora, False)
         self.assertEqual(resultado, "reagendado")
-        cancelar.assert_called_once_with("m1")
+        cancelar.assert_called_once_with("m1", "tarefas")
         self.assertEqual(estado["inst:I1"]["message_id"], "m2")
 
     @mock.patch.object(common, "ntfy_cancel")
@@ -112,7 +112,7 @@ class ReconciliarChaveTests(unittest.TestCase):
         estado = {"inst:I1": {"message_id": "m1", "alvo": (self.agora + timedelta(hours=1)).isoformat()}}
         resultado = recalcular.reconciliar_chave("inst:I1", None, "T", "c", None, estado, self.agora, False)
         self.assertEqual(resultado, "cancelado")
-        cancelar.assert_called_once_with("m1")
+        cancelar.assert_called_once_with("m1", "tarefas")
         self.assertNotIn("inst:I1", estado)
 
     def test_fora_do_horizonte_nao_agenda(self) -> None:

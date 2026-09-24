@@ -130,23 +130,32 @@ def alvo_piscina(linha: dict, config: dict[str, Any]) -> datetime | None:
 
 def reconciliar_chave(chave: str, alvo: datetime | None, titulo: str, corpo: str,
                       acoes: list[dict] | None, estado: dict[str, dict], agora: datetime,
-                      plan_only: bool, click: str | None = None) -> str:
+                      plan_only: bool, click: str | None = None, topico: str | None = None) -> str:
     """Devolve o que aconteceu: agendado / reagendado / cancelado / entregue /
-    presumivelmente_entregue / sem_alteracao / fora_do_horizonte / falhou."""
+    presumivelmente_entregue / sem_alteracao / fora_do_horizonte / falhou.
+
+    `topico`: tópico ntfy de destino (None = o tópico legado do .env). O tópico fica no estado: se mudar (a pessoa
+    passou a ter utilizador ntfy), a mensagem agendada no tópico antigo é cancelada e reagendada no novo."""
     anterior = estado.get(chave)
+    destino = topico or common.env("NTFY_TOPIC", common.TOPICO_LEGADO)
+    topico_anterior = (anterior or {}).get("topico") or common.env("NTFY_TOPIC", common.TOPICO_LEGADO)
+
+    def cancelar_anterior() -> None:
+        common.ntfy_cancel(anterior["message_id"], topico_anterior)
 
     if alvo is None:
         if anterior:
             if not plan_only:
-                common.ntfy_cancel(anterior["message_id"])
+                cancelar_anterior()
                 del estado[chave]
             return "cancelado"
         return "sem_alteracao"
 
     alvo_iso = alvo.isoformat()
+    igual = bool(anterior) and anterior.get("alvo") == alvo_iso and topico_anterior == destino
 
     if alvo <= agora:
-        if anterior and anterior.get("alvo") == alvo_iso:
+        if igual:
             # estava agendado exatamente para esta hora, que já passou: o
             # ntfy já deve ter entregue por si só — só falta refletir isso.
             if not plan_only:
@@ -156,28 +165,28 @@ def reconciliar_chave(chave: str, alvo: datetime | None, titulo: str, corpo: str
         # agendamento anterior já não batia com a hora certa) — publica já,
         # para garantir que chega, em vez de esperar pelo próximo ciclo.
         if anterior and not plan_only:
-            common.ntfy_cancel(anterior["message_id"])
+            cancelar_anterior()
         if plan_only:
             return "entregue"
-        resp = common.ntfy_publish(title=titulo, message=corpo, actions=acoes, click=click)
+        resp = common.ntfy_publish(title=titulo, message=corpo, actions=acoes, click=click, topic=topico)
         estado.pop(chave, None)
         return "entregue" if resp else "falhou"
 
     if alvo - agora > timedelta(days=HORIZONTE_NTFY_DIAS, hours=-MARGEM_SEGURANCA_HORAS):
         return "fora_do_horizonte"
 
-    if anterior and anterior.get("alvo") == alvo_iso:
-        return "sem_alteracao"  # já está agendado para a hora certa, nada a fazer
+    if igual:
+        return "sem_alteracao"  # já está agendado para a hora e o tópico certos, nada a fazer
 
     reagendado = anterior is not None
     if anterior and not plan_only:
-        common.ntfy_cancel(anterior["message_id"])
+        cancelar_anterior()
 
     if plan_only:
         return "reagendado" if reagendado else "agendado"
-    resp = common.ntfy_publish(title=titulo, message=corpo, delay_at=alvo, actions=acoes, click=click)
+    resp = common.ntfy_publish(title=titulo, message=corpo, delay_at=alvo, actions=acoes, click=click, topic=topico)
     if resp and resp.get("id"):
-        estado[chave] = {"message_id": resp["id"], "alvo": alvo_iso}
+        estado[chave] = {"message_id": resp["id"], "alvo": alvo_iso, "topico": destino}
         return "reagendado" if reagendado else "agendado"
     estado.pop(chave, None)
     return "falhou"
@@ -219,6 +228,11 @@ def registar_snooze(instancia_id: str, minutos: int = 60) -> datetime:
     bruto[instancia_id] = ate.isoformat()
     common._write_json_atomic(path, bruto)
     return ate
+
+
+def nomes_pessoas(config: dict[str, Any]) -> list[str]:
+    import re
+    return [str(v).strip() for k, v in config.items() if re.fullmatch(r"Pessoa\d+_Nome", str(k).strip()) and str(v or "").strip()]
 
 
 def recalcular(sheets: SheetsClient | None = None, plan_only: bool = False) -> dict[str, int]:
@@ -275,22 +289,33 @@ def _recalcular_sem_lock(sheets: SheetsClient, plan_only: bool) -> dict[str, int
         corpo = f"{inst.get('Pessoa')}: é a vez de \"{nome_tarefa}\" hoje."
         acoes = acoes_notificacao(instancia_id) if alvo is not None else None
 
-        resultado = reconciliar_chave(chave, alvo, titulo, corpo, acoes, estado, agora, plan_only, click=URL_APP)
+        resultado = reconciliar_chave(chave, alvo, titulo, corpo, acoes, estado, agora, plan_only, click=URL_APP,
+                                      topico=common.topico_da_pessoa(config, str(inst.get('Pessoa', ''))))
         contar(resultado)
         if resultado in ("entregue", "presumivelmente_entregue") and not plan_only:
             sheets.update_cells("Instancias", inst["_rowIndex"], NotificacaoEnviada="TRUE")
 
+    # A piscina não tem responsável: vai para o tópico de TODAS as pessoas com utilizador ntfy (ou, se ninguém tem, para o
+    # tópico legado). Uma chave de estado por tópico, para cada mensagem poder ser cancelada no sítio certo.
+    topicos_piscina = sorted({t for t in (common.topico_da_pessoa(config, n) for n in nomes_pessoas(config)) if t}) or [None]
+    chaves_piscina: set[str] = set()
     for linha in sheets.read_objects("Piscina"):
         alvo = alvo_piscina(linha, config)
-        chave = f"piscina:{linha.get('ID')}"
         aviso_longo = str(linha.get("AvisoLongo", "")).strip().upper() == "TRUE"
         titulo = "🏊 Piscina — manutenção anual" if aviso_longo else "🏊 Piscina"
         corpo = (f"Está a aproximar-se: {linha.get('Nome')} (previsto para {linha.get('ProximaData')})."
                 if aviso_longo else f"Sugestão de hoje: {linha.get('Nome')}.")
-        resultado = reconciliar_chave(chave, alvo, titulo, corpo, None, estado, agora, plan_only, click=URL_APP)
-        contar(resultado)
-        if resultado in ("entregue", "presumivelmente_entregue") and not plan_only:
+        entregue = False
+        for topico in topicos_piscina:
+            chave = f"piscina:{linha.get('ID')}" + (f":{topico}" if topico else "")
+            chaves_piscina.add(chave)
+            resultado = reconciliar_chave(chave, alvo, titulo, corpo, None, estado, agora, plan_only, click=URL_APP, topico=topico)
+            contar(resultado)
+            entregue = entregue or resultado in ("entregue", "presumivelmente_entregue")
+        if entregue and not plan_only:
             sheets.update_cells("Piscina", linha["_rowIndex"], NotificacaoEnviada="TRUE")
+    for chave in [k for k in estado if k.startswith("piscina:") and k not in chaves_piscina]:
+        contar(reconciliar_chave(chave, None, "", "", None, estado, agora, plan_only))   # chave antiga (sem tópico) ou pessoa removida
 
     if sheets.tab_exists("Horario"):
         import horario

@@ -9,6 +9,7 @@ Regras:
   e o aviso menciona-as;
 - só há aviso de segunda a sexta dentro do ano letivo (1 set do 1.º ano a 31 jul do 2.º) e se houver aulas nesse dia;
 - nunca se avisa "tarde": se a hora do aviso já passou e não estava agendado, esse dia fica sem aviso;
+- vai para o tópico da pessoa com o mesmo nome do aluno (`tarefas_<utilizador>`; sem utilizador ntfy, o tópico legado);
 - Config `HorarioAvisos` = FALSE pausa os avisos (férias, greves); `HorarioAvisoMinutos` muda os 30 min.
 """
 
@@ -82,7 +83,8 @@ def reconciliar(store, config: dict[str, Any], estado: dict[str, dict], agora: d
                     alvo = None      # a hora já passou e nada estava agendado: não se avisa tarde
             if alvo is not None or chave in estado:
                 chaves_vivas.add(chave)
-                resultados.append(reconciliar_chave(chave, alvo, titulo, corpo, None, estado, agora, plan_only, click=url_app))
+                resultados.append(reconciliar_chave(chave, alvo, titulo, corpo, None, estado, agora, plan_only, click=url_app,
+                                                    topico=common.topico_da_pessoa(config, aluno)))
     # avisos de dias/alunos que deixaram de existir (horário apagado ou alterado): cancelam-se
     for chave in [k for k in estado if k.startswith(PREFIXO) and k not in chaves_vivas]:
         resultados.append(reconciliar_chave(chave, None, "", "", None, estado, agora, plan_only))

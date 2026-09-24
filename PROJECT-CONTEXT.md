@@ -386,6 +386,10 @@ Pedido do utilizador: liberdade total para reinventar o layout, só duas constra
 
 ---
 
+## Notificações ntfy por pessoa (Beta 52, 2026-09-24)
+
+Cada pessoa tem o seu tópico, `tarefas_<utilizador>` (o utilizador é o `Pessoa<N>_NtfyUser` da Config, configurado na app; se já começar por `tarefas_` usa-se tal e qual). O Pi (`common.topico_da_pessoa`) publica cada instância no tópico da pessoa da instância, o aviso do horário no da pessoa com o nome do aluno, e a piscina (sem responsável) no de todas. Quem ainda não tem utilizador ntfy cai no tópico legado `tarefas` (`NTFY_TOPIC`). O estado (`ntfy_agendados.json`) guarda o tópico de cada mensagem agendada: se mudar, cancela no antigo e reagenda no novo. No ntfy: `tarefas-pi` escreve em `tarefas_*` e cada utilizador lê só o seu tópico.
+
 ## Endurecimento e CSP (2026-09-24)
 
 - **PWAs**: todas têm `<meta>` CSP (`script-src` só com os CDNs usados, `connect-src` por app, `object-src 'none'`, `base-uri 'none'`) e `referrer no-referrer`. `'unsafe-inline'` mantém-se em `script-src`/`style-src` porque as apps usam scripts e handlers inline (sem nonces em hosting estático). Scripts de CDN têm **SRI** (`integrity` + `crossorigin`), inclusive os carregados a pedido (Chart.js/XLSX no peso, XLSX no RTO, Stockfish no xadrez via `fetch(..., {integrity})`). O tesseract.js do enfermagem passou de `@5` para a versão fixa `5.1.1`. Ao mudar a versão de uma lib, recalcular o hash (`curl URL | openssl dgst -sha384 -binary | openssl base64 -A`). Sem SRI ficam o GIS (`accounts.google.com/gsi/client`), os CSS do Google Fonts e o `pdf.worker` do pdf.js.

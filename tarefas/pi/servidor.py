@@ -162,13 +162,16 @@ def handle_testar(sheets: SheetsClient, params: dict[str, Any]) -> dict[str, Any
     pessoa = str(params.get("pessoa") or "").strip()
     if not pessoa:
         return {"ok": False, "erro": "pessoa é obrigatória"}
+    config = {str(r.get("Chave", "")).strip(): r.get("Valor") for r in sheets.read_objects("Config")}
+    topico = common.topico_da_pessoa(config, pessoa)
     resp = common.ntfy_publish(
         title="Teste", message=f"Notificação de teste para {pessoa} — Tarefas de Casa 👋",
-        tags=["test_tube"], click=URL_APP,
+        tags=["test_tube"], click=URL_APP, topic=topico,
     )
     if resp is None:
         return {"ok": False, "erro": "Falha ao publicar no ntfy — ver logs do Pi."}
-    return {"ok": True, "aviso": f"Publicado no tópico partilhado — confirma na app ntfy de {pessoa}."}
+    onde = f"tópico {topico}" if topico else f"tópico partilhado {common.env('NTFY_TOPIC', common.TOPICO_LEGADO)} ({pessoa} ainda não tem utilizador ntfy)"
+    return {"ok": True, "aviso": f"Publicado no {onde} — confirma na app ntfy de {pessoa}."}
 
 
 # ---------------------------------------------------------------------------

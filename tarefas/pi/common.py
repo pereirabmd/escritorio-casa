@@ -219,12 +219,34 @@ class FileLock:
 # ntfy: publicar (com agendamento opcional) e cancelar
 # ---------------------------------------------------------------------------
 
+TOPICO_LEGADO = "tarefas"     # tópico partilhado antigo: fica de reserva para quem ainda não tem utilizador ntfy
+_TOPICO_OK = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
+
+
+def topico_da_pessoa(config: dict[str, Any], nome: str) -> str | None:
+    """Tópico ntfy de uma pessoa, por convenção `tarefas_<utilizador>`. O utilizador (Pessoa<N>_NtfyUser) configura-se
+    na app; se já vier como `tarefas_bruno` usa-se tal e qual, se vier `bruno` o tópico é `tarefas_bruno`.
+    None se a pessoa não existe ou ainda não tem utilizador ntfy (as mensagens vão então para o tópico legado)."""
+    nome = str(nome or "").strip()
+    if not nome:
+        return None
+    for chave, valor in config.items():
+        m = re.fullmatch(r"Pessoa(\d+)_Nome", str(chave).strip())
+        if m and str(valor or "").strip() == nome:
+            user = str(config.get(f"Pessoa{m.group(1)}_NtfyUser") or "").strip().lower()
+            if not user:
+                return None
+            topico = user if user.startswith("tarefas_") else f"tarefas_{user}"
+            return topico if _TOPICO_OK.match(topico) else None
+    return None
+
+
 NTFY_ICON_URL = "https://pereirabmd.github.io/escritorio-casa/tarefas/icon-192.png"
 
 
 def ntfy_publish(*, title: str, message: str, delay_at: datetime | None = None,
                  actions: list[dict] | None = None, tags: list[str] | None = None,
-                 priority: int = 4, click: str | None = None) -> dict | None:
+                 priority: int = 4, click: str | None = None, topic: str | None = None) -> dict | None:
     """Publica no tópico do .env (NTFY_TOPIC), autenticado com as credenciais de
     ESCRITA do próprio Pi (NTFY_WRITE_USER/NTFY_WRITE_PASSWORD — nunca as de
     leitura por pessoa, essas só servem para a app de cada um subscrever).
@@ -235,7 +257,7 @@ def ntfy_publish(*, title: str, message: str, delay_at: datetime | None = None,
 
     log = get_logger("ntfy")
     base = env("NTFY_SERVER_URL").rstrip("/")
-    topic = env("NTFY_TOPIC", "tarefas")
+    topic = topic or env("NTFY_TOPIC", TOPICO_LEGADO)
     body: dict[str, Any] = {"topic": topic, "title": title, "message": message,
                             "priority": priority,
                             # ícone da app na notificação (GitHub Pages serve-o ao telemóvel)
@@ -426,7 +448,7 @@ def get_store():
     return SheetsClient()
 
 
-def ntfy_cancel(message_id: str) -> bool:
+def ntfy_cancel(message_id: str, topic: str | None = None) -> bool:
     """Cancela uma mensagem ainda agendada (antes da hora). Uma mensagem que já
     foi entregue não pode ser cancelada — a resposta é simplesmente ignorada
     nesse caso (não é um erro, só já não há nada a fazer)."""
@@ -434,7 +456,7 @@ def ntfy_cancel(message_id: str) -> bool:
 
     log = get_logger("ntfy")
     base = env("NTFY_SERVER_URL").rstrip("/")
-    topic = env("NTFY_TOPIC", "tarefas")
+    topic = topic or env("NTFY_TOPIC", TOPICO_LEGADO)
     auth = (env("NTFY_WRITE_USER"), env("NTFY_WRITE_PASSWORD"))
     try:
         r = requests.delete(f"{base}/{topic}/{message_id}", auth=auth, timeout=(4, 10))
