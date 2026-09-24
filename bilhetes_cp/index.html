@@ -19,7 +19,6 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Barlow:wght@400;500;600&display=swap" rel="stylesheet">
 <script src="https://accounts.google.com/gsi/client" async defer></script>
-<script src="https://apis.google.com/js/api.js" async defer></script>
 <style>
 :root{
   --primary:#008542; --primary-dark:#006B35; --primary-light:#E6F4EC; --primary-hover:#00773B;
@@ -256,7 +255,7 @@ body.kb-open #toast{--toast-b:84px}
   <section id="auth" class="overlay" hidden>
     <img src="assets/icon-192.png" alt="">
     <h2>Bilhetes CP</h2>
-    <p id="authMsg">Entra com a conta Google que tem acesso à Sheet.</p>
+    <p id="authMsg">Entra com a conta Google autorizada.</p>
     <button class="btn" id="btnSignIn" data-act="sign-in">Entrar com Google</button>
   </section>
 
@@ -269,43 +268,20 @@ body.kb-open #toast{--toast-b:84px}
 'use strict';
 /* =====================================================================
    Bilhetes CP — PWA (PLANO_FINAL.md 3.7 e 5)
-   Google Identity Services (login) + gapi client (Sheets). Sem backend.
+   Google Identity Services (login) + API do servidor de casa (Raspberry Pi). Desde a v2.0.0 os dados
+   vivem numa base SQLite no Pi (antes, numa Google Sheet).
    Nenhuma credencial neste ficheiro: as chaves da CP (só para preencher
    horários) ficam no localStorage do telemóvel, importadas por um link.
    ===================================================================== */
-const VERSION = 'v1.2.0';
+const VERSION = 'v2.0.0';
 const CLIENT_ID = '108256538530-fgunbb52s7f3s9aurfpjtaf01v8fjbph.apps.googleusercontent.com';
-const SHEET_ID = '1PNY134CrkxVhcpKHjTDZMYqYv3q-_oeDusJ-hgLRMBk';
-const SCOPE = 'https://www.googleapis.com/auth/spreadsheets';
-const TOKEN_KEY = 'bilhetes_cp.token';
+const API_URL = 'https://bmdpereira.duckdns.org/dados-api';
+// só a identidade: a API reconhece quem chama pelo e-mail do token (a app já não acede ao Google Sheets)
+const SCOPE = 'openid email';
+const TOKEN_KEY = 'bilhetes_cp.token.v2';   // v2: o token antigo não tinha o e-mail, que a API exige
 const KEYS_KEY = 'bilhetes_cp.cpkeys';
 const TZ = 'Europe/Lisbon';
 const CP_API = 'https://api-gateway.cp.pt/cp/services';
-/* Cabeçalhos da aba Config, procurados pelo NOME (PLANO_FINAL secção 4): inserir linhas na
-   Sheet não pode desalinhar leituras nem escritas. */
-const HEAD_PASSE = ['Data_Ultima_Compra', 'Validade_Dias', 'Data_Expira', 'Dias_Restantes'];
-const HEAD_WEEK = ['Data', 'Origem', 'Destino', 'Comboio', 'Hora', 'Ativo'];
-const hnorm = (c) => String(c ?? '').toLowerCase().replace(/[^a-z0-9]/g, '');
-function locateConfig(values) {
-  const find = (heads) => {
-    const hs = heads.map(hnorm);
-    for (let i = 0; i < values.length; i++) {
-      const cells = (values[i] || []).map(hnorm);
-      if (hs.every(h => cells.includes(h))) return { row: i, idx: hs.map(h => cells.indexOf(h)) };
-    }
-    return null;
-  };
-  const p = find(HEAD_PASSE), w = find(HEAD_WEEK);
-  if (!p || !w) throw new Error('Não encontrei os cabeçalhos da aba Config (' + [!p && 'passe', !w && 'semana'].filter(Boolean).join(' e ') + ').');
-  const prow = values[p.row + 1] || [];
-  return {
-    passe: p.idx.map(i => prow[i] ?? ''),
-    weekly: values.slice(w.row + 1).map(r => w.idx.map(i => (r || [])[i] ?? '')),
-    firstRow: w.row + 2, colStart: w.idx[0], contiguous: w.idx.every((v, k) => v === w.idx[0] + k),
-  };
-}
-const colLetter = (i) => String.fromCharCode(65 + i);
-
 /* ---------- utilitários ---------- */
 const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => [...r.querySelectorAll(s)];
@@ -448,75 +424,81 @@ function ensureTokenClient(onOk, onFail) {
     if (resp.error) return onFail(resp);
     accessToken = resp.access_token;
     lsSet(TOKEN_KEY, JSON.stringify({ access_token: accessToken, scope: SCOPE, expires_at: Date.now() + (resp.expires_in || 3600) * 1000 }));
-    if (window.gapi?.client) gapi.client.setToken({ access_token: accessToken });
     onOk();
   };
   tokenClient.error_callback = (err) => onFail(err || { error: 'popup' });
   return tokenClient;
 }
 const requestToken = (prompt) => new Promise((res, rej) => ensureTokenClient(res, rej).requestAccessToken({ prompt }));
-function showAuth(msg) { $('#authMsg').textContent = msg || 'Entra com a conta Google que tem acesso à Sheet.'; $('#auth').hidden = false; $('#btnSignIn').disabled = false; }
+function showAuth(msg) { $('#authMsg').textContent = msg || 'Entra com a conta Google autorizada.'; $('#auth').hidden = false; $('#btnSignIn').disabled = false; }
 const hideAuth = () => { $('#auth').hidden = true; };
 
 async function waitFor(cond, ms = 12000) { const t0 = Date.now(); while (!cond()) { if (Date.now() - t0 > ms) return false; await sleep(80); } return true; }
-async function initGapi() {
-  if (!(await waitFor(() => window.gapi && window.google?.accounts?.oauth2))) throw new Error('Não consegui carregar os serviços Google (sem ligação?).');
-  await new Promise((res, rej) => gapi.load('client', { callback: res, onerror: rej, timeout: 10000, ontimeout: rej }));
-  await gapi.client.init({});
-  await gapi.client.load('https://sheets.googleapis.com/$discovery/rest?version=v4');
+async function initGapi() {   // (nome mantido) já só espera pela biblioteca de login da Google
+  if (!(await waitFor(() => window.google?.accounts?.oauth2))) throw new Error('Não consegui carregar o início de sessão da Google (sem ligação?).');
 }
 async function ensureAuth(interactive) {
   const c = cachedToken();
-  if (c) { accessToken = c; gapi.client.setToken({ access_token: c }); return true; }
+  if (c) { accessToken = c; return true; }
   try { await requestToken(interactive ? (lsGet(TOKEN_KEY) ? '' : 'consent') : ''); return true; } catch { return false; }
 }
 
-/* ---------- acesso à Sheet (gapi client); tudo passa por aqui para se poder testar ---------- */
-async function gcall(fn) {
-  try { return await fn(); }
-  catch (e) {
-    const code = e?.result?.error?.code ?? e?.status;
-    if (code === 401) { lsDel(TOKEN_KEY); if (await ensureAuth(false)) return await fn(); showAuth('A sessão expirou. Entra outra vez.'); }
-    throw e;
-  }
+/* ---------- API do servidor (Raspberry Pi); tudo passa por aqui para se poder testar ---------- */
+class ApiErro extends Error {
+  constructor(msg, status) { super(msg); this.status = status; }
 }
+const MSGS_API = {
+  403: 'Esta conta Google não tem acesso a esta app. Entra com a conta certa.',
+  429: 'Demasiados pedidos — tenta daqui a um minuto.',
+  502: 'O servidor de casa não está a responder.', 503: 'Servidor ocupado — tenta de novo.', 504: 'O servidor de casa não está a responder.',
+};
+async function apiCall(method, path, body, retried = false) {
+  if (!navigator.onLine) throw new ApiErro('Sem ligação à internet', 0);
+  const ctl = new AbortController(), timer = setTimeout(() => ctl.abort(), 15000); let res;
+  try {
+    res = await fetch(API_URL + path, {
+      method, signal: ctl.signal,
+      headers: Object.assign({ Authorization: 'Bearer ' + accessToken }, body !== undefined ? { 'Content-Type': 'application/json' } : {}),
+      body: body !== undefined ? JSON.stringify(body) : undefined });
+  } catch { throw new ApiErro('Não foi possível contactar o servidor', 0); }
+  finally { clearTimeout(timer); }
+  if (res.status === 401) {
+    lsDel(TOKEN_KEY);
+    if (!retried && await ensureAuth(false)) return apiCall(method, path, body, true);
+    showAuth('A sessão expirou. Entra outra vez.'); throw new ApiErro('Sessão expirada', 401);
+  }
+  let dados = null; try { dados = await res.json(); } catch { /* sem corpo JSON */ }
+  if (!res.ok) throw new ApiErro(MSGS_API[res.status] || dados?.erro?.mensagem || ('Erro do servidor (' + res.status + ')'), res.status);
+  return dados;
+}
+/* A API devolve JSON; aqui converte-se para a mesma "forma crua" (listas de células) que o resto da app
+   sempre tratou — parseData() e as vistas ficaram como estavam. As datas chegam em ISO, as horas em HH:MM. */
 const REAL_API = {
   async load() {
-    const r = await gcall(() => gapi.client.sheets.spreadsheets.values.batchGet({
-      spreadsheetId: SHEET_ID, valueRenderOption: 'UNFORMATTED_VALUE', dateTimeRenderOption: 'SERIAL_NUMBER',
-      ranges: ['Config!A1:L300', 'Bilhetes!A5:H600', 'Logs!A5:I1500', 'Pedidos!A5:M1000'],
-    }));
-    const v = r.result.valueRanges.map(x => x.values || []);
-    const cfg = locateConfig(v[0]);
-    return { passe: cfg.passe, weeklyRaw: cfg.weekly, firstRow: cfg.firstRow, ticketsRaw: v[1], logsRaw: v[2], requestsRaw: v[3] };
+    const d = await apiCall('GET', '/bilhetes/dados'), p = d.passe || {};
+    return {
+      passe: [p.dataUltimaCompra || '', p.validadeDias ?? 29, p.dataExpira || '', p.diasRestantes ?? ''],
+      weeklyRaw: d.viagens.map(v => [v.data, v.origem, v.destino, v.comboio, v.hora, v.ativo]), firstRow: 0,
+      ticketsRaw: d.compras.map(c => [c.data, c.comboio ?? '', c.origem, c.destino, c.hora, c.carruagem, c.lugar, c.referencia]),
+      logsRaw: d.logs.map(l => [l.ts, l.tipo, l.data, l.perna, l.comboio, l.status, l.resultado, l.referencia, l.erro]),
+      requestsRaw: d.pedidos.map(r => [r.data, r.origem, r.destino, r.comboio ?? '', r.hora, r.ativo, r.retry, r.intervaloMinutos ?? '',
+        r.forcar, r.estado, r.ultimaTentativa, r.referencia, r.mensagem, r.id]),   // 14.ª coluna: o id do pedido
+    };
   },
-  /* lê a tabela atual, troca só as linhas da semana e escreve TUDO num único pedido (atómico) */
+  /* substitui as viagens da semana, atomicamente e PRESERVANDO os ids das que continuam (o servidor compara
+     por data+comboio+hora) — o id é parte da chave do lock de compra do Pi */
   async saveWeek(weekStart, newRows) {
-    const cur = await gcall(() => gapi.client.sheets.spreadsheets.values.get({
-      spreadsheetId: SHEET_ID, range: 'Config!A1:L300', valueRenderOption: 'UNFORMATTED_VALUE', dateTimeRenderOption: 'SERIAL_NUMBER' }));
-    const loc = locateConfig(cur.result.values || []);
-    if (!loc.contiguous) throw new Error('As colunas da tabela semanal da Config estão desordenadas: não escrevo para não as trocar.');
-    const existing = loc.weekly;
-    const all = mergeWeek(existing, weekStart, newRows);
-    const n = Math.max(all.length, existing.length);
-    const values = Array.from({ length: n }, (_, i) => all[i] || ['', '', '', '', '', '']);
-    await gcall(() => gapi.client.sheets.spreadsheets.values.update({
-      spreadsheetId: SHEET_ID, range: `Config!${colLetter(loc.colStart)}${loc.firstRow}:${colLetter(loc.colStart + 5)}${loc.firstRow + n - 1}`,
-      valueInputOption: 'RAW', resource: { values } }));
+    const viagens = newRows.map(([data, origem, destino, comboio, hora, ativo]) => ({ data, origem, destino, comboio, hora, ativo }));
+    await apiCall('PUT', '/bilhetes/semana', { inicio: weekStart, viagens });
   },
-  /* "Tentar agora": força uma única tentativa (Forcar=SIM, coluna I) */
-  async forcarPedido(row) {
-    await gcall(() => gapi.client.sheets.spreadsheets.values.update({
-      spreadsheetId: SHEET_ID, range: `Pedidos!I${row}`, valueInputOption: 'RAW', resource: { values: [['SIM']] } }));
+  /* "Tentar agora": força uma única tentativa */
+  async forcarPedido(id) { await apiCall('POST', `/bilhetes/pedidos/${id}/forcar`, {}); },
+  /* liga/desliga a repetição automática e o intervalo, por pedido */
+  async setPedidoRetry(id, on, minutos) {
+    await apiCall('PUT', `/bilhetes/pedidos/${id}`, { retry: !!on, intervaloMinutos: minutos ? Number(minutos) : null });
   },
-  /* liga/desliga a repetição automática e o intervalo (Retry=G, Intervalo_Minutos=H), por pedido */
-  async setPedidoRetry(row, on, minutos) {
-    await gcall(() => gapi.client.sheets.spreadsheets.values.batchUpdate({
-      spreadsheetId: SHEET_ID, resource: { valueInputOption: 'RAW', data: [
-        { range: `Pedidos!G${row}`, values: [[on ? 'SIM' : 'NAO']] },
-        { range: `Pedidos!H${row}`, values: [[minutos]] },
-      ] } }));
-  },
+  /* data do último carregamento do passe (antes editava-se a célula na Sheet) */
+  async setPasse(dataISO) { return apiCall('PUT', '/bilhetes/passe', { dataUltimaCompra: dataISO }); },
 };
 const api = window.__BCP_API || REAL_API;   // (o teste injeta uma API falsa)
 
@@ -547,7 +529,7 @@ function parseData(raw) {
     http: c[5] ?? '', result: String(c[6] ?? ''), ref: String(c[7] ?? ''), err: String(c[8] ?? '') }));
   const requests = (raw.requestsRaw || []).map((r, i) => {
     const c = [...r]; while (c.length < 13) c.push('');
-    return { row: 5 + i, date: sheetDate(c[0]), origin: String(c[1] ?? ''), dest: String(c[2] ?? ''),
+    return { row: c.length > 13 && c[13] !== '' && c[13] != null ? Number(c[13]) : 5 + i, date: sheetDate(c[0]), origin: String(c[1] ?? ''), dest: String(c[2] ?? ''),
       train: toNum(c[3]), hora: sheetTime(c[4]) || String(c[4] ?? ''), ativo: String(c[5]).trim().toUpperCase() === 'SIM',
       retry: String(c[6]).trim().toUpperCase() === 'SIM', intervalo: toNum(c[7]) ?? '',
       forcar: String(c[8]).trim().toUpperCase() === 'SIM', estado: String(c[9] ?? '').trim().toUpperCase() || 'PENDENTE',
@@ -588,13 +570,10 @@ function trainHistory() {
 
 /* ---------- carregar ---------- */
 function explainError(e) {
-  const code = e?.result?.error?.code ?? e?.status; const msg = e?.result?.error?.message || e?.message || String(e);
-  if (code === 403 && /has not been used|disabled/i.test(msg)) return 'A API Google Sheets não está ativada no projeto Google desta app.';
-  if (code === 403) return 'Esta conta Google não tem acesso à Sheet. Entra com a conta certa.';
-  if (code === 404) return 'Não encontrei a Sheet.';
-  if (code === 400 && /parse range/i.test(msg)) return 'Falta uma aba na Sheet (Config, Bilhetes ou Logs).';
+  if (e instanceof ApiErro) return e.message;
+  const msg = e?.message || String(e);
   if (!navigator.onLine) return 'Sem ligação à internet.';
-  return 'Não consegui ler a Sheet: ' + String(msg).slice(0, 140);
+  return 'Não consegui ler os dados: ' + String(msg).slice(0, 140);
 }
 /* Partida na 1.ª estação das próximas pernas (para a data da compra na lista); só com as chaves da CP. */
 async function loadAnchors() {
@@ -681,16 +660,16 @@ function viewSemana() {
 
 function passHtml() {
   const p = S.data.passe || [], last = sheetDate(p[0]), validity = toNum(p[1]) || 30;
-  /* 30 dias contando o dia do carregamento: expira a compra + 29. A coluna Data_Expira da Sheet
-     é a fonte; sem ela, compra + Validade_Dias (29), como a fórmula da Sheet. */
+  /* 30 dias contando o dia do carregamento: expira a compra + 29. O servidor calcula a data de expiração;
+     sem ela, compra + Validade_Dias (29). */
   const exp = sheetDate(p[2]) || (last ? addDays(last, validity) : null);
-  if (!exp) return `<div class="pass"><h3>Passe Verde</h3><p class="muted small" style="margin:6px 0 0">Preenche a data da última compra e a validade na aba Config para receberes o aviso antes de expirar.</p></div>`;
+  if (!exp) return `<div class="pass"><h3>Passe Verde</h3><p class="muted small" style="margin:6px 0 0">Indica a data do último carregamento em Definições para receberes o aviso antes de expirar.</p></div>`;
   const left = daysBetween(todayISO(), exp), cls = left <= 0 ? 'err' : left <= 3 ? 'warn' : '';
   const pct = Math.max(0, Math.min(100, Math.round(left / validity * 100)));
   const txt = left < 0 ? `Expirou a ${fmtDM(exp)}` : left === 0 ? 'Expira hoje' : `Válido até ${fmtDM(exp)}`;
   return `<div class="pass"><div class="top-line"><h3>Passe Verde</h3><span class="days">${Math.max(0, left)} dia${left === 1 ? '' : 's'}</span></div>
     <div class="meter ${cls}" role="img" aria-label="${esc(txt)}"><i style="width:${pct}%"></i></div>
-    <div class="muted small">${esc(txt)}${left <= 3 ? ' · renova na App CP e atualiza a data na Sheet' : ''}</div></div>`;
+    <div class="muted small">${esc(txt)}${left <= 3 ? ' · renova na App CP e atualiza a data em Definições' : ''}</div></div>`;
 }
 
 function viewBilhetes() {
@@ -875,7 +854,7 @@ function renderEditor() {
         ${canCopy ? `<button class="btn quiet" data-act="copy-prev">Repetir a semana anterior</button>` : ''}
       </div>
     </div>
-    <div class="savebar"><div class="note">O RPi lê a Sheet de 5 em 5 minutos e agenda as compras.</div>
+    <div class="savebar"><div class="note">O RPi lê a configuração de 5 em 5 minutos e agenda as compras.</div>
       <button class="btn" data-act="save-week" ${E.saving ? 'disabled' : ''}>${E.saving ? 'A guardar…' : 'Guardar'}</button></div>`;
   E.days.forEach((d, i) => { refreshDayMeta(i); d.viagens.forEach((_, vi) => scheduleVerify(i, vi, 0)); });
 }
@@ -1034,8 +1013,11 @@ function openSettings() {
       <p class="muted small" style="margin:6px 0 12px">${keys ? 'Ligado neste telemóvel: ao escreveres o nº do comboio, a app confirma a hora e o percurso no horário oficial e mostra a data da compra a partir da partida do comboio na 1.ª estação.'
         : 'Desligado. Para ligar, no computador do projeto corre <b>python3 scripts/pwa_link.py</b> e abre o link que aparece neste telemóvel. As chaves ficam só aqui, nunca no código.'}</p>
       ${keys ? '<button class="btn ghost" data-act="clear-keys">Desligar e apagar as chaves</button>' : ''}</div>
-    <div class="pass"><h3>Sheet</h3><p class="muted small" style="margin:6px 0 12px">A configuração, os registos e os bilhetes vivem numa Google Sheet.</p>
-      <a class="btn ghost" href="https://docs.google.com/spreadsheets/d/${SHEET_ID}" target="_blank" rel="noopener">Abrir a Sheet</a></div>
+    <div class="pass"><h3>Passe Verde</h3>
+      <p class="muted small" style="margin:6px 0 12px">Depois de carregares o passe na App CP, indica aqui a data do carregamento: é daqui que sai o aviso de validade (o passe vale 30 dias contando esse dia).</p>
+      <label class="f"><span>Data do último carregamento</span><input class="in" type="date" id="passeData" value="${esc(sheetDate((S.data.passe || [])[0]) || '')}"></label>
+      <button class="btn ghost" style="margin-top:10px" data-act="save-passe">Guardar data</button></div>
+    <div class="pass"><h3>Dados</h3><p class="muted small" style="margin:6px 0 0">A configuração, os bilhetes e os registos vivem no servidor de casa (Raspberry Pi), com cópia de segurança diária.</p></div>
     <p class="muted small" style="text-align:center">Bilhetes CP ${VERSION}</p>
   </div>`;
 }
@@ -1048,6 +1030,15 @@ document.addEventListener('click', async (e) => {
   const di = () => +b.closest('.dayc').dataset.i;
   switch (a) {
     case 'refresh': refresh(); break;
+    case 'save-passe': {
+      const v = $('#passeData')?.value || '';
+      if (!validISO(v)) { toast('Indica uma data válida.'); break; }
+      if (!api.setPasse) { toast('Não disponível.'); break; }
+      b.disabled = true;
+      try { await api.setPasse(v); toast('Data do passe guardada.'); await refresh(); if (!$('#settings').hidden) openSettings(); }
+      catch (err) { console.error(err); toast('Não consegui guardar: ' + explainError(err)); }
+      b.disabled = false; break;
+    }
     case 'open-settings': openSettings(); break;
     case 'close-settings': $('#settings').hidden = true; $('#settings').innerHTML = ''; break;
     case 'edit-week': openEditor(b.dataset.week); break;
@@ -1147,11 +1138,14 @@ async function boot() {
   applyViewport(); importKeysFromHash(); registerSW(); await loadConfig(); render();
   const wantEditor = /[?&]semana=1/.test(location.search);
   if (window.__BCP_API) { await refresh(); if (wantEditor) openEditor(); return; }
+  // Com sessão em cache a app arranca já: a API do servidor não precisa da biblioteca de login da Google.
+  const cached = cachedToken();
+  if (cached) { accessToken = cached; hideAuth(); await refresh(); if (wantEditor && S.loaded) openEditor(); return; }
   try { await initGapi(); } catch (e) { S.error = String(e.message || e); renderBanners(); render(); showAuth(S.error); return; }
   if (await ensureAuth(false)) { hideAuth(); await refresh(); if (wantEditor && S.loaded) openEditor(); }
   else { render(); showAuth(); }
 }
-window.__BCP = { S, mergeWeek, locateConfig, anchorFromStops, validateDays, sheetDate, sheetTime, fireInstant, applyViewport, openEditor, parseData, upcomingLegs, VERSION };
+window.__BCP = { S, mergeWeek, anchorFromStops, validateDays, sheetDate, sheetTime, fireInstant, applyViewport, openEditor, parseData, upcomingLegs, VERSION };
 boot();
 </script>
 </body>

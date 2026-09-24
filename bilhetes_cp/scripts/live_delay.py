@@ -140,7 +140,7 @@ def check_one(watch: Watch, cache: dict, now_ts: float) -> None:
 def main() -> int:
     now = common.now_local()
     try:
-        rows = common.SheetsClient().read_tickets()
+        rows = common.get_store().read_tickets()
     except Exception as e:  # noqa: BLE001
         log.error("Não consegui ler a aba Bilhetes: %s: %s", type(e).__name__, e)
         notify_once("live-delay-sheet-fail", "Vigilância do comboio sem dados",

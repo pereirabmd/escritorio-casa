@@ -93,18 +93,52 @@ class PublicarTest(unittest.TestCase):
                    "AGE_RECIPIENT": "age1teste", "BACKUP_SSH_KEY": "/dev/null",
                    "GIT_CONFIG_GLOBAL": "/dev/null"}
             with mock.patch.dict("os.environ", env):
-                self.assertTrue(backup.publicar("texto v1"))                        # 1º backup num repo vazio
-                self.assertFalse(backup.publicar("texto v1"))                       # igual: nada a commitar
-                self.assertTrue(backup.publicar("texto v2"))
+                self.assertTrue(backup.publicar({"dados": "texto v1"}))                        # 1º backup num repo vazio
+                self.assertFalse(backup.publicar({"dados": "texto v1"}))                       # igual: nada a commitar
+                self.assertTrue(backup.publicar({"dados": "texto v2"}))
             log = self._git("log", "--format=%s", cwd=d / "remoto.git").splitlines()
             self.assertEqual(len(log), 2)
             self.assertEqual(self._git("show", "main:dados.sql.age", cwd=d / "remoto.git"), "texto v2")
             self.assertEqual(self._git("ls-tree", "--name-only", "main", cwd=d / "remoto.git").split(), ["dados.sql.age"])
+            with mock.patch.dict("os.environ", env):                                # várias bases num só commit
+                self.assertTrue(backup.publicar({"dados": "texto v2", "bilhetes": "b1"}))
+            self.assertEqual(self._git("ls-tree", "--name-only", "main", cwd=d / "remoto.git").split(), ["bilhetes.sql.age", "dados.sql.age"])
+            self.assertEqual(len(self._git("log", "--format=%s", cwd=d / "remoto.git").splitlines()), 3)
+
+
+class VariasBasesTest(unittest.TestCase):
+    """As duas bases (dados e bilhetes) vão no mesmo backup; só se republica a que mudou."""
+
+    def test_backup_de_ambas_e_so_a_que_mudou(self):
+        with tempfile.TemporaryDirectory() as d:
+            d = Path(d)
+            env = {"DADOS_DB": str(d / "dados.db"), "BILHETES_DB": str(d / "bilhetes.db"), "BACKUP_EXCLUIR": ""}
+            with mock.patch.dict("os.environ", env), \
+                    mock.patch.object(backup, "STATE_DIR", d / "state"), \
+                    mock.patch.object(backup, "HASH_FILE", d / "state" / "dados.h"), \
+                    mock.patch.object(backup, "publicar", return_value=True) as pub:
+                for nome in ("dados", "bilhetes"):
+                    c = db.connect_named(nome)
+                    db.migrate(c, db.BASE_DIR / db.DATABASES[nome][2])
+                    c.close()
+                self.assertEqual(backup.fazer_backup(), "backup publicado (bilhetes, dados)")
+                self.assertEqual(sorted(pub.call_args[0][0]), ["bilhetes", "dados"])
+                self.assertEqual(backup.fazer_backup(), "sem alterações desde o último backup")
+                c = db.connect_named("bilhetes")
+                c.execute("UPDATE bilhetes_passe SET data_ultima_compra='2026-09-21' WHERE id=1")
+                c.close()
+                backup.fazer_backup()
+                self.assertEqual(sorted(pub.call_args[0][0]), ["bilhetes"])          # a base dos dados não mudou
+                dump = pub.call_args[0][0]["bilhetes"]
+                novo = sqlite3.connect(":memory:")
+                novo.executescript(dump)                                              # o dump recarrega
+                self.assertEqual(novo.execute("SELECT data_ultima_compra FROM bilhetes_passe").fetchone()[0], "2026-09-21")
+                self.assertEqual(novo.execute("SELECT seq FROM sqlite_sequence WHERE name='bilhetes_viagens'").fetchone()[0], 99)
 
 
 class FluxoTest(unittest.TestCase):
     def _correr(self, d, **extra):
-        env = {"DADOS_DB": str(Path(d) / "a.db"), "BACKUP_EXCLUIR": "logs_x", **extra}
+        env = {"DADOS_DB": str(Path(d) / "a.db"), "BILHETES_DB": str(Path(d) / "inexistente.db"), "BACKUP_EXCLUIR": "logs_x", **extra}
         return mock.patch.dict("os.environ", env)
 
     def test_sem_alteracoes_nao_volta_a_publicar(self):
@@ -113,7 +147,7 @@ class FluxoTest(unittest.TestCase):
                 mock.patch.object(backup, "HASH_FILE", Path(d) / "state" / "h"), \
                 mock.patch.object(backup, "publicar", return_value=True) as pub:
             bd_de_teste(Path(d) / "a.db").close()
-            self.assertEqual(backup.fazer_backup(), "backup publicado")
+            self.assertEqual(backup.fazer_backup(), "backup publicado (dados)")
             self.assertEqual(backup.fazer_backup(), "sem alterações desde o último backup")
             self.assertEqual(pub.call_count, 1)
             conn = db.connect(); conn.execute("INSERT INTO peso_config VALUES ('sexo','M')"); conn.close()

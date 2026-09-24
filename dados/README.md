@@ -5,6 +5,7 @@ Só usa a biblioteca padrão do Python (Debian: 3.11, SQLite ≥ 3.40) — sem v
 
 - `db.py` — liga com WAL + chaves estrangeiras e aplica `migrations/NNN_*.sql` por ordem
   (versão em `PRAGMA user_version`, cada migração numa transação). `python db.py init|status`.
+- `migrations_bilhetes/` — esquema da base `bilhetes.db` (separada de propósito; o Pi também a acede em SQL direto, ver `bilhetes_cp/scripts/store.py`).
 - `migrations/001_peso.sql` — esquema do piloto (peso). Cada app nova = uma migração nova,
   com tabelas prefixadas (`peso_…`, `rto_…`); nunca editar uma migração já aplicada.
 - `backup.py` — export SQL determinístico → só publica se mudou → cifra com `age` → push.
@@ -89,6 +90,10 @@ As PWAs chamam-no com `Authorization: Bearer <access token Google>` — **têm d
 | `POST /convidados/lista` · `PUT/DELETE /convidados/lista/{id}` | criar · atualizar **só os campos enviados** · eliminar. Só "Confirmado" pode ter mesa (o servidor larga-a se o estado mudar) |
 | `POST /convidados/lista/{id}/convite` | regista a data do convite (hora do servidor) |
 | `PUT /convidados/opcoes` | substitui as listas `fases`/`estados` (atómico; os estados têm de incluir "Confirmado" e "Convidado") |
+| `GET /bilhetes/dados` | passe, viagens (Config), bilhetes, pedidos e registos (base `bilhetes.db`) |
+| `PUT /bilhetes/semana` | substitui as viagens de [inicio, inicio+6] **preservando os ids** das que continuam (data+comboio+hora) |
+| `PUT /bilhetes/passe` | data do último carregamento do passe (a expiração calcula-se) |
+| `PUT /bilhetes/pedidos/{id}` · `POST /bilhetes/pedidos/{id}/forcar` | repetição automática (`retry`, `intervaloMinutos`) · "tentar agora" |
 
 Erros: `{"erro":{"codigo":"...","mensagem":"..."}}` com 400/401/403/404/405/409/413/415/429/503.
 

@@ -176,7 +176,7 @@ class Buyer:
 
     def _sheets(self):
         if self.sheets is None:
-            self.sheets = common.SheetsClient()
+            self.sheets = common.get_store()
         return self.sheets
 
     def sheet(self, method: str, *args: Any, **kwargs: Any) -> bool:
@@ -694,7 +694,7 @@ class PedidoAttempt:
 
     def _sheets(self):
         if self.sheets is None:
-            self.sheets = common.SheetsClient()
+            self.sheets = common.get_store()
         return self.sheets
 
     def sheet(self, method: str, *args: Any, **kwargs: Any) -> bool:
@@ -938,7 +938,7 @@ class PedidoAttempt:
 
 def load_pedido_leg(leg_name: str) -> Leg | None:
     row = int(leg_name.removeprefix("pedido"))
-    rows = common.SheetsClient().read_requests()
+    rows = common.get_store().read_requests()
     legs, _ = common.parse_request_rows(rows, common.now_local().date())
     return next((l for l in legs if l.row == row), None)
 
@@ -954,7 +954,7 @@ def load_leg(d: str, leg_name: str) -> Leg | None:
         snap = common.load_config_cache() if source == "cache" else None
         if source == "sheet":
             try:
-                snap = common.SheetsClient().read_config()
+                snap = common.get_store().read_config()
                 common.save_config_cache(snap)
             except Exception as e:  # noqa: BLE001
                 log.error("Não consegui ler a Sheet: %s", type(e).__name__)

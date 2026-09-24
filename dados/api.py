@@ -35,7 +35,7 @@ import db
 from auth import AuthError, TokenVerifier, Unauthorized
 
 MAX_BODY = 16 * 1024
-APPS = ["peso", "rto", "convidados"]  # módulos em apps/ com NAME e ROUTES
+APPS = ["peso", "rto", "convidados", "bilhetes"]  # módulos em apps/ com NAME e ROUTES
 LOG = logging.getLogger("dados.api")
 
 
@@ -83,10 +83,14 @@ class Settings:
         self.limite_falhas = int(e.get("RATE_FALHAS_POR_MIN", "10"))
 
 
+APP_DB: dict[str, str] = {}   # app -> base de dados (módulo pode declarar DB = "bilhetes"; por omissão "dados")
+
+
 def carregar_rotas() -> list[tuple[str, re.Pattern, str, object]]:
     rotas = []
     for nome in APPS:
         mod = importlib.import_module(f"apps.{nome}")
+        APP_DB[mod.NAME] = getattr(mod, "DB", "dados")
         for metodo, padrao, fn in mod.ROUTES:
             rotas.append((metodo, re.compile(padrao), mod.NAME, fn))
     return rotas
@@ -95,7 +99,7 @@ def carregar_rotas() -> list[tuple[str, re.Pattern, str, object]]:
 class Contexto(SimpleNamespace):
     def db(self) -> sqlite3.Connection:
         if self._conn is None:
-            self._conn = db.connect()
+            self._conn = db.connect_named(self._dbname)
         return self._conn
 
     def fechar(self):
@@ -187,7 +191,7 @@ def make_handler(settings: Settings, verifier: TokenVerifier, rotas):
         # -- fluxo principal ------------------------------------------------
         def _tratar(self):
             self._t0, self._status, self._user = time.monotonic(), 0, "-"
-            ctx = Contexto(_conn=None)
+            ctx = Contexto(_conn=None, _dbname="dados")
             try:
                 self._fluxo(ctx)
             except ApiError as e:
@@ -259,6 +263,7 @@ def make_handler(settings: Settings, verifier: TokenVerifier, rotas):
 
             # 3) pedido
             ctx.user, ctx.tz, ctx.groups = email, settings.tz, m.groups()
+            ctx._dbname = APP_DB.get(app, "dados")
             ctx.query = dict(parse_qsl(partes.query, keep_blank_values=True, max_num_fields=20))
             ctx.body = self._ler_corpo() if self.command in ("POST", "PUT") else {}
             status, corpo = fn(ctx)
@@ -303,9 +308,7 @@ def main() -> int:
     for app in APPS:
         if not settings.acl[app]:
             LOG.warning("ACL_%s vazia: ninguém tem acesso à app %s", app.upper(), app)
-    conn = db.connect()
-    db.migrate(conn)  # o serviço arranca sempre com o esquema em dia
-    conn.close()
+    db.migrate_all()  # o serviço arranca sempre com o esquema em dia (todas as bases)
     srv = criar_servidor(settings)
     LOG.info("a escutar em %s:%d", settings.host, settings.port)
     try:

@@ -85,7 +85,7 @@ class SdNotify:
 def read_config() -> tuple[dict | None, bool]:
     """(snapshot, veio_da_cache). Uma falha nunca é silenciosa."""
     try:
-        snap = common.SheetsClient().read_config()
+        snap = common.get_store().read_config()
         common.save_config_cache(snap)
         return snap, False
     except Exception as e:  # noqa: BLE001 — rede, quota, permissões, cabeçalhos, Google em baixo...

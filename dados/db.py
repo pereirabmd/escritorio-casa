@@ -20,6 +20,13 @@ from pathlib import Path
 BASE_DIR = Path(os.environ.get("DADOS_HOME") or Path(__file__).resolve().parent)
 MIGRATIONS_DIR = BASE_DIR / "migrations"
 
+# Bases de dados: nome -> (variável de ambiente com o caminho, ficheiro por omissão, pasta das migrações).
+# `bilhetes` é separada de propósito: a compra com hora certa nunca espera por um lock de outra app.
+DATABASES = {
+    "dados": ("DADOS_DB", "dados.db", "migrations"),
+    "bilhetes": ("BILHETES_DB", "bilhetes.db", "migrations_bilhetes"),
+}
+
 
 def load_env(path: Path | None = None) -> None:
     path = path or (BASE_DIR / ".env")
@@ -39,8 +46,26 @@ def load_env(path: Path | None = None) -> None:
 load_env()
 
 
-def db_path() -> Path:
-    return Path(os.environ.get("DADOS_DB") or BASE_DIR / "data" / "dados.db")
+def db_path(name: str = "dados") -> Path:
+    var, ficheiro, _ = DATABASES[name]
+    return Path(os.environ.get(var) or BASE_DIR / "data" / ficheiro)
+
+
+def connect_named(name: str) -> sqlite3.Connection:
+    """Liga a uma das bases conhecidas (`dados` ou `bilhetes`)."""
+    return connect(db_path(name))
+
+
+def migrate_all() -> dict[str, list[str]]:
+    """Aplica as migrações em falta a todas as bases. Devolve, por base, o que aplicou."""
+    out = {}
+    for name, (_, _, pasta) in DATABASES.items():
+        conn = connect_named(name)
+        try:
+            out[name] = migrate(conn, BASE_DIR / pasta)
+        finally:
+            conn.close()
+    return out
 
 
 def connect(path: Path | str | None = None) -> sqlite3.Connection:

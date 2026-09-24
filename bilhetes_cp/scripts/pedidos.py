@@ -102,7 +102,7 @@ def launch(leg, out=log.info) -> bool:
 
 def run(plan_only: bool = False) -> int:
     try:
-        raw_rows = common.SheetsClient().read_requests()
+        raw_rows = common.get_store().read_requests()
     except Exception as e:  # noqa: BLE001 — nunca falha calado (1.1), mas sem inundar
         log.error("Não consegui ler a aba Pedidos: %s: %s", type(e).__name__, e)
         if not plan_only:
@@ -124,7 +124,9 @@ def run(plan_only: bool = False) -> int:
     for leg in legs:
         if leg.departure.timestamp() <= now_ts:
             continue                                           # o comboio já partiu (3.2.1)
-        raw = raw_rows[leg.row - 5]
+        raw = common.request_row(raw_rows, leg.row)   # por id, nunca por posição
+        if raw is None:
+            continue
         due, forced = is_due(leg, raw, default_interval, now_ts)
         if not due or scheduler.is_running(leg):
             continue

@@ -61,7 +61,7 @@ def main() -> int:
     today = date.fromisoformat(args.today) if args.today else common.now_local().date()
 
     try:
-        snap = common.SheetsClient().read_config()
+        snap = common.get_store().read_config()
         common.save_config_cache(snap)
     except Exception as e:  # noqa: BLE001
         log.error("Leitura da Sheet falhou: %s: %s", type(e).__name__, e)

@@ -48,7 +48,7 @@ def main() -> int:
 
     monday, sunday = next_week(today)
     try:
-        snap = common.SheetsClient().read_config()
+        snap = common.get_store().read_config()
         common.save_config_cache(snap)
     except Exception as e:  # noqa: BLE001
         log.error("Leitura da Sheet falhou: %s: %s", type(e).__name__, e)

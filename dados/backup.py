@@ -31,7 +31,6 @@ from pathlib import Path
 
 import db
 
-BACKUP_FILE = "dados.sql.age"
 STATE_DIR = db.BASE_DIR / "state"
 HASH_FILE = STATE_DIR / "ultimo_backup.sha256"
 
@@ -115,15 +114,21 @@ def _tem_commits(repo: Path) -> bool:
                           capture_output=True).returncode == 0
 
 
-def publicar(texto: str) -> bool:
-    """Cifra para o clone do repo privado e faz push. False se não houve alteração no Git."""
+def ficheiro_de(nome: str) -> str:
+    return f"{nome}.sql.age"   # dados.sql.age, bilhetes.sql.age
+
+
+def publicar(textos: dict[str, str]) -> bool:
+    """Cifra cada base (`{nome: texto}`) para o clone do repo privado e faz UM commit + push.
+    False se não houve alteração no Git."""
     repo = Path(env("BACKUP_REPO_DIR"))
     if not (repo / ".git").is_dir():
         raise BackupError(f"BACKUP_REPO_DIR não é um clone git: {repo}")
     if _tem_commits(repo):
         _git(repo, "pull", "--ff-only")   # num repositório ainda vazio (1º backup) não há nada para puxar
-    cifrar(texto, repo / BACKUP_FILE)
-    _git(repo, "add", BACKUP_FILE)
+    for nome, texto in textos.items():
+        cifrar(texto, repo / ficheiro_de(nome))
+        _git(repo, "add", ficheiro_de(nome))
     if not _git(repo, "status", "--porcelain").strip():
         return False
     _git(repo, "-c", "user.name=dados-backup", "-c", "user.email=dados-backup@localhost",
@@ -155,21 +160,40 @@ def alertar(titulo: str, mensagem: str) -> None:
 # Comandos
 # ---------------------------------------------------------------------------
 
+def _hash_file(nome: str) -> Path:
+    return HASH_FILE if nome == "dados" else STATE_DIR / f"ultimo_backup_{nome}.sha256"
+
+
 def fazer_backup(force: bool = False) -> str:
+    """Faz o backup de TODAS as bases (dados e bilhetes). Só publica as que mudaram desde o último
+    backup bem sucedido; qualquer falha numa delas falha o conjunto (e alerta)."""
     excluir = _excluidas()
-    conn = db.connect()
-    try:
-        texto = dump_text(conn, excluir)
-        verificar(texto, conn, excluir)
-    finally:
-        conn.close()
-    h = hashlib.sha256(texto.encode("utf-8")).hexdigest()
-    if not force and HASH_FILE.is_file() and HASH_FILE.read_text().strip() == h:
+    textos: dict[str, str] = {}
+    for nome in db.DATABASES:
+        caminho = db.db_path(nome)
+        if not caminho.is_file():
+            continue                      # base ainda não criada
+        conn = db.connect(caminho)
+        try:
+            texto = dump_text(conn, excluir)
+            verificar(texto, conn, excluir)
+        finally:
+            conn.close()
+        textos[nome] = texto
+    if not textos:
+        raise BackupError("nenhuma base de dados encontrada para fazer backup")
+    hashes = {n: hashlib.sha256(t.encode("utf-8")).hexdigest() for n, t in textos.items()}
+    mudadas = {n: textos[n] for n, h in hashes.items()
+               if force or not _hash_file(n).is_file() or _hash_file(n).read_text().strip() != h}
+    if not mudadas:
         return "sem alterações desde o último backup"
-    publicou = publicar(texto)
+    publicou = publicar(mudadas)
     STATE_DIR.mkdir(exist_ok=True)
-    HASH_FILE.write_text(h + "\n")
-    return "backup publicado" if publicou else "repositório já estava igual"
+    for n in mudadas:
+        _hash_file(n).write_text(hashes[n] + "\n")
+    if not publicou:
+        return "repositório já estava igual"
+    return "backup publicado (" + ", ".join(sorted(mudadas)) + ")"
 
 
 def restaurar(ficheiro: Path, identity: Path, out: Path) -> None:

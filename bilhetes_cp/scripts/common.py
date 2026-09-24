@@ -406,6 +406,17 @@ def _to_train(v: Any) -> int | None:
     return int(f) if f == int(f) and f > 0 else None
 
 
+def _row_id(raw: list[Any], i: int, first_row: int, id_col: int) -> int:
+    """Número da viagem (`vN` / `pedidoN`). Na Sheet era a linha (`first_row + i`); na base de dados
+    a linha traz o `id` explícito numa coluna extra (`id_col`), estável mesmo que se apaguem outras."""
+    if len(raw) > id_col and raw[id_col] not in (None, ""):
+        try:
+            return int(raw[id_col])
+        except (TypeError, ValueError):
+            pass
+    return first_row + i
+
+
 def parse_config_rows(rows: list[list[Any]], today: date, first_row: int = 12
                       ) -> tuple[list[Leg], list[str]]:
     """Valida a tabela semanal. Devolve (viagens válidas, problemas em texto).
@@ -422,7 +433,7 @@ def parse_config_rows(rows: list[list[Any]], today: date, first_row: int = 12
     seen: dict[tuple[date, int, str], int] = {}
 
     for i, raw in enumerate(rows):
-        row = first_row + i
+        row = _row_id(raw, i, first_row, 6)
         cells = list(raw) + [""] * (6 - len(raw))
         data_v, org_v, dst_v, train_v, hora_v, ativo = cells[:6]
         if str(ativo).strip().upper() != "SIM":
@@ -531,7 +542,7 @@ def parse_request_rows(rows: list[list[Any]], today: date, first_row: int = 5
     legs: list[Leg] = []
     issues: list[str] = []
     for i, raw in enumerate(rows):
-        row = first_row + i
+        row = _row_id(raw, i, first_row, 13)
         cells = list(raw) + [""] * 13
         data_v, org_v, dst_v, train_v, hora_v, ativo, retry_v, interval_v = cells[:8]
         if str(ativo).strip().upper() != "SIM":
@@ -566,6 +577,29 @@ def parse_request_rows(rows: list[list[Any]], today: date, first_row: int = 5
         legs.append(Leg(d, f"pedido{row}", org, dst, train, hora, row,
                         retry=str(retry_v).strip().upper() == "SIM", retry_minutes=_to_minutes(interval_v)))
     return legs, issues
+
+
+def request_row(rows: list[list[Any]], row: int, first_row: int = 5) -> list[Any] | None:
+    """A linha crua do pedido `row` (o `N` de `pedidoN`), procurada pelo id — nunca por posição."""
+    for i, raw in enumerate(rows):
+        if _row_id(raw, i, first_row, 13) == row:
+            return raw
+    return None
+
+
+# ---------------------------------------------------------------------------
+# Onde vivem os dados (Config, Bilhetes, Logs, Pedidos): Google Sheets ou SQLite
+# ---------------------------------------------------------------------------
+
+def get_store():
+    """A camada de dados atual. `BILHETES_BACKEND=sqlite` usa a base de dados local (bilhetes.db);
+    qualquer outro valor (por omissão) usa a Sheet, como sempre. Voltar atrás é mudar esta variável
+    no .env e reiniciar o daemon. Ambas têm a mesma interface (read_config, read_tickets, read_requests,
+    append_log, append_ticket, append_request, update_request)."""
+    if env("BILHETES_BACKEND", "sheets").strip().lower() == "sqlite":
+        import store
+        return store.SqliteStore()
+    return SheetsClient()
 
 
 # ---------------------------------------------------------------------------

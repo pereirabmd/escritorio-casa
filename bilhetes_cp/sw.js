@@ -4,7 +4,7 @@
  * - Configuração não-secreta (estações): stale-while-revalidate, para poder
  *   mudar sem nova versão do service worker.
  * - Tipos de letra: stale-while-revalidate (são públicos).
- * - TUDO o resto (Google Sheets, Google Identity, API da CP, ntfy) NÃO é
+ * - TUDO o resto (API de dados no Pi, Google Identity, API da CP, ntfy) NÃO é
  *   intercetado: vai sempre à rede, porque são dados privados ou mutáveis
  *   (network-only por omissão — nenhuma rota registada).
  *
@@ -12,7 +12,7 @@
  */
 importScripts('https://storage.googleapis.com/workbox-cdn/releases/7.3.0/workbox-sw.js');
 
-const VERSION = 'v1.2.0';
+const VERSION = 'v2.0.0';
 
 workbox.core.setCacheNameDetails({ prefix: 'bilhetes-cp', suffix: VERSION });
 workbox.core.clientsClaim();

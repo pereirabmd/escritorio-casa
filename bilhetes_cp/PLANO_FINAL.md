@@ -473,6 +473,10 @@ nunca conta para esse limite.
   parte em 3.10.1
 
 ### 3.5 Camada de dados: Google Sheets
+
+> **Substituída a 24/09/2026 (ver 9.10):** os dados vivem agora numa base SQLite no Pi (`bilhetes.db`). O texto
+> abaixo descreve a Sheet, que continua a ser o formato de referência (as tabelas da BD têm as mesmas colunas)
+> e o plano de recuo (`BILHETES_BACKEND=sheets`). Onde este documento diz "a Sheet", lê-se "os dados".
 Em vez de API própria + Tailscale, os dados são partilhados via Google
 Sheets:
 - **PWA → Sheet**: escreve a config semanal via OAuth Google client-side
@@ -826,6 +830,10 @@ quer preservar para o pedido crítico. Abordagem:
 ---
 
 ## 4. Estrutura do Google Sheets
+
+> Desde 24/09/2026 as abas correspondem às tabelas `bilhetes_viagens` (Config semanal), `bilhetes_passe`
+> (bloco do passe), `bilhetes_compras` (Bilhetes), `bilhetes_logs` (Logs) e `bilhetes_pedidos` (Pedidos) —
+> ver 9.10. A Sheet ficou intacta, congelada nessa data.
 
 Sheet: `https://docs.google.com/spreadsheets/d/1PNY134CrkxVhcpKHjTDZMYqYv3q-_oeDusJ-hgLRMBk`
 
@@ -1228,3 +1236,48 @@ sudo fail2ban-client set ntfy-auth unbanip <IP>     # desbanir
 | `timetable_check_days` | 14 | a partir de quantos dias antes se valida a Config e se descobre a 1.ª estação |
 | `clock_max_offset_ms` / `cp_date_max_offset_s` | 150 / 3 | limites do pre-flight (3.10.1, 3.11.1) |
 | `pedido_retry_interval_minutes` | 15 | intervalo de reserva quando um pedido não define o seu próprio `Intervalo_Minutos` (3.2.1) |
+
+### 9.10 Migração para SQLite (24/09/2026)
+
+A Sheet deixou de ser a base de dados. Os dados vivem em **`bilhetes.db`** (SQLite, WAL) no Pi — uma base
+**separada** da das outras apps (`dados.db`), para a compra com hora certa nunca esperar por um lock de outra
+app. Esquema em `dados/migrations_bilhetes/001_bilhetes.sql` (tabelas `bilhetes_viagens`, `bilhetes_passe`,
+`bilhetes_compras`, `bilhetes_logs`, `bilhetes_pedidos`); ficheiro em `~/dados/data/bilhetes.db`.
+
+**Quem acede e como**
+- **O Pi (scheduler, hot_buy, pedidos.py, live_delay, pass_expiry_check, config_reminder)** lê e escreve em SQL
+  direto — `scripts/store.py` (`SqliteStore`), que tem **exatamente a interface da `SheetsClient`** e devolve os
+  dados nos mesmos formatos, por isso a lógica de compra, os validadores e as protecções não mudaram. Escolhe-se com
+  `BILHETES_BACKEND` no `.env` (`common.get_store()`): **`sqlite`** desde 24/09/2026; **`sheets`** volta à Sheet
+  (**recuo**: mudar a variável e `sudo systemctl restart cp-scheduler`; os bilhetes/registos criados depois da
+  troca só existem na BD). Uma falha da BD é tratada como uma falha da Sheet: nunca interrompe uma compra
+  (`Buyer.sheet()`), avisa, e o lock por perna continua a proteger de compras duplicadas.
+- **A PWA** fala com a API do `dados/` (`https://bmdpereira.duckdns.org/dados-api/bilhetes/…`, token Google, ACL
+  `ACL_BILHETES`), já não com o Google Sheets nem com o `gapi`: só pede `openid email`. Ver `dados/apps/bilhetes.py`.
+
+**O que teve de mudar de propósito (e porquê)**
+- **O id de uma viagem/pedido É o número em `vN`/`pedidoN`** (parte da chave do lock de compra). Na Sheet era a
+  linha, que se renumerava ao guardar a semana; agora é o `id` da BD (`AUTOINCREMENT`, nunca reutilizado). As
+  viagens importadas **mantêm o número da linha** (`v12` continua `v12`, senão os locks e estados existentes deixavam
+  de bater); as novas começam em **100**. `parse_config_rows`/`parse_request_rows` aceitam o id explícito numa coluna
+  extra (`_row_id`) e `pedidos.py` procura a linha do pedido **por id** (`request_row`), nunca por posição.
+- **Guardar a semana na PWA preserva os ids** (`PUT /bilhetes/semana`): compara por (data, comboio, hora) — o que
+  continua existe com o mesmo id (só se atualizam origem/destino/ativo), o que sumiu apaga-se, o novo ganha id.
+  Reescrever tudo, como na Sheet, mudava o id a meio de um disparo e arriscava uma compra dupla.
+- **A data do passe** deixou de ser uma célula editada à mão: a PWA tem um campo em Definições
+  (`PUT /bilhetes/passe`); a expiração e os dias que faltam calculam-se (`data + validade_dias`, 29 = 30 dias).
+- **Registos**: a aba Registo da PWA precisa deles, por isso `bilhetes_logs` fica na BD — só eventos com resultado
+  (como na Sheet); as tentativas da rajada continuam só em `logs/hot_buy.log`.
+
+**Importação e verificação** (`dados/importar_bilhetes.py`, corre no Pi): 1 viagem (id 12), 3 bilhetes, 0 pedidos,
+18 registos, passe de 21/09 (+29 = 20/10, igual à fórmula da folha). Verificado contra os valores **formatados** da
+Sheet (bilhetes e registos idênticos) e, o que mais interessa, **o Pi alimentado pela BD vê o mesmo plano**
+(`scheduler --plan-only`, `pedidos --plan-only`, `live_delay`, `pass_expiry_check` iguais); com viagens futuras
+numa **cópia** da BD, o plano sai certo (disparos às 17:30/06:45 ancorados à 1.ª estação, ids v100/v101).
+Testes: 226 no `bilhetes_cp` (12 de `store`, 5 de fluxos reais de compra a escrever numa BD verdadeira) mais os da
+API, do importador e do backup em `dados/`, e a PWA em Chromium (58 verificações + um percurso completo PWA↔API↔BD↔Pi).
+
+**Backup**: o backup diário (`dados/backup.py`) cobre `bilhetes.db` (`bilhetes.sql.age`, no mesmo repositório
+privado). **Cuidado ao alterar o esquema**: as tabelas são lidas/escritas por dois lados (o Pi em SQL, a PWA pela
+API) — mudar uma coluna exige mudar `store.py` e `apps/bilhetes.py` juntos, e uma migração nova (nunca editar uma
+já aplicada).

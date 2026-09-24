@@ -119,7 +119,7 @@ try {
     console.log('  problemas:', JSON.stringify(problems.slice(0, 4)));
   }
   check('a app arranca e mostra conteúdo', await ev(`document.querySelector('#view').innerText.length>40`));
-  check('título e versão', (await ev('document.title')) === 'Bilhetes CP' && (await ev('__BCP.VERSION')) === 'v1.2.0');
+  check('título e versão', (await ev('document.title')) === 'Bilhetes CP' && (await ev('__BCP.VERSION')) === 'v2.0.0');
   check('sem scroll horizontal', await ev(`document.documentElement.scrollWidth<=innerWidth && document.querySelector('#view').scrollWidth<=document.querySelector('#view').clientWidth+1`));
   const home = await text('#view');
   check('ação em destaque: falta configurar a semana seguinte', /Falta configurar a semana de \d\d\/\d\d a \d\d\/\d\d/.test(home), home.slice(0, 80));
@@ -297,6 +297,7 @@ try {
   console.log('\n== Segurança');
   const html = await (await fetch(`http://127.0.0.1:${HTTP}/index.html`)).text() + await (await fetch(`http://127.0.0.1:${HTTP}/sw.js`)).text();
   check('nenhuma chave/segredo da CP no código da PWA', !/x-api-key['"]?\s*:\s*['"][0-9a-f]{16,}|connect-secret['"]?\s*:\s*['"][0-9a-f]{8,}/i.test(html) && !/(CP_API_KEY|CP_CONNECT_SECRET)\s*=\s*\S{8,}/.test(html));
+  check('a PWA já não fala com o Google Sheets nem carrega o gapi (só a API do servidor de casa)', !/sheets\.googleapis|apis\.google\.com\/js\/api|gapi\./.test(html));
   check('tudo o que vem da Sheet passa por esc() (sem innerHTML cru de dados)', !/innerHTML\s*=\s*[^;]*\$\{(?!esc\()[^}]*\b(r|t|l|d|h)\.(origin|dest|ref|err|result|tipo|hora)\b/.test(html));
 } catch (e) {
   console.error('ERRO NO TESTE:', e.message); results.push({ name: 'execução do teste', ok: false });
