@@ -46,7 +46,6 @@ class ConfigValidationTests(unittest.TestCase):
 
     def test_varios_problemas_tipicos(self):
         cases = {
-            "já passou": row(data="2026-09-01"),
             "data inválida": row(data="lixo"),
             "origem igual ao destino": row(dst="aveiro"),
             "origem desconhecida": row(org="marte"),
@@ -57,6 +56,14 @@ class ConfigValidationTests(unittest.TestCase):
             legs, issues = self.parse(r)
             self.assertEqual(legs, [], expected)
             self.assertTrue(any(expected in i for i in issues), f"{expected!r} não em {issues}")
+
+    def test_viagem_com_data_passada_e_historico_ignora_se_em_silencio(self):
+        # cada linha é uma viagem única: depois de usada fica na Config e não deve avisar todas as meias-noites
+        self.assertEqual(self.parse(row(data="2026-09-01")), ([], []))
+        legs, issues = self.parse(row(data="2026-09-01", hora="25:90"), row(data="2026-09-23"))      # mesmo com outros campos maus
+        self.assertEqual((len(legs), issues), (1, []))
+        legs, issues = self.parse(row(hora="25:90"), row(data="2026-09-01"))                          # os erros das linhas futuras continuam
+        self.assertEqual(len(issues), 1)
 
     def test_mais_de_duas_viagens_no_mesmo_dia_sao_todas_aceites(self):
         # a Config já não tem o par fixo ida/volta: quantas viagens quiseres no mesmo dia

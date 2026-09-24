@@ -452,7 +452,10 @@ def parse_config_rows(rows: list[list[Any]], today: date, first_row: int = 12
         if d is None:
             problems.append(f"data inválida ({data_v!r})")
         elif d < today:
-            problems.append(f"data {d.isoformat()} já passou (linha ativa mas sem efeito)")
+            # Viagem já passada: é histórico (cada linha é uma viagem única e fica na Config depois de usada), não um erro.
+            # Antes (Sheets semanal) uma data passada queria dizer «esqueceste-te de a atualizar» e avisava-se; agora
+            # avisaria à meia-noite por cada viagem usada (24/09/2026: «Linha 12 … já passou»). Ignora-se em silêncio.
+            continue
 
         org, dst = norm_station(org_v), norm_station(dst_v)
         if station_code(org) is None:
