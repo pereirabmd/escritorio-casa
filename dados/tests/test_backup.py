@@ -8,6 +8,10 @@ import backup
 import db
 
 
+MIGRACOES = db._migrations(db.MIGRATIONS_DIR)
+ULTIMA_VERSAO = max(n for n, _ in MIGRACOES)
+
+
 def bd_de_teste(path):
     conn = db.connect(path)
     db.migrate(conn)
@@ -22,9 +26,9 @@ class MigracoesTest(unittest.TestCase):
     def test_idempotente_e_versao(self):
         with tempfile.TemporaryDirectory() as d:
             conn = db.connect(Path(d) / "a.db")
-            self.assertEqual(db.migrate(conn), ["001_peso.sql"])
+            self.assertEqual(db.migrate(conn), [f.name for _, f in MIGRACOES])
             self.assertEqual(db.migrate(conn), [])
-            self.assertEqual(db.versao(conn), 1)
+            self.assertEqual(db.versao(conn), ULTIMA_VERSAO)
 
     def test_migracao_falhada_faz_rollback(self):
         with tempfile.TemporaryDirectory() as d:
@@ -57,7 +61,7 @@ class DumpTest(unittest.TestCase):
             novo = sqlite3.connect(":memory:")
             novo.executescript(t1)
             self.assertEqual(novo.execute("SELECT nota FROM peso_registos").fetchone()[0], "a;b")
-            self.assertEqual(novo.execute("PRAGMA user_version").fetchone()[0], 1)
+            self.assertEqual(novo.execute("PRAGMA user_version").fetchone()[0], ULTIMA_VERSAO)
 
     def test_verificar_apanha_export_truncado(self):
         with tempfile.TemporaryDirectory() as d:

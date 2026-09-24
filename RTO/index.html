@@ -13,9 +13,9 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="KLx RTO">
-<meta name="description" content="Calendário de dias no escritório/em casa, quota RTO, férias e astreinte — sincronizado com o Google Sheets.">
+<meta name="description" content="Calendário de dias no escritório/em casa, quota RTO, férias e astreinte — sincronizado com o servidor de casa.">
 <link rel="preconnect" href="https://accounts.google.com">
-<link rel="preconnect" href="https://sheets.googleapis.com">
+<link rel="preconnect" href="https://bmdpereira.duckdns.org">
 <link rel="stylesheet" href="styles.css">
 </head>
 <body>
@@ -40,7 +40,6 @@
   <img src="logo.png" alt="" style="height:56px;width:auto;margin-bottom:6px;">
   <div id="authChecking" class="sub" style="padding-bottom:10px;" role="status">A verificar sessão…</div>
   <button id="signinBtn" class="btn-primary hidden">Iniciar sessão com a Google</button>
-  <button id="setupBtn" class="btn-secondary hidden">Inicializar folha (1ª vez)</button>
 </div>
 
 <div id="app" class="hidden">
@@ -78,6 +77,11 @@
   <div id="offlineBanner" class="hidden" role="status">
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-3px;margin-right:4px;" aria-hidden="true"><line x1="1" y1="1" x2="23" y2="23"/><path d="M16.72 11.06A10.94 10.94 0 0 1 19 12.55"/><path d="M5 12.55a10.94 10.94 0 0 1 5.17-2.39"/><path d="M10.71 5.05A16 16 0 0 1 22.58 9"/><path d="M1.42 9a15.91 15.91 0 0 1 4.7-2.88"/><path d="M8.53 16.11a6 6 0 0 1 6.95 0"/><path d="M12 20h.01"/></svg>
     Sem ligação — os dados apresentados podem não estar atualizados.
+  </div>
+
+  <div id="filaBanner" class="hidden" role="status">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-3px;margin-right:4px;" aria-hidden="true"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+    <span></span>
   </div>
 
   <div id="tabBar" role="tablist" aria-label="Secções">
@@ -146,7 +150,6 @@
 
       <div id="monthCompare" class="hidden" role="status"></div>
 
-      <div id="yearBanner" class="hidden"></div>
       <div id="adminBanner" class="hidden">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-3px;margin-right:4px;" aria-hidden="true"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
         Modo Administrador ativo — sem restrições de data.
@@ -277,10 +280,10 @@
 
 <script>
 /* ============================================================
-   CONFIGURAÇÃO — não alterar CLIENT_ID / SPREADSHEET_ID / nomes das folhas:
-   é a ligação à folha de cálculo Google Sheets já em uso.
+   CONFIGURAÇÃO — CLIENT_ID (login Google) e API_URL (servidor no Raspberry Pi).
+   Desde a v8.0.0 os dados vivem numa base SQLite no Pi, já não no Google Sheets.
    ============================================================ */
-const APP_VERSION = 'v7.1.1';
+const APP_VERSION = 'v8.0.0';
 
 const ICON_EDIT = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>';
 const ICON_TRASH = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>';
@@ -291,18 +294,17 @@ const ICON_WARNING = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none
 const ICON_REPEAT = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-4px;margin-right:6px;" aria-hidden="true"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>';
 const ICON_WIFI_OFF = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-3px;margin-right:4px;" aria-hidden="true"><line x1="1" y1="1" x2="23" y2="23"/><path d="M16.72 11.06A10.94 10.94 0 0 1 19 12.55"/><path d="M5 12.55a10.94 10.94 0 0 1 5.17-2.39"/><path d="M10.71 5.05A16 16 0 0 1 22.58 9"/><path d="M1.42 9a15.91 15.91 0 0 1 4.7-2.88"/><path d="M8.53 16.11a6 6 0 0 1 6.95 0"/><path d="M12 20h.01"/></svg>';
 const CLIENT_ID = '108256538530-fgunbb52s7f3s9aurfpjtaf01v8fjbph.apps.googleusercontent.com';
-const SPREADSHEET_ID = '1u4QOqKMEOe8qq_kU_Cw5c8Vj4qQ0AHE5gXj9hPood9c';
-const SHEET_NAME = 'Dados';
+const API_URL = 'https://bmdpereira.duckdns.org/dados-api';
 let currentYear = new Date().getFullYear();
 /* ============================================================ */
 
-const SCOPES = 'https://www.googleapis.com/auth/spreadsheets';
+// só a identidade: a API reconhece quem chama pelo e-mail do token (a app já não acede ao Google Sheets)
+const SCOPES = 'openid email';
 const QUOTA_ANUAL = 120;
 
 let tokenClient;
 let accessToken = null;
-let dayData = {};      // { 'YYYY-MM-DD': 'T' | 'C' | '' }
-let rowIndex = {};      // { 'YYYY-MM-DD': rowNumber } (1-indexed sheet row)
+let dayData = {};      // { 'YYYY-MM-DD': 'T' | 'C' } — só os dias marcados (os outros não existem)
 let feriasMode = false;
 let adminMode = false;
 let appMode = 'normal'; // 'normal' | 'ferias' | 'admin'
@@ -328,8 +330,8 @@ window.addEventListener('unhandledrejection', (e) => { console.error('Promessa r
 function estaOnline(){ return typeof navigator === 'undefined' || navigator.onLine !== false; }
 
 /* ---------- Sessão persistente ---------- */
-const TOKEN_KEY = 'rto_access_token';
-const TOKEN_EXPIRY_KEY = 'rto_token_expiry';
+const TOKEN_KEY = 'rto_access_token_v2';   // v2: o token antigo não tinha o e-mail, que a API exige
+const TOKEN_EXPIRY_KEY = 'rto_token_expiry_v2';
 
 function saveToken(token, expiresInSeconds){
   try{
@@ -354,33 +356,32 @@ function clearSavedToken(){
 }
 
 /* ---------- Cópia local dos últimos dados sincronizados (só leitura, para modo offline) ---------- */
-const CACHE_KEY_DAYS = 'rto_cache_daydata';
-const CACHE_KEY_ROWS = 'rto_cache_rowindex';
-const CACHE_KEY_NOTES = 'rto_cache_notas';
+const CACHE_KEY_DAYS = 'rto_cache_daydata_v2';
+const CACHE_KEY_NOTES = 'rto_cache_notas_v2';
+const FILA_KEY = 'rto_fila_dias_v2';      // marcas de dias feitas sem ligação, à espera de sincronizar
+function limparChavesAntigas(){
+  try{ ['rto_access_token','rto_token_expiry','rto_cache_daydata','rto_cache_rowindex','rto_cache_notas'].forEach(k => localStorage.removeItem(k)); } catch(e){}
+}
 
 function saveLocalCache(){
   try{
     localStorage.setItem(CACHE_KEY_DAYS, JSON.stringify(dayData));
-    localStorage.setItem(CACHE_KEY_ROWS, JSON.stringify(rowIndex));
     localStorage.setItem(CACHE_KEY_NOTES, JSON.stringify(notasData));
   } catch(e){}
 }
 function loadLocalCache(){
   try{
     const daysRaw = localStorage.getItem(CACHE_KEY_DAYS);
-    const rowsRaw = localStorage.getItem(CACHE_KEY_ROWS);
-    if (!daysRaw || !rowsRaw) return false;
+    if (!daysRaw) return false;
     const days = JSON.parse(daysRaw);
-    const rows = JSON.parse(rowsRaw);
-    if (!days || typeof days !== 'object' || !rows || typeof rows !== 'object') return false;
+    if (!days || typeof days !== 'object') return false;
     dayData = days;
-    rowIndex = rows;
+    aplicarFilaAosDias();
     const notesRaw = localStorage.getItem(CACHE_KEY_NOTES);
     if (notesRaw){
       const parsed = JSON.parse(notesRaw);
       if (Array.isArray(parsed)) notasData = parsed;
     }
-    notasNextRow = notasData.reduce((max, n) => Math.max(max, n.row || 0), 1) + 1;
     return true;
   } catch(e){ return false; }
 }
@@ -418,6 +419,9 @@ window.onload = () => {
   document.title = `KLx RTO ${currentYear}`;
   document.getElementById('footerVersion').textContent = APP_VERSION;
   console.log('KLx RTO app', APP_VERSION);
+  limparChavesAntigas();
+  filaDias = lerFila();
+  atualizarFilaBanner();
   buildSkeletonGrid();
   attachRippleAll('.btn-primary, .btn-secondary, .tabBtn, .subTabBtn, .navBtn, #todayBtn, #fabExport, .stat:not(#todayStrip), .modeBtn');
   document.getElementById('changelogBtn').onclick = () => showChangelog();
@@ -444,7 +448,6 @@ window.onload = () => {
     });
     document.getElementById('signinBtn').onclick = () => tokenClient.requestAccessToken({ prompt: 'consent' });
   }
-  document.getElementById('setupBtn').onclick = initializeSheet;
   document.getElementById('prevMonth').onclick = () => changeMonth(-1);
   document.getElementById('nextMonth').onclick = () => changeMonth(1);
   document.getElementById('todayBtn').onclick = () => goToToday();
@@ -474,7 +477,7 @@ window.onload = () => {
   });
 
   updateOfflineBanner();
-  window.addEventListener('online', updateOfflineBanner);
+  window.addEventListener('online', () => { updateOfflineBanner(); if (accessToken) sincronizarFila().catch(() => {}); });
   window.addEventListener('offline', updateOfflineBanner);
 
   const themeBtn = document.getElementById('themeToggleBtn');
@@ -652,6 +655,7 @@ async function onSignedIn(){
       setStatus('Falha a sincronizar — a mostrar os últimos dados guardados.', true);
     }
   }
+  sincronizarFila().catch(() => {});
   await handleQuickAction();
 }
 
@@ -724,18 +728,13 @@ async function handleQuickAction(){
 
   const now = new Date();
   const todayStr = isoDate(now.getFullYear(), now.getMonth(), now.getDate());
-  const row = rowIndex[todayStr];
-  if (!row){
-    setStatus('Não foi possível marcar hoje — inicializa a folha primeiro.', true);
-    return;
-  }
   captureSnapshot();
   dayData[todayStr] = quick;
   currentYear = now.getFullYear();
   currentMonth = now.getMonth();
   setStatus('A marcar hoje…');
   try{
-    await sheetsPut(`${SHEET_NAME}!B${row}`, [[quick]]);
+    await gravarDias({ [todayStr]: quick });
     renderMonth();
     updateTotals();
     saveLocalCache();
@@ -746,83 +745,133 @@ async function handleQuickAction(){
   }
 }
 
-/* ---------- Sheets API helpers ---------- */
+/* ---------- Estado de ligação ---------- */
 function updateOfflineBanner(){
   document.getElementById('offlineBanner').classList.toggle('hidden', navigator.onLine);
 }
 
-async function apiFetch(url, opts){
-  if (!navigator.onLine){
-    throw new Error('Sem ligação à internet');
-  }
+/* ---------- API do servidor (Raspberry Pi) ---------- */
+class ApiErro extends Error {
+  constructor(msg, status){ super(msg); this.status = status; }
+}
+// falhas de rede / servidor em baixo: o pedido pode ser repetido mais tarde
+function ehErroDeRede(e){
+  return e instanceof ApiErro && (e.status === 0 || e.status === 502 || e.status === 503 || e.status === 504);
+}
+const MSGS_API = {
+  403: 'Esta conta não tem acesso à app RTO.',
+  429: 'Demasiados pedidos — tenta daqui a um minuto.',
+  502: 'Servidor indisponível.', 503: 'Servidor ocupado — tenta de novo.', 504: 'Servidor indisponível.',
+};
+async function api(method, path, body){
+  if (!navigator.onLine) throw new ApiErro('Sem ligação à internet', 0);
+  const ctl = new AbortController();
+  const timer = setTimeout(() => ctl.abort(), 15000);
+  let res;
   try{
-    return await fetch(url, opts);
-  }catch(err){
-    throw new Error('Sem ligação à internet — tenta novamente');
+    res = await fetch(API_URL + path, {
+      method, signal: ctl.signal,
+      headers: Object.assign({ Authorization: 'Bearer ' + accessToken }, body !== undefined ? { 'Content-Type': 'application/json' } : {}),
+      body: body !== undefined ? JSON.stringify(body) : undefined,
+    });
+  } catch(e){
+    throw new ApiErro('Não foi possível contactar o servidor', 0);
+  } finally {
+    clearTimeout(timer);
   }
+  if (res.status === 401){ onSessaoExpirada(); throw new ApiErro('Sessão expirada', 401); }
+  let dados = null;
+  try{ dados = await res.json(); } catch(e){}
+  if (!res.ok){
+    const doServidor = dados && dados.erro && dados.erro.mensagem;
+    throw new ApiErro(MSGS_API[res.status] || doServidor || ('Erro do servidor (' + res.status + ')'), res.status);
+  }
+  return dados;
 }
 
-async function sheetsGet(range){
-  const url = `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/${encodeURIComponent(range)}`;
-  const res = await apiFetch(url, { headers: { Authorization: 'Bearer ' + accessToken } });
-  if (res.status === 401){ onSessaoExpirada(); throw new Error('Sessão expirada'); }
-  if (!res.ok) throw new Error('Erro a ler a folha (' + res.status + ')');
-  return res.json();
-}
+/* ---------- Fila de marcas de dias feitas sem ligação ----------
+   Marcar um dia é "este dia passa a ser T/C/vazio" (idempotente, o último ganha), por isso
+   pode esperar. Fica em localStorage e é enviada em lote quando o servidor voltar. Notas e
+   "Desfazer" de notas exigem ligação. */
+let filaDias = {};       // { 'AAAA-MM-DD': 'T' | 'C' | '' }
+let aSincronizar = false;
 
-async function sheetsPut(range, values){
-  const url = `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/${encodeURIComponent(range)}?valueInputOption=RAW`;
-  const res = await apiFetch(url, {
-    method: 'PUT',
-    headers: {
-      Authorization: 'Bearer ' + accessToken,
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify({ range, values })
-  });
-  if (res.status === 401){ onSessaoExpirada(); throw new Error('Sessão expirada'); }
-  if (!res.ok) throw new Error('Erro a gravar (' + res.status + ')');
-  return res.json();
+function lerFila(){
+  try{
+    const f = JSON.parse(localStorage.getItem(FILA_KEY) || '{}');
+    const limpa = {};
+    if (f && typeof f === 'object'){
+      Object.keys(f).forEach(k => { if (/^\d{4}-\d{2}-\d{2}$/.test(k) && (f[k] === 'T' || f[k] === 'C' || f[k] === '')) limpa[k] = f[k]; });
+    }
+    return limpa;
+  } catch(e){ return {}; }
 }
-
-async function sheetsAppend(range, values){
-  const url = `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/${encodeURIComponent(range)}:append?valueInputOption=RAW`;
-  const res = await apiFetch(url, {
-    method: 'POST',
-    headers: {
-      Authorization: 'Bearer ' + accessToken,
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify({ range, values })
-  });
-  if (res.status === 401){ onSessaoExpirada(); throw new Error('Sessão expirada'); }
-  if (!res.ok) throw new Error('Erro a inicializar (' + res.status + ')');
-  return res.json();
+function guardarFila(){
+  try{
+    if (Object.keys(filaDias).length) localStorage.setItem(FILA_KEY, JSON.stringify(filaDias));
+    else localStorage.removeItem(FILA_KEY);
+  } catch(e){}
+  atualizarFilaBanner();
+}
+// aviso persistente enquanto houver alterações por sincronizar (não some sozinho)
+function atualizarFilaBanner(){
+  const el = document.getElementById('filaBanner');
+  if (!el) return;
+  const n = Object.keys(filaDias).length;
+  el.classList.toggle('hidden', n === 0);
+  el.querySelector('span').textContent = n === 1
+    ? '1 alteração guardada neste aparelho — a sincronizar quando houver ligação ao servidor.'
+    : `${n} alterações guardadas neste aparelho — a sincronizar quando houver ligação ao servidor.`;
+}
+function aplicarFilaAosDias(){
+  Object.keys(filaDias).forEach(d => { if (filaDias[d]) dayData[d] = filaDias[d]; else delete dayData[d]; });
+}
+// Grava marcas de dias ({data: 'T'|'C'|''}). Vão primeiro para a fila local e depois ao servidor;
+// devolve 'ok' ou 'fila' (sem ligação: fica para depois). Rejeições do servidor lançam erro.
+async function gravarDias(mapa){
+  Object.assign(filaDias, mapa);
+  guardarFila();
+  return sincronizarFila();
+}
+async function sincronizarFila(){
+  if (aSincronizar) return 'fila';
+  if (!Object.keys(filaDias).length) return 'ok';
+  if (!accessToken) return 'fila';
+  aSincronizar = true;
+  try{
+    for (let volta = 0; volta < 3 && Object.keys(filaDias).length; volta++){   // apanha o que entrou a meio
+      const enviar = Object.assign({}, filaDias);
+      const chaves = Object.keys(enviar);
+      for (let i = 0; i < chaves.length; i += 400){
+        const parte = chaves.slice(i, i + 400);
+        const dias = {};
+        parte.forEach(k => { dias[k] = enviar[k]; });
+        try{
+          await api('PUT', '/rto/dias', { dias });
+        } catch(e){
+          if (e instanceof ApiErro && e.status === 400) parte.forEach(k => { if (filaDias[k] === enviar[k]) delete filaDias[k]; });  // inválido: não bloquear a fila
+          guardarFila();
+          throw e;
+        }
+        parte.forEach(k => { if (filaDias[k] === enviar[k]) delete filaDias[k]; });
+        guardarFila();
+      }
+    }
+    return 'ok';
+  } catch(e){
+    if (ehErroDeRede(e)) return 'fila';
+    throw e;
+  } finally {
+    aSincronizar = false;
+  }
 }
 
 /* ---------- Load + parse data ---------- */
 async function loadData(){
   try{
-    const data = await sheetsGet(`${SHEET_NAME}!A2:B4000`);
-    const rows = data.values || [];
-    dayData = {};
-    rowIndex = {};
-    if (rows.length === 0){
-      document.getElementById('setupBtn').classList.remove('hidden');
-      setStatus('A folha parece vazia. Usa "Inicializar folha" (só é preciso uma vez).');
-      renderMonth();
-      updateTotals();
-      return;
-    }
-    document.getElementById('setupBtn').classList.add('hidden');
-    rows.forEach((row, i) => {
-      const dateStr = row[0];
-      const mark = row[1] || '';
-      if (dateStr){
-        dayData[dateStr] = mark;
-        rowIndex[dateStr] = i + 2; // +2: header row + 0-index offset
-      }
-    });
+    const data = await api('GET', '/rto/dias');
+    dayData = data.dias || {};
+    aplicarFilaAosDias();
     setStatus('');
     renderMonth();
     updateTotals();
@@ -831,54 +880,6 @@ async function loadData(){
   }
 }
 
-/* ---------- Setup (first run): writes header + 365/366 date rows for currentYear ---------- */
-async function initializeSheet(){
-  setStatus('A inicializar a folha…');
-  try{
-    const values = [['Data','Marca']];
-    let d = new Date(currentYear,0,1);
-    while (d.getFullYear() === currentYear){
-      values.push([isoDate(d.getFullYear(), d.getMonth(), d.getDate()), '']);
-      d.setDate(d.getDate()+1);
-    }
-    await sheetsPut(`${SHEET_NAME}!A1`, values);
-    setStatus('Folha inicializada.');
-    await loadData();
-  }catch(err){
-    setStatus(err.message, true);
-  }
-}
-
-/* ---------- Inicializar um ano seguinte (2027, 2028...) na mesma folha ---------- */
-async function initializeYear(year){
-  setStatus(`A inicializar ${year}…`);
-  try{
-    const values = [];
-    let d = new Date(year,0,1);
-    while (d.getFullYear() === year){
-      values.push([isoDate(d.getFullYear(), d.getMonth(), d.getDate()), '']);
-      d.setDate(d.getDate()+1);
-    }
-    await sheetsAppend(`${SHEET_NAME}!A:B`, values);
-    setStatus(`${year} inicializado.`);
-    await loadData();
-  }catch(err){
-    setStatus(err.message, true);
-  }
-}
-
-function checkYearInitialized(){
-  const banner = document.getElementById('yearBanner');
-  const jan1 = isoDate(currentYear, 0, 1);
-  if (!(jan1 in rowIndex)){
-    banner.classList.remove('hidden');
-    banner.innerHTML = `<span>${currentYear} ainda não está na folha.</span><button id="initYearBtn" class="btn-secondary">Inicializar ${currentYear}</button>`;
-    document.getElementById('initYearBtn').onclick = () => initializeYear(currentYear);
-  } else {
-    banner.classList.add('hidden');
-    banner.innerHTML = '';
-  }
-}
 
 /* ---------- Calendar rendering ---------- */
 /* ---------- Feriados nacionais PT + municipal de Lisboa ---------- */
@@ -971,7 +972,6 @@ function dayHasInfo(dateStr){
 
 function renderMonth(){
   document.getElementById('monthLabel').textContent = `${MESES[currentMonth]} ${currentYear}`;
-  checkYearInitialized();
   ensureHolidays(currentYear);
   const grid = document.getElementById('grid');
   grid.innerHTML = '';
@@ -1089,6 +1089,7 @@ function attachLongPress(cell, dateStr){
 
 /* ---------- Registo de alterações (changelog) ---------- */
 const CHANGELOG = [
+  { v:'8.0.0', c:['Os dados passaram do Google Sheets para o servidor de casa (Raspberry Pi): mais rápido, e a app deixa de precisar de acesso à tua folha de cálculo — só pede a identidade (o e-mail)', 'Acabou a "Inicialização da folha/do ano": os dias marcados guardam-se sozinhos, para qualquer ano', 'Marcar um dia sem ligação ao servidor já não falha: fica guardado neste aparelho (com um aviso que se mantém enquanto houver algo por sincronizar) e envia-se sozinho quando a ligação voltar', 'Criar e alterar notas e férias passa a exigir ligação; as ações compostas (dividir/juntar férias, gerar validações) deixam de fazer dezenas de pedidos — o gerador cria tudo numa só operação', 'É preciso voltar a iniciar sessão uma vez (a app passa a pedir só o e-mail, em vez do acesso à folha de cálculo)'] },
   { v:'7.1.1', c:['Formulário de nova nota passa para o topo da aba Notas, antes da lista — deixa de ser preciso descer até ao fim para acrescentar uma; editar uma nota existente continua a abrir o formulário junto dela', 'Ficha de detalhe do dia e registo de alterações passam a abrir/fechar com uma transição suave, em vez de aparecer/desaparecer de repente'] },
   { v:'7.1.0', c:['"Calendário" passa a ser a aba principal (ecrã de entrada da app), à frente de "Hoje"', 'Animação de carregamento (skeleton) refeita para espelhar a estrutura real da aba Calendário — subseparadores Mês/Ano, navegação de mês, seletor de modo, grelha e legenda — em vez de um layout genérico desalinhado com o que aparece a seguir'] },
   { v:'7.0.1', c:['Legenda do calendário (Mês e Ano) passa a ter etiquetas coloridas com a cor de cada categoria, em vez de etiquetas cinzentas com um pontinho — mais fácil de ler o calendário à distância'] },
@@ -1160,7 +1161,7 @@ async function cycleDay(dateStr, cell){
   const current = dayData[dateStr] || '';
   const next = current === '' ? 'T' : current === 'T' ? 'C' : '';
 
-  dayData[dateStr] = next;
+  if (next) dayData[dateStr] = next; else delete dayData[dateStr];
   const todayStr = isoDate(new Date().getFullYear(), new Date().getMonth(), new Date().getDate());
   const { markHTML, cls } = computeCellDisplay(dateStr);
   const hasInfo = dayHasInfo(dateStr);
@@ -1170,16 +1171,17 @@ async function cycleDay(dateStr, cell){
   cell.innerHTML = `<div class="num">${dayNum}</div><div class="mark">${markHTML}</div>`;
   updateTotals();
 
-  const row = rowIndex[dateStr];
-  if (!row){ setStatus('Data não encontrada na folha — usa "Inicializar folha".', true); dayTapBusy = false; return; }
-
   setStatus('A gravar…');
   try{
-    await sheetsPut(`${SHEET_NAME}!B${row}`, [[next]]);
+    await gravarDias({ [dateStr]: next });
     saveLocalCache();
     setStatus('');
     showUndoToast();
   }catch(err){
+    // o servidor recusou: volta ao estado anterior em vez de mostrar uma marca que não ficou gravada
+    if (current) dayData[dateStr] = current; else delete dayData[dateStr];
+    renderMonth();
+    updateTotals();
     setStatus('Não gravou: ' + err.message, true);
   } finally {
     dayTapBusy = false;
@@ -1211,7 +1213,21 @@ function nextBusinessDayPt(pt){
   const mm = String(d.getMonth()+1).padStart(2,'0');
   return `${dd}/${mm}/${d.getFullYear()}`;
 }
-function notaRange(row){ return `${NOTAS_SHEET}!A${row}:D${row}`; }
+// notas: em memória as datas ficam em 'DD/MM/AAAA' (como a app sempre as tratou); a API usa ISO
+function notaParaApi(n){
+  return { dataInicio: toISODateForInput(n.dataInicio) || null, dataFim: toISODateForInput(n.dataFim) || null,
+           categoria: n.categoria || '', descricao: n.descricao || '' };
+}
+function notaDaApi(r){
+  return { id: r.id, dataInicio: toPtDate(r.dataInicio || ''), dataFim: toPtDate(r.dataFim || ''),
+           categoria: r.categoria || '', descricao: r.descricao || '' };
+}
+async function apiNotaPut(n){ await api('PUT', '/rto/notas/' + n.id, notaParaApi(n)); }
+async function apiNotaPost(n){ return notaDaApi(await api('POST', '/rto/notas', notaParaApi(n))); }
+async function apiNotaDelete(id){
+  try{ await api('DELETE', '/rto/notas/' + id); }
+  catch(e){ if (!(e instanceof ApiErro && e.status === 404)) throw e; }   // já não existia: o resultado pretendido
+}
 
 /* ---------- Visão do ano (mapa de calor compacto, 12 meses) ---------- */
 function renderAno(){
@@ -1268,8 +1284,7 @@ let undoTimeout = null;
 function captureSnapshot(){
   undoSnapshot = {
     dayData: Object.assign({}, dayData),
-    notasData: notasData.map(n => Object.assign({}, n)),
-    notasNextRow: notasNextRow
+    notasData: notasData.map(n => Object.assign({}, n))
   };
 }
 
@@ -1297,31 +1312,27 @@ async function performUndo(){
     const beforeDay = snap.dayData;
     const afterDay = dayData;
     const allDates = new Set([...Object.keys(beforeDay), ...Object.keys(afterDay)]);
+    const mudados = {};
     for (const dt of allDates){
-      if ((beforeDay[dt] || '') !== (afterDay[dt] || '') && rowIndex[dt]){
-        await sheetsPut(`${SHEET_NAME}!B${rowIndex[dt]}`, [[beforeDay[dt] || '']]);
-      }
+      if ((beforeDay[dt] || '') !== (afterDay[dt] || '')) mudados[dt] = beforeDay[dt] || '';
     }
+    if (Object.keys(mudados).length) await gravarDias(mudados);
     dayData = Object.assign({}, beforeDay);
 
-    const beforeByRow = new Map(snap.notasData.map(n => [n.row, n]));
-    const afterByRow = new Map(notasData.map(n => [n.row, n]));
-    const allRows = new Set([...beforeByRow.keys(), ...afterByRow.keys()]);
-    for (const row of allRows){
-      const b = beforeByRow.get(row);
-      const a = afterByRow.get(row);
+    const beforeById = new Map(snap.notasData.map(n => [n.id, n]));
+    const afterById = new Map(notasData.map(n => [n.id, n]));
+    const allIds = new Set([...beforeById.keys(), ...afterById.keys()]);
+    for (const id of allIds){
+      const b = beforeById.get(id);
+      const a = afterById.get(id);
       const same = b && a && b.dataInicio === a.dataInicio && b.dataFim === a.dataFim
         && b.categoria === a.categoria && b.descricao === a.descricao;
       if (!same){
-        if (b){
-          await sheetsPut(notaRange(row), [[b.dataInicio, b.dataFim, b.categoria, b.descricao]]);
-        } else {
-          await sheetsPut(notaRange(row), [['','','','']]);
-        }
+        if (b) await apiNotaPut(b);          // repõe (ou recria com o mesmo id, se foi apagada)
+        else await apiNotaDelete(id);        // foi criada depois do retrato: remove
       }
     }
     notasData = snap.notasData.map(n => Object.assign({}, n));
-    notasNextRow = snap.notasNextRow;
 
     sortNotas();
     computeNoteMarks();
@@ -1352,24 +1363,23 @@ async function applyFeriasCore(dateStr){
     const s = parsePtDate(origStart), e = parsePtDate(origEnd);
 
     if (+s === +d && +e === +d){
-      await sheetsPut(notaRange(covering.row), [['','','','']]);
-      notasData = notasData.filter(x => x.row !== covering.row);
+      await apiNotaDelete(covering.id);
+      notasData = notasData.filter(x => x.id !== covering.id);
     } else if (+d === +s){
       const newStart = ptAddDays(origStart, 1);
-      await sheetsPut(notaRange(covering.row), [[newStart, origEnd, covering.categoria, covering.descricao]]);
+      await apiNotaPut(Object.assign({}, covering, { dataInicio: newStart }));
       covering.dataInicio = newStart;
     } else if (+d === +e){
       const newEnd = ptAddDays(origEnd, -1);
-      await sheetsPut(notaRange(covering.row), [[origStart, newEnd, covering.categoria, covering.descricao]]);
+      await apiNotaPut(Object.assign({}, covering, { dataFim: newEnd }));
       covering.dataFim = newEnd;
     } else {
       const leftEnd = ptAddDays(pt, -1);
       const rightStart = ptAddDays(pt, 1);
-      await sheetsPut(notaRange(covering.row), [[origStart, leftEnd, covering.categoria, covering.descricao]]);
+      await apiNotaPut(Object.assign({}, covering, { dataFim: leftEnd }));
       covering.dataFim = leftEnd;
-      const newRow = notasNextRow++;
-      await sheetsPut(notaRange(newRow), [[rightStart, origEnd, covering.categoria, covering.descricao]]);
-      notasData.push({ row:newRow, dataInicio:rightStart, dataFim:origEnd, categoria:covering.categoria, descricao:covering.descricao });
+      const direita = await apiNotaPost({ dataInicio: rightStart, dataFim: origEnd, categoria: covering.categoria, descricao: covering.descricao });
+      notasData.push(direita);
     }
   } else {
     /* -------- adicionar este dia, juntando a notas de Férias adjacentes se existirem -------- */
@@ -1385,28 +1395,27 @@ async function applyFeriasCore(dateStr){
         .map(s => (s||'').trim()).filter(Boolean)
         .filter((v,i,a) => a.indexOf(v) === i)
         .join(' / ');
-      await sheetsPut(notaRange(prevNote.row), [[prevNote.dataInicio, newEnd, mergedCategoria, mergedDescricao]]);
-      await sheetsPut(notaRange(nextNote.row), [['','','','']]);
+      await apiNotaPut(Object.assign({}, prevNote, { dataFim: newEnd, categoria: mergedCategoria, descricao: mergedDescricao }));
+      await apiNotaDelete(nextNote.id);
       prevNote.dataFim = newEnd;
       prevNote.categoria = mergedCategoria;
       prevNote.descricao = mergedDescricao;
-      notasData = notasData.filter(x => x.row !== nextNote.row);
+      notasData = notasData.filter(x => x.id !== nextNote.id);
     } else if (prevNote){
-      await sheetsPut(notaRange(prevNote.row), [[prevNote.dataInicio, pt, prevNote.categoria, prevNote.descricao]]);
+      await apiNotaPut(Object.assign({}, prevNote, { dataFim: pt }));
       prevNote.dataFim = pt;
     } else if (nextNote){
-      await sheetsPut(notaRange(nextNote.row), [[pt, nextNote.dataFim, nextNote.categoria, nextNote.descricao]]);
+      await apiNotaPut(Object.assign({}, nextNote, { dataInicio: pt }));
       nextNote.dataInicio = pt;
     } else {
-      const row = notasNextRow++;
-      await sheetsPut(notaRange(row), [[pt, pt, 'Férias', '']]);
-      notasData.push({ row, dataInicio: pt, dataFim: pt, categoria: 'Férias', descricao: '' });
+      const nova = await apiNotaPost({ dataInicio: pt, dataFim: pt, categoria: 'Férias', descricao: '' });
+      notasData.push(nova);
     }
 
     // um dia de férias deixa de ser um dia de trabalho
-    if (rowIndex[dateStr] && dayData[dateStr]){
-      await sheetsPut(`${SHEET_NAME}!B${rowIndex[dateStr]}`, [['']]);
-      dayData[dateStr] = '';
+    if (dayData[dateStr]){
+      await gravarDias({ [dateStr]: '' });
+      delete dayData[dateStr];
     }
   }
 }
@@ -1452,11 +1461,8 @@ async function cycleDayAdmin(dateStr, cell){
     if (next === 'F'){
       await applyFeriasCore(dateStr); // adiciona este dia a uma nota de férias (limpa T/C sozinho)
     } else {
-      const row = rowIndex[dateStr];
-      if (row){
-        await sheetsPut(`${SHEET_NAME}!B${row}`, [[next]]);
-        dayData[dateStr] = next;
-      }
+      await gravarDias({ [dateStr]: next });
+      if (next) dayData[dateStr] = next; else delete dayData[dateStr];
     }
 
     sortNotas();
@@ -1701,10 +1707,8 @@ function showSaldoExplain(cond){
 }
 
 /* ---------- Notas (4 campos: Data Início | Data Fim | Categoria | Descrição) ---------- */
-const NOTAS_SHEET = 'Notas';
-let notasData = [];      // [{ row, dataInicio, dataFim, categoria, descricao }]
-let notasNextRow = 2;
-let editingRow = null;   // row currently being edited, or null when adding new
+let notasData = [];      // [{ id, dataInicio, dataFim, categoria, descricao }] (datas em DD/MM/AAAA)
+let editingId = null;    // id da nota em edição, ou null ao acrescentar uma nova
 let noteMarks = {};      // { 'YYYY-MM-DD': 'F' | 'A' }, derived from Notas categories
 
 function toISODateForInput(v){
@@ -1778,19 +1782,8 @@ function sortNotas(){
 
 async function loadNotes(){
   try{
-    const data = await sheetsGet(`${NOTAS_SHEET}!A2:D1000`);
-    const rows = data.values || [];
-    notasData = [];
-    rows.forEach((row, i) => {
-      const dataInicio = row[0] || '';
-      const dataFim = row[1] || '';
-      const categoria = row[2] || '';
-      const descricao = row[3] || '';
-      if (dataInicio || dataFim || categoria || descricao){
-        notasData.push({ row: i + 2, dataInicio, dataFim, categoria, descricao });
-      }
-    });
-    notasNextRow = rows.length + 2;
+    const data = await api('GET', '/rto/notas');
+    notasData = (data.notas || []).map(notaDaApi);
     sortNotas();
     computeNoteMarks();
     renderNotes();
@@ -1824,7 +1817,7 @@ function renderNotes(){
   visibleNotas.forEach(n => {
     const card = document.createElement('div');
     card.className = 'notaCard';
-    card.dataset.row = n.row;
+    card.dataset.id = n.id;
     const locked = isPastFeriasNote(n);
     const periodo = n.dataInicio && n.dataFim && n.dataInicio !== n.dataFim
       ? `${n.dataInicio} a ${n.dataFim}` : (n.dataInicio || n.dataFim || '');
@@ -1852,12 +1845,12 @@ function renderNotes(){
 
 function positionNotaForm(){
   const formEl = document.getElementById('notaForm');
-  if (editingRow){
+  if (editingId){
     // A editar uma nota existente: o formulário continua a aparecer logo
     // a seguir a essa nota (edição "in place"), não lá para cima — isto
     // não muda com o pedido de pôr o formulário no início da página, que
     // é só sobre o estado por omissão (a acrescentar uma nota nova).
-    const card = document.querySelector(`.notaCard[data-row="${editingRow}"]`);
+    const card = document.querySelector(`.notaCard[data-id="${editingId}"]`);
     if (card){ card.insertAdjacentElement('afterend', formEl); return; }
   }
   document.getElementById('notasList').insertAdjacentElement('beforebegin', formEl);
@@ -1881,7 +1874,7 @@ function startNotaEdit(n){
     setStatus('Não é possível editar notas de datas já passadas (usa o Modo Administrador).', true);
     return;
   }
-  editingRow = n.row;
+  editingId = n.id;
   document.getElementById('notaDataInicio').value = toISODateForInput(n.dataInicio);
   document.getElementById('notaDataFim').value = toISODateForInput(n.dataFim);
   document.getElementById('notaCategoria').value = n.categoria;
@@ -1893,7 +1886,7 @@ function startNotaEdit(n){
 }
 
 function cancelNotaEdit(){
-  editingRow = null;
+  editingId = null;
   document.getElementById('notaDataInicio').value = '';
   document.getElementById('notaDataFim').value = '';
   document.getElementById('notaCategoria').value = '';
@@ -1921,18 +1914,16 @@ async function onNotaSave(){
   }
   captureSnapshot();
 
-  const values = [[dataInicio, dataFim, categoria, descricao]];
   setStatus('A gravar nota…');
   try{
-    if (editingRow){
-      await sheetsPut(`${NOTAS_SHEET}!A${editingRow}:D${editingRow}`, values);
-      const idx = notasData.findIndex(n => n.row === editingRow);
-      if (idx > -1) notasData[idx] = { row: editingRow, dataInicio, dataFim, categoria, descricao };
+    if (editingId){
+      const nota = { id: editingId, dataInicio, dataFim, categoria, descricao };
+      await apiNotaPut(nota);
+      const idx = notasData.findIndex(n => n.id === editingId);
+      if (idx > -1) notasData[idx] = nota;
     } else {
-      const row = notasNextRow;
-      await sheetsPut(`${NOTAS_SHEET}!A${row}:D${row}`, values);
-      notasData.push({ row, dataInicio, dataFim, categoria, descricao });
-      notasNextRow++;
+      const criada = await apiNotaPost({ dataInicio, dataFim, categoria, descricao });
+      notasData.push(criada);
     }
     cancelNotaEdit();
     sortNotas();
@@ -1972,22 +1963,26 @@ async function gerarValidacoesPeriodicas(){
   try{
     let d = new Date(refDate);
     let i = 0;
-    let criadas = 0, existentes = 0;
+    let existentes = 0;
+    const novas = [];
     while (d <= untilDate){
       const categoria = (i % 2 === 0) ? refType : otherType;
       const pt = toPtDate(isoDate(d.getFullYear(), d.getMonth(), d.getDate()));
       const jaExiste = notasData.some(n => n.dataInicio === pt && n.dataFim === pt && n.categoria === categoria);
-      if (jaExiste){
+      if (jaExiste || novas.some(n => n.dataInicio === pt && n.categoria === categoria)){
         existentes++;
       } else {
-        const row = notasNextRow++;
-        await sheetsPut(notaRange(row), [[pt, pt, categoria, '']]);
-        notasData.push({ row, dataInicio: pt, dataFim: pt, categoria, descricao: '' });
-        criadas++;
+        novas.push({ dataInicio: pt, dataFim: pt, categoria, descricao: '' });
       }
       d.setDate(d.getDate() + 14);
       i++;
     }
+    // uma só chamada por 100 notas (atómica): nada de dezenas de pedidos seguidos
+    for (let k = 0; k < novas.length; k += 100){
+      const r = await api('POST', '/rto/notas/lote', { notas: novas.slice(k, k + 100).map(notaParaApi) });
+      r.notas.forEach(n => notasData.push(notaDaApi(n)));
+    }
+    const criadas = novas.length;
     sortNotas();
     computeNoteMarks();
     renderNotes();
@@ -2009,9 +2004,9 @@ async function deleteNota(n){
   captureSnapshot();
   setStatus('A eliminar…');
   try{
-    await sheetsPut(`${NOTAS_SHEET}!A${n.row}:D${n.row}`, [['','','','']]);
-    notasData = notasData.filter(x => x.row !== n.row);
-    if (editingRow === n.row) cancelNotaEdit();
+    await apiNotaDelete(n.id);
+    notasData = notasData.filter(x => x.id !== n.id);
+    if (editingId === n.id) cancelNotaEdit();
     computeNoteMarks();
     renderNotes();
     renderMonth();
@@ -2054,8 +2049,14 @@ async function exportToExcel(){
 
     // Dados
     const dadosRows = [['Data','Marca']];
-    Object.keys(dayData).sort().forEach(date => {
-      dadosRows.push([date, dayData[date] || '']);
+    // um dia por linha, como sempre (os dias sem marca já não existem na base, por isso enumeram-se aqui)
+    const anosExport = new Set(Object.keys(dayData).map(d => Number(d.slice(0, 4))));
+    anosExport.add(currentYear);
+    [...anosExport].sort().forEach(ano => {
+      for (let dt = new Date(ano, 0, 1); dt.getFullYear() === ano; dt.setDate(dt.getDate() + 1)){
+        const iso = isoDate(dt.getFullYear(), dt.getMonth(), dt.getDate());
+        dadosRows.push([iso, dayData[iso] || '']);
+      }
     });
     const wsDados = XLSX.utils.aoa_to_sheet(dadosRows);
     XLSX.utils.book_append_sheet(wb, wsDados, 'Dados');

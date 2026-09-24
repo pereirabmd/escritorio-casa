@@ -1,13 +1,13 @@
 /* ==========================================================================
    KLx RTO — Service Worker
    Estratégia: cache do "app shell" (HTML/CSS/ícones/manifest) para permitir
-   abrir a app offline. NUNCA cacheia pedidos ao Google (login, Sheets API)
-   — esses são sempre pedidos à rede; a app trata a falta de rede no próprio
+   abrir a app offline. NUNCA cacheia pedidos ao Google (login) nem à API de dados
+   no Raspberry Pi — esses são sempre pedidos à rede; a app trata a falta de rede no próprio
    JavaScript (banner "sem ligação" + última cópia local dos dados, nunca
    escrita de volta na folha a partir daqui).
    ========================================================================== */
 
-const CACHE_VERSION = 'rto-v7.1.1';
+const CACHE_VERSION = 'rto-v8.0.0';
 const SHELL_CACHE = CACHE_VERSION + '-shell';
 
 const SHELL_ASSETS = [
@@ -29,6 +29,7 @@ const NUNCA_CACHEAR = [
   'googleapis.com',
   'apis.google.com',
   'gstatic.com',
+  'duckdns.org',   // API de dados no Raspberry Pi: sempre à rede, nunca em cache
 ];
 
 self.addEventListener('install', (event) => {
