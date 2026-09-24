@@ -71,7 +71,19 @@
       120,
       120
     ],
-    "pedido_retry_interval_minutes": 15
+    "pedido_retry_interval_minutes": 15,
+    "hold_before_open": true,
+    "hold_lead_seconds": 150,
+    "hold_retry_interval_s": 15,
+    "warm_interval_s": 10,
+    "discount_lead_s": 0.6,
+    "discount_fast_interval_s": 0.1,
+    "discount_fast_phase_s": 1.6,
+    "discount_mid_interval_s": 0.3,
+    "discount_max_fast_attempts": 48,
+    "discount_slow_interval_s": 1.5,
+    "discount_window_s": 180,
+    "discount_unknown_s": 10
   },
   "reminders": {
     "config_missing_check_times": [

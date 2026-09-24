@@ -37,8 +37,12 @@ class FakeCP:
         self.steps = steps or {}
         self.access_token = "tok"
 
-    def warm(self):
+    def warm(self, *a):
         self.calls.append("warm")
+
+    def cancel_sale(self, sid):
+        self.calls.append("cancel")
+        return resp(200, {"status": {"code": "CANCELLED"}})
 
     trip = None
 

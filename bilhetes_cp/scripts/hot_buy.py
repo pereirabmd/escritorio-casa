@@ -119,9 +119,20 @@ def to_amount(v: Any) -> float | None:
             if k in v:
                 return to_amount(v[k])
         return None
+    if isinstance(v, (int, float)) and not isinstance(v, bool):
+        return float(v)
+    # A CP devolve "€ 0,00" / "€ 23,45" (símbolo, espaço, vírgula decimal). Até 24/09/2026 isto dava None e a
+    # guarda «total ≠ 0 → não confirmar» nunca chegou a funcionar (só saía o aviso «totalAmount não encontrado»).
+    t = re.sub(r"[^0-9,.\-]", "", str(v))
+    if not t or not re.search(r"\d", t):
+        return None
+    if "," in t and "." in t:                       # 1.234,56 (milhares com ponto, decimais com vírgula)
+        t = t.replace(".", "").replace(",", ".")
+    else:
+        t = t.replace(",", ".")
     try:
-        return float(str(v).replace(",", "."))
-    except (TypeError, ValueError):
+        return float(t)
+    except ValueError:
         return None
 
 
@@ -206,8 +217,8 @@ class Buyer:
                 return
             if keepalive and self.cp is not None:
                 now = self.clock()
-                if now - last_ping >= 15 and remaining > 1.0:
-                    self.cp.warm()
+                if now - last_ping >= float(cfg("warm_interval_s", 10)) and remaining > 0.5:
+                    self.cp.warm(self.leg.train, self.leg.date.isoformat())
                     last_ping = now
                 if now - self.login_at > 240 and remaining > 10:
                     self.reauth(quiet=True)
@@ -307,6 +318,13 @@ class Buyer:
         # 3) pesquisa: obter o serviceCode (nunca no caminho crítico)
         if not self.prepare_trip():
             return 2
+
+        # 3b) reter o lugar ANTES de T e só disputar o desconto a T (ver hold_sale); se não for possível, fluxo normal
+        if cfg("hold_before_open", True) and self.hold_sale():
+            early = self.complete_sale(pre_only=True)        # passageiro, cliente, fiscal (antes de T)
+            if early is not None:
+                return early
+            return self.complete_sale()                      # espera por T, insiste no desconto e confirma
 
         # 4) manter a ligação quente e disparar
         self.wait_until(self.fire_ts - 2.0, keepalive=True)
@@ -471,20 +489,12 @@ class Buyer:
                 return "ambiguous"
 
             kind, detail = classify_sale_response(resp)
-            server_ts = resp.body.get("timestamp") if isinstance(resp.body, dict) else None
-            timing = (f"alvo {hms(target)} | enviado {hms(resp.sent_at)} "
-                      f"({(resp.sent_at - target) * 1000:+.0f} ms) | resposta {hms(resp.received_at)} "
-                      f"({resp.elapsed_ms:.0f} ms) | timestamp CP {server_ts} | Date CP {resp.date_header}")
+            timing = self._timing_txt(resp, target)
             if kind not in ("not_open", "known") or attempt <= 3 or attempt % 20 == 0:   # sem inundar o log
                 log.info("POST /sale #%d -> HTTP %s [%s] %s", attempt, resp.status, kind, timing)
             if kind == "ok":
-                sale_id = resp.body["saleID"]
-                seats = collect_seats(resp.body)
-                self.lock.update(seats=seats, carriage=(seats[0]["carriage"] if seats else find_key(resp.body, "carriageNumber")),
-                                 seat=(seats[0]["seat"] if seats else find_key(resp.body, "seatNumber")))
                 late = f" | abriu {self.clock() - target:.1f} s depois do alvo, tentativa {attempt}" if waiting_since else ""
-                self.lock.update(state="SALE_CREATED", sale_id=sale_id, timing=timing + late)
-                self.slog("COMPRA", "SALE_CREATED", status=resp.status, ref=str(sale_id), err=timing + late)
+                self._sale_created(resp, timing + late)
                 return "ok"
             if kind == "transient":
                 transient += 1
@@ -530,6 +540,144 @@ class Buyer:
                            f"{detail}. Resposta: {resp.text[:300]}", "ERRO", status=resp.status)
             return "failed"
 
+    def _sale_created(self, resp: Any, timing: str) -> None:
+        """Regista a venda criada (lugar atribuído, estado, log) — comum ao disparo a T e à retenção antes de T."""
+        sale_id = resp.body["saleID"]
+        seats = collect_seats(resp.body)
+        self.lock.update(seats=seats, carriage=(seats[0]["carriage"] if seats else find_key(resp.body, "carriageNumber")),
+                         seat=(seats[0]["seat"] if seats else find_key(resp.body, "seatNumber")))
+        self.lock.update(state="SALE_CREATED", sale_id=sale_id, timing=timing)
+        self.slog("COMPRA", "SALE_CREATED", status=resp.status, ref=str(sale_id), err=timing)
+
+    @staticmethod
+    def _timing_txt(resp: Any, target: float | None = None) -> str:
+        """Linha de diagnóstico de um pedido: quando saiu, quanto demorou e — o que faltava — se abriu uma ligação nova."""
+        alvo = f"alvo {hms(target)} | " if target is not None else ""
+        rel = f" ({(resp.sent_at - target) * 1000:+.0f} ms)" if target is not None else ""
+        ligacao = {True: "ligação NOVA", False: "ligação reutilizada"}.get(getattr(resp, "new_conn", None), "ligação ?")
+        srv = resp.body.get("timestamp") if isinstance(resp.body, dict) else None
+        return (f"{alvo}enviado {hms(resp.sent_at)}{rel} | resposta {hms(resp.received_at)} ({resp.elapsed_ms:.0f} ms) | "
+                f"{ligacao} | timestamp CP {srv} | Date CP {resp.date_header}")
+
+    # ---- reter o lugar ANTES de T e disputar só o desconto (24/09/2026) ------------
+    #
+    # Medido no Pi: o POST /sale aceita-se dias antes de T (lugar atribuído, 23,45 € pendente), mas o desconto do passe
+    # (PUT items, código 302) só passa a ser aceite a T (antes: 500 «SIV:DIS:I:302 Sale item not available»). Por isso
+    # segura-se o lugar uns minutos antes e a corrida a T fica reduzida a UM pedido leve numa ligação viva, em vez de
+    # disputar o POST /sale com todos os outros compradores. Uma venda pendente que nunca chega a ser confirmada não
+    # custa nada e cancela-se com DELETE.
+
+    def hold_sale(self) -> bool:
+        """Cria a venda `hold_lead_seconds` antes de T. Devolve True se o lugar ficou retido; False (sem terminar nada)
+        se não foi possível — então o fluxo normal a T (com a rajada do esgotado) continua como antes."""
+        lead = float(cfg("hold_lead_seconds", 150))
+        deadline = self.fire_ts - 3.0
+        if self.clock() >= deadline:
+            return False                        # sem tempo (arranque atrasado): fluxo normal
+        self.wait_until(self.fire_ts - lead, keepalive=True)
+        interval = float(cfg("hold_retry_interval_s", 15))
+        attempt = 0
+        while True:
+            attempt += 1
+            if self.clock() - self.login_at > 240:
+                self.reauth(quiet=True)
+            resp = None
+            try:
+                resp = self.cp.create_sale_request(self.leg.date.isoformat(), self.lock.state["sections"])
+            except CPError as e:
+                log.warning("Retenção #%d: pedido falhou (%s)", attempt, e)
+            if resp is not None:
+                kind, detail = classify_sale_response(resp)
+                timing = self._timing_txt(resp, self.fire_ts)
+                if kind == "ok":
+                    self._sale_created(resp, f"RETIDA antes de T ({(self.fire_ts - resp.sent_at):.0f} s) | {timing}")
+                    log.info("Lugar retido antes de T (tentativa %d): %s", attempt, timing)
+                    return True
+                log.info("Retenção #%d sem venda [%s]: %s | %s", attempt, kind, detail[:120], timing)
+            if self.clock() + interval >= deadline:
+                log.warning("Não consegui reter o lugar antes de T; sigo para o disparo normal a T.")
+                return False
+            self.sleep(interval)
+
+    def cancel_sale(self, sale_id: Any, why: str) -> None:
+        """Liberta o lugar de uma venda que sabemos que não vai ser confirmada (nunca em estados incertos)."""
+        try:
+            r = self.cp.cancel_sale(sale_id)
+            log.info("Venda %s cancelada (%s): HTTP %s", sale_id, why, getattr(r, "status", "?"))
+        except Exception as e:  # noqa: BLE001 — melhor esforço
+            log.warning("Não consegui cancelar a venda %s (%s): %s", sale_id, why, e)
+
+    def race_discount(self, sale_id: Any) -> Any:
+        """O desconto do passe (PUT items 302), com insistência à volta de T: antes de T a CP recusa
+        (`SIV:DIS:I:302`), a T passa a aceitar. Devolve a resposta aceite; levanta CPError se nunca abrir/for recusado.
+
+        Orçamento de pedidos (a CP responde 429 a ~120 pedidos em ~30 s): de T−0,6 s a T+1,6 s de 0,1 em 0,1 s (com a
+        ligação viva cada recusa custa ~50–110 ms), depois de 0,3 em 0,3 s até 48 pedidos, depois 1,5 s. O PUT é
+        idempotente, por isso repetir depois de um timeout é seguro."""
+        start = self.fire_ts - float(cfg("discount_lead_s", 0.6))
+        self.wait_until(start - 2.0, keepalive=True)
+        self.precise_wait(start)
+        fast_iv, mid_iv = float(cfg("discount_fast_interval_s", 0.10)), float(cfg("discount_mid_interval_s", 0.30))
+        slow_iv = float(cfg("discount_slow_interval_s", 1.5))
+        fast_until = self.fire_ts + float(cfg("discount_fast_phase_s", 1.6))
+        max_fast = int(cfg("discount_max_fast_attempts", 48))
+        deadline = min(self.fire_ts + float(cfg("discount_window_s", 180)), self.leg.departure.timestamp())
+        unknown_s = float(cfg("discount_unknown_s", 10))
+        n = refused = rate_limited = 0
+        unknown_since: float | None = None
+        last_err: CPError | None = None
+        while True:
+            n += 1
+            if self.clock() - self.login_at > 240:
+                self.reauth(quiet=True)
+            try:
+                resp = self.cp.apply_green_pass(sale_id)
+                log.info("Desconto do passe ACEITE no pedido #%d (recusas antes: %d) | %s", n, refused,
+                         self._timing_txt(resp, self.fire_ts))
+                self.lock.update(discount_timing=self._timing_txt(resp, self.fire_ts), discount_attempts=n)
+                return resp
+            except CPError as e:
+                last_err = e
+                r = e.response
+                status = r.status if r is not None else None
+                body = r.body if (r is not None and isinstance(r.body, dict)) else {}
+                text = (r.text if r is not None else str(e))[:300]
+                if status == 429:
+                    rate_limited += 1
+                    wait = max(1.0, (r.retry_after_s or 2.0))
+                    log.warning("Limite de pedidos da CP (429) no desconto: espero %.1f s (%d)", wait, rate_limited)
+                    if rate_limited > 8:
+                        raise
+                    self.sleep(wait)
+                    continue
+                if status in (401, 403):
+                    self.reauth()
+                    if n > 3:
+                        raise
+                    continue
+                if body.get("error") == "SIV:DIS:I:302" or "not available" in text.lower():
+                    refused += 1                                   # ainda não abriu (esperado antes de T)
+                    unknown_since = None
+                    if n <= 3 or n % 20 == 0:
+                        log.info("Desconto ainda recusado (#%d): %s", n, self._timing_txt(r, self.fire_ts) if r else "")
+                elif e.kind in ("not_sent", "ambiguous") or (status is not None and status >= 500):
+                    unknown_since = None                           # erro técnico: o PUT é idempotente, repete-se
+                else:                                              # recusa 4xx não reconhecida: só uns segundos
+                    unknown_since = unknown_since or self.clock()
+                    if self.clock() - unknown_since > unknown_s:
+                        raise
+            now = self.clock()
+            if now >= deadline:
+                raise CPError("http", f"o desconto do passe não foi aceite em {n} pedidos (última resposta: "
+                                      f"{(last_err.response.text[:150] if last_err and last_err.response else last_err)})",
+                              last_err.response if last_err else None)
+            if n <= max_fast and now < fast_until:
+                self.sleep(fast_iv)
+            elif n <= max_fast:
+                self.sleep(mid_iv)
+            else:
+                self.sleep(slow_iv)
+
     # ---- concluir a venda ------------------------------------------------
 
     def _step(self, name: str, fn: Callable[[int], Any], sale_id: int):
@@ -558,7 +706,9 @@ class Buyer:
                     raise CPError("ambiguous", "confirmação incerta após timeout") from e
                 raise
 
-    def complete_sale(self) -> int:
+    def complete_sale(self, pre_only: bool = False) -> int | None:
+        """Passageiro → cliente → fiscal → desconto → confirmar. `pre_only`: pára antes do desconto (a venda foi retida
+        antes de T) e devolve None se tudo correu bem."""
         sale_id = self.lock.state["sale_id"]
         done = STATES.index(self.lock.state["state"])
         methods = {"PASSENGERS_OK": self.cp.set_passengers, "CLIENT_OK": self.cp.set_client,
@@ -568,9 +718,16 @@ class Buyer:
         for name in STEPS:
             if STATES.index(name) <= done:
                 continue
+            if pre_only and name == "DISCOUNT_OK":
+                return None
             try:
-                resp = self._step(name, methods[name], sale_id)
+                resp = self.race_discount(sale_id) if name == "DISCOUNT_OK" else self._step(name, methods[name], sale_id)
             except CPError as e:
+                if name == "DISCOUNT_OK":
+                    self.cancel_sale(sale_id, "o desconto do passe não foi aceite")
+                    return self.terminate("FAILED", f"Desconto do passe não aceite — {self.label}",
+                                          f"A CP não aceitou o desconto da venda {sale_id} ({e}). Nada foi confirmado e "
+                                          "o lugar foi libertado.", "ERRO")
                 if e.kind == "ambiguous" and name == "CONFIRMED":
                     return self.terminate("AMBIGUOUS", f"Confirmação incerta — {self.label}",
                                           f"A venda {sale_id} existe mas não sei se foi confirmada. "
@@ -584,9 +741,10 @@ class Buyer:
             if name == "DISCOUNT_OK":
                 total = to_amount(find_key(resp.body, "totalAmount"))
                 if total is not None and total != 0.0:
+                    self.cancel_sale(sale_id, f"total {total} € depois do desconto")
                     return self.terminate("FAILED", f"Desconto do passe não aplicado — {self.label}",
                                           f"Total da venda {sale_id} ficou {total}€ em vez de 0€. "
-                                          "Não confirmei. Verifica o passe (validade/número).", "ERRO")
+                                          "Não confirmei e libertei o lugar. Verifica o passe (validade/número).", "ERRO")
                 if total is None:
                     log.warning("totalAmount não encontrado na resposta do desconto; sigo para a confirmação.")
             if name == "CONFIRMED":

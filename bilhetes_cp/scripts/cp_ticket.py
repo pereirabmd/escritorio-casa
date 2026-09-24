@@ -30,6 +30,7 @@ import sys
 import time
 import urllib.parse as up
 from dataclasses import dataclass, field
+from datetime import date
 from typing import Any
 
 import requests
@@ -122,6 +123,8 @@ class CPResponse:
     received_at: float      # time.time() ao receber a resposta
     elapsed_ms: float
     messages: list[str] = field(default_factory=list)
+    new_conn: bool | None = None   # True = este pedido abriu uma ligação nova (DNS+TCP+TLS ≈ 250 ms no Pi); None = desconhecido
+    retry_after_s: float | None = None
 
     @property
     def ok(self) -> bool:
@@ -338,6 +341,8 @@ class CPClient:
         """Um único pedido, sem retries. Levanta CPError só para falhas de rede."""
         url = path if path.startswith("http") else f"{API_BASE}{path}"
         headers = self._headers(api_key, with_client_id, with_token)
+        pool = self._pool(url)
+        conns_before = getattr(pool, "num_connections", None)
         t0 = time.perf_counter()
         sent_at = time.time()
         try:
@@ -346,6 +351,12 @@ class CPClient:
             kind = "not_sent" if _is_not_sent(e) else "ambiguous"
             raise CPError(kind, f"{type(e).__name__} em {method} {path}") from e
         received_at = time.time()
+        conns_after = getattr(pool, "num_connections", None)
+        new_conn = (conns_after > conns_before) if isinstance(conns_before, int) and isinstance(conns_after, int) else None
+        try:
+            retry_after = float(r.headers.get("Retry-After", ""))
+        except ValueError:
+            retry_after = None
         try:
             data = r.json() if r.content else None
         except ValueError:
@@ -354,7 +365,15 @@ class CPClient:
             status=r.status_code, body=data, text=r.text, date_header=r.headers.get("Date"),
             sent_at=sent_at, received_at=received_at,
             elapsed_ms=(time.perf_counter() - t0) * 1000, messages=extract_messages(data),
+            new_conn=new_conn, retry_after_s=retry_after,
         )
+
+    def _pool(self, url: str):
+        """O pool de ligações que vai servir este URL (para saber se o pedido abriu uma ligação nova)."""
+        try:
+            return self.session.get_adapter(url).poolmanager.connection_from_url(url)
+        except Exception:  # noqa: BLE001 — só diagnóstico; nunca pode estragar um pedido
+            return None
 
     def _checked(self, method: str, path: str, **kw: Any) -> CPResponse:
         """Pedido cujo sucesso exige 2xx e nenhuma mensagem de erro."""
@@ -369,11 +388,25 @@ class CPClient:
 
     # -- ligação --
 
-    def warm(self) -> CPResponse | None:
-        """Estabelece/mantém a ligação TCP/TLS à CP (qualquer resposta HTTP serve)."""
+    def warm(self, train: int | None = None, day: str | None = None) -> CPResponse | None:
+        """Estabelece/mantém a ligação TCP/TLS à CP para o pedido crítico.
+
+        NÃO usar `HEAD /`: a CP responde 404 com `Connection: close` e fecha a ligação (medido em 24/09/2026: cada
+        «aquecimento» destruía a ligação e o POST /sale de T pagava DNS+TCP+TLS ≈ 250 ms, no Pi 3). O horário de um
+        comboio é um pedido leve, sem login, que devolve `Connection: Keep-Alive` (200 ou 404): o pedido seguinte
+        reutiliza a ligação (26–90 ms em vez de ~300 ms). A ligação aguenta parada pelo menos 120 s."""
+        path = f"/travel-api/trains/{train or 731}/timetable/{day or date.today().isoformat()}"
         try:
-            return self.request("HEAD", "/", api_key=X_API_KEY_TRAVEL, with_token=False,
-                                timeout=(4.0, 6.0))
+            return self.request("GET", path, api_key=X_API_KEY_TRAVEL, with_token=False, timeout=(4.0, 6.0))
+        except CPError:
+            return None
+
+    def cancel_sale(self, sale_id: int) -> CPResponse | None:
+        """Cancela uma venda pendente e liberta o lugar (`DELETE /sale/{id}` → 200 «CANCELLED»; testado 24/09/2026).
+        Melhor esforço: nunca levanta."""
+        try:
+            return self.request("DELETE", f"/ticketing-api/sale/{sale_id}", api_key=X_API_KEY_TICKETING,
+                                with_client_id=True, timeout=(4.0, 10.0))
         except CPError:
             return None
 

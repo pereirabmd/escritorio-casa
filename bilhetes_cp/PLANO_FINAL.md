@@ -829,6 +829,45 @@ quer preservar para o pedido crítico. Abordagem:
 
 ---
 
+### 3.12 Ligação viva e retenção do lugar antes de T (24/09/2026 — medido no Pi)
+
+Duas descobertas, ambas medidas com a CP a sério, mudaram o caminho crítico. Números e gráficos: `analise-bilhetes-timing`
+(relatório de 24/09, fora do repositório).
+
+**1. O «aquecimento» destruía a ligação.** `warm()` fazia `HEAD /`, que a CP responde com 404 e **`Connection: close`**: cada
+aviso fechava a ligação e o `POST /sale` de T pagava DNS (~20 ms) + TCP (~35 ms) + TLS (~190 ms no Pi 3) **depois** de o
+log dizer «enviado a T+1 ms» — o pedido só chegava a ~T+255 ms (venda registada pela CP a T+268…330 ms nas 3 compras a T;
+T+37 ms na compra de 22/09 01:42, feita numa ligação que a pesquisa deixara viva). Correção: `warm()` usa o horário de um
+comboio (`GET /travel-api/trains/{n}/timetable/{data}`, sem login, `Connection: Keep-Alive`, 26–90 ms) de 10 em 10 s; a
+ligação aguenta parada pelo menos 120 s. Cada resposta regista agora «ligação NOVA/reutilizada» (`CPResponse.new_conn`).
+
+**2. O lugar pode ser retido antes de T; o que abre a T é o desconto.** `POST /sale` (e passageiros/cliente/fiscal) são aceites
+dias antes de T (venda pendente a 23,45 €, lugar atribuído); o **desconto do passe** (`PUT /sale/{id}/items`, `itemCode 302`)
+é recusado antes de T (`500 SIV:DIS:I:302 «Sale item not available»`) e aceite a T (experiência de 24/09 22:30: recusado
+até T−7 ms, aceite no pedido enviado a T+119 ms, total 0,00 €; a aceitação demorou ~1 s). `DELETE /sale/{id}` cancela a
+venda (200 «CANCELLED»). Uma venda pendente de ensaio ainda estava PENDENTE 29 min depois (não expira aos 15 min).
+
+**Novo fluxo do `Buyer`** (`hold_before_open`, por omissão ligado): login a T−5 min → pesquisa → **retenção**
+(`hold_sale`, a `hold_lead_seconds`=150 s de T; repete de `hold_retry_interval_s`=15 s se esgotado; se não conseguir,
+segue o fluxo antigo a T com a rajada do esgotado) → passageiro/cliente/fiscal → **corrida ao desconto**
+(`race_discount`: de T−0,6 s a T+1,6 s de 0,1 em 0,1 s, depois 0,3 s até 48 pedidos, depois 1,5 s, até
+`discount_window_s`=180 s; o PUT é idempotente) → confirmar. Arranque atrasado (já depois de T−3 s) não retém: fluxo normal.
+Se o desconto nunca for aceite, ou o total não for 0 €, **a venda é cancelada** (lugar libertado) e há aviso; nunca se cancela
+depois de uma confirmação incerta.
+
+**Guarda do total corrigida.** `to_amount("€ 0,00")` dava `None` (só lia «0,00»), por isso o teste «total ≠ 0 → não confirmar»
+nunca esteve ativo (as 4 compras reais registaram «totalAmount não encontrado…»). Agora lê «€ 23,45», «€ 1.234,56», etc.
+
+**Limite de pedidos da CP:** HTTP 429 depois de ~120 pedidos em ~30 s (ensaio de 24/09). O orçamento acima cumpre-o; um 429 no
+desconto espera `Retry-After` (≥ 1 s) e continua (desiste ao 9.º).
+
+**Ferramenta de ensaio:** `scripts/ensaio_compra.py` corre o `Buyer` verdadeiro contra a CP verdadeira, mas o «confirmar»
+cancela a venda (nada é comprado); `--sem-ancora` inventa um T daqui a uns minutos para ensaiar a retenção.
+
+**Por medir:** se um comboio concorrido (o 731 à sexta) ainda tem lugar 10–15 min antes de T e quanto tempo uma venda pendente
+se mantém (ajustar `hold_lead_seconds`); se há disputa pelo desconto a T; a hora exata da abertura do desconto (T … T+1,2 s).
+
+
 ## 4. Estrutura do Google Sheets
 
 > Desde 24/09/2026 as abas correspondem às tabelas `bilhetes_viagens` (Config semanal), `bilhetes_passe`
