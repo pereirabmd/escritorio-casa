@@ -19,6 +19,7 @@ import argparse
 import sys
 from datetime import timedelta
 
+import common
 from common import FileLock, SheetsClient, get_logger, now_local, parse_sheet_date
 
 log = get_logger("manutencao")
@@ -73,7 +74,7 @@ def manutencao(sheets: SheetsClient | None = None, plan_only: bool = False) -> d
         log.warning("manutencao: outra execução em curso, a saltar.")
         return {}
     try:
-        sheets = sheets or SheetsClient()
+        sheets = sheets or common.get_store()
         n_instancias = limpar_historico_antigo(sheets, plan_only)
         n_subs = limpar_subscricoes_inativas(sheets, plan_only)
         resultado = {"instancias_apagadas": n_instancias, "subscricoes_apagadas": n_subs}

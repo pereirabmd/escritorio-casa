@@ -5,15 +5,15 @@ aqui a PWA e a ação "Marcar feita"/"Daqui a 1h" da própria notificação ntfy
 chamam este serviço. Fica atrás de um `location` novo no MESMO nginx/
 domínio/TLS já montado para o ntfy — nunca exposto diretamente.
 
-Autenticação ao mesmo nível de risco que o `WebApp.gs` de hoje: os
-endpoints de baixo risco (gerar, configurarNtfy, testar, recalcularAgora)
-continuam sem segredo, protegidos só por o URL não ser divulgado — mesmo
-modelo já aceite para o sistema atual. Só `marcarFeita`/`snooze` aceitam
-(mas não exigem) uma assinatura `s` — obrigatória apenas quando vem da
-ação `http` embutida na própria notificação ntfy (ver recalcular.py:
-acoes_notificacao/assinar_instancia), que corre sem contexto Google
-nenhum; a chamada feita pela própria PWA (com a Google Sheet já aberta)
-continua sem segredo, tal como hoje.
+Autenticação (desde a migração para SQLite, 24/09/2026 — antes estes endpoints eram públicos, protegidos só por o
+URL "não ser divulgado", num repositório público):
+- `gerar`, `recalcularAgora`, `configurarNtfy`, `testar` — os que a PWA chama — exigem `Authorization: Bearer <token
+  Google>` de um e-mail em `ACL_TAREFAS` (a mesma validação da API dos dados: `dados/auth.py`); sem isso, 401/403.
+  Fecham-se por defeito: sem `GOOGLE_CLIENT_IDS`/`ACL_TAREFAS` configurados respondem 503, nunca "abertos".
+- CORS só para `CORS_ORIGINS` (por omissão o GitHub Pages): até aqui a PWA nem conseguia ler as respostas.
+- `marcarFeita`/`snooze` continuam a aceitar a assinatura HMAC `s` das ações `http` embutidas nas notificações ntfy
+  (que correm sem contexto Google nenhum) — é o único caminho sem token, e a assinatura é obrigatória quando presente.
+- `saude` é público (versão e contagens, nada sensível).
 
     python servidor.py
 """
@@ -25,6 +25,7 @@ import json
 import sys
 from datetime import datetime
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path
 from typing import Any
 from urllib.parse import parse_qs, urlsplit
 
@@ -62,6 +63,7 @@ def handle_saude() -> dict[str, Any]:
 
 def handle_gerar(sheets: SheetsClient) -> dict[str, Any]:
     n = instancias.gerar_instancias(sheets)
+    instancias.marcar_atrasadas(sheets)
     return {"ok": True, "criadas": n}
 
 
@@ -170,6 +172,56 @@ def handle_testar(sheets: SheetsClient, params: dict[str, Any]) -> dict[str, Any
 
 
 # ---------------------------------------------------------------------------
+# Autenticação dos endpoints da PWA (token Google, via dados/auth.py — só biblioteca padrão)
+# ---------------------------------------------------------------------------
+
+ENDPOINTS_PWA = {"/gerar", "/recalcularAgora", "/configurarNtfy", "/testar"}
+MAX_CORPO = 16 * 1024
+_VERIFICADOR: Any = None
+
+
+class CorpoGrande(Exception):
+    pass
+
+
+def _verificador():
+    """O TokenVerifier (partilhado com a API dos dados). None se não estiver configurado — e então falha fechado."""
+    global _VERIFICADOR
+    if _VERIFICADOR is None:
+        ids = {x.strip() for x in common.env("GOOGLE_CLIENT_IDS").split(",") if x.strip()}
+        if not ids:
+            return None
+        dados = Path(common.env("DADOS_HOME") or (common.BASE_DIR.parents[1] / "dados"))
+        if str(dados) not in sys.path:
+            sys.path.append(str(dados))
+        import auth
+        _VERIFICADOR = auth.TokenVerifier(ids)
+    return _VERIFICADOR
+
+
+def _acl() -> set[str]:
+    return {x.strip().lower() for x in common.env("ACL_TAREFAS").split(",") if x.strip()}
+
+
+def autenticar(cabecalho: str) -> tuple[int, str]:
+    """(status, motivo): 200 se o token é válido e o e-mail está em ACL_TAREFAS."""
+    acl, ver = _acl(), _verificador()
+    if ver is None or not acl:
+        return 503, "autenticação não configurada"
+    if not cabecalho.startswith("Bearer "):
+        return 401, "falta o token"
+    try:
+        email = ver.verify(cabecalho[7:].strip())
+    except Exception as e:  # Unauthorized (401) / Unavailable (503, a Google não respondeu: não é culpa do cliente)
+        return getattr(e, "status", 401), str(e)
+    return (200, email) if email in acl else (403, "sem acesso")
+
+
+def _origens_cors() -> set[str]:
+    return {x.strip() for x in common.env("CORS_ORIGINS", "https://pereirabmd.github.io").split(",") if x.strip()}
+
+
+# ---------------------------------------------------------------------------
 # Camada HTTP
 # ---------------------------------------------------------------------------
 
@@ -190,6 +242,8 @@ class Handler(BaseHTTPRequestHandler):
     def _params(self) -> dict[str, Any]:
         query = {k: v[0] for k, v in parse_qs(urlsplit(self.path).query).items()}
         length = int(self.headers.get("Content-Length") or 0)
+        if length > MAX_CORPO:
+            raise CorpoGrande()
         body: dict[str, Any] = {}
         if length:
             raw = self.rfile.read(length)
@@ -206,8 +260,27 @@ class Handler(BaseHTTPRequestHandler):
         self.send_response(status)
         self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("Content-Length", str(len(payload)))
+        self.send_header("X-Content-Type-Options", "nosniff")
+        self.send_header("Cache-Control", "no-store")
+        origem = self.headers.get("Origin")
+        self.send_header("Vary", "Origin")
+        if origem and origem in _origens_cors():
+            self.send_header("Access-Control-Allow-Origin", origem)
         self.end_headers()
         self.wfile.write(payload)
+
+    def do_OPTIONS(self) -> None:   # preflight CORS: sem autenticação, só responde a origens permitidas
+        origem = self.headers.get("Origin")
+        ok = bool(origem) and origem in _origens_cors()
+        self.send_response(204 if ok else 403)
+        self.send_header("Vary", "Origin")
+        if ok:
+            self.send_header("Access-Control-Allow-Origin", origem)
+            self.send_header("Access-Control-Allow-Methods", "GET, POST")
+            self.send_header("Access-Control-Allow-Headers", "Authorization, Content-Type")
+            self.send_header("Access-Control-Max-Age", "600")
+        self.send_header("Content-Length", "0")
+        self.end_headers()
 
     def _tratar(self) -> None:
         caminho = urlsplit(self.path).path.rstrip("/") or "/"
@@ -215,13 +288,20 @@ class Handler(BaseHTTPRequestHandler):
         if rota is None:
             self._responder({"ok": False, "erro": "endpoint desconhecido"}, status=404)
             return
+        if caminho in ENDPOINTS_PWA:
+            estado, motivo = autenticar(self.headers.get("Authorization", ""))
+            if estado != 200:
+                self._responder({"ok": False, "erro": motivo}, status=estado)
+                return
         try:
             params = self._params()
             corpo = rota(self.server.sheets_factory(), params)
-        except Exception as e:  # nunca deixar a ligação sem resposta
+        except CorpoGrande:
+            self._responder({"ok": False, "erro": "corpo demasiado grande"}, status=413)
+            return
+        except Exception:  # nunca deixar a ligação sem resposta — nem revelar detalhes internos ao cliente
             log.exception("Erro a tratar %s", caminho)
-            corpo = {"ok": False, "erro": str(e)}
-            self._responder(corpo, status=500)
+            self._responder({"ok": False, "erro": "erro interno"}, status=500)
             return
         # 401 no próprio HTTP (não só no corpo) para o nginx/fail2ban conseguir
         # vigiar tentativas de assinatura inválida na ação da notificação —
@@ -239,7 +319,7 @@ class Handler(BaseHTTPRequestHandler):
         log.info("%s - %s", self.address_string(), fmt % args)
 
 
-def criar_servidor(porta: int, sheets_factory: Any = SheetsClient) -> ThreadingHTTPServer:
+def criar_servidor(porta: int, sheets_factory: Any = common.get_store) -> ThreadingHTTPServer:
     servidor = ThreadingHTTPServer(("127.0.0.1", porta), Handler)
     servidor.sheets_factory = sheets_factory  # type: ignore[attr-defined]
     return servidor

@@ -227,7 +227,7 @@ def recalcular(sheets: SheetsClient | None = None, plan_only: bool = False) -> d
         log.warning("recalcular: outra execução em curso, a saltar este ciclo.")
         return {}
     try:
-        return _recalcular_sem_lock(sheets or SheetsClient(), plan_only)
+        return _recalcular_sem_lock(sheets or common.get_store(), plan_only)
     finally:
         lock.release()
 
@@ -235,6 +235,9 @@ def recalcular(sheets: SheetsClient | None = None, plan_only: bool = False) -> d
 def _recalcular_sem_lock(sheets: SheetsClient, plan_only: bool) -> dict[str, int]:
     agora = now_local()
     hoje = agora.date()
+    if not plan_only:
+        import instancias
+        instancias.marcar_atrasadas(sheets, hoje)   # a cada 5 min: o que ficou por fazer ontem passa a Atrasada (ver instancias.py)
     config = {str(r.get("Chave", "")).strip(): r.get("Valor") for r in sheets.read_objects("Config")}
     tarefas_map = {t.get("ID"): t for t in sheets.read_objects("Tarefas")}
     instancias = sheets.read_objects("Instancias")

@@ -59,6 +59,23 @@ def calcular_responsavel(tarefa: dict, contagem_por_tarefa: dict[str, int]) -> s
     return rotacao[indice % len(rotacao)]
 
 
+def marcar_atrasadas(sheets: Any, hoje: date | None = None, plan_only: bool = False) -> int:
+    """Porta de `marcarAtrasadas()` (NotificationSender.gs): uma ocorrência ainda Pendente cuja data já passou fica
+    Atrasada. Ficou por portar na Beta 48 (quem o fazia era o trigger horário do Apps Script, que continuava a correr
+    em paralelo); sem isto, uma tarefa por fazer desaparecia das listas da app ao virar o dia. Idempotente."""
+    hoje = hoje or common.now_local().date()
+    n = 0
+    for inst in sheets.read_objects("Instancias"):
+        if str(inst.get("Estado", "")) != "Pendente":
+            continue
+        d = parse_sheet_date(inst.get("Data"))
+        if d is not None and d < hoje:
+            if not plan_only:
+                sheets.update_cells("Instancias", inst["_rowIndex"], Estado="Atrasada")
+            n += 1
+    return n
+
+
 def gerar_instancias(sheets: SheetsClient | None = None) -> int:
     """F19 — lock: gerarInstancias() pode ser chamada tanto pelo cron periódico
     como manualmente ("Atualizar tarefas do dia agora"). Sem serializar, duas
@@ -69,7 +86,7 @@ def gerar_instancias(sheets: SheetsClient | None = None) -> int:
         log.warning("gerarInstancias: não obteve o lock a tempo, outra execução em curso.")
         return 0
     try:
-        return _gerar_sem_lock(sheets or SheetsClient())
+        return _gerar_sem_lock(sheets or common.get_store())
     finally:
         lock.release()
 
@@ -125,6 +142,9 @@ def _gerar_sem_lock(sheets: SheetsClient) -> int:
 def main() -> int:
     n = gerar_instancias()
     log.info("Geradas %d instância(s) nova(s).", n)
+    atrasadas = marcar_atrasadas(common.get_store())
+    if atrasadas:
+        log.info("Marcadas %d ocorrência(s) como Atrasada.", atrasadas)
     return 0
 
 

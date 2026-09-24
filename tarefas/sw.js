@@ -10,7 +10,7 @@
  * scope competem entre si e um acaba por invalidar o outro.
  */
 
-const CACHE_NAME = 'tarefas-casa-v17';
+const CACHE_NAME = 'tarefas-casa-v18';
 const APP_SHELL = [
   './',
   './index.html',

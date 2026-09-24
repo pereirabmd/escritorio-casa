@@ -410,6 +410,17 @@ class SheetsClient:
             self.append_rows("Config", [[chave, valor, notas]])
 
 
+def get_store():
+    """Onde vivem os dados (Tarefas, Instancias, Config, Piscina). `TAREFAS_BACKEND=sqlite` usa a base de dados
+    local (dados.db, tabelas tarefas_*); qualquer outro valor (por omissão) usa a Sheet, como sempre — é o plano
+    de recuo: mudar a variável no .env e reiniciar. As duas têm a mesma interface (read_objects, append_rows,
+    update_cells, delete_rows, tab_exists, find_config, set_config)."""
+    if env("TAREFAS_BACKEND", "sheets").strip().lower() == "sqlite":
+        import store
+        return store.SqliteStore()
+    return SheetsClient()
+
+
 def ntfy_cancel(message_id: str) -> bool:
     """Cancela uma mensagem ainda agendada (antes da hora). Uma mensagem que já
     foi entregue não pode ser cancelada — a resposta é simplesmente ignorada

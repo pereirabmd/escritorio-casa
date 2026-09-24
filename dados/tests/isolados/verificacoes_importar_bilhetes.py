@@ -5,7 +5,7 @@ import unittest
 from pathlib import Path
 
 # o importador usa o `common` do bilhetes_cp: apontá-lo para o repositório e para uma pasta temporária
-_REPO = Path(__file__).resolve().parents[2] / "bilhetes_cp"
+_REPO = Path(__file__).resolve().parents[3] / "bilhetes_cp"
 _TMP = tempfile.mkdtemp(prefix="imp_bilhetes_")
 shutil.copytree(_REPO / "config", Path(_TMP) / "config", ignore=shutil.ignore_patterns("service-account.json"))
 os.environ["BILHETES_CP_SCRIPTS"] = str(_REPO / "scripts")

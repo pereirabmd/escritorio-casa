@@ -76,3 +76,23 @@ class GerarInstanciasTests(TarefasTestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class MarcarAtrasadasTests(TarefasTestCase):
+    def test_so_o_pendente_cuja_data_ja_passou_fica_atrasado(self) -> None:
+        hoje = common.now_local().date()
+        ontem, amanha = (hoje - timedelta(days=1)).isoformat(), (hoje + timedelta(days=1)).isoformat()
+        sheets = FakeSheetsClient({"Instancias": [
+            {"ID": "I1", "Data": ontem, "Estado": "Pendente"},     # atrasada
+            {"ID": "I2", "Data": hoje.isoformat(), "Estado": "Pendente"},   # hoje: ainda a tempo
+            {"ID": "I3", "Data": amanha, "Estado": "Pendente"},
+            {"ID": "I4", "Data": ontem, "Estado": "Feita"},        # concluída: nunca
+            {"ID": "I5", "Data": ontem, "Estado": "Saltada"},
+            {"ID": "I6", "Data": ontem, "Estado": "Atrasada"},     # já estava
+        ]})
+        self.assertEqual(instancias.marcar_atrasadas(sheets, plan_only=True), 1)
+        self.assertEqual({r["ID"]: r["Estado"] for r in sheets.read_objects("Instancias")}["I1"], "Pendente")   # plan_only não escreve
+        self.assertEqual(instancias.marcar_atrasadas(sheets), 1)
+        self.assertEqual({r["ID"]: r["Estado"] for r in sheets.read_objects("Instancias")},
+                         {"I1": "Atrasada", "I2": "Pendente", "I3": "Pendente", "I4": "Feita", "I5": "Saltada", "I6": "Atrasada"})
+        self.assertEqual(instancias.marcar_atrasadas(sheets), 0)                                              # idempotente

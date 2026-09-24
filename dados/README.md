@@ -94,6 +94,11 @@ As PWAs chamam-no com `Authorization: Bearer <access token Google>` — **têm d
 | `PUT /bilhetes/semana` | substitui as viagens de [inicio, inicio+6] **preservando os ids** das que continuam (data+comboio+hora) |
 | `PUT /bilhetes/passe` | data do último carregamento do passe (a expiração calcula-se) |
 | `PUT /bilhetes/pedidos/{id}` · `POST /bilhetes/pedidos/{id}/forcar` | repetição automática (`retry`, `intervaloMinutos`) · "tentar agora" |
+| `GET /tarefas/dados` | tarefas, ocorrências, config (password ntfy mascarada) e piscina |
+| `POST /tarefas/tarefas` · `PUT/DELETE /tarefas/tarefas/{id}` | criar (as Pontuais criam a ocorrência) · atualizar · desativar + saltar pendentes |
+| `POST /tarefas/instancias` · `PUT /tarefas/instancias[/{id}]` | criar · atualizar (lote atómico; 409 se a tarefa já tem ocorrência nesse dia) |
+| `POST /tarefas/pessoas/reatribuir` · `PUT /tarefas/config` | renomear/remover/reatribuir pessoa (atómico) · gravar/apagar chaves |
+| `PUT /tarefas/piscina/{id}` · `POST /tarefas/piscina/catalogo` · `GET/POST /tarefas/auditoria` | piscina e registo de quem fez o quê |
 
 Erros: `{"erro":{"codigo":"...","mensagem":"..."}}` com 400/401/403/404/405/409/413/415/429/503.
 
