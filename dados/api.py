@@ -35,7 +35,7 @@ import db
 from auth import AuthError, TokenVerifier, Unauthorized
 
 MAX_BODY = 16 * 1024
-APPS = ["peso", "rto"]  # módulos em apps/ com NAME e ROUTES
+APPS = ["peso", "rto", "convidados"]  # módulos em apps/ com NAME e ROUTES
 LOG = logging.getLogger("dados.api")
 
 

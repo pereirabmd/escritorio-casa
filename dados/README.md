@@ -81,6 +81,10 @@ As PWAs chamam-no com `Authorization: Bearer <access token Google>` — **têm d
 | `GET/PUT /rto/dias` · `PUT /rto/dias/{AAAA-MM-DD}` | dias marcados `{data: "T" ou "C"}`; PUT em lote atómico (≤400), `""` limpa o dia |
 | `GET/POST /rto/notas` · `POST /rto/notas/lote` | notas (datas ISO); o lote (≤100) devolve os ids pela ordem |
 | `PUT/DELETE /rto/notas/{id}` | PUT é upsert (recria com o mesmo id, para o Desfazer); DELETE devolve a nota apagada |
+| `GET /convidados/dados` | convidados + listas de fases e estados numa só chamada |
+| `POST /convidados/lista` · `PUT/DELETE /convidados/lista/{id}` | criar · atualizar **só os campos enviados** · eliminar. Só "Confirmado" pode ter mesa (o servidor larga-a se o estado mudar) |
+| `POST /convidados/lista/{id}/convite` | regista a data do convite (hora do servidor) |
+| `PUT /convidados/opcoes` | substitui as listas `fases`/`estados` (atómico; os estados têm de incluir "Confirmado" e "Convidado") |
 
 Erros: `{"erro":{"codigo":"...","mensagem":"..."}}` com 400/401/403/404/405/409/413/415/429/503.
 
