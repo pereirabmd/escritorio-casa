@@ -133,7 +133,7 @@ class LeituraTests(Base):
         s, b, _ = self.pedir("GET", "/api/linhas?db=dados&tabela=peso_registos&q=nota%204")
         self.assertEqual(b["total"], 1)
         s, b, _ = self.pedir("GET", "/api/linhas?db=dados&tabela=peso_registos&f.nota=nota%206")
-        self.assertEqual(b["total"], 1)
+        self.assertEqual(b["total"], 1)                             # forma antiga: «contém»
 
     def test_pesquisa_com_caracteres_especiais_e_injecao_nao_funcionam(self):
         from urllib.parse import quote
@@ -144,6 +144,47 @@ class LeituraTests(Base):
         self.assertEqual(self.pedir("GET", "/api/linhas?db=dados&tabela=" + quote("peso_registos;drop", safe=""))[0], 404)
         s, b, _ = self.pedir("GET", "/api/linhas?db=dados&tabela=peso_registos&ordem=" + quote("peso; DROP TABLE x", safe=""))
         self.assertEqual(s, 200)                                   # coluna desconhecida: ignora a ordem
+
+    def filtrar(self, *filtros, tabela="peso_registos"):
+        from urllib.parse import quote
+        return self.pedir("GET", f"/api/linhas?db=dados&tabela={tabela}&filtros=" + quote(json.dumps(list(filtros)), safe=""))
+
+    def test_filtros_com_operadores(self):
+        f = lambda c, o, v="": {"c": c, "o": o, "v": v}  # noqa: E731
+        casos = [
+            ((f("peso", "gt", "83"),), [84.0, 85.0, 86.0]),
+            ((f("peso", "ge", "83"), f("peso", "lt", "85")), [83.0, 84.0]),                   # E entre filtros
+            ((f("peso", "eq", "82,0"),), [82.0]),                                              # vírgula decimal
+            ((f("peso", "ne", "80"),), [81.0, 82.0, 83.0, 84.0, 85.0, 86.0]),
+            ((f("nota", "contem", "nota 4"),), [84.0]),
+            ((f("nota", "eq", "nota 6"),), [86.0]),
+            ((f("quando", "gt", "2026-01-06"),), [85.0, 86.0]),                                # datas ISO como texto (o dia 06 com hora conta como maior que «2026-01-06»)
+            ((f("cid", "vazio"),), [80.0, 81.0, 82.0, 83.0, 84.0, 85.0, 86.0]),
+            ((f("cid", "nvazio"),), []),
+            ((f("nota", "contem", ""),), [80.0, 81.0, 82.0, 83.0, 84.0, 85.0, 86.0]),          # sem valor: ignorado
+        ]
+        for filtros, esperado in casos:
+            s, b, _ = self.filtrar(*filtros)
+            self.assertEqual((s, [l["peso"] for l in b["linhas"]], b["total"]), (200, esperado, len(esperado)), filtros)
+
+    def test_filtros_invalidos_e_injecao(self):
+        for filtro in ({"c": "nao_existe", "o": "eq", "v": "1"}, {"c": "peso", "o": "DROP", "v": "1"}, {"c": "peso; DROP TABLE x", "o": "eq", "v": "1"},
+                       {"c": "peso", "o": "gt", "v": "abc"}, {"c": "chave_password", "o": "eq", "v": "x"}):
+            self.assertEqual(self.filtrar(filtro)[0], 400, filtro)
+        s, b, _ = self.filtrar({"c": "nota", "o": "contem", "v": "'; DROP TABLE peso_registos; --"})
+        self.assertEqual((s, b["total"]), (200, 0))
+        self.assertEqual(self.pedir("GET", "/api/linhas?db=dados&tabela=peso_registos")[1]["total"], 7)
+        self.assertEqual(self.pedir("GET", "/api/linhas?db=dados&tabela=peso_registos&filtros=nao-json")[0], 400)
+        self.assertEqual(self.pedir("GET", "/api/linhas?db=dados&tabela=peso_registos&filtros=%7B%7D")[0], 400)        # não é lista
+
+    def test_filtro_por_operador_em_todas_as_tabelas_nao_rebenta(self):
+        for base in ("dados", "bilhetes"):
+            for t in self.pedir("GET", f"/api/esquema?db={base}")[1]["tabelas"]:
+                for c in t["colunas"]:
+                    for op in ("contem", "vazio", "nvazio"):
+                        from urllib.parse import quote
+                        s, b, _ = self.pedir("GET", f"/api/linhas?db={base}&tabela={t['nome']}&filtros=" + quote(json.dumps([{"c": c["nome"], "o": op, "v": "1"}]), safe=""))
+                        self.assertEqual(s, 200, f"{base}.{t['nome']}.{c['nome']} {op}: {b}")
 
     def test_segredos_saem_mascarados(self):
         s, b, _ = self.pedir("GET", "/api/linhas?db=dados&tabela=tarefas_config")

@@ -165,8 +165,32 @@ def _mascarar(tabela: str, linha: dict) -> dict:
     return {k: (MASCARA if k != "_rowid_" and v not in (None, "") and celula_protegida(tabela, k, linha) else v) for k, v in linha.items()}
 
 
+OPERADORES = {"contem": "contém", "eq": "=", "ne": "≠", "gt": ">", "lt": "<", "ge": "≥", "le": "≤", "vazio": "vazio", "nvazio": "não vazio"}
+
+
+def _cond_filtro(col: dict, op: str, valor: str) -> tuple[str, list]:
+    """Condição SQL de UM filtro (coluna do esquema, operador da lista branca, valor por parâmetro)."""
+    n = col["nome"]
+    if op == "vazio":
+        return f'("{n}" IS NULL OR CAST("{n}" AS TEXT) = \'\')', []
+    if op == "nvazio":
+        return f'("{n}" IS NOT NULL AND CAST("{n}" AS TEXT) <> \'\')', []
+    if op == "contem":
+        like = "%" + valor.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%"
+        return f'CAST("{n}" AS TEXT) LIKE ? ESCAPE \'\\\'', [like]
+    simbolo = {"eq": "=", "ne": "<>", "gt": ">", "lt": "<", "ge": ">=", "le": "<="}[op]
+    tipo = col["tipo"]
+    if any(x in tipo for x in ("INT", "REAL", "FLOA", "DOUB")):          # colunas numéricas comparam-se como números
+        try:
+            v = float(valor.replace(",", "."))
+        except ValueError:
+            raise AdminError(400, f'"{n}" é numérica: "{valor}" não é um número') from None
+        return f'"{n}" {simbolo} ?', [v]
+    return f'CAST("{n}" AS TEXT) {simbolo} ?', [valor]          # texto (datas ISO ordenam-se como texto)
+
+
 def linhas(conn: sqlite3.Connection, tabela: str, *, pagina: int = 1, tamanho: int = 50, ordem: str | None = None,
-           sentido: str = "asc", q: str = "", filtros: dict[str, str] | None = None) -> dict:
+           sentido: str = "asc", q: str = "", filtros: dict[str, str] | list[dict] | None = None) -> dict:
     cols = colunas(conn, tabela)
     info = info_tabela(conn, tabela)
     nomes = [c["nome"] for c in cols]
@@ -178,12 +202,18 @@ def linhas(conn: sqlite3.Connection, tabela: str, *, pagina: int = 1, tamanho: i
         like = "%" + q.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%"
         where.append("(" + " OR ".join(f'CAST("{n}" AS TEXT) LIKE ? ESCAPE \'\\\'' for n in pesquisaveis) + ")")
         args += [like] * len(pesquisaveis)
-    for col, v in (filtros or {}).items():
-        if col not in nomes or _SENSIVEL.search(col) or v == "":
-            continue
-        like = "%" + v.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%"
-        where.append(f'CAST("{col}" AS TEXT) LIKE ? ESCAPE \'\\\'')
-        args.append(like)
+    if isinstance(filtros, dict):                             # forma antiga: {coluna: texto} = «contém»
+        filtros = [{"c": k, "o": "contem", "v": v} for k, v in filtros.items()]
+    por_nome = {c["nome"]: c for c in cols}
+    for f in filtros or []:
+        col, op, v = f.get("c"), f.get("o", "contem"), str(f.get("v", ""))
+        if col not in por_nome or _SENSIVEL.search(col) or op not in OPERADORES:
+            raise AdminError(400, "filtro inválido")
+        if op not in ("vazio", "nvazio") and v == "":
+            continue                                          # filtro ainda sem valor: ignora
+        cond_f, args_f = _cond_filtro(por_nome[col], op, v)
+        where.append(cond_f)
+        args += args_f
     cond = (" WHERE " + " AND ".join(where)) if where else ""
     total = conn.execute(f'SELECT COUNT(*) FROM "{tabela}"{cond}', args).fetchone()[0]
     desempate = ", ".join(f'"{c}"' for c in info["pk"]) if info["sem_rowid"] else "rowid"
@@ -686,7 +716,7 @@ def make_handler(estado: Estado):
             if escrita and not hmac.compare_digest(self.headers.get("X-CSRF", ""), csrf):
                 raise AdminError(403, "CSRF inválido")
             if path == "/api/sessao":
-                return self._json(200, {"csrf": csrf, "bases": nomes_bases()})
+                return self._json(200, {"csrf": csrf, "bases": nomes_bases(), "operadores": OPERADORES})
             if path == "/api/logout" and self.command == "POST":
                 estado.sessoes.pop(self._cookie() or "", None)
                 return self._json(200, {"ok": True}, {"Set-Cookie": "adb_sess=; Max-Age=0; Path=/; HttpOnly; SameSite=Strict"})
@@ -700,6 +730,13 @@ def make_handler(estado: Estado):
                 c = abrir(q.get("db", ""), so_leitura=True)
                 try:
                     filtros = {k[2:]: v for k, v in q.items() if k.startswith("f.")}
+                    if q.get("filtros"):                              # JSON: [{"c": coluna, "o": operador, "v": valor}, ...]
+                        try:
+                            filtros = json.loads(q["filtros"])
+                        except ValueError:
+                            raise AdminError(400, "filtros inválidos") from None
+                        if not isinstance(filtros, list) or len(filtros) > 12 or not all(isinstance(x, dict) for x in filtros):
+                            raise AdminError(400, "filtros inválidos")
                     return self._json(200, linhas(c, q.get("tabela", ""), pagina=int(q.get("pagina", 1)), tamanho=int(q.get("tamanho", 50)),
                                                   ordem=q.get("ordem"), sentido=q.get("sentido", "asc"), q=q.get("q", ""), filtros=filtros))
                 finally:
@@ -739,7 +776,7 @@ def make_handler(estado: Estado):
                 raise AdminError(401, "password errada")
             tok, csrf = estado.nova_sessao()
             LOG.info("login ok ip=%s", ip)
-            self._json(200, {"csrf": csrf, "bases": nomes_bases()},
+            self._json(200, {"csrf": csrf, "bases": nomes_bases(), "operadores": OPERADORES},
                        {"Set-Cookie": f"adb_sess={tok}; Max-Age={SESSAO_SEGUNDOS}; Path=/; HttpOnly; SameSite=Strict"})
 
         do_GET = do_POST = do_PUT = do_DELETE = _tratar

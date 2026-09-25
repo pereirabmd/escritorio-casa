@@ -2,7 +2,7 @@
 // Consulta e edição das bases SQLite do Pi (ver admin_db.py). Todo o texto vindo da base entra por textContent/value: nunca innerHTML.
 const $ = (id) => document.getElementById(id);
 let sqlAuto = '';   // último SELECT preenchido automaticamente (só se substitui se o utilizador não o alterou)
-const estado = { csrf: null, db: null, esquema: [], tabela: null, pagina: 1, tamanho: 50, ordem: null, sentido: 'asc', q: '', dados: null };
+const estado = { operadores: {}, filtros: [], csrf: null, db: null, esquema: [], tabela: null, pagina: 1, tamanho: 50, ordem: null, sentido: 'asc', q: '', dados: null };
 const MASCARA = '••••••••';
 
 function toast(msg) {
@@ -31,7 +31,7 @@ function el(tag, props, ...filhos) {
 // ---------------- login / sessão ----------------
 function mostrarLogin() { $('app').hidden = true; $('login').hidden = false; $('pw').value = ''; $('pw').focus(); }
 async function entrar(dados) {
-  estado.csrf = dados.csrf;
+  estado.csrf = dados.csrf; estado.operadores = dados.operadores || {};
   $('login').hidden = true; $('app').hidden = false;
   const sel = $('sel-db'); sel.replaceChildren(...dados.bases.map(b => el('option', { value: b, textContent: b })));
   estado.db = dados.bases[0]; sel.value = estado.db;
@@ -79,7 +79,7 @@ function preencherSql() {
   if (ta.value.trim() === '' || ta.value === sqlAuto) { sqlAuto = `SELECT * FROM "${estado.tabela}" LIMIT 100`; ta.value = sqlAuto; }
 }
 async function escolherTabela(nome) {
-  estado.tabela = nome; preencherSql(); estado.pagina = 1; estado.ordem = null; estado.sentido = 'asc'; estado.q = ''; $('pesquisa').value = '';
+  estado.tabela = nome; preencherSql(); estado.pagina = 1; estado.ordem = null; estado.sentido = 'asc'; estado.q = ''; $('pesquisa').value = ''; estado.filtros = []; $('filtros').hidden = true;
   $('esquema').hidden = true;
   await carregarEsquema();
 }
@@ -88,6 +88,8 @@ function tabelaAtual() { return estado.esquema.find(t => t.nome === estado.tabel
 async function carregarLinhas() {
   const p = new URLSearchParams({ db: estado.db, tabela: estado.tabela, pagina: estado.pagina, tamanho: estado.tamanho, q: estado.q });
   if (estado.ordem) { p.set('ordem', estado.ordem); p.set('sentido', estado.sentido); }
+  const ativos = estado.filtros.filter(f => f.o === 'vazio' || f.o === 'nvazio' || f.v !== '');
+  if (ativos.length) p.set('filtros', JSON.stringify(ativos));
   const d = await api('GET', '/api/linhas?' + p);
   estado.dados = d;
   $('titulo-tabela').textContent = estado.tabela + ' (' + d.total + ')';
@@ -121,6 +123,41 @@ $('seg').addEventListener('click', () => { estado.pagina++; carregarLinhas(); })
 $('tamanho').addEventListener('change', () => { estado.tamanho = Number($('tamanho').value); estado.pagina = 1; carregarLinhas(); });
 $('ver-esquema').addEventListener('click', () => { $('esquema').hidden = !$('esquema').hidden; });
 let _busca; $('pesquisa').addEventListener('input', () => { clearTimeout(_busca); _busca = setTimeout(() => { estado.q = $('pesquisa').value; estado.pagina = 1; carregarLinhas(); }, 300); });
+
+// ---------------- filtros ----------------
+function colunasFiltraveis() { return (tabelaAtual() ? tabelaAtual().colunas : []).filter(c => !/(password|senha|secret|token)/i.test(c.nome)); }
+let _filtro;
+function rotuloFiltros() {
+  const n = estado.filtros.filter(f => f.o === 'vazio' || f.o === 'nvazio' || f.v !== '').length;
+  $('ver-filtros').textContent = n ? `Filtros (${n})` : 'Filtros'; $('ver-filtros').classList.toggle('ativo', n > 0);
+  $('resumo-filtros').textContent = estado.filtros.length ? 'todos os filtros têm de se cumprir (E)' : 'sem filtros';
+}
+function aplicarFiltros() { rotuloFiltros(); clearTimeout(_filtro); _filtro = setTimeout(() => { estado.pagina = 1; carregarLinhas().catch(e => toast(e.message)); }, 350); }
+function desenharFiltros() {
+  const cols = colunasFiltraveis();
+  $('lista-filtros').replaceChildren(...estado.filtros.map((f, i) => {
+    const sc = el('select', { 'aria-label': 'Coluna' }, cols.map(c => el('option', { value: c.nome, textContent: c.nome })));
+    sc.value = f.c;
+    const so = el('select', { 'aria-label': 'Operador' }, Object.entries(estado.operadores).map(([k, v]) => el('option', { value: k, textContent: v })));
+    so.value = f.o;
+    const iv = el('input', { type: 'text', placeholder: 'valor', value: f.v, 'aria-label': 'Valor' });
+    iv.hidden = f.o === 'vazio' || f.o === 'nvazio';
+    const rm = el('button', { class: 'sec', textContent: '✕', title: 'Remover filtro' });
+    sc.addEventListener('change', () => { f.c = sc.value; aplicarFiltros(); });
+    so.addEventListener('change', () => { f.o = so.value; iv.hidden = f.o === 'vazio' || f.o === 'nvazio'; aplicarFiltros(); });
+    iv.addEventListener('input', () => { f.v = iv.value; aplicarFiltros(); });
+    rm.addEventListener('click', () => { estado.filtros.splice(i, 1); desenharFiltros(); aplicarFiltros(); });
+    return el('div', { class: 'filtro' }, sc, so, iv, rm);
+  }));
+  rotuloFiltros();
+}
+$('ver-filtros').addEventListener('click', () => {
+  $('filtros').hidden = !$('filtros').hidden;
+  if (!$('filtros').hidden && !estado.filtros.length && colunasFiltraveis().length) { estado.filtros.push({ c: colunasFiltraveis()[0].nome, o: 'contem', v: '' }); }
+  desenharFiltros();
+});
+$('add-filtro').addEventListener('click', () => { const c = colunasFiltraveis(); if (c.length) { estado.filtros.push({ c: c[0].nome, o: 'contem', v: '' }); desenharFiltros(); } });
+$('limpar-filtros').addEventListener('click', () => { estado.filtros = []; desenharFiltros(); aplicarFiltros(); });
 
 // ---------------- editor de linha ----------------
 let linhaEmEdicao = null;   // null = nova linha

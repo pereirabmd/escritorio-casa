@@ -52,3 +52,8 @@ dialog::backdrop{background:rgba(0,0,0,.45)}
 
 #ultimo-backup{font-size:12.5px;white-space:nowrap}
 #ultimo-backup.velho{color:var(--perigo);font-weight:600}
+
+.cartao-filtros{background:var(--card);border:1px solid var(--bd);border-radius:10px;padding:10px 12px;margin-bottom:10px}
+.filtro{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-bottom:6px}
+.filtro select,.filtro input{width:auto;min-width:110px}.filtro input{flex:1 1 140px}
+#ver-filtros.ativo{background:var(--sel);border-color:var(--pri);font-weight:600}

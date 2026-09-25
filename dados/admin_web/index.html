@@ -42,8 +42,13 @@
           <div class="barra">
             <h2 id="titulo-tabela"></h2>
             <input id="pesquisa" type="search" placeholder="Pesquisar em todas as colunas…">
+            <button id="ver-filtros" class="sec">Filtros</button>
             <button id="ver-esquema" class="sec">Esquema</button>
             <button id="nova-linha" class="primario">+ Nova linha</button>
+          </div>
+          <div id="filtros" class="cartao-filtros" hidden>
+            <div id="lista-filtros"></div>
+            <div class="barra"><button id="add-filtro" class="sec">+ Filtro</button><button id="limpar-filtros" class="sec">Limpar</button><span id="resumo-filtros" class="mut"></span></div>
           </div>
           <pre id="esquema" hidden></pre>
           <div class="rolagem"><table id="grelha"></table></div>
