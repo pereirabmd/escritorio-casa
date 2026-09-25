@@ -39,6 +39,8 @@ class Base(unittest.TestCase):
             c.execute(f"DELETE FROM {t}")
         c.close()
         Path(self.tmp.name, "edits.jsonl").unlink(missing_ok=True)
+        for f in Path(self.tmp.name, "undo").glob("*.db"):          # instantâneos de testes anteriores (o teste conta os seus)
+            f.unlink()
         self.cookie, self.csrf = None, None
 
     def pedir(self, metodo, caminho, corpo=None, cookie=True, csrf=True):
