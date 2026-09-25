@@ -879,8 +879,13 @@ Bruno: seguir o comportamento e retirar se falhar por causa disto. Por confirmar
 **Ferramenta de ensaio:** `scripts/ensaio_compra.py` corre o `Buyer` verdadeiro contra a CP verdadeira, mas o «confirmar»
 cancela a venda (nada é comprado); `--sem-ancora` inventa um T daqui a uns minutos para ensaiar a retenção.
 
-**Por medir:** se um comboio concorrido (o 731 à sexta) ainda tem lugar 10–15 min antes de T e quanto tempo uma venda pendente
-se mantém (ajustar `hold_lead_seconds`); se há disputa pelo desconto a T; a hora exata da abertura do desconto (T … T+1,2 s).
+**Ensaio a T real (25/09/2026, 521 de 26/09, T 06:30, sem comprar):** login 06:18 → lugar retido às **06:20:00** (T−10 min; 348 ms;
+ligação reutilizada) → lugar mudado ao corredor 21/55 → 21/47 (250 ms) → desconto recusado nos 4 pedidos até T (60–69 ms cada)
+→ **aceite no 5.º pedido, enviado a T+64 ms** (a resposta demorou 1067 ms; total 0 €) → venda cancelada. Fica provado: a retenção
+de 10 min aguenta sem expirar, o desconto abre a T e o fluxo completo funciona numa ligação viva. O disparo real seguinte
+(520 domingo 06:45, 731 domingo 17:30) confirma o `confirm` com o lugar mudado.
+
+**Por medir:** se um comboio concorrido (o 731 à sexta) ainda tem lugar 10 min antes de T (ajustar `hold_lead_seconds`); se há disputa pelo desconto a T; a hora exata da abertura do desconto (T … T+1,2 s).
 
 
 ## 4. Estrutura do Google Sheets
