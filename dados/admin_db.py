@@ -123,12 +123,33 @@ def colunas(conn: sqlite3.Connection, tabela: str) -> list[dict]:
     return out
 
 
+def info_tabela(conn: sqlite3.Connection, tabela: str) -> dict:
+    """{'sem_rowid': bool, 'pk': [colunas da chave primária, por ordem]}. As tabelas WITHOUT ROWID (rto_dias, convidados_opcoes)
+    não têm `rowid`: as linhas identificam-se pela chave primária (lista de valores)."""
+    colunas(conn, tabela)                                    # valida o nome
+    wr = next((r["wr"] for r in conn.execute("PRAGMA table_list") if r["name"] == tabela), 0)
+    pk = [c["nome"] for c in sorted((c for c in colunas(conn, tabela) if c["pk"]), key=lambda c: c["pk"])]
+    return {"sem_rowid": bool(wr), "pk": pk}
+
+
+def _ident_sql(info: dict, ident) -> tuple[str, list]:
+    """Cláusula WHERE e argumentos que identificam uma linha: `rowid` (inteiro) ou a chave primária (lista)."""
+    if not info["sem_rowid"]:
+        try:
+            return "rowid=?", [int(ident)]
+        except (TypeError, ValueError):
+            raise AdminError(400, "identificador de linha inválido") from None
+    if not isinstance(ident, list) or len(ident) != len(info["pk"]):
+        raise AdminError(400, "identificador de linha inválido (esperava a chave primária)")
+    return " AND ".join(f'"{c}"=?' for c in info["pk"]), list(ident)
+
+
 def esquema(conn: sqlite3.Connection) -> list[dict]:
     res = []
     for t in tabelas(conn):
         sql = conn.execute("SELECT sql FROM sqlite_master WHERE type='table' AND name=?", (t,)).fetchone()[0]
         res.append({"nome": t, "linhas": conn.execute(f'SELECT COUNT(*) FROM "{t}"').fetchone()[0],
-                    "colunas": colunas(conn, t), "sql": sql,
+                    "colunas": colunas(conn, t), "sql": sql, "sem_rowid": info_tabela(conn, t)["sem_rowid"],
                     "indices": [r["name"] for r in conn.execute(f'PRAGMA index_list("{t}")')]})
     return res
 
@@ -141,12 +162,13 @@ def celula_protegida(tabela: str, coluna: str, linha: dict | None) -> bool:
 
 
 def _mascarar(tabela: str, linha: dict) -> dict:
-    return {k: (MASCARA if v not in (None, "") and celula_protegida(tabela, k, linha) else v) for k, v in linha.items()}
+    return {k: (MASCARA if k != "_rowid_" and v not in (None, "") and celula_protegida(tabela, k, linha) else v) for k, v in linha.items()}
 
 
 def linhas(conn: sqlite3.Connection, tabela: str, *, pagina: int = 1, tamanho: int = 50, ordem: str | None = None,
            sentido: str = "asc", q: str = "", filtros: dict[str, str] | None = None) -> dict:
     cols = colunas(conn, tabela)
+    info = info_tabela(conn, tabela)
     nomes = [c["nome"] for c in cols]
     tamanho = max(1, min(int(tamanho), PAGINA_MAX))
     pagina = max(1, int(pagina))
@@ -164,20 +186,21 @@ def linhas(conn: sqlite3.Connection, tabela: str, *, pagina: int = 1, tamanho: i
         args.append(like)
     cond = (" WHERE " + " AND ".join(where)) if where else ""
     total = conn.execute(f'SELECT COUNT(*) FROM "{tabela}"{cond}', args).fetchone()[0]
-    order_sql = ""
+    desempate = ", ".join(f'"{c}"' for c in info["pk"]) if info["sem_rowid"] else "rowid"
     if ordem in nomes:
-        order_sql = f' ORDER BY "{ordem}" {"DESC" if str(sentido).lower() == "desc" else "ASC"}, rowid'
+        order_sql = f' ORDER BY "{ordem}" {"DESC" if str(sentido).lower() == "desc" else "ASC"}, {desempate}'
     else:
-        order_sql = " ORDER BY rowid"
-    rows = conn.execute(f'SELECT rowid AS _rowid_, * FROM "{tabela}"{cond}{order_sql} LIMIT ? OFFSET ?',
+        order_sql = f" ORDER BY {desempate}"
+    sel = "*" if info["sem_rowid"] else "rowid AS _rowid_, *"
+    rows = conn.execute(f'SELECT {sel} FROM "{tabela}"{cond}{order_sql} LIMIT ? OFFSET ?',
                         args + [tamanho, (pagina - 1) * tamanho]).fetchall()
     out = []
     for r in rows:
         d = dict(r)
-        rid = d.pop("_rowid_")
-        d["_rowid_"] = rid
+        if info["sem_rowid"]:
+            d["_rowid_"] = [d[c] for c in info["pk"]]           # identificador = valores da chave primária
         out.append(_mascarar(tabela, d))
-    return {"colunas": cols, "linhas": out, "total": total, "pagina": pagina, "tamanho": tamanho}
+    return {"colunas": cols, "linhas": out, "total": total, "pagina": pagina, "tamanho": tamanho, "sem_rowid": info["sem_rowid"], "pk": info["pk"]}
 
 
 # Formatos que as apps esperam em colunas de data/hora e que a base, por si, não verifica (só a API das apps o faz).
@@ -236,12 +259,14 @@ def _valores(conn, tabela: str, valores: dict, linha_atual: dict | None) -> dict
     return out
 
 
-def _linha(conn, tabela: str, rowid: int) -> dict | None:
-    r = conn.execute(f'SELECT rowid AS _rowid_, * FROM "{tabela}" WHERE rowid=?', (rowid,)).fetchone()
+def _linha(conn, tabela: str, ident) -> dict | None:
+    info = info_tabela(conn, tabela)
+    where, args = _ident_sql(info, ident)
+    r = conn.execute(f'SELECT {"*" if info["sem_rowid"] else "rowid AS _rowid_, *"} FROM "{tabela}" WHERE {where}', args).fetchone()
     if r is None:
         return None
     d = dict(r)
-    d.pop("_rowid_")
+    d.pop("_rowid_", None)
     return d
 
 
@@ -314,12 +339,13 @@ class Editor:
                 v = _valores(conn, tabela, valores, None)
                 if not v:
                     raise AdminError(400, "nada para inserir")
+                info = info_tabela(conn, tabela)
                 self.snapshot(nome, conn, "inserir")
                 conn.execute("BEGIN IMMEDIATE")
                 try:
                     cols = ", ".join(f'"{c}"' for c in v)
                     cur = conn.execute(f'INSERT INTO "{tabela}" ({cols}) VALUES ({", ".join("?" * len(v))})', list(v.values()))
-                    rid = cur.lastrowid
+                    rid = [v.get(c) for c in info["pk"]] if info["sem_rowid"] else cur.lastrowid
                     conn.execute("COMMIT")
                 except sqlite3.Error:
                     conn.execute("ROLLBACK")
@@ -344,15 +370,19 @@ class Editor:
                 v = {k: x for k, x in v.items() if antes.get(k) != x}
                 if not v:
                     return {"rowid": rowid, "linha": _mascarar(tabela, antes), "alterada": False}
+                info = info_tabela(conn, tabela)
+                where, wargs = _ident_sql(info, rowid)
                 self.snapshot(nome, conn, "atualizar")
                 conn.execute("BEGIN IMMEDIATE")
                 try:
                     sets = ", ".join(f'"{c}"=?' for c in v)
-                    conn.execute(f'UPDATE "{tabela}" SET {sets} WHERE rowid=?', list(v.values()) + [rowid])
+                    conn.execute(f'UPDATE "{tabela}" SET {sets} WHERE {where}', list(v.values()) + wargs)
                     conn.execute("COMMIT")
                 except sqlite3.Error:
                     conn.execute("ROLLBACK")
                     raise
+                if info["sem_rowid"]:                       # a chave primária pode ter mudado
+                    rowid = [v.get(c, antes[c]) for c in info["pk"]]
                 depois = _linha(conn, tabela, rowid)
             except sqlite3.Error as e:
                 raise AdminError(400, f"a base recusou: {e}") from None
@@ -369,10 +399,11 @@ class Editor:
                 antes = _linha(conn, tabela, rowid)
                 if antes is None:
                     raise AdminError(404, "linha inexistente")
+                where, wargs = _ident_sql(info_tabela(conn, tabela), rowid)
                 self.snapshot(nome, conn, "apagar")
                 conn.execute("BEGIN IMMEDIATE")
                 try:
-                    conn.execute(f'DELETE FROM "{tabela}" WHERE rowid=?', (rowid,))
+                    conn.execute(f'DELETE FROM "{tabela}" WHERE {where}', wargs)
                     conn.execute("COMMIT")
                 except sqlite3.Error:
                     conn.execute("ROLLBACK")
@@ -399,6 +430,7 @@ class Editor:
             nome, tabela, rowid, op = e["base"], e["tabela"], e["rowid"], e["op"]
             conn = abrir(nome)
             try:
+                info = info_tabela(conn, tabela)
                 atual = _linha(conn, tabela, rowid)
                 self.snapshot(nome, conn, "reverter")
                 conn.execute("BEGIN IMMEDIATE")
@@ -406,18 +438,24 @@ class Editor:
                     if op == "inserir":
                         if atual != e["depois"]:
                             raise AdminError(409, "a linha mudou depois desta inserção: não a apago")
-                        conn.execute(f'DELETE FROM "{tabela}" WHERE rowid=?', (rowid,))
+                        where, wargs = _ident_sql(info, rowid)
+                        conn.execute(f'DELETE FROM "{tabela}" WHERE {where}', wargs)
                     elif op == "atualizar":
                         if atual is None or any(atual.get(k) != v for k, v in e["depois"].items()):
                             raise AdminError(409, "a linha mudou depois desta alteração: não a desfaço")
+                        where, wargs = _ident_sql(info, rowid)
                         sets = ", ".join(f'"{c}"=?' for c in e["antes"])
-                        conn.execute(f'UPDATE "{tabela}" SET {sets} WHERE rowid=?', list(e["antes"].values()) + [rowid])
+                        conn.execute(f'UPDATE "{tabela}" SET {sets} WHERE {where}', list(e["antes"].values()) + wargs)
                     elif op == "apagar":
                         if atual is not None:
-                            raise AdminError(409, "já existe uma linha com este rowid")
-                        cols = ", ".join(['rowid'] + [f'"{c}"' for c in e["antes"]])
-                        conn.execute(f'INSERT INTO "{tabela}" ({cols}) VALUES ({", ".join("?" * (len(e["antes"]) + 1))})',
-                                     [rowid] + list(e["antes"].values()))
+                            raise AdminError(409, "já existe uma linha com este identificador")
+                        if info["sem_rowid"]:
+                            cols = ", ".join(f'"{c}"' for c in e["antes"])
+                            conn.execute(f'INSERT INTO "{tabela}" ({cols}) VALUES ({", ".join("?" * len(e["antes"]))})', list(e["antes"].values()))
+                        else:
+                            cols = ", ".join(["rowid"] + [f'"{c}"' for c in e["antes"]])
+                            conn.execute(f'INSERT INTO "{tabela}" ({cols}) VALUES ({", ".join("?" * (len(e["antes"]) + 1))})',
+                                         [rowid] + list(e["antes"].values()))
                     else:
                         raise AdminError(400, "operação desconhecida")
                     conn.execute("COMMIT")
@@ -482,6 +520,10 @@ def info_backup() -> dict:
         except (OSError, subprocess.TimeoutExpired, ValueError):
             pass
         out["ficheiros"] = [{"nome": f.name, "bytes": f.stat().st_size} for f in sorted(repo.glob("*.age"))]
+    try:                                                   # última execução do backup (mesmo sem nada a publicar)
+        out["execucao"] = json.loads((db.BASE_DIR / "state" / "backup_execucao.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        out["execucao"] = None
     return out
 
 
@@ -551,6 +593,13 @@ class Estado:
 
 TIPOS = {".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".css": "text/css; charset=utf-8"}
 CSP = "default-src 'self'; style-src 'self'; script-src 'self'; img-src 'self' data:; connect-src 'self'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'"
+
+
+def _json_ou_texto(txt: str):
+    try:
+        return json.loads(txt)
+    except ValueError:
+        raise AdminError(400, "identificador de linha inválido") from None
 
 
 def make_handler(estado: Estado):
@@ -660,7 +709,7 @@ def make_handler(estado: Estado):
                 nome, tabela = (d.get("db") or q.get("db", "")), (d.get("tabela") or q.get("tabela", ""))
                 if self.command == "POST":
                     return self._json(201, estado.editor.inserir(nome, tabela, d.get("valores") or {}, self._quem))
-                rid = int(d.get("rowid") if d.get("rowid") is not None else q.get("rowid", -1))
+                rid = d.get("rowid") if d.get("rowid") is not None else _json_ou_texto(q.get("rowid", "-1"))
                 if self.command == "PUT":
                     return self._json(200, estado.editor.atualizar(nome, tabela, rid, d.get("valores") or {}, self._quem))
                 return self._json(200, estado.editor.apagar(nome, tabela, rid, self._quem))

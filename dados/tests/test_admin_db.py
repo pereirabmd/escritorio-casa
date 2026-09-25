@@ -230,6 +230,69 @@ class EscritaTests(Base):
         self.assertEqual(self.pedir("GET", "/api/linhas?db=dados&tabela=peso_registos")[1]["linhas"][0]["peso"], 90.0)
 
 
+class SemRowidTests(Base):
+    """rto_dias e convidados_opcoes são WITHOUT ROWID (chave primária composta ou de texto): não têm `rowid`."""
+
+    def setUp(self):
+        super().setUp()
+        self.entrar()
+        c = db.connect_named("dados")
+        c.execute("DELETE FROM rto_dias"); c.execute("DELETE FROM convidados_opcoes")
+        c.execute("INSERT INTO rto_dias (data, marca) VALUES ('2026-09-21', 'T'), ('2026-09-22', 'C')")
+        c.execute("INSERT INTO convidados_opcoes (tipo, posicao, valor) VALUES ('fase', 1, 'Convite'), ('fase', 2, 'Confirmado')")
+        c.close()
+
+    def test_carrega_e_identifica_pela_chave(self):
+        for tabela, chaves in (("rto_dias", [["2026-09-21"], ["2026-09-22"]]), ("convidados_opcoes", [["fase", 1], ["fase", 2]])):
+            s, b, _ = self.pedir("GET", f"/api/linhas?db=dados&tabela={tabela}")
+            self.assertEqual(s, 200, b)
+            self.assertEqual([l["_rowid_"] for l in b["linhas"]], chaves)
+            self.assertTrue(b["sem_rowid"])
+        s, b, _ = self.pedir("GET", "/api/linhas?db=dados&tabela=rto_dias&ordem=marca&sentido=desc&q=2026")
+        self.assertEqual((s, [l["marca"] for l in b["linhas"]]), (200, ["T", "C"]))
+        self.assertTrue(next(t for t in self.pedir("GET", "/api/esquema?db=dados")[1]["tabelas"] if t["nome"] == "rto_dias")["sem_rowid"])
+
+    def test_inserir_atualizar_apagar_e_reverter(self):
+        s, b, _ = self.pedir("POST", "/api/linha", {"db": "dados", "tabela": "rto_dias", "valores": {"data": "2026-09-23", "marca": "T"}})
+        self.assertEqual((s, b["rowid"]), (201, ["2026-09-23"]))
+        s, b, _ = self.pedir("PUT", "/api/linha", {"db": "dados", "tabela": "rto_dias", "rowid": ["2026-09-23"], "valores": {"marca": "C"}})
+        self.assertEqual((s, b["linha"]["marca"]), (200, "C"))
+        s, b, _ = self.pedir("PUT", "/api/linha", {"db": "dados", "tabela": "rto_dias", "rowid": ["2026-09-23"], "valores": {"data": "2026-09-24"}})   # muda a chave
+        self.assertEqual((s, b["rowid"]), (200, ["2026-09-24"]))
+        s, b, _ = self.pedir("DELETE", "/api/linha?db=dados&tabela=rto_dias&rowid=" + json.dumps(["2026-09-24"]).replace('"', "%22"))
+        self.assertEqual(s, 200)
+        apagar = next(a for a in self.pedir("GET", "/api/alteracoes")[1]["alteracoes"] if a["op"] == "apagar")
+        self.assertEqual(self.pedir("POST", "/api/reverter", {"id": apagar["id"]})[0], 200)
+        self.assertEqual(self.pedir("GET", "/api/linhas?db=dados&tabela=rto_dias&q=09-24")[1]["total"], 1)
+
+    def test_chave_composta(self):
+        s, b, _ = self.pedir("PUT", "/api/linha", {"db": "dados", "tabela": "convidados_opcoes", "rowid": ["fase", 2], "valores": {"valor": "Presente"}})
+        self.assertEqual((s, b["linha"]["valor"]), (200, "Presente"))
+        s, b, _ = self.pedir("DELETE", "/api/linha?db=dados&tabela=convidados_opcoes&rowid=%5B%22fase%22%2C1%5D")
+        self.assertEqual(s, 200)
+        self.assertEqual(self.pedir("GET", "/api/linhas?db=dados&tabela=convidados_opcoes")[1]["total"], 1)
+
+    def test_identificador_invalido(self):
+        for rid in ([], ["so-um"], "texto", 5, None):
+            s, b, _ = self.pedir("PUT", "/api/linha", {"db": "dados", "tabela": "convidados_opcoes", "rowid": rid, "valores": {"valor": "x"}})
+            self.assertIn(s, (400, 404), rid)
+
+    def test_a_base_recusa_o_invalido(self):
+        s, b, _ = self.pedir("PUT", "/api/linha", {"db": "dados", "tabela": "rto_dias", "rowid": ["2026-09-21"], "valores": {"marca": "X"}})
+        self.assertEqual(s, 400)
+
+
+class TodasAsTabelasTests(Base):
+    def test_todas_as_tabelas_das_duas_bases_carregam(self):
+        self.entrar()
+        for base in ("dados", "bilhetes"):
+            tabelas = self.pedir("GET", f"/api/esquema?db={base}")[1]["tabelas"]
+            self.assertTrue(tabelas)
+            for t in tabelas:
+                s, b, _ = self.pedir("GET", f"/api/linhas?db={base}&tabela={t['nome']}")
+                self.assertEqual(s, 200, f"{base}.{t['nome']}: {b}")
+
+
 class SqlTests(Base):
     def setUp(self):
         super().setUp()
@@ -265,6 +328,17 @@ class SqlTests(Base):
 
 
 class BackupTests(Base):
+    def test_execucao_do_backup_aparece_na_informacao(self):
+        self.entrar()
+        import backup
+        estado = Path(self.tmp.name) / "state"
+        with mock.patch.object(backup, "STATE_DIR", estado), mock.patch.object(backup, "EXECUCAO_FILE", estado / "backup_execucao.json"), \
+                mock.patch.object(admin_db.db, "BASE_DIR", Path(self.tmp.name)):
+            backup.registar_execucao(True, "sem alterações desde o último backup")
+            s, b, _ = self.pedir("GET", "/api/backup")
+        self.assertEqual((s, b["execucao"]["ok"], b["execucao"]["mensagem"]), (200, True, "sem alterações desde o último backup"))
+        self.assertRegex(b["execucao"]["ts"], r"^\d{4}-\d{2}-\d{2}T")
+
     def test_info_sem_repositorio_nao_rebenta(self):
         self.entrar()
         with mock.patch.dict("os.environ", {"BACKUP_REPO_DIR": ""}):

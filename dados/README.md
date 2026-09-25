@@ -148,5 +148,7 @@ repositório privado `pereirabmd/backup_database`.
   segredos (`*password*`, `*token*`, `*secret*`, `Pessoa*_NtfyPasswordEnc`) saem mascarados e não se editam.
 - **Rede de segurança:** antes de escrever guarda um instantâneo da base em `data/undo/` (no máximo 1/min, 20 mais recentes); cada alteração fica em
   `logs/admin_edits.jsonl` (antes/depois) e **«Reverter»** desfaz uma alteração de uma linha (só se a linha ainda estiver como a deixámos).
-- **Consola SQL:** só SELECT/WITH, base aberta em modo `ro` + autorizador; 500 linhas e 3 s no máximo.
+- **Consola SQL:** só SELECT/WITH, base aberta em modo `ro` + autorizador; 500 linhas e 3 s no máximo. Ao escolher uma tabela preenche `SELECT * FROM "tabela" LIMIT 100` (só se a caixa estiver vazia ou ainda tiver o texto automático).
+- **Tabelas `WITHOUT ROWID`** (`rto_dias`, `convidados_opcoes`) não têm `rowid`: as linhas identificam-se pela chave primária (lista de valores) em editar, apagar e reverter. Corrigido a 25/09 (davam erro 500 ao carregar).
+- **Backup no cabeçalho:** «publicado» = data do último commit no repositório privado (só há commit novo quando os dados mudam); «verificado» = última execução do `backup.py` (`state/backup_execucao.json`, escrito em cada execução, mesmo sem nada a publicar); fica vermelho se passar de 30 h ou se a última execução falhou.
 - Edita-se a base **por baixo das apps**: regras que só as apps garantem (ids sequenciais, estados, dependências entre tabelas) não são verificadas.

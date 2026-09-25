@@ -49,3 +49,6 @@ dialog::backdrop{background:rgba(0,0,0,.45)}
 #toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);background:var(--fg);color:var(--bg);padding:8px 14px;border-radius:10px;opacity:0;transition:opacity .2s;pointer-events:none}
 #toast.ver{opacity:1}
 @media (max-width:760px){.aba{flex-direction:column}#lista-tabelas{flex:none;position:static;max-height:none;width:100%}}
+
+#ultimo-backup{font-size:12.5px;white-space:nowrap}
+#ultimo-backup.velho{color:var(--perigo);font-weight:600}

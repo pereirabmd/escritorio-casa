@@ -209,6 +209,20 @@ def restaurar(ficheiro: Path, identity: Path, out: Path) -> None:
         conn.close()
 
 
+EXECUCAO_FILE = STATE_DIR / "backup_execucao.json"
+
+
+def registar_execucao(ok: bool, mensagem: str) -> None:
+    """Guarda quando o backup correu pela última vez e como acabou (mesmo quando não havia nada a publicar): é o que a
+    página de administração mostra como «última verificação». Nunca faz falhar o backup."""
+    try:
+        STATE_DIR.mkdir(exist_ok=True)
+        EXECUCAO_FILE.write_text(json.dumps({"ts": datetime.now().astimezone().isoformat(timespec="seconds"), "ok": ok,
+                                             "mensagem": mensagem[:300]}, ensure_ascii=False) + "\n", encoding="utf-8")
+    except OSError:
+        pass
+
+
 def main(argv: list[str]) -> int:
     p = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     sub = p.add_subparsers(dest="cmd")
@@ -223,13 +237,17 @@ def main(argv: list[str]) -> int:
             restaurar(args.ficheiro, args.identity, args.out)
             print(f"restaurado para {args.out}")
         else:
-            print(fazer_backup(args.force))
+            resultado = fazer_backup(args.force)
+            registar_execucao(True, resultado)
+            print(resultado)
         return 0
     except BackupError as e:
+        registar_execucao(False, str(e))
         alertar("Backup dos dados falhou", str(e))
         print(f"ERRO: {e}", file=sys.stderr)
         return 1
     except Exception as e:
+        registar_execucao(False, f"{type(e).__name__}: {e}")
         alertar("Backup dos dados falhou", f"{type(e).__name__}: {e}")
         raise
 

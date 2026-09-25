@@ -1,6 +1,7 @@
 'use strict';
 // Consulta e edição das bases SQLite do Pi (ver admin_db.py). Todo o texto vindo da base entra por textContent/value: nunca innerHTML.
 const $ = (id) => document.getElementById(id);
+let sqlAuto = '';   // último SELECT preenchido automaticamente (só se substitui se o utilizador não o alterou)
 const estado = { csrf: null, db: null, esquema: [], tabela: null, pagina: 1, tamanho: 50, ordem: null, sentido: 'asc', q: '', dados: null };
 const MASCARA = '••••••••';
 
@@ -34,6 +35,7 @@ async function entrar(dados) {
   $('login').hidden = true; $('app').hidden = false;
   const sel = $('sel-db'); sel.replaceChildren(...dados.bases.map(b => el('option', { value: b, textContent: b })));
   estado.db = dados.bases[0]; sel.value = estado.db;
+  carregarResumoBackup();
   $('aviso').hidden = false;
   $('aviso').textContent = '⚠️ Edição direta na base: as apps têm regras próprias (ids, datas, estados). As restrições da base recusam o inválido e tudo fica registado e reversível na aba «Alterações».';
   await carregarEsquema();
@@ -44,7 +46,11 @@ $('form-login').addEventListener('submit', async (ev) => {
   catch (e) { $('erro-login').textContent = e.message; }
 });
 $('sair').addEventListener('click', async () => { try { await api('POST', '/api/logout', {}); } catch (e) { /* ok */ } mostrarLogin(); });
-$('sel-db').addEventListener('change', async () => { estado.db = $('sel-db').value; estado.tabela = null; await carregarEsquema(); });
+$('sel-db').addEventListener('change', async () => {
+  estado.db = $('sel-db').value; estado.tabela = null;
+  if ($('sql').value === sqlAuto) { $('sql').value = ''; sqlAuto = ''; }
+  await carregarEsquema();
+});
 
 // ---------------- abas ----------------
 document.querySelectorAll('#abas button').forEach(b => b.addEventListener('click', () => {
@@ -67,8 +73,13 @@ async function carregarEsquema() {
   $('vazio').hidden = !!estado.tabela; $('tabela-vista').hidden = !estado.tabela;
   if (estado.tabela) await carregarLinhas();
 }
+function preencherSql() {
+  const ta = $('sql');
+  if (!estado.tabela) return;
+  if (ta.value.trim() === '' || ta.value === sqlAuto) { sqlAuto = `SELECT * FROM "${estado.tabela}" LIMIT 100`; ta.value = sqlAuto; }
+}
 async function escolherTabela(nome) {
-  estado.tabela = nome; estado.pagina = 1; estado.ordem = null; estado.sentido = 'asc'; estado.q = ''; $('pesquisa').value = '';
+  estado.tabela = nome; preencherSql(); estado.pagina = 1; estado.ordem = null; estado.sentido = 'asc'; estado.q = ''; $('pesquisa').value = '';
   $('esquema').hidden = true;
   await carregarEsquema();
 }
@@ -139,7 +150,7 @@ function campoInput(col, valor, nova) {
 }
 function abrirEditor(linha) {
   linhaEmEdicao = linha; const t = tabelaAtual(); const nova = linha === null;
-  $('dlg-titulo').textContent = (nova ? 'Nova linha em ' : 'Editar linha em ') + t.nome + (nova ? '' : ` (rowid ${linha._rowid_})`);
+  $('dlg-titulo').textContent = (nova ? 'Nova linha em ' : 'Editar linha em ') + t.nome + (nova ? '' : (Array.isArray(linha._rowid_) ? ` (chave ${linha._rowid_.join(' / ')})` : ` (rowid ${linha._rowid_})`));
   $('dlg-erro').textContent = '';
   const blocos = t.colunas.map(c => campoInput(c, nova ? null : linha[c.nome], nova));
   $('campos').replaceChildren(...blocos); $('campos')._blocos = blocos;
@@ -165,7 +176,7 @@ $('form-linha').addEventListener('submit', async (ev) => {
 });
 $('dlg-apagar').addEventListener('click', async () => {
   if (!confirm('Apagar esta linha? (fica registado e pode ser revertido em «Alterações»)')) return;
-  try { await api('DELETE', `/api/linha?db=${encodeURIComponent(estado.db)}&tabela=${encodeURIComponent(estado.tabela)}&rowid=${linhaEmEdicao._rowid_}`); toast('Linha apagada'); $('dlg').close(); await carregarEsquema(); }
+  try { await api('DELETE', `/api/linha?db=${encodeURIComponent(estado.db)}&tabela=${encodeURIComponent(estado.tabela)}&rowid=${encodeURIComponent(JSON.stringify(linhaEmEdicao._rowid_))}`); toast('Linha apagada'); $('dlg').close(); await carregarEsquema(); }
   catch (e) { $('dlg-erro').textContent = e.message; }
 });
 
@@ -197,12 +208,39 @@ async function carregarAlteracoes() {
 }
 
 // ---------------- backup ----------------
+function fmtData(iso) {
+  const d = new Date(iso); if (isNaN(d)) return iso;
+  const p = (n) => String(n).padStart(2, '0');
+  return `${p(d.getDate())}/${p(d.getMonth() + 1)}/${d.getFullYear()} ${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+function haQuanto(iso) {
+  const min = Math.max(0, Math.round((Date.now() - new Date(iso)) / 60000));
+  if (min < 60) return `há ${min} min`;
+  if (min < 48 * 60) return `há ${Math.round(min / 60)} h`;
+  return `há ${Math.round(min / 1440)} dias`;
+}
+async function carregarResumoBackup() {
+  const alvo = $('ultimo-backup');
+  try {
+    const d = await api('GET', '/api/backup');
+    const partes = [];
+    if (d.ultimo) partes.push(`💾 publicado ${fmtData(d.ultimo)} (${haQuanto(d.ultimo)})`);
+    if (d.execucao) partes.push(`${d.execucao.ok ? '✓' : '⚠️'} verificado ${fmtData(d.execucao.ts)}`);
+    alvo.textContent = partes.join(' · ') || 'backup: sem informação';
+    const ref = d.execucao && d.execucao.ts ? d.execucao.ts : d.ultimo;
+    alvo.classList.toggle('velho', !ref || (Date.now() - new Date(ref)) > 30 * 3600 * 1000 || (d.execucao && !d.execucao.ok));
+  } catch (e) { alvo.textContent = ''; }
+}
 async function carregarBackup() {
   const d = await api('GET', '/api/backup');
+  const ex = d.execucao;
   $('info-backup').replaceChildren(
     el('div', {}, el('strong', {}, 'Repositório: '), d.repositorio),
-    el('div', {}, el('strong', {}, 'Último backup: '), d.ultimo ? `${d.ultimo.replace('T', ' ').slice(0, 19)} (commit ${d.commit})` : 'sem informação'),
-    el('div', {}, el('strong', {}, 'Ficheiros: '), d.ficheiros.map(f => `${f.nome} (${f.bytes} B)`).join(', ') || '—'));
+    el('div', {}, el('strong', {}, 'Último backup publicado: '), d.ultimo ? `${fmtData(d.ultimo)} (${haQuanto(d.ultimo)}, commit ${d.commit})` : 'sem informação'),
+    el('div', {}, el('strong', {}, 'Última execução do backup: '), ex ? `${fmtData(ex.ts)} (${haQuanto(ex.ts)}) — ${ex.ok ? 'ok' : 'FALHOU'}: ${ex.mensagem}` : 'sem informação (ainda não correu desde esta versão)'),
+    el('div', {}, el('strong', {}, 'Ficheiros: '), d.ficheiros.map(f => `${f.nome} (${f.bytes} B)`).join(', ') || '—'),
+    el('div', { class: 'mut' }, 'Só se publica um commit novo quando os dados mudaram; a «execução» mostra quando foi a última verificação.'));
+  carregarResumoBackup();
 }
 $('backup-agora').addEventListener('click', async () => {
   $('backup-agora').disabled = true; $('saida-backup').hidden = false; $('saida-backup').textContent = 'a fazer backup…';
