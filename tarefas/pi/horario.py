@@ -7,6 +7,8 @@ Usa o mesmo mecanismo das tarefas (`recalcular.reconciliar_chave`): a mensagem f
 Regras:
 - a "última aula" do dia é a que acaba mais tarde; se houver duas ao mesmo tempo (turma dividida) contam as duas
   e o aviso menciona-as;
+- aulas a que o aluno não vai (`DISCIPLINAS_SEM_AVISO`, hoje só E.M.R.) ficam no horário mas não contam como "última aula":
+  o aviso é agendado para a aula anterior (a que ele frequenta);
 - só há aviso de segunda a sexta dentro do ano letivo (1 set do 1.º ano a 31 jul do 2.º) e se houver aulas nesse dia;
 - nunca se avisa "tarde": se a hora do aviso já passou e não estava agendado, esse dia fica sem aviso;
 - vai para quem o painel de administração escolher (`Notif_horario`; por omissão a pessoa com o nome do aluno), no tópico
@@ -26,6 +28,8 @@ log = get_logger("horario")
 
 ANTECEDENCIA_MIN = 30
 PREFIXO = "horario:"
+# aulas que aparecem no horário mas a que o aluno não assiste: não contam para a "última aula" (manter em sincronia com HOR_SEM_AVISO em index.html)
+DISCIPLINAS_SEM_AVISO = {"E.M.R."}
 
 
 def dentro_do_ano_letivo(ano_letivo: str, dia: date) -> bool:
@@ -39,7 +43,7 @@ def dentro_do_ano_letivo(ano_letivo: str, dia: date) -> bool:
 def ultima_aula(aulas: list[dict], aluno: str, dia: date) -> tuple[str, list[dict]] | None:
     """(hora de fim, aulas que acabam a essa hora) do aluno nesse dia, ou None se não há aulas."""
     do_dia = [a for a in aulas
-              if a.get("Aluno") == aluno and int(a.get("DiaSemana") or 0) == dia.isoweekday()
+              if a.get("Aluno") == aluno and a.get("Disciplina") not in DISCIPLINAS_SEM_AVISO and int(a.get("DiaSemana") or 0) == dia.isoweekday()
               and dentro_do_ano_letivo(str(a.get("AnoLetivo", "")), dia)]
     if not do_dia:
         return None

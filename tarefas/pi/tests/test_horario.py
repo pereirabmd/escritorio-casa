@@ -38,6 +38,12 @@ class UltimaAulaTests(unittest.TestCase):
         self.assertIsNone(horario.ultima_aula(HORARIO, "Bruno", date(2027, 8, 2)))        # depois
         self.assertIsNotNone(horario.ultima_aula(HORARIO, "Bruno", date(2027, 6, 28)))
 
+    def test_emr_nao_conta_e_avisa_pela_aula_anterior(self):
+        h = [aula(5, "15:35", "16:25", "C-NAT"), aula(5, "16:35", "17:25", "E.M.R.", "B1")]
+        fim, u = horario.ultima_aula(h, "Bruno", date(2026, 9, 25))           # 6.ª feira
+        self.assertEqual((fim, [a["Disciplina"] for a in u]), ("16:25", ["C-NAT"]))
+        self.assertIsNone(horario.ultima_aula([aula(5, "16:35", "17:25", "E.M.R.")], "Bruno", date(2026, 9, 25)))
+
     def test_alvo_30_min_antes(self):
         self.assertEqual(horario.alvo_aviso("13:25", date(2026, 9, 28), 30), datetime(2026, 9, 28, 12, 55, tzinfo=TZ))
 

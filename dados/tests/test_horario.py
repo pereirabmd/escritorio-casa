@@ -32,6 +32,18 @@ class ImportadorTest(unittest.TestCase):
                               "Bruno;2026/2027;2ª Feira;08:30;09:20;X;S\nBruno;2026/2027;2ª Feira;08:30;09:20;X;S\n"))
         self.assertEqual(len(prob), 5, prob)
 
+    def test_substituir_troca_o_horario_do_aluno(self):
+        db.migrate_all()
+        conn = db.connect_named("dados")
+        conn.execute("DELETE FROM tarefas_horario")
+        antigo, _ = imp.ler(csv("Bruno;2026/2027;2ª Feira;08:30;09:20;PORT;EB_B7\nBruno;2026/2027;2ª Feira;09:30;10:20;ING;EB_B7\n"))
+        novo, _ = imp.ler(csv("Bruno;2026/2027;2ª Feira;10:35;11:25;HISTGP;EB_B7\n"))
+        imp.gravar(conn, antigo)
+        self.assertEqual(imp.gravar(conn, novo, substituir=True), 1)
+        self.assertEqual([r[0] for r in conn.execute("SELECT disciplina FROM tarefas_horario")], ["HISTGP"])
+        conn.execute("DELETE FROM tarefas_horario")
+        conn.close()
+
     def test_gravar_idempotente(self):
         db.migrate_all()
         conn = db.connect_named("dados")

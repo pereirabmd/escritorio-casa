@@ -1181,6 +1181,7 @@ function renderTudo() {
 // acabar" é enviado pelo Pi (tarefas/pi/horario.py); aqui só se mostra e se pode pausar.
 // ---------------------------------------------------------------
 const HOR_DIAS = ['', '2ª feira', '3ª feira', '4ª feira', '5ª feira', '6ª feira', 'Sábado', 'Domingo'];
+const HOR_SEM_AVISO = ['E.M.R.'];   // aulas que aparecem mas a que não se vai: a saída/aviso conta a anterior (igual a horario.py)
 const HOR_DIAS_CURTO = ['', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'];
 let horarioVista = 'dia';       // 'dia' | 'semana'
 let horarioDia = null;          // 1..7 (ISO)
@@ -1253,7 +1254,7 @@ function renderHorarioDia(aulas, diasComAulas) {
   if (!slots.length) return html + '<div class="empty">Sem aulas neste dia.</div>';
   const agora = new Date();
   const agoraMin = agora.getHours() * 60 + agora.getMinutes();
-  const fimDia = slots.reduce((m, sl) => sl.fim > m ? sl.fim : m, '');
+  const fimDia = slots.reduce((m, sl) => sl.aulas.every(a => HOR_SEM_AVISO.includes(a.disciplina)) || sl.fim <= m ? m : sl.fim, '');
   const minutos = Number(state.config.HorarioAvisoMinutos) || 30;
   html += `<div class="hor-resumo">Entra às <b>${esc(slots[0].ini)}</b> · sai às <b>${esc(fimDia)}</b> · ${slots.reduce((n, sl) => n + sl.aulas.length, 0)} aulas</div>`;
   html += slots.map(sl => {

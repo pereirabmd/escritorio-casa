@@ -2,6 +2,7 @@
 
     python importar_horario.py horario.txt            # só valida e mostra o relatório
     python importar_horario.py horario.txt --gravar   # grava (idempotente: repetir não duplica)
+    python importar_horario.py horario.txt --gravar --substituir   # apaga antes o horário desses alunos/anos e grava o do ficheiro
 
 Formato: nome_aluno;ano_letivo;dia_semana;hora_inicio;hora_fim;disciplina;sala
 Dois registos com o mesmo dia e hora são aceites (turma dividida em dois turnos); só se recusam
@@ -67,10 +68,13 @@ def ler(caminho: Path) -> tuple[list[dict], list[str]]:
     return aulas, problemas
 
 
-def gravar(conn, aulas: list[dict]) -> int:
+def gravar(conn, aulas: list[dict], substituir: bool = False) -> int:
     novas = 0
     conn.execute("BEGIN IMMEDIATE")
     try:
+        if substituir:
+            for aluno, ano in sorted({(a["aluno"], a["ano_letivo"]) for a in aulas}):
+                conn.execute("DELETE FROM tarefas_horario WHERE aluno = ? AND ano_letivo = ?", (aluno, ano))
         for a in aulas:
             cur = conn.execute(
                 "INSERT INTO tarefas_horario (aluno, ano_letivo, dia_semana, hora_inicio, hora_fim, disciplina, sala) "
@@ -115,7 +119,7 @@ def main(argv: list[str]) -> int:
     db.migrate_all()
     conn = db.connect_named("dados")
     try:
-        novas = gravar(conn, aulas)
+        novas = gravar(conn, aulas, "--substituir" in argv)
         total = conn.execute("SELECT COUNT(*) FROM tarefas_horario").fetchone()[0]
     finally:
         conn.close()
