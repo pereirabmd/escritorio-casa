@@ -50,9 +50,27 @@ class BuyerSqliteTests(SqliteFlowMixin, FlowBase):
         self.assertIn(("COMPRA", "CONFIRMED"), tipos)
         self.assertEqual(self.q("SELECT count(*) FROM bilhetes_pedidos"), [(0,)])          # confirmada: nunca espelhada
 
+    def test_grava_os_pedidos_a_cp_na_tabela_de_tentativas(self):
+        self.run_buyer(FakeCP())
+        rows = self.q("SELECT fase, resultado, http, perna, comboio, rel_t_ms, ligacao_nova FROM bilhetes_tentativas ORDER BY id")
+        self.assertEqual([r[:2] for r in rows], [("venda", "ok"), ("desconto", "ok")])         # T já passou: sem retenção
+        self.assertEqual(rows[0][2:5], (200, "ida", 524))
+        self.assertIsNotNone(rows[0][5])                 # relativo a T
+
+    def test_esgotado_grava_todas_as_tentativas_da_rajada(self):
+        n = len(hot_buy.sold_out_delays()) + 1
+        cp = FakeCP(sale_script=[resp(409, {}, messages=[{"message": "Comboio esgotado"}])] * n)
+        self.run_buyer(cp, advancing=True)
+        self.assertEqual(self.q("SELECT count(*), min(resultado), max(resultado) FROM bilhetes_tentativas"), [(n, "sold_out", "sold_out")])
+
+    def test_base_antiga_sem_a_tabela_nunca_estraga_a_compra(self):
+        c = sqlite3.connect(self.dbpath); c.execute("DROP TABLE bilhetes_tentativas"); c.commit(); c.close()
+        code, st = self.run_buyer(FakeCP())
+        self.assertEqual((code, st["state"]), (0, "CONFIRMED"))
+
     def test_esgotado_e_espelhado_para_pedidos_com_id_novo(self):
         cp = FakeCP(sale_script=[resp(409, {}, messages=[{"message": "Comboio esgotado"}])]
-                    * (len(hot_buy.cfg("sold_out_retry_delays_s", [])) + 1))
+                    * (len(hot_buy.sold_out_delays()) + 1))
         _, st = self.run_buyer(cp, advancing=True)
         self.assertEqual(st["state"], "SOLD_OUT")
         rows = self.q("SELECT id, data, comboio, estado, retry, forcar FROM bilhetes_pedidos")
@@ -78,6 +96,7 @@ class PedidoSqliteTests(SqliteFlowMixin, PedidoFlowBase):
     def setUp(self):
         super().setUp()
         self.make_db()
+
         # o Pi espelhou o pedido (id 100) depois de uma viagem esgotar; o Pedido usa esse id como 'pedido100'
         self.sheets.append_request(DAY.isoformat(), "Aveiro", "Lisboa Oriente", 524, "06:45", estado="ESGOTADO")
         self.q_write("UPDATE bilhetes_pedidos SET forcar='SIM', retry='SIM', intervalo_minutos=10 WHERE id=100")
@@ -89,6 +108,10 @@ class PedidoSqliteTests(SqliteFlowMixin, PedidoFlowBase):
         c.execute(sql)
         c.commit()
         c.close()
+
+    def test_pedido_grava_a_tentativa(self):
+        self.run_pedido(FakeCP())
+        self.assertEqual(self.q("SELECT fase, resultado, perna, rel_t_ms FROM bilhetes_tentativas"), [("venda", "ok", "pedido100", None)])
 
     def test_pedido_confirmado_atualiza_a_linha_certa(self):
         code, st = self.run_pedido(FakeCP())

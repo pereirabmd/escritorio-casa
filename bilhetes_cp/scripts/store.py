@@ -101,6 +101,26 @@ class SqliteStore:
                       (datetime.now(TZ).isoformat(timespec="milliseconds"), _txt(tipo), _txt(data_viagem), _txt(perna),
                        _txt(comboio), _txt(status_http), _txt(resultado), _txt(referencia), _txt(mensagem_erro)))
 
+    def append_attempts(self, rows: list[dict[str, Any]]) -> int:
+        """Grava, numa só transação, os pedidos à CP de uma compra (ver `bilhetes_tentativas`) e poda os de há mais de 90 dias.
+        Chamado no fim da compra, fora do caminho crítico."""
+        if not rows:
+            return 0
+        campos = ("ts", "data_viagem", "perna", "comboio", "fase", "http", "resultado", "rel_t_ms", "rtt_ms", "ligacao_nova",
+                  "ts_cp", "codigo", "detalhe")
+        with closing(self._connect()) as c:
+            c.execute("BEGIN IMMEDIATE")
+            try:
+                c.executemany(f"INSERT INTO bilhetes_tentativas ({', '.join(campos)}) VALUES ({', '.join('?' * len(campos))})",
+                              [tuple(r.get(k) if k in ("http", "rel_t_ms", "rtt_ms", "ligacao_nova", "comboio") else _txt(r.get(k, ""))
+                                     for k in campos) for r in rows])
+                c.execute("DELETE FROM bilhetes_tentativas WHERE gravado < datetime('now', '-90 days')")
+                c.execute("COMMIT")
+            except sqlite3.Error:
+                c.execute("ROLLBACK")
+                raise
+        return len(rows)
+
     def append_ticket(self, data: str, comboio: Any, origem: str, destino: str,
                       hora: str, carruagem: Any, lugar: Any, referencia: str) -> None:
         try:

@@ -46,6 +46,18 @@ def cfg(name: str, default: Any) -> Any:
     return app_config().get("purchase", {}).get(name, default)
 
 
+def sold_out_delays() -> list[float]:
+    """Esperas entre tentativas quando a CP diz «esgotado» (a 1.ª tentativa não espera). Por fases `[duração_s, intervalo_s]`
+    (`sold_out_phases`): denso no início — é quando um lugar libertado (venda cancelada por outro) tem mais hipóteses de aparecer
+    (ensaio de 24/09: apareceu um lugar ao fim de ~30 s) — e cada vez mais espaçado, sempre abaixo do limite da CP (429 a ~120 pedidos
+    em ~30 s). Uma lista explícita `sold_out_retry_delays_s` (incluindo `[]` = sem rajada) tem prioridade, para testes e afinações."""
+    explicita = app_config().get("purchase", {}).get("sold_out_retry_delays_s")
+    if explicita is not None:
+        return [float(x) for x in explicita]
+    fases = cfg("sold_out_phases", [[10, 0.5], [50, 1.0], [240, 3.0], [600, 10.0]])
+    return [float(iv) for dur, iv in fases for _ in range(max(0, round(float(dur) / float(iv))))]
+
+
 def hms(ts: float) -> str:
     return datetime.fromtimestamp(ts, TZ).strftime("%H:%M:%S.") + f"{int(ts * 1000) % 1000:03d}"
 
@@ -158,7 +170,95 @@ def already_bought(sheets_client: Any, leg: Leg) -> bool:
     return False
 
 
-class Buyer:
+class SeatMixin:
+    """Preferência de lugar (ao corredor), partilhada pelo `Buyer` (T-24h) e pelo `PedidoAttempt` (pedidos avulsos)."""
+
+    def improve_seat(self, sale_id: Any) -> None:
+        """Preferência de lugar (por omissão «corredor»; `seat_preference` = aisle|none): com a venda RETIDA antes de T, muda o
+        lugar atribuído para um livre ao corredor (`PUT /train-seats`, testado a 24/09/2026). Nunca faz falhar a compra: qualquer
+        erro fica em log e a compra segue com o lugar que a CP deu. Se isto vier a atrapalhar, desliga-se com
+        `seat_preference: "none"` (decisão de 24/09: seguir o comportamento e retirar se falhar por causa disto)."""
+        if str(cfg("seat_preference", "aisle")).lower() not in ("aisle", "corredor"):
+            return
+        try:
+            seats = list(self.lock.state.get("seats") or [])
+            for cur in seats:
+                train = cur.get("train") or self.leg.train
+                if cur.get("carriage") in (None, "") or cur.get("seat") in (None, ""):
+                    continue
+                seat_map = self.cp.get_seat_map(sale_id, train)
+                candidatos = pick_aisle_seats(seat_map, int(cur["carriage"]), int(cur["seat"]),
+                                              limit=int(cfg("seat_change_max_tries", 4)))
+                if not candidatos:
+                    log.info("Lugar %s/%s: já é corredor (ou não há corredor livre); não mudo.", cur["carriage"], cur["seat"])
+                    continue
+                for carriage, seat in candidatos:
+                    try:
+                        resp = self.cp.change_seat(sale_id, train, int(cur["carriage"]), int(cur["seat"]), carriage, seat)
+                    except CPError as e:
+                        log.info("Lugar %s/%s ocupado ou recusado (%s); tento o seguinte.", carriage, seat,
+                                 (e.response.text[:80] if e.response is not None else e))
+                        self._tent("lugar", e.response, "recusado" if e.response is not None else "erro", detalhe=f"{carriage}/{seat}")
+                        continue
+                    self._tent("lugar", resp, "ok", detalhe=f"{cur['carriage']}/{cur['seat']} -> {carriage}/{seat}")
+                    novo = dict(cur, carriage=carriage, seat=seat)
+                    seats = [novo if s is cur else s for s in seats]
+                    self.lock.update(seats=seats, carriage=(seats[0]["carriage"] if len(seats) == 1 else self.lock.state.get("carriage")),
+                                     seat=(seats[0]["seat"] if len(seats) == 1 else self.lock.state.get("seat")),
+                                     seat_changed=f"{cur['carriage']}/{cur['seat']} → {carriage}/{seat} (corredor)",
+                                     seat_target=f"{carriage}/{seat}")
+                    log.info("Lugar mudado para o corredor: %s/%s → %s/%s (%.0f ms)", cur["carriage"], cur["seat"], carriage, seat,
+                             resp.elapsed_ms)
+                    break
+        except Exception as e:  # noqa: BLE001 — a preferência nunca pode estragar a compra
+            log.warning("Preferência de lugar falhou (%s: %s); sigo com o lugar atribuído.", type(e).__name__, e)
+
+    # ---- registo dos pedidos à CP (tabela bilhetes_tentativas), em memória e gravado no fim da compra ----------------
+
+    def _tent(self, fase: str, resp: Any, resultado: str, *, target: float | None = None, codigo: str = "", detalhe: str = "") -> None:
+        """Junta um pedido à CP ao registo desta compra. Só memória: nunca escreve na base no caminho crítico nem falha."""
+        try:
+            buf = self.__dict__.setdefault("_tents", [])
+            if len(buf) >= 1500:
+                return
+            enviado = getattr(resp, "sent_at", None) or self.clock()
+            corpo = resp.body if isinstance(getattr(resp, "body", None), dict) else {}
+            buf.append({"ts": datetime.fromtimestamp(enviado, TZ).isoformat(timespec="milliseconds"),
+                        "data_viagem": self.leg.date.isoformat(), "perna": self.leg.leg, "comboio": self.leg.train, "fase": fase,
+                        "http": getattr(resp, "status", None), "resultado": resultado,
+                        "rel_t_ms": round((enviado - target) * 1000) if target is not None else None,
+                        "rtt_ms": round(resp.elapsed_ms) if resp is not None and hasattr(resp, "elapsed_ms") else None,
+                        "ligacao_nova": {True: 1, False: 0}.get(getattr(resp, "new_conn", None)),
+                        "ts_cp": str(corpo.get("timestamp") or ""), "codigo": str(codigo or corpo.get("error") or "")[:40],
+                        "detalhe": str(detalhe)[:200]})
+        except Exception:  # noqa: BLE001 — diagnóstico, nunca estraga a compra
+            pass
+
+    def flush_tentativas(self) -> None:
+        """Grava o registo desta compra (uma transação), fora do caminho crítico. Sem suporte na base (Sheets) ou em erro: só log."""
+        buf = self.__dict__.get("_tents") or []
+        if not buf:
+            return
+        self.__dict__["_tents"] = []
+        try:
+            grava = getattr(self._sheets(), "append_attempts", None)
+            if grava is not None:
+                grava(buf)
+        except Exception as e:  # noqa: BLE001
+            log.warning("Não consegui gravar o registo de %d pedidos à CP: %s: %s", len(buf), type(e).__name__, e)
+
+    def seat_note(self, carriage: Any, seat: Any) -> tuple[str, str]:
+        """(sufixo para a mensagem, aviso). Compara o lugar do bilhete com o que pedimos ao corredor: o sufixo é « (corredor)» se
+        o bilhete o reflete; o aviso diz o que aconteceu se a CP devolveu OUTRO lugar (a confirmar no 1.º disparo real)."""
+        alvo = self.lock.state.get("seat_target")
+        if not alvo:
+            return "", ""
+        if f"{carriage}/{seat}" == alvo:
+            return " (corredor)", ""
+        return "", f" ⚠️ pedi o lugar {alvo} (corredor) mas o bilhete diz {carriage}/{seat}"
+
+
+class Buyer(SeatMixin):
     def __init__(self, leg: Leg, lock: PurchaseLock, *, sheets: Any = None,
                  login_fn: Callable[[], dict] = login,
                  refresh_fn: Callable[[str], dict] = refresh_tokens,
@@ -274,6 +374,7 @@ class Buyer:
             self.slog("ERRO", "EXCECAO", err=f"{type(e).__name__}: {e}")
             return 1
         finally:
+            self.flush_tentativas()
             self.lock.release()
 
     def _run(self) -> int:
@@ -457,7 +558,7 @@ class Buyer:
         seguro como um erro técnico transitório."""
         st = self.lock.state
         max_attempts = int(cfg("max_sale_attempts", 3))
-        sold_out_delays = list(cfg("sold_out_retry_delays_s", [0, 0.5, 0.5, 0.5, 1, 1, 1]))
+        esperas_esgotado = sold_out_delays()
         target = self.fire_ts
         open_window = float(cfg("not_open_retry_window_s", 600))
         fast_s, fast_iv = float(cfg("not_open_fast_phase_s", 20)), float(cfg("not_open_fast_interval_s", 0.25))
@@ -491,6 +592,7 @@ class Buyer:
 
             kind, detail = classify_sale_response(resp)
             timing = self._timing_txt(resp, target)
+            self._tent("venda", resp, kind, target=target, detalhe=detail)
             if kind not in ("not_open", "known") or attempt <= 3 or attempt % 20 == 0:   # sem inundar o log
                 log.info("POST /sale #%d -> HTTP %s [%s] %s", attempt, resp.status, kind, timing)
             if kind == "ok":
@@ -503,13 +605,13 @@ class Buyer:
                     self.sleep(0.25 * transient)
                     continue
             elif kind == "sold_out":
-                if sold_out_retry < len(sold_out_delays) and self.clock() < departure_ts:
-                    self.sleep(sold_out_delays[sold_out_retry])
+                if sold_out_retry < len(esperas_esgotado) and self.clock() < departure_ts:
+                    self.sleep(esperas_esgotado[sold_out_retry])
                     sold_out_retry += 1
                     continue
-                mins = sum(sold_out_delays) / 60
+                mins = sum(esperas_esgotado) / 60
                 confirmado = (f" (confirmado depois de {sold_out_retry + 1} tentativas em "
-                             f"~{mins:.0f} min)" if sold_out_delays else "")
+                             f"~{mins:.0f} min)" if esperas_esgotado else "")
                 self.terminate("SOLD_OUT", f"Esgotado — {self.label}",
                                f"Não há lugares{confirmado}. {detail}", "COMPRA", tags=["no_entry"],
                                status=resp.status)
@@ -590,6 +692,7 @@ class Buyer:
             if resp is not None:
                 kind, detail = classify_sale_response(resp)
                 timing = self._timing_txt(resp, self.fire_ts)
+                self._tent("retencao", resp, kind, target=self.fire_ts, detalhe=detail)
                 if kind == "ok":
                     self._sale_created(resp, f"RETIDA antes de T ({(self.fire_ts - resp.sent_at):.0f} s) | {timing}")
                     log.info("Lugar retido antes de T (tentativa %d): %s", attempt, timing)
@@ -599,43 +702,6 @@ class Buyer:
                 log.warning("Não consegui reter o lugar antes de T; sigo para o disparo normal a T.")
                 return False
             self.sleep(interval)
-
-    def improve_seat(self, sale_id: Any) -> None:
-        """Preferência de lugar (por omissão «corredor»; `seat_preference` = aisle|none): com a venda RETIDA antes de T, muda o
-        lugar atribuído para um livre ao corredor (`PUT /train-seats`, testado a 24/09/2026). Nunca faz falhar a compra: qualquer
-        erro fica em log e a compra segue com o lugar que a CP deu. Se isto vier a atrapalhar, desliga-se com
-        `seat_preference: "none"` (decisão de 24/09: seguir o comportamento e retirar se falhar por causa disto)."""
-        if str(cfg("seat_preference", "aisle")).lower() not in ("aisle", "corredor"):
-            return
-        try:
-            seats = list(self.lock.state.get("seats") or [])
-            for cur in seats:
-                train = cur.get("train") or self.leg.train
-                if cur.get("carriage") in (None, "") or cur.get("seat") in (None, ""):
-                    continue
-                seat_map = self.cp.get_seat_map(sale_id, train)
-                candidatos = pick_aisle_seats(seat_map, int(cur["carriage"]), int(cur["seat"]),
-                                              limit=int(cfg("seat_change_max_tries", 4)))
-                if not candidatos:
-                    log.info("Lugar %s/%s: já é corredor (ou não há corredor livre); não mudo.", cur["carriage"], cur["seat"])
-                    continue
-                for carriage, seat in candidatos:
-                    try:
-                        resp = self.cp.change_seat(sale_id, train, int(cur["carriage"]), int(cur["seat"]), carriage, seat)
-                    except CPError as e:
-                        log.info("Lugar %s/%s ocupado ou recusado (%s); tento o seguinte.", carriage, seat,
-                                 (e.response.text[:80] if e.response is not None else e))
-                        continue
-                    novo = dict(cur, carriage=carriage, seat=seat)
-                    seats = [novo if s is cur else s for s in seats]
-                    self.lock.update(seats=seats, carriage=(seats[0]["carriage"] if len(seats) == 1 else self.lock.state.get("carriage")),
-                                     seat=(seats[0]["seat"] if len(seats) == 1 else self.lock.state.get("seat")),
-                                     seat_changed=f"{cur['carriage']}/{cur['seat']} → {carriage}/{seat} (corredor)")
-                    log.info("Lugar mudado para o corredor: %s/%s → %s/%s (%.0f ms)", cur["carriage"], cur["seat"], carriage, seat,
-                             resp.elapsed_ms)
-                    break
-        except Exception as e:  # noqa: BLE001 — a preferência nunca pode estragar a compra
-            log.warning("Preferência de lugar falhou (%s: %s); sigo com o lugar atribuído.", type(e).__name__, e)
 
     def cancel_sale(self, sale_id: Any, why: str) -> None:
         """Liberta o lugar de uma venda que sabemos que não vai ser confirmada (nunca em estados incertos)."""
@@ -670,6 +736,7 @@ class Buyer:
                 self.reauth(quiet=True)
             try:
                 resp = self.cp.apply_green_pass(sale_id)
+                self._tent("desconto", resp, "ok", target=self.fire_ts)
                 log.info("Desconto do passe ACEITE no pedido #%d (recusas antes: %d) | %s", n, refused,
                          self._timing_txt(resp, self.fire_ts))
                 self.lock.update(discount_timing=self._timing_txt(resp, self.fire_ts), discount_attempts=n)
@@ -680,6 +747,8 @@ class Buyer:
                 status = r.status if r is not None else None
                 body = r.body if (r is not None and isinstance(r.body, dict)) else {}
                 text = (r.text if r is not None else str(e))[:300]
+                self._tent("desconto", r, "429" if status == 429 else ("recusado" if body.get("error") == "SIV:DIS:I:302" else "erro"),
+                           target=self.fire_ts, detalhe=text[:120])
                 if status == 429:
                     rate_limited += 1
                     wait = max(1.0, (r.retry_after_s or 2.0))
@@ -845,9 +914,10 @@ class Buyer:
                                       tags=["train"], at=remind_at, logger=log)
         self.lock.update(reminder_scheduled=reminder_ok, seat_known=have_seat)
         extra = "" if reminder_ok else " (lembrete de partida não agendado)"
+        nota, aviso = self.seat_note(carriage, seat)
         return self.terminate("CONFIRMED", f"Bilhete comprado — {self.label}",
                               f"{pretty(leg.origin)} → {pretty(leg.destination)} às {boarding} · "
-                              f"{seat_txt} · ref. {ref}{extra}", "COMPRA", tags=["white_check_mark"], ref=ref)
+                              f"{seat_txt}{nota} · ref. {ref}{extra}{aviso}", "COMPRA", tags=["white_check_mark"], ref=ref)
 
     # ---- proteção contra compra duplicada -------------------------------
 
@@ -862,7 +932,7 @@ class Buyer:
 REQUEST_ESTADO = {"CONFIRMED": "CONFIRMADO", "SOLD_OUT": "ESGOTADO", "FAILED": "FALHOU", "AMBIGUOUS": "AMBIGUO"}
 
 
-class PedidoAttempt:
+class PedidoAttempt(SeatMixin):
     """Uma única tentativa de compra de um pedido avulso (aba Pedidos, 3.2.1): login e compra
     já, sem esperar por T-24h (`leg.fire` já é "agora" para um pedido) e sem hotstart (nada de
     pre-flight nem de login antecipado). No máximo UMA repetição por passo — nunca a rajada de
@@ -934,6 +1004,7 @@ class PedidoAttempt:
             self._update_request(estado="FALHOU", mensagem=common.sanitize(f"{type(e).__name__}: {e}")[:400], forcar="NAO")
             return 1
         finally:
+            self.flush_tentativas()
             self.lock.release()
 
     def _run(self) -> int:
@@ -963,6 +1034,7 @@ class PedidoAttempt:
         outcome, resp = self.fire_sale(sections)
         if outcome != "ok":
             return 0 if outcome == "sold_out" else 2
+        self.improve_seat(resp.body["saleID"])       # lugar ao corredor (a venda já segura o lugar: não é uma corrida)
         return self.complete_sale(resp.body["saleID"])
 
     def search_trip(self) -> list | None:
@@ -1006,7 +1078,8 @@ class PedidoAttempt:
                 return "ambiguous", None
 
             kind, detail = classify_sale_response(resp)
-            timing = f"alvo {hms(target)} | resposta {hms(resp.received_at)} ({resp.elapsed_ms:.0f} ms)"
+            timing = Buyer._timing_txt(resp, target)
+            self._tent("venda", resp, kind, detalhe=detail)
             log.info("POST /sale (pedido) #%d -> HTTP %s [%s] %s", attempt, resp.status, kind, timing)
             if kind == "ok":
                 sale_id = resp.body["saleID"]
@@ -1044,6 +1117,18 @@ class PedidoAttempt:
                 if retryable and attempt == 1:
                     self.sleep(1)
                     continue
+                if name == "DISCOUNT_OK" and e.response is not None and isinstance(e.response.body, dict) \
+                        and e.response.body.get("error") == "SIV:DIS:I:302":
+                    # antes de T (24 h antes da partida na 1.ª estação) a CP recusa o desconto do passe: não há nada a concluir
+                    try:
+                        self.cp.cancel_sale(sale_id)
+                    except Exception:  # noqa: BLE001 — melhor esforço
+                        pass
+                    self.terminate("FAILED", f"O desconto do passe ainda não abriu — {self.label}",
+                                   f"O desconto só é aceite 24 h antes da partida na 1.ª estação. Nada foi comprado e libertei o "
+                                   f"lugar (venda {sale_id}). Tenta outra vez a partir dessa hora (ou deixa a Config tratar: retém "
+                                   "o lugar 10 min antes).", "ERRO")
+                    return None
                 if name == "CONFIRMED" and e.kind == "ambiguous":
                     self.terminate("AMBIGUOUS", f"Confirmação incerta — {self.label}",
                                    f"A venda {sale_id} existe mas não sei se foi confirmada. "
@@ -1127,9 +1212,10 @@ class PedidoAttempt:
                                       tags=["train"], at=remind_at, logger=log)
         self.lock.update(reminder_scheduled=reminder_ok, seat_known=have_seat)
         extra = "" if reminder_ok else " (lembrete de partida não agendado)"
+        nota, aviso = self.seat_note(carriage, seat)
         return self.terminate("CONFIRMED", f"Bilhete comprado — {self.label}",
-                              f"{pretty(leg.origin)} → {pretty(leg.destination)} às {boarding} · {seat_txt} · "
-                              f"ref. {ref}{extra}", "COMPRA", tags=["white_check_mark"], ref=ref)
+                              f"{pretty(leg.origin)} → {pretty(leg.destination)} às {boarding} · {seat_txt}{nota} · "
+                              f"ref. {ref}{extra}{aviso}", "COMPRA", tags=["white_check_mark"], ref=ref)
 
 
 def load_pedido_leg(leg_name: str) -> Leg | None:

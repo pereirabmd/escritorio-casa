@@ -8,7 +8,7 @@ import os
 import sqlite3
 import tempfile
 import unittest
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from pathlib import Path
 from unittest import mock
 
@@ -18,7 +18,18 @@ import live_delay
 import pedidos
 import store
 
-SCHEMA = Path(__file__).resolve().parents[2] / "dados" / "migrations_bilhetes" / "001_bilhetes.sql"
+MIGRACOES = Path(__file__).resolve().parents[2] / "dados" / "migrations_bilhetes"
+SCHEMA_001 = MIGRACOES / "001_bilhetes.sql"
+SCHEMA_002 = MIGRACOES / "002_tentativas.sql"
+
+
+class _Schema:
+    """As migrações da base `bilhetes` por ordem (o teste só precisa de `.read_text()`)."""
+    def read_text(self):
+        return SCHEMA_001.read_text() + "\n" + SCHEMA_002.read_text()
+
+
+SCHEMA = _Schema()
 TODAY = date(2026, 9, 24)
 
 
@@ -46,6 +57,26 @@ class StoreBase(unittest.TestCase):
     def viagem(self, id_=None, data="2026-09-25", org="Lisboa Oriente", dst="Aveiro", comboio=731, hora="17:30", ativo="SIM"):
         self.sql("INSERT INTO bilhetes_viagens (id, data, origem, destino, comboio, hora, ativo) VALUES (?,?,?,?,?,?,?)",
                  id_, data, org, dst, comboio, hora, ativo)
+
+
+class TentativasTest(StoreBase):
+    def linha(self, ts, **kw):
+        base = {"ts": ts, "data_viagem": "2026-09-25", "perna": "v100", "comboio": 731, "fase": "venda", "http": 500, "resultado": "sold_out",
+                "rel_t_ms": 12, "rtt_ms": 250, "ligacao_nova": 0, "ts_cp": "", "codigo": "WS:RES:114", "detalhe": "x"}
+        return {**base, **kw}
+
+    def test_grava_em_bloco_e_poda_o_que_foi_gravado_ha_mais_de_90_dias(self):
+        self.assertEqual(self.st.append_attempts([self.linha("2026-09-25T10:00:00.000+01:00")]), 1)
+        self.sql("UPDATE bilhetes_tentativas SET gravado = datetime('now', '-120 days')")           # esta fica velha
+        self.assertEqual(self.st.append_attempts([self.linha("2026-09-25T10:00:01.000+01:00", fase="desconto", resultado="ok", http=200)]), 1)
+        rows = self.sql("SELECT fase, resultado, http, ligacao_nova, codigo FROM bilhetes_tentativas ORDER BY id")
+        self.assertEqual(rows, [("desconto", "ok", 200, 0, "WS:RES:114")])            # a de há 120 dias foi podada
+        self.assertEqual(self.st.append_attempts([]), 0)
+
+    def test_a_base_recusa_fases_desconhecidas_e_nada_fica_gravado(self):
+        with self.assertRaises(sqlite3.Error):
+            self.st.append_attempts([self.linha("2026-09-25T10:00:00.000+01:00"), self.linha("2026-09-25T10:00:01.000+01:00", fase="lixo")])
+        self.assertEqual(self.sql("SELECT count(*) FROM bilhetes_tentativas"), [(0,)])          # transação: ou entra tudo ou nada
 
 
 class ConfigTest(StoreBase):

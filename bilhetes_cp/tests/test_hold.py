@@ -13,7 +13,7 @@ import _env  # noqa: F401
 import cp_ticket
 import hot_buy
 from cp_ticket import CPClient, CPError
-from test_purchase_flow import FakeCP, FlowBase, resp
+from test_purchase_flow import DAY, FakeCP, FlowBase, resp
 
 RECUSA = lambda: resp(500, {"error": "SIV:DIS:I:302", "description": "Sale item not available"})  # noqa: E731
 ESGOTADO = lambda: resp(500, {"error": "WS:RES:114", "description": "Não há lugares disponíveis para a classe selecionada"})  # noqa: E731
@@ -243,6 +243,88 @@ class SeatTests(HoldBase):
         cp = self.cp()
         _, st = self.run_buyer(cp, clock_offset=100)       # T já passou: fluxo normal
         self.assertNotIn("seat_map", cp.calls)
+
+
+class AttemptLogTests(HoldBase):
+    def test_regista_cada_pedido_e_grava_no_fim(self):
+        cp = FakeCP(sale_script=[resp(200, SALE_COM_LUGAR)], steps={"items": [RECUSA(), RECUSA()]})
+        cp.seat_map = mapa()
+        _, st = self.run_early(cp)
+        rows = self.sheets.attempts
+        self.assertEqual(st["state"], "CONFIRMED")
+        fases = [r["fase"] for r in rows]
+        self.assertEqual(fases, ["retencao", "lugar", "desconto", "desconto", "desconto"])
+        self.assertEqual([r["resultado"] for r in rows], ["ok", "ok", "recusado", "recusado", "ok"])
+        self.assertTrue(all(r["perna"] == "ida" and r["data_viagem"] == DAY.isoformat() for r in rows))
+        self.assertLess(rows[0]["rel_t_ms"], 0)                        # a retenção sai antes de T
+        self.assertEqual(rows[2]["codigo"], "SIV:DIS:I:302")
+
+    def test_falha_a_gravar_nunca_estraga_a_compra(self):
+        class Estraga(type(self.sheets)):
+            def append_attempts(self, rows):
+                raise RuntimeError("base cheia")
+        self.sheets = Estraga()
+        self.assertEqual(self.run_early(FakeCP())[1]["state"], "CONFIRMED")
+
+    def test_uma_base_sem_suporte_e_ignorada(self):
+        class SemSuporte:
+            def __getattr__(self, nome):
+                if nome == "append_attempts":
+                    raise AttributeError(nome)
+                return lambda *a, **k: None
+            def read_tickets(self): return []
+        self.assertEqual(self.run_early(FakeCP(), sheets=SemSuporte())[1]["state"], "CONFIRMED")
+
+
+class ConfirmSeatTests(HoldBase):
+    def test_a_mensagem_diz_corredor_quando_o_bilhete_reflete_a_mudanca(self):
+        cp = FakeCP(sale_script=[resp(200, SALE_COM_LUGAR)])
+        cp.seat_map = mapa()
+        cp.steps = {"confirm": resp(200, {"status": {"code": "CONFIRMED"}, "reference": "R", "seatData": {"carriageNumber": 21, "seatNumber": 113}})}
+        self.run_early(cp)
+        msg = [n for n in self.notes if n[0].startswith("Bilhete comprado")][0][1]
+        self.assertIn("(corredor)", msg); self.assertNotIn("⚠️", msg)
+
+    def test_avisa_se_a_cp_devolver_outro_lugar(self):
+        cp = FakeCP(sale_script=[resp(200, SALE_COM_LUGAR)])
+        cp.seat_map = mapa()
+        cp.steps = {"confirm": resp(200, {"status": {"code": "CONFIRMED"}, "reference": "R", "seatData": {"carriageNumber": 21, "seatNumber": 112}})}
+        self.run_early(cp)
+        msg = [n for n in self.notes if n[0].startswith("Bilhete comprado")][0][1]
+        self.assertIn("⚠️ pedi o lugar 21/113", msg); self.assertNotIn("lugar 112 (corredor)", msg)
+
+    def test_sem_mudanca_de_lugar_a_mensagem_e_a_de_sempre(self):
+        self.run_early(FakeCP())
+        msg = [n for n in self.notes if n[0].startswith("Bilhete comprado")][0][1]
+        self.assertNotIn("corredor", msg); self.assertNotIn("⚠️", msg)
+
+
+class PedidoNovoTests(unittest.TestCase):
+    """Os pedidos avulsos também levam o lugar ao corredor e explicam o desconto que ainda não abriu."""
+
+    def setUp(self):
+        from test_purchase_flow import PedidoFlowBase
+        self.b = PedidoFlowBase(); self.b.setUp()
+
+    def test_pedido_muda_o_lugar_para_o_corredor(self):
+        cp = FakeCP(sale_script=[resp(200, SALE_COM_LUGAR)])
+        cp.seat_map = mapa()
+        code, st = self.b.run_pedido(cp)
+        self.assertEqual((code, st["state"]), (0, "CONFIRMED"))
+        self.assertIn(("change_seat", 21, 113), cp.calls)
+        self.assertEqual(st["seat_changed"], "21/112 → 21/113 (corredor)")
+
+    def test_desconto_antes_de_T_liberta_o_lugar_e_explica(self):
+        cp = FakeCP(steps={"items": [RECUSA(), RECUSA()]})
+        code, st = self.b.run_pedido(cp)
+        self.assertEqual((code, st["state"]), (2, "FAILED"))
+        self.assertIn("cancel", cp.calls)
+        self.assertTrue(any("desconto do passe ainda não abriu" in t for t in self.b.titles()))
+        self.assertNotIn("confirm", cp.calls)
+
+    def test_pedido_regista_a_tentativa(self):
+        self.b.run_pedido(FakeCP())
+        self.assertEqual([r["fase"] for r in self.b.sheets.attempts], ["venda"])
 
 
 class SafetyTests(HoldBase):

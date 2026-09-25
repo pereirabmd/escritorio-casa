@@ -117,6 +117,11 @@ class FakeSheets:
     def append_log(self, *row): self.logs.append(row)
     def append_ticket(self, *row): self.bilhetes.append(row)
     def append_request(self, *row, **kw): self.requests.append((row, kw))
+    attempts = None
+
+    def append_attempts(self, rows):
+        self.attempts = (self.attempts or []) + list(rows)
+        return len(rows)
     def update_request(self, row, **fields): self.request_updates.append((row, fields))
 
 
@@ -349,10 +354,13 @@ class SaleOutcomeTests(FlowBase):
     def test_esgotado_confirma_se_com_uma_rajada_longa_antes_de_desistir(self):
         # Bruno, 22/09: o mesmo "esgotado" pode aparecer com a rede condicionada, não só a sério —
         # o servidor respondeu SEM criar venda, por isso repetir é seguro (como um erro transitório).
-        # Esquema tão persistente quanto o que Bruno já fazia à mão: ~12 min, 25 retentativas (26 no total).
-        delays = hot_buy.cfg("sold_out_retry_delays_s", [])
-        self.assertEqual(len(delays), 25)
-        self.assertAlmostEqual(sum(delays), 727.5)
+        # Esquema por fases (25/09): denso ao início (um lugar libertado aparece cedo) e cada vez mais espaçado, 15 min, 211 tentativas.
+        delays = hot_buy.sold_out_delays()
+        self.assertEqual(len(delays), 210)
+        self.assertAlmostEqual(sum(delays), 900)
+        self.assertEqual(delays[:3], [0.5, 0.5, 0.5])                # primeiros 10 s: 0,5 s
+        self.assertEqual(set(delays[-60:]), {10.0})                  # últimos 10 min: 10 s
+        self.assertLessEqual(60 / min(delays), 120)                  # nunca mais depressa que o orçamento da CP (~120/min)
         esgotado = resp(409, {}, messages=[{"message": "Comboio esgotado"}])
         cp = FakeCP(sale_script=[esgotado] * (len(delays) + 1))
         code, st = self.run_buyer(cp, advancing=True)
@@ -361,11 +369,11 @@ class SaleOutcomeTests(FlowBase):
         self.assertNotIn("passengers", cp.calls)
         self.assertEqual(self.sleeps, delays)
         self.assertTrue(any("Esgotado" in t for t in self.titles()))
-        self.assertIn(f"confirmado depois de {len(delays) + 1} tentativas em ~12 min", self.notes[-1][1])
+        self.assertIn(f"confirmado depois de {len(delays) + 1} tentativas em ~15 min", self.notes[-1][1])
 
     def test_a_rajada_do_esgotado_renova_o_token_se_demorar_mais_de_4_min(self):
-        # o access_token dura 5 min (3.1); uma rajada de ~12 min tem de o renovar a meio.
-        delays = hot_buy.cfg("sold_out_retry_delays_s", [])
+        # o access_token dura 5 min (3.1); uma rajada de ~15 min tem de o renovar a meio.
+        delays = hot_buy.sold_out_delays()
         esgotado = resp(409, {}, messages=[{"message": "Comboio esgotado"}])
         cp = FakeCP(sale_script=[esgotado] * (len(delays) + 1))
         reauths = []
@@ -375,7 +383,7 @@ class SaleOutcomeTests(FlowBase):
         self.assertTrue(any(reauths))            # renovou pelo menos uma vez
 
     def test_a_rajada_do_esgotado_para_se_o_comboio_ja_partiu(self):
-        delays = hot_buy.cfg("sold_out_retry_delays_s", [])
+        delays = hot_buy.sold_out_delays()
         esgotado = resp(409, {}, messages=[{"message": "Comboio esgotado"}])
         cp = FakeCP(sale_script=[esgotado] * (len(delays) + 1))
         depart_offset = self.leg.departure.timestamp() - self.leg.fire.timestamp()
@@ -389,7 +397,7 @@ class SaleOutcomeTests(FlowBase):
         _, st = self.run_buyer(cp)
         self.assertEqual(st["state"], "CONFIRMED")           # não desistiu: era transitório
         self.assertEqual(cp.calls.count("sale"), 4)
-        self.assertEqual(self.sleeps[:3], [0, 0.5, 0.5])
+        self.assertEqual(self.sleeps[:3], [0.5, 0.5, 0.5])
         self.assertFalse(any("Esgotado" in t for t in self.titles()))
 
     def test_esgotado_sem_rajada_configurada_para_logo_como_antes(self):
@@ -498,7 +506,7 @@ class NotOpenYetTests(FlowBase):
         self.assertEqual((st["state"], cp.calls.count("sale")), ("FAILED", 1))
 
     def test_esgotado_persistente_usa_o_seu_proprio_esquema_nao_o_ciclo_do_ainda_nao_aberto(self):
-        delays = hot_buy.cfg("sold_out_retry_delays_s", [])
+        delays = hot_buy.sold_out_delays()
         esgotado = resp(409, {}, messages=["Comboio esgotado"])
         cp = FakeCP(sale_script=[esgotado] * (len(delays) + 1))
         _, st = self.run_buyer(cp, clock_offset=1, advancing=True)
@@ -675,7 +683,7 @@ class RequestMirrorTests(FlowBase):
 
     def test_esgotado_e_espelhado_para_pedidos(self):
         cp = FakeCP(sale_script=[resp(409, {}, messages=[{"message": "Comboio esgotado"}])]
-                    * (len(hot_buy.cfg("sold_out_retry_delays_s", [])) + 1))
+                    * (len(hot_buy.sold_out_delays()) + 1))
         _, st = self.run_buyer(cp, advancing=True)
         self.assertEqual(st["state"], "SOLD_OUT")
         self.assertEqual(len(self.sheets.requests), 1)

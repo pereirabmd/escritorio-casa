@@ -44,33 +44,6 @@
     "not_open_fast_interval_s": 0.25,
     "not_open_slow_interval_s": 2.0,
     "unrecognized_4xx_retry_s": 15,
-    "sold_out_retry_delays_s": [
-      0,
-      0.5,
-      0.5,
-      0.5,
-      1,
-      1,
-      1,
-      1,
-      1,
-      1,
-      1,
-      2,
-      4,
-      8,
-      15,
-      30,
-      30,
-      30,
-      60,
-      60,
-      60,
-      60,
-      120,
-      120,
-      120
-    ],
     "pedido_retry_interval_minutes": 15,
     "hold_before_open": true,
     "hold_lead_seconds": 600,
@@ -85,7 +58,25 @@
     "discount_window_s": 180,
     "discount_unknown_s": 10,
     "seat_preference": "aisle",
-    "seat_change_max_tries": 4
+    "seat_change_max_tries": 4,
+    "sold_out_phases": [
+      [
+        10,
+        0.5
+      ],
+      [
+        50,
+        1.0
+      ],
+      [
+        240,
+        3.0
+      ],
+      [
+        600,
+        10.0
+      ]
+    ]
   },
   "reminders": {
     "config_missing_check_times": [

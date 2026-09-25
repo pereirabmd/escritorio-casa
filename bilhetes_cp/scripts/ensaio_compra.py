@@ -42,6 +42,10 @@ class SheetsMudas:
     def append_request(self, *a, **k): pass
     def update_request(self, *a, **k): pass
 
+    def append_attempts(self, rows):
+        """O registo de pedidos à CP grava-se a sério (perna «ens»): é o que se quer verificar num ensaio."""
+        return common.get_store().append_attempts(rows)
+
 
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])

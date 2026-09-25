@@ -876,6 +876,20 @@ Bruno: seguir o comportamento e retirar se falhar por causa disto. Por confirmar
 
 **Viagens passadas (25/09/2026).** `parse_config_rows` ignora em silêncio as linhas ativas com data passada (são histórico: cada linha é uma viagem única); os problemas reais das linhas futuras continuam a gerar o aviso «Linha da Config com problema».
 
+**Melhorias de 25/09/2026 (a seguir ao ensaio a T real).**
+- **Registo de todos os pedidos à CP** (`bilhetes_tentativas`, migração `dados/migrations_bilhetes/002`): uma linha por pedido de retenção, `POST /sale`,
+  mudança de lugar e desconto (hora real do envio, `rel_t_ms` face a T, `rtt_ms`, `ligacao_nova`, `timestamp` da CP, código de erro). Fica em
+  memória durante a compra e grava-se de uma vez no fim (`flush_tentativas`, nunca no caminho crítico; falha ⇒ só log); poda aos 90 dias
+  (coluna `gravado`). Consulta-se na página das bases de dados.
+- **Rajada do esgotado por fases** (`sold_out_phases` = `[duração s, intervalo s]`: 10 s a 0,5 s · 50 s a 1 s · 240 s a 3 s · 600 s a 10 s):
+  211 tentativas em 15 min, densa ao início (um lugar libertado aparece cedo: no ensaio de 24/09 surgiu ao fim de ~30 s) e sempre abaixo do
+  limite da CP (~120 pedidos/min). `sold_out_retry_delays_s` (lista explícita, `[]` = sem rajada) continua a ter prioridade.
+- **Aviso de compra:** «(corredor)» junto do lugar quando o bilhete reflete a mudança; se a CP devolver OUTRO lugar, a mensagem diz
+  «⚠️ pedi o lugar X (corredor) mas o bilhete diz Y» — é assim que se confirma, no 1.º disparo real, que o `confirm` respeita a mudança.
+- **Pedidos avulsos (`PedidoAttempt`):** passam a mudar o lugar para o corredor depois de criar a venda (a venda já segura o lugar, não é uma
+  corrida) e a registar as tentativas; se o desconto for recusado (`SIV:DIS:I:302`, pedido feito antes de T) cancelam a venda e explicam em vez
+  de deixar «Venda por concluir».
+
 **Ferramenta de ensaio:** `scripts/ensaio_compra.py` corre o `Buyer` verdadeiro contra a CP verdadeira, mas o «confirmar»
 cancela a venda (nada é comprado); `--sem-ancora` inventa um T daqui a uns minutos para ensaiar a retenção.
 
