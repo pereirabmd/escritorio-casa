@@ -8,6 +8,8 @@ Este repositório não é uma aplicação única — é uma coleção de **PWAs 
 
 Apps ativas: `financas/` (nova, v1.1.0), `peso/`, `tarefas/`, `RTO/`, `receitas/`, `ciclismo/`, `convidados/` (a lista de convidados do casamento real do utilizador — ver secção própria abaixo, é a exceção às apps "não mantidas"). Existem ainda `enfermagem/`, `xadrez/` e um duplicado histórico em `enfermagemCamila.html`, que continuam sem manutenção.
 
+**Página inicial (`index.html` na raiz, 26/09/2026)**: lista de links para as apps (`https://pereirabmd.github.io/escritorio-casa/`). HTML estático sem JavaScript nem service worker, com CSP mínima, modo claro/escuro e os ícones de cada app (`<pasta>/icon-192.png`; `peso/pesoicon192.png`, `RTO/icon192.png`, `bilhetes_cp/assets/icon-192.png` são as exceções de nome). `enfermagem/` (Turnos) e `xadrez/` estão numa secção «Outras». **Ao criar uma app nova, acrescentar aqui o cartão dela.** A `dados/` (API e consulta da BD) não tem link: a consulta só existe na LAN.
+
 Na raiz existe também **`push.sh`** (não pertence a nenhuma app): adiciona, comita e faz push de todo o repositório para `main`, com uma guarda contra ficheiros que pareçam credenciais (`.env`, `.pem`, `.key`, `credentials.json`, etc.). Depois do push — e também no caminho em que não há nada para commitar, para permitir forçar um redeploy sem alterar ficheiros — pede explicitamente ao GitHub, via `gh api POST .../pages/builds`, que reconstrua o GitHub Pages, e espera até ~40s a reportar se ficou `built`/`errored`/ainda em curso. É um pedido explícito por cima do que já acontece sozinho (ver nota sobre o build "legacy" acima); exige a CLI `gh` instalada e autenticada, e falha em aviso (não em erro) se não estiver.
 
 ## Convenções partilhadas entre apps

@@ -100,6 +100,12 @@ As PWAs chamam-no com `Authorization: Bearer <access token Google>` — **têm d
 | `POST /tarefas/instancias` · `PUT /tarefas/instancias[/{id}]` | criar · atualizar (lote atómico; 409 se a tarefa já tem ocorrência nesse dia) |
 | `POST /tarefas/pessoas/reatribuir` · `PUT /tarefas/config` | renomear/remover/reatribuir pessoa (atómico) · gravar/apagar chaves |
 | `PUT /tarefas/piscina/{id}` · `POST /tarefas/piscina/catalogo` · `GET/POST /tarefas/auditoria` | piscina e registo de quem fez o quê |
+| `GET/POST /financas/categorias` · `PUT/DELETE /financas/categorias/{id}` | categorias (nome único sem distinguir maiúsculas, cor `#RRGGBB`); apagar uma em uso dá 409 |
+| `GET /financas/lancamentos` (`mes`, `de`/`ate`, `pendentes=1`, `tipo`) · `POST` · `PUT/DELETE /financas/lancamentos/{id}` | lançamentos (despesa/rendimento); `POST` idempotente por `cid`; `PUT` altera só os campos enviados (mudar o vencimento volta a armar o aviso); `DELETE` devolve o apagado |
+| `POST /financas/meses/{AAAA-MM}/preparar` | copia os recorrentes do último mês anterior (uma só vez por mês, só sobre um mês vazio) |
+| `GET /financas/agregado?de=AAAA-MM&ate=AAAA-MM` | totais por mês/tipo/categoria/descrição (≤ 61 meses), para os relatórios |
+
+**Avisos ntfy da `financas`**: `financas_notificar.py` (timer `deploy/financas-notificar.timer`, de hora a hora das 08h às 21h) avisa no dia do vencimento de cada lançamento por pagar, no tópico `financas` (`NTFY_FINANCAS_TOPIC`), Priority high, um só aviso por lançamento (`notificado_em`). Instalar: copiar os dois ficheiros de `deploy/` para `/etc/systemd/system/`, `daemon-reload`, `enable --now financas-notificar.timer`; dar ao utilizador de escrita read-write e ao de leitura read-only ao tópico (`ntfy access`).
 
 Erros: `{"erro":{"codigo":"...","mensagem":"..."}}` com 400/401/403/404/405/409/413/415/429/503.
 
