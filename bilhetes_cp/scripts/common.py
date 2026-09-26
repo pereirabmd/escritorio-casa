@@ -564,7 +564,9 @@ def parse_request_rows(rows: list[list[Any]], today: date, first_row: int = 5
         if d is None:
             problems.append(f"data inválida ({data_v!r})")
         elif d < today:
-            problems.append(f"data {d.isoformat()} já passou")
+            # Igual à Config: uma viagem avulsa já feita fica na aba como histórico; avisar «já passou» à meia-noite
+            # dava um erro por cada pedido usado (26/09/2026: 3 avisos «Linha de Pedidos com problema»). Ignora-se.
+            continue
 
         org, dst = norm_station(org_v), norm_station(dst_v)
         if station_code(org) is None:

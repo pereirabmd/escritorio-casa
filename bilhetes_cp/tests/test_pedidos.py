@@ -22,6 +22,13 @@ def leg_of(row):
     return legs[0]
 
 
+class ParseDataPassadaTests(unittest.TestCase):
+    def test_pedido_de_data_passada_e_historico_nao_problema(self):
+        ontem = date.today() - timedelta(days=1)
+        legs, issues = common.parse_request_rows([prow(data=ontem)], common.now_local().date())
+        self.assertEqual((legs, issues), ([], []))
+
+
 class IsDueTests(unittest.TestCase):
     NOW = 1_000_000.0
 
