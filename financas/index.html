@@ -78,6 +78,12 @@
       <div id="relCorpo"></div>
     </section>
 
+    <!-- Lembretes -->
+    <section class="tab" id="tab-lemb" role="tabpanel">
+      <p class="muted" style="margin:4px 4px 12px">Avisos no ntfy que agendas tu: numa data certa, ou todos os meses. Além dos avisos automáticos no dia de cada vencimento.</p>
+      <div id="listaLemb"></div>
+    </section>
+
     <!-- Ajustes -->
     <section class="tab" id="tab-ajustes" role="tabpanel">
       <div class="card">
@@ -90,7 +96,7 @@
       </div>
       <div class="card">
         <h2>Avisos</h2>
-        <p class="muted" style="margin:0">Recebes uma notificação no ntfy (tópico <b>financas</b>) no próprio dia do vencimento de cada lançamento por pagar. Não há segundo aviso.</p>
+        <p class="muted" style="margin:0">Recebes uma notificação no ntfy (tópico <b>financas</b>) no próprio dia do vencimento de cada lançamento por pagar, e nos lembretes que agendares. Não há segundo aviso.</p>
       </div>
       <div class="card">
         <h2>Conta</h2>
@@ -106,6 +112,7 @@
     <button type="button" role="tab" data-tab="lanc" aria-selected="true"></button>
     <button type="button" role="tab" data-tab="resumo" aria-selected="false"></button>
     <button type="button" role="tab" data-tab="rel" aria-selected="false"></button>
+    <button type="button" role="tab" data-tab="lemb" aria-selected="false"></button>
     <button type="button" role="tab" data-tab="ajustes" aria-selected="false"></button>
   </div></nav>
 </div>
@@ -133,6 +140,30 @@
     <button class="btn danger hidden" id="fApagar" type="button">Apagar</button>
     <button class="btn ghost" id="fCancelar" type="button">Cancelar</button>
     <button class="btn" id="fGuardar" type="submit">Guardar</button>
+  </div>
+</form>
+
+<form class="sheet hidden" id="sheetL" aria-modal="true" role="dialog" aria-labelledby="sheetLTitulo" novalidate>
+  <h3 id="sheetLTitulo">Novo lembrete</h3>
+  <label class="f" for="lTit">Título</label>
+  <input type="text" id="lTit" maxlength="100" required autocomplete="off" placeholder="Ex.: Transferir para a conta da casa">
+  <label class="f" for="lNota">Nota (opcional)</label>
+  <input type="text" id="lNota" maxlength="300" autocomplete="off" placeholder="Texto que aparece na notificação">
+  <div class="grid2">
+    <div><label class="f" for="lData">Data</label><input type="date" id="lData" required></div>
+    <div><label class="f" for="lHora">Hora</label><input type="time" id="lHora" step="1800" required></div>
+  </div>
+  <label class="f">Repetição</label>
+  <div class="seg" role="group" aria-label="Repetição">
+    <button type="button" data-rep="unica" aria-pressed="true">Só uma vez</button>
+    <button type="button" data-rep="mensal" aria-pressed="false">Todos os meses</button>
+  </div>
+  <div class="muted" id="lAjuda" style="margin-top:8px"></div>
+  <div class="muted" id="lErro" role="alert" style="color:var(--expense);min-height:18px;margin-top:8px"></div>
+  <div class="actions">
+    <button class="btn danger hidden" id="lApagar" type="button">Apagar</button>
+    <button class="btn ghost" id="lCancelar" type="button">Cancelar</button>
+    <button class="btn" id="lGuardar" type="submit">Guardar</button>
   </div>
 </form>
 

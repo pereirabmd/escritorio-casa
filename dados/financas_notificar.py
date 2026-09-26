@@ -1,5 +1,6 @@
-"""Avisos do ntfy da app financas: uma notificação no próprio dia do vencimento de cada lançamento
-(despesa ou rendimento) ainda sem data de pagamento. Corre de hora a hora (financas-notificar.timer):
+"""Avisos do ntfy da app financas: (1) uma notificação no próprio dia do vencimento de cada lançamento
+(despesa ou rendimento) ainda sem data de pagamento; (2) os lembretes agendados pelo utilizador (únicos ou
+mensais, financas_lembretes). Corre de meia em meia hora (financas-notificar.timer):
 `notificado_em` garante um só aviso por lançamento, e um lançamento criado a meio do dia ainda avisa
 nesse dia. Sem insistência: se o dia passar, não há segundo aviso (a app mostra o que está vencido).
 
@@ -11,6 +12,7 @@ Uso:  python3 financas_notificar.py [--simular]
 from __future__ import annotations
 
 import base64
+import calendar
 import json
 import logging
 import os
@@ -48,6 +50,27 @@ def montar(l) -> dict:
     return {"title": titulo, "message": f"{eur(l['valor'])} · {l['categoria']}", "tags": [tag]}
 
 
+def lembretes_devidos(conn, agora: datetime) -> list:
+    """Lembretes ativos a avisar agora: já passou a hora de hoje e ainda não avisaram hoje.
+    Única: só no dia marcado. Mensal: no dia do mês da data (no último dia, em meses mais curtos), a partir da data."""
+    hoje, hora = agora.strftime("%Y-%m-%d"), agora.strftime("%H:%M")
+    ultimo = calendar.monthrange(agora.year, agora.month)[1]
+    out = []
+    for l in conn.execute("SELECT id, titulo, nota, data, hora, repeticao, ultimo_aviso FROM financas_lembretes WHERE ativo = 1 ORDER BY hora, id"):
+        if l["hora"] > hora or l["ultimo_aviso"] == hoje:
+            continue
+        if l["repeticao"] == "unica":
+            if l["data"] == hoje and l["ultimo_aviso"] is None:
+                out.append(l)
+        elif hoje >= l["data"] and min(int(l["data"][8:]), ultimo) == agora.day:
+            out.append(l)
+    return out
+
+
+def montar_lembrete(l) -> dict:
+    return {"title": l["titulo"], "message": l["nota"] or "Lembrete", "tags": ["bell"]}
+
+
 def publicar(msg: dict, env=os.environ) -> bool:
     base = env.get("NTFY_SERVER_URL", "").rstrip("/")
     user, senha = env.get("NTFY_WRITE_USER", ""), env.get("NTFY_WRITE_PASSWORD", "")
@@ -75,6 +98,12 @@ def correr(conn, agora: datetime, enviar=publicar) -> tuple[int, int]:
         if enviar(montar(l)):
             conn.execute("UPDATE financas_lancamentos SET notificado_em = ? WHERE id = ?",
                          (agora.strftime("%Y-%m-%d %H:%M:%S"), l["id"]))
+            enviados += 1
+        else:
+            falhados += 1
+    for l in lembretes_devidos(conn, agora):
+        if enviar(montar_lembrete(l)):
+            conn.execute("UPDATE financas_lembretes SET ultimo_aviso = ? WHERE id = ?", (agora.strftime("%Y-%m-%d"), l["id"]))
             enviados += 1
         else:
             falhados += 1

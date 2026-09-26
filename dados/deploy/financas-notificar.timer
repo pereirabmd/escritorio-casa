@@ -1,8 +1,8 @@
 [Unit]
-Description=financas — avisos ntfy (de hora a hora, das 08h às 21h)
+Description=financas — avisos ntfy (de meia em meia hora, das 07h às 22h)
 
 [Timer]
-OnCalendar=*-*-* 08..21:05:00
+OnCalendar=*-*-* 07..22:05,35:00
 Persistent=true
 
 [Install]

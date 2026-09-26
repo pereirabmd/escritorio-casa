@@ -1,7 +1,7 @@
 /* Finanças — PWA. Dados na API do Raspberry Pi (tabelas financas_*), login Google. */
 'use strict';
 
-const APP_VERSION = 'v1.1.0';
+const APP_VERSION = 'v1.2.0';
 const CLIENT_ID = '108256538530-fgunbb52s7f3s9aurfpjtaf01v8fjbph.apps.googleusercontent.com';
 const API_URL = 'https://bmdpereira.duckdns.org/dados-api';
 const SCOPES = 'openid email';
@@ -25,6 +25,7 @@ const P = {
   info: '<circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/>',
   repeat: '<path d="m17 2 4 4-4 4"/><path d="M3 11v-1a4 4 0 0 1 4-4h14M7 22l-4-4 4-4"/><path d="M21 13v1a4 4 0 0 1-4 4H3"/>',
   x: '<path d="M18 6 6 18M6 6l12 12"/>',
+  bell: '<path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/>',
   trash: '<path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>',
 };
 const ico = (n) => `<svg class="i" viewBox="0 0 24 24" aria-hidden="true">${P[n]}</svg>`;
@@ -38,6 +39,7 @@ const S = {
   edit: null, tipo: 'despesa', charts: {},
   base: { lancs: [], atrasados: [] },   // o que veio do servidor (ou da cache); S.lancs/S.atrasados = base + fila
   resumoBase: null, fila: [], offline: false, sincronizando: false,
+  lembretes: null, editL: null, rep: 'unica',
 };
 
 /* ---------- Utilitários ---------- */
@@ -490,12 +492,91 @@ function mostrarTab(t) {
   S.tab = t;
   $$('.tab').forEach((x) => x.classList.toggle('active', x.id === 'tab-' + t));
   $$('nav.tabs button').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.tab === t)));
-  $('#monthNav').style.visibility = t === 'ajustes' ? 'hidden' : 'visible';
+  $('#monthNav').style.visibility = t === 'ajustes' || t === 'lemb' ? 'hidden' : 'visible';
   $('#fab').classList.toggle('hidden', t === 'ajustes');
   window.scrollTo(0, 0);
   if (t === 'resumo') carregarResumo();
   if (t === 'rel') renderRelatorio();
+  if (t === 'lemb') { renderLembretes(); carregarLembretes(); }
   if (t === 'ajustes') renderCategorias();
+}
+
+/* ---------- Lembretes (avisos ntfy agendados; precisam de rede, não passam pela fila offline) ---------- */
+async function carregarLembretes() {
+  try { S.lembretes = (await api('GET', '/financas/lembretes')).lembretes; mostrarErro(''); }
+  catch (e) { if (e.status !== 401) mostrarErro(e.status === 0 ? 'Os lembretes precisam de ligação à internet.' : e.message); S.lembretes = S.lembretes || []; }
+  renderLembretes();
+}
+
+function proximoAviso(l) {
+  const h = hoje();
+  if (l.repeticao === 'unica') return l.data;
+  const dia = (m) => `${m}-${pad(Math.min(+l.data.slice(8), +ultimoDia(m).slice(8)))}`;
+  let m = mesDe(h < l.data ? l.data : h), c = dia(m);
+  if (c < h || (c === h && l.ultimo_aviso === h)) { m = addMes(m, 1); c = dia(m); }
+  return c;
+}
+
+function renderLembretes() {
+  const el = $('#listaLemb');
+  if (!S.lembretes) { el.innerHTML = '<div class="skeleton"></div><div class="skeleton"></div>'; return; }
+  if (!S.lembretes.length) { el.innerHTML = `<div class="empty">${ico('bell')}<p>Ainda não tens lembretes.<br>Toca em + para agendar o primeiro.</p></div>`; return; }
+  const h = hoje();
+  el.innerHTML = `<div class="list">${S.lembretes.map((l) => {
+    const unica = l.repeticao === 'unica', enviado = unica && l.ultimo_aviso;
+    const quando = unica
+      ? (enviado ? `Enviado a ${dataCurta(l.data)}` : l.data < h ? `Passou a ${dataCurta(l.data)}` : `${dataCurta(l.data)} às ${l.hora}`)
+      : `Próximo: ${dataCurta(proximoAviso(l))} às ${l.hora}`;
+    return `<div class="row ${l.ativo ? '' : 'off'}" data-lemb="${l.id}" role="button" tabindex="0">
+      <span class="dot" style="background:var(--${l.ativo ? 'primary' : 'muted'})"></span>
+      <div class="main"><div class="desc">${esc(l.titulo)}</div><div class="sub"><span class="badge">${unica ? 'Uma vez' : 'Todos os meses'}</span> ${esc(quando)}${l.nota ? ' · ' + esc(l.nota) : ''}</div></div>
+      <input class="toggle" type="checkbox" data-lemb-ativo="${l.id}" ${l.ativo ? 'checked' : ''} aria-label="Ativo">
+    </div>`;
+  }).join('')}</div>`;
+}
+
+function pintarRep() {
+  $$('[data-rep]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.rep === S.rep)));
+  const d = $('#lData').value;
+  $('#lAjuda').textContent = S.rep === 'mensal'
+    ? `Repete-se todos os meses no dia ${d ? +d.slice(8) : '…'}${d && +d.slice(8) > 28 ? ' (nos meses mais curtos, no último dia)' : ''}, a partir desta data.`
+    : 'Avisa uma só vez, no dia e hora escolhidos.';
+}
+
+function abrirSheetLemb(l) {
+  S.editL = l || null; S.rep = l ? l.repeticao : 'unica';
+  $('#sheetLTitulo').textContent = l ? 'Editar lembrete' : 'Novo lembrete';
+  $('#lTit').value = l ? l.titulo : ''; $('#lNota').value = l ? l.nota : '';
+  $('#lData').value = l ? l.data : hoje(); $('#lHora').value = l ? l.hora : '09:00';
+  $('#lErro').textContent = ''; $('#lApagar').classList.toggle('hidden', !l);
+  pintarRep();
+  $('#scrim').classList.remove('hidden'); $('#sheetL').classList.remove('hidden');
+  requestAnimationFrame(() => { $('#scrim').classList.add('on'); $('#sheetL').classList.add('on'); if (!l) $('#lTit').focus(); });
+}
+
+async function guardarLembrete(ev) {
+  ev.preventDefault();
+  const corpo = { titulo: $('#lTit').value.trim(), nota: $('#lNota').value.trim(), data: $('#lData').value, hora: $('#lHora').value, repeticao: S.rep };
+  if (!corpo.titulo) return ($('#lErro').textContent = 'Indica um título.');
+  if (!corpo.data) return ($('#lErro').textContent = 'Indica a data.');
+  if (!corpo.hora) return ($('#lErro').textContent = 'Indica a hora.');
+  $('#lGuardar').disabled = true;
+  try {
+    if (S.editL) await api('PUT', `/financas/lembretes/${S.editL.id}`, corpo); else await api('POST', '/financas/lembretes', corpo);
+    fecharSheet(); toast('Lembrete guardado'); await carregarLembretes();
+  } catch (e) { $('#lErro').textContent = e.message; } finally { $('#lGuardar').disabled = false; }
+}
+
+async function apagarLembrete() {
+  const l = S.editL; if (!l) return;
+  try {
+    const apagado = await api('DELETE', `/financas/lembretes/${l.id}`);
+    fecharSheet(); await carregarLembretes();
+    toast('Lembrete apagado', { texto: 'Desfazer', fn: async () => {
+      try { const { titulo, nota, data, hora, repeticao, ativo } = apagado; await api('POST', '/financas/lembretes', { titulo, nota, data, hora, repeticao, ativo }); await carregarLembretes(); }
+      catch (e) { toast(e.message); }
+    } });
+  } catch (e) { $('#lErro').textContent = e.message; }
 }
 
 /* ---------- Ações sobre lançamentos (todas passam pela fila) ---------- */
@@ -531,8 +612,8 @@ function abrirSheet(l) {
   requestAnimationFrame(() => { $('#scrim').classList.add('on'); $('#sheet').classList.add('on'); if (!l) $('#fDesc').focus(); });
 }
 function fecharSheet() {
-  $('#scrim').classList.remove('on'); $('#sheet').classList.remove('on');
-  setTimeout(() => { $('#scrim').classList.add('hidden'); $('#sheet').classList.add('hidden'); }, 250);
+  $('#scrim').classList.remove('on'); $$('.sheet').forEach((x) => x.classList.remove('on'));
+  setTimeout(() => { $('#scrim').classList.add('hidden'); $$('.sheet').forEach((x) => x.classList.add('hidden')); }, 250);
 }
 function pintarTipo() {
   $$('[data-tipo]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.tipo === S.tipo)));
@@ -582,13 +663,13 @@ async function guardarCategoria(id, campos) {
 /* ---------- Ligações de eventos ---------- */
 function ligar() {
   $('#mesAnt').innerHTML = ico('left'); $('#mesSeg').innerHTML = ico('right'); $('#btnRefresh').innerHTML = ico('refresh'); $('#fab').innerHTML = ico('plus');
-  const abas = { lanc: ['list', 'Lançamentos'], resumo: ['wallet', 'Resumo'], rel: ['chart', 'Relatórios'], ajustes: ['gear', 'Ajustes'] };
+  const abas = { lanc: ['list', 'Lançamentos'], resumo: ['wallet', 'Resumo'], rel: ['chart', 'Relatórios'], lemb: ['bell', 'Lembretes'], ajustes: ['gear', 'Ajustes'] };
   $$('nav.tabs button').forEach((b) => { const [i, t] = abas[b.dataset.tab]; b.innerHTML = ico(i) + `<span>${t}</span>`; b.onclick = () => mostrarTab(b.dataset.tab); });
   $('#versao').textContent = 'Finanças ' + APP_VERSION;
   const mudarMes = (n) => { S.mes = addMes(S.mes, n); S.preparado = null; S.resumoBase = null; S.resumo = null; carregarMes(); };
   $('#mesAnt').onclick = () => mudarMes(-1); $('#mesSeg').onclick = () => mudarMes(1);
   $('#btnRefresh').onclick = async () => { const b = $('#btnRefresh'); b.classList.add('spin'); invalidarHistorico(); await carregarMes({ silencioso: true }); b.classList.remove('spin'); };
-  $('#fab').onclick = () => abrirSheet(null);
+  $('#fab').onclick = () => (S.tab === 'lemb' ? abrirSheetLemb(null) : abrirSheet(null));
   window.addEventListener('scroll', () => $('#topbar').classList.toggle('scrolled', window.scrollY > 4), { passive: true });
 
   document.addEventListener('click', (ev) => {
@@ -596,11 +677,13 @@ function ligar() {
     const pagar = alvo.closest('[data-pagar]'); if (pagar) { ev.stopPropagation(); return alternarPago(idDe(pagar.dataset.pagar)); }
     const ir = alvo.closest('[data-ir]'); if (ir) return mostrarTab(ir.dataset.ir);
     if (alvo.closest('[data-fechar-prep]')) { try { localStorage.setItem('financas_prep_' + S.mes, '1'); } catch (e) { /* */ } return renderLancamentos(); }
+    if (alvo.closest('[data-lemb-ativo]')) return;   // o interruptor trata-se no evento 'change'
+    const lemb = alvo.closest('[data-lemb]'); if (lemb) { const id = +lemb.dataset.lemb; return abrirSheetLemb((S.lembretes || []).find((x) => x.id === id)); }
     const linha = alvo.closest('.row[data-id]');
     if (linha) { const id = idDe(linha.dataset.id); return abrirSheet(S.lancs.find((x) => x.id === id) || S.atrasados.find((x) => x.id === id)); }
   });
   document.addEventListener('keydown', (ev) => {
-    if (ev.key === 'Escape' && !$('#sheet').classList.contains('hidden')) fecharSheet();
+    if (ev.key === 'Escape' && $('.sheet:not(.hidden)')) fecharSheet();
     if ((ev.key === 'Enter' || ev.key === ' ') && ev.target.matches && ev.target.matches('.row[data-id]')) { ev.preventDefault(); ev.target.click(); }
   });
 
@@ -608,6 +691,15 @@ function ligar() {
   $$('[data-rel]').forEach((b) => b.onclick = () => { S.rel = b.dataset.rel; renderRelatorio(); });
   $$('[data-tipo]').forEach((b) => b.onclick = () => { S.tipo = b.dataset.tipo; pintarTipo(); });
   $('#sheet').addEventListener('submit', guardarSheet);
+  $$('[data-rep]').forEach((b) => b.onclick = () => { S.rep = b.dataset.rep; pintarRep(); });
+  $('#lData').addEventListener('change', pintarRep);
+  $('#sheetL').addEventListener('submit', guardarLembrete);
+  $('#lCancelar').onclick = fecharSheet; $('#lApagar').onclick = apagarLembrete;
+  $('#listaLemb').addEventListener('change', async (ev) => {
+    const t = ev.target.closest('[data-lemb-ativo]'); if (!t) return;
+    try { await api('PUT', `/financas/lembretes/${t.dataset.lembAtivo}`, { ativo: t.checked }); toast(t.checked ? 'Lembrete ativado' : 'Lembrete desativado'); await carregarLembretes(); }
+    catch (e) { toast(e.message); t.checked = !t.checked; }
+  });
   $('#fCancelar').onclick = fecharSheet; $('#scrim').onclick = fecharSheet; $('#fApagar').onclick = apagarLancamento;
 
   $('#btnNovaCat').onclick = async () => {

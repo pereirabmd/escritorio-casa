@@ -296,8 +296,10 @@ def _somar_meses(d: str, delta: int) -> str:
 def preparar_mes(ctx):
     """Prepara o mês a partir do último mês anterior com lançamentos recorrentes: mesma lista, mesmos
     valores, `data_pagamento` em branco e o vencimento deslocado para o novo mês. Só acontece uma vez
-    por mês (fica em financas_meses) e nunca sobre um mês que já tenha lançamentos — apagar de propósito
-    o que não se aplica não faz a lista voltar. Pontuais (recorrente=0) não se copiam."""
+    por mês (fica em financas_meses), por isso apagar de propósito o que não se aplica não faz a lista
+    voltar. Um recorrente que já exista no mês (mesmo tipo e descrição) não se duplica — assim um mês
+    com lançamentos pré-carregados (ex.: as prestações do IRS) também recebe os recorrentes.
+    Pontuais (recorrente=0) não se copiam."""
     mes = _mes(ctx.groups[0])
     hoje = datetime.now(ctx.tz).date()
     if _indice_mes(mes) > hoje.year * 12 + hoje.month:  # no máximo o mês seguinte
@@ -306,16 +308,18 @@ def preparar_mes(ctx):
     with _transacao(conn):
         if conn.execute("SELECT 1 FROM financas_meses WHERE mes=?", (mes,)).fetchone():
             return 200, {"mes": mes, "criados": 0, "origem": None, "ja_preparado": True}
-        origem, criados = None, 0
-        vazio = not conn.execute("SELECT 1 FROM financas_lancamentos WHERE mes_referencia=?", (mes,)).fetchone()
-        if vazio:
-            r = conn.execute("SELECT MAX(mes_referencia) FROM financas_lancamentos "
-                             "WHERE recorrente = 1 AND mes_referencia < ?", (mes,)).fetchone()
-            origem = r[0]
+        criados = 0
+        r = conn.execute("SELECT MAX(mes_referencia) FROM financas_lancamentos "
+                         "WHERE recorrente = 1 AND mes_referencia < ?", (mes,)).fetchone()
+        origem = r[0]
         if origem:
             delta = _indice_mes(mes) - _indice_mes(origem)
+            ja = {(x["tipo"], x["descricao"].lower()) for x in conn.execute(
+                "SELECT tipo, descricao FROM financas_lancamentos WHERE mes_referencia = ?", (mes,))}
             for l in conn.execute("SELECT tipo, descricao, valor, categoria_id, data_vencimento FROM financas_lancamentos "
                                   "WHERE mes_referencia = ? AND recorrente = 1 ORDER BY data_vencimento, id", (origem,)).fetchall():
+                if (l["tipo"], l["descricao"].lower()) in ja:
+                    continue
                 conn.execute(
                     "INSERT INTO financas_lancamentos (tipo, descricao, valor, categoria_id, data_vencimento, "
                     "data_pagamento, recorrente, mes_referencia) VALUES (?,?,?,?,?,NULL,1,?)",
@@ -325,6 +329,93 @@ def preparar_mes(ctx):
         conn.execute("INSERT INTO financas_meses (mes, preparado_em) VALUES (?, ?)",
                      (mes, datetime.now(ctx.tz).strftime("%Y-%m-%d %H:%M:%S")))
     return 200, {"mes": mes, "criados": criados, "origem": origem, "ja_preparado": False}
+
+
+# --- lembretes (avisos ntfy agendados: únicos ou mensais) ---------------------
+
+_HORA_RE = re.compile(r"^([01]\d|2[0-3]):[0-5]\d$")
+CAMPOS_LEMBRETE = {"titulo", "nota", "data", "hora", "repeticao", "ativo"}
+SELECT_LEMBRETE = "SELECT id, titulo, nota, data, hora, repeticao, ativo, ultimo_aviso FROM financas_lembretes"
+
+
+def _hora(v: object) -> str:
+    if not isinstance(v, str) or not _HORA_RE.match(v):
+        raise ApiError(400, "hora_invalida", "hora tem de ser HH:MM")
+    return v
+
+
+def _lembrete(row) -> dict:
+    d = dict(row)
+    d["ativo"] = bool(d["ativo"])
+    return d
+
+
+def listar_lembretes(ctx):
+    rows = ctx.db().execute(SELECT_LEMBRETE + " ORDER BY ativo DESC, data, hora, id LIMIT 500")
+    return 200, {"lembretes": [_lembrete(r) for r in rows]}
+
+
+def _validar_lembrete(b: dict, completo: bool) -> dict:
+    v = {}
+    if completo:
+        for obrigatorio in ("titulo", "data", "hora", "repeticao"):
+            if obrigatorio not in b:
+                raise ApiError(400, f"{obrigatorio}_em_falta", f"{obrigatorio} é obrigatório")
+    if "titulo" in b:
+        v["titulo"] = _texto(b["titulo"], "titulo", 100)
+    if "nota" in b:
+        v["nota"] = "" if b["nota"] in (None, "") else _texto(b["nota"], "nota", 300)
+    if "data" in b:
+        v["data"] = _data(b["data"], "data")
+    if "hora" in b:
+        v["hora"] = _hora(b["hora"])
+    if "repeticao" in b:
+        if b["repeticao"] not in ("unica", "mensal"):
+            raise ApiError(400, "repeticao_invalida", "repeticao tem de ser 'unica' ou 'mensal'")
+        v["repeticao"] = b["repeticao"]
+    if "ativo" in b:
+        if not isinstance(b["ativo"], bool):
+            raise ApiError(400, "ativo_invalido", "ativo tem de ser verdadeiro ou falso")
+        v["ativo"] = int(b["ativo"])
+    return v
+
+
+def criar_lembrete(ctx):
+    _so_campos(ctx.body, CAMPOS_LEMBRETE)
+    v = _validar_lembrete(ctx.body, completo=True)
+    conn = ctx.db()
+    if conn.execute("SELECT COUNT(*) FROM financas_lembretes").fetchone()[0] >= 200:
+        raise ApiError(400, "demasiados_lembretes", "limite de 200 lembretes")
+    cur = conn.execute("INSERT INTO financas_lembretes (titulo, nota, data, hora, repeticao, ativo) VALUES (?,?,?,?,?,?)",
+                       (v["titulo"], v.get("nota", ""), v["data"], v["hora"], v["repeticao"], v.get("ativo", 1)))
+    return 201, _lembrete(conn.execute(SELECT_LEMBRETE + " WHERE id = ?", (cur.lastrowid,)).fetchone())
+
+
+def atualizar_lembrete(ctx):
+    """Só altera os campos enviados. Mudar data, hora ou repetição volta a armar o aviso."""
+    lid = int(ctx.groups[0])
+    _so_campos(ctx.body, CAMPOS_LEMBRETE)
+    if not ctx.body:
+        raise ApiError(400, "sem_alteracoes", "nada para alterar")
+    v = _validar_lembrete(ctx.body, completo=False)
+    sets = [f"{k} = ?" for k in v]
+    if {"data", "hora", "repeticao"} & set(v) or v.get("ativo") == 1:
+        sets.append("ultimo_aviso = NULL")
+    conn = ctx.db()
+    cur = conn.execute(f"UPDATE financas_lembretes SET {', '.join(sets)} WHERE id = ?", [*v.values(), lid])
+    if cur.rowcount == 0:
+        raise ApiError(404, "nao_encontrado", "lembrete inexistente")
+    return 200, _lembrete(conn.execute(SELECT_LEMBRETE + " WHERE id = ?", (lid,)).fetchone())
+
+
+def eliminar_lembrete(ctx):
+    lid = int(ctx.groups[0])
+    conn = ctx.db()
+    row = conn.execute(SELECT_LEMBRETE + " WHERE id = ?", (lid,)).fetchone()
+    if not row:
+        raise ApiError(404, "nao_encontrado", "lembrete inexistente")
+    conn.execute("DELETE FROM financas_lembretes WHERE id = ?", (lid,))
+    return 200, _lembrete(row)
 
 
 # --- relatórios -------------------------------------------------------------
@@ -358,4 +449,8 @@ ROUTES = [
     ("DELETE", r"^/financas/lancamentos/(\d{1,12})$", eliminar),
     ("POST", r"^/financas/meses/(\d{4}-\d{2})/preparar$", preparar_mes),
     ("GET", r"^/financas/agregado$", agregado),
+    ("GET", r"^/financas/lembretes$", listar_lembretes),
+    ("POST", r"^/financas/lembretes$", criar_lembrete),
+    ("PUT", r"^/financas/lembretes/(\d{1,12})$", atualizar_lembrete),
+    ("DELETE", r"^/financas/lembretes/(\d{1,12})$", eliminar_lembrete),
 ]

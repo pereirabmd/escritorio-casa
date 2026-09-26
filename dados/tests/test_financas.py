@@ -129,6 +129,27 @@ class FinancasApiTest(ApiBase):
         s, r, _ = self.pedir("POST", f"/financas/meses/{mes}/preparar", {})
         self.assertEqual((r["criados"], r["ja_preparado"]), (0, True))
 
+    def test_preparar_mes_com_lancamentos_recebe_recorrentes_sem_duplicar(self):
+        hoje = datetime.now(ZoneInfo("Europe/Lisbon")).date()
+        mes = f"{hoje.year:04d}-{hoje.month:02d}"
+        ant = _somar_meses(f"{mes}-01", -1)[:7]
+        import db
+        c = db.connect_named("dados")
+        try:
+            c.execute("DELETE FROM financas_lancamentos WHERE mes_referencia >= ?", (ant,))
+            c.execute("DELETE FROM financas_meses WHERE mes >= ?", (ant,))
+        finally:
+            c.close()
+        self.pedir("POST", "/financas/lancamentos", lanc(descricao="Luz", data_vencimento=f"{ant}-10", recorrente=True))
+        self.pedir("POST", "/financas/lancamentos", lanc(descricao="Renda", valor=650, data_vencimento=f"{ant}-02", recorrente=True))
+        # mês já com lançamentos (ex.: prestações pré-carregadas), incluindo uma "luz" com outra grafia
+        self.pedir("POST", "/financas/lancamentos", lanc(descricao="LUZ", valor=99, data_vencimento=f"{mes}-11"))
+        self.pedir("POST", "/financas/lancamentos", lanc(descricao="IRS", valor=231, data_vencimento=f"{mes}-28"))
+        s, r, _ = self.pedir("POST", f"/financas/meses/{mes}/preparar", {})
+        self.assertEqual((s, r["criados"]), (200, 1))   # só a Renda; a Luz já existe
+        _, b, _ = self.pedir("GET", f"/financas/lancamentos?mes={mes}")
+        self.assertEqual(sorted(x["descricao"] for x in b["lancamentos"]), ["IRS", "LUZ", "Renda"])
+
     def test_preparar_mes_futuro_recusado(self):
         self.assertEqual(self.pedir("POST", "/financas/meses/2099-01/preparar", {})[0], 400)
         self.assertEqual(self.pedir("POST", "/financas/meses/2031-13/preparar", {})[0], 400)
@@ -143,6 +164,46 @@ class FinancasApiTest(ApiBase):
         self.assertEqual((agua["total"], agua["n"], agua["mes"], agua["tipo"]), (22.25, 2, "2040-05", "despesa"))
         for q in ["", "?de=2040-05", "?de=2040-06&ate=2040-05", "?de=2030-01&ate=2040-01", "?de=x&ate=y"]:
             self.assertEqual(self.pedir("GET", "/financas/agregado" + q)[0], 400, q)
+
+
+class LembretesApiTest(ApiBase):
+    def test_acesso_so_para_a_acl_da_app(self):
+        self.assertEqual(self.pedir("GET", "/financas/lembretes", token="t" * 30 + "outro")[0], 403)
+
+    def test_crud(self):
+        s, l, _ = self.pedir("POST", "/financas/lembretes", {"titulo": "Transferir para a conta da casa", "data": "2031-06-05", "hora": "09:00", "repeticao": "mensal", "nota": "500 €"})
+        self.assertEqual((s, l["ativo"], l["ultimo_aviso"], l["repeticao"]), (201, True, None, "mensal"))
+        _, b, _ = self.pedir("GET", "/financas/lembretes")
+        self.assertIn(l["id"], [x["id"] for x in b["lembretes"]])
+        s, p, _ = self.pedir("PUT", f"/financas/lembretes/{l['id']}", {"hora": "10:30"})
+        self.assertEqual((s, p["hora"], p["titulo"]), (200, "10:30", "Transferir para a conta da casa"))
+        s, p, _ = self.pedir("PUT", f"/financas/lembretes/{l['id']}", {"ativo": False})
+        self.assertFalse(p["ativo"])
+        self.assertEqual(self.pedir("DELETE", f"/financas/lembretes/{l['id']}")[0], 200)
+        self.assertEqual(self.pedir("DELETE", f"/financas/lembretes/{l['id']}")[0], 404)
+        self.assertEqual(self.pedir("PUT", "/financas/lembretes/999999", {"hora": "10:00"})[0], 404)
+
+    def test_mudar_agendamento_rearma_o_aviso(self):
+        _, l, _ = self.pedir("POST", "/financas/lembretes", {"titulo": "X", "data": "2031-06-05", "hora": "09:00", "repeticao": "unica"})
+        import db
+        c = db.connect_named("dados")
+        try:
+            c.execute("UPDATE financas_lembretes SET ultimo_aviso='2031-06-05' WHERE id=?", (l["id"],))
+            self.pedir("PUT", f"/financas/lembretes/{l['id']}", {"titulo": "Y"})   # não mexe no agendamento
+            self.assertEqual(c.execute("SELECT ultimo_aviso FROM financas_lembretes WHERE id=?", (l["id"],)).fetchone()[0], "2031-06-05")
+            self.pedir("PUT", f"/financas/lembretes/{l['id']}", {"data": "2031-06-06"})
+            self.assertIsNone(c.execute("SELECT ultimo_aviso FROM financas_lembretes WHERE id=?", (l["id"],)).fetchone()[0])
+        finally:
+            c.close()
+
+    def test_validacao(self):
+        ok = {"titulo": "X", "data": "2031-06-05", "hora": "09:00", "repeticao": "unica"}
+        for extra in [{"titulo": ""}, {"titulo": "x" * 101}, {"data": "2031-02-30"}, {"hora": "24:00"}, {"hora": "9:00"},
+                      {"repeticao": "semanal"}, {"nota": "x" * 301}, {"ativo": "sim"}, {"x": 1}]:
+            self.assertEqual(self.pedir("POST", "/financas/lembretes", {**ok, **extra})[0], 400, extra)
+        for falta in ok:
+            self.assertEqual(self.pedir("POST", "/financas/lembretes", {k: v for k, v in ok.items() if k != falta})[0], 400, falta)
+        self.assertEqual(self.pedir("PUT", "/financas/lembretes/1", {})[0], 400)
 
 
 class SomarMesesTest(unittest.TestCase):
