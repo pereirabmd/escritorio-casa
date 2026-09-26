@@ -72,6 +72,8 @@ const FAKE = `(() => {
   window.__BCP_API={
     async load(){return {passe:state.passe,weeklyRaw:state.weekly.map(r=>[...r]),ticketsRaw:state.tickets.map(r=>[...r]),logsRaw:state.logs.map(r=>[...r]),requestsRaw:state.requests.map(r=>[...r])};},
     async saveWeek(weekStart,newRows){window.__saved={weekStart,newRows};state.weekly=window.__BCP.mergeWeek(state.weekly,weekStart,newRows);},
+    async eu(){return {admin:!!window.__euAdmin,utilizador:{id:1,nome:'Bruno'}};},
+    async adminUtilizadores(){return {naLan:!window.__foraDeCasa,urlAdmin:'http://192.168.68.103:8890/bilhetes',utilizadores:[{id:1,nome:'Bruno',admin:true,ativo:true,cp_email:true,cp_password:true,nif:true,passe_verde:true,cc:true},{id:2,nome:'Camila',admin:false,ativo:true,cp_email:false,cp_password:false,nif:false,passe_verde:false,cc:false}]};},
     async forcarPedido(row){window.__pedidoForce=row; const r=state.requests[row-5]; if(r) r[8]='SIM';},
     async setPedidoRetry(row,on,minutos){window.__pedidoRetry={row,on,minutos}; const r=state.requests[row-5]; if(r){r[6]=on?'SIM':'NAO'; r[7]=minutos;}},
   };
@@ -119,7 +121,7 @@ try {
     console.log('  problemas:', JSON.stringify(problems.slice(0, 4)));
   }
   check('a app arranca e mostra conteúdo', await ev(`document.querySelector('#view').innerText.length>40`));
-  check('título e versão', (await ev('document.title')) === 'Bilhetes CP' && (await ev('__BCP.VERSION')) === 'v2.0.2');
+  check('título e versão', (await ev('document.title')) === 'Bilhetes CP' && (await ev('__BCP.VERSION')) === 'v2.1.0');
   check('sem scroll horizontal', await ev(`document.documentElement.scrollWidth<=innerWidth && document.querySelector('#view').scrollWidth<=document.querySelector('#view').clientWidth+1`));
   const home = await text('#view');
   check('ação em destaque: falta configurar a semana seguinte', /Falta configurar a semana de \d\d\/\d\d a \d\d\/\d\d/.test(home), home.slice(0, 80));
@@ -136,6 +138,19 @@ try {
   await click('[data-f="bad"]'); reg = await text('#view');
   check('Registo: filtro "Problemas" só deixa esgotado/falhas', /Esgotado/.test(reg) && /Falhou/.test(reg) && !/Verificação/.test(reg) && !/Venda criada/.test(reg));
   await shot('03-registo');
+
+  console.log('\n== Separador Admin');
+  check('Admin: escondido para quem não é administrador', await ev(`document.querySelector('[data-tab="admin"]').hidden===true`));
+  await ev(`window.__euAdmin=true; window.__foraDeCasa=true; refresh().then(()=>0)`); await sleep(500);
+  check('Admin: aparece para administradores', await ev(`document.querySelector('[data-tab="admin"]').hidden===false`));
+  await click('[data-tab="admin"]'); await sleep(400); const adm = await text('#view');
+  check('Admin: lista os utilizadores e o que falta preencher', /Bruno/.test(adm) && /Camila/.test(adm) && /✗ NIF/.test(adm) && /✓ NIF/.test(adm), adm.slice(0, 120));
+  check('Admin: avisa quando parece estar fora da rede de casa', /fora da rede de casa/.test(adm));
+  check('Admin: link para a página de administração da LAN', await ev(`!!document.querySelector('#view a[href="http://192.168.68.103:8890/bilhetes"][target="_blank"][rel~="noopener"]')`));
+  await shot('09-admin');
+  await ev(`window.__foraDeCasa=false; S.admin=null; render()`); await sleep(400);
+  check('Admin: em casa não mostra o aviso', !/fora da rede de casa/.test(await text('#view')));
+  await click('[data-tab="semana"]');
 
   console.log('\n== Pedidos avulsos');
   await click('[data-tab="pedidos"]'); let ped = await text('#view');

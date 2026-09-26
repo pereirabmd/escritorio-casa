@@ -155,3 +155,51 @@ class BilhetesApiTest(ApiBase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class BilhetesUtilizadoresApiTest(ApiBase):
+    """A PWA só sabe quem é o utilizador e (se administrador) um resumo SEM dados pessoais nem segredos."""
+
+    def setUp(self):
+        c = db.connect_named("bilhetes")
+        c.execute("UPDATE bilhetes_utilizadores SET email = 'eu@example.com', admin = 1, ativo = 1, nif = '123456789', cp_password_enc = 'cifrada', "
+                  "passageiro_cc = '12345678' WHERE id = 1")
+        c.close()
+
+    def test_eu_e_admin(self):
+        s, b, _ = self.pedir("GET", "/bilhetes/eu")
+        self.assertEqual((s, b["admin"], b["utilizador"]["nome"]), (200, True, "Bruno"))
+
+    def test_nao_admin_nao_ve_o_resumo(self):
+        c = db.connect_named("bilhetes"); c.execute("UPDATE bilhetes_utilizadores SET admin = 0 WHERE id = 1"); c.close()
+        s, b, _ = self.pedir("GET", "/bilhetes/eu")
+        self.assertEqual((s, b["admin"]), (200, False))
+        self.assertEqual(self.pedir("GET", "/bilhetes/admin/utilizadores")[0], 403)
+
+    def test_sem_utilizador_para_o_email(self):
+        c = db.connect_named("bilhetes"); c.execute("UPDATE bilhetes_utilizadores SET email = NULL WHERE id = 1"); c.close()
+        s, b, _ = self.pedir("GET", "/bilhetes/eu")
+        self.assertEqual((s, b), (200, {"utilizador": None, "admin": False}))
+        self.assertEqual(self.pedir("GET", "/bilhetes/admin/utilizadores")[0], 403)
+
+    def test_resumo_sem_segredos_nem_dados_pessoais(self):
+        s, b, _ = self.pedir("GET", "/bilhetes/admin/utilizadores")
+        self.assertEqual(s, 200)
+        bruno = b["utilizadores"][0]
+        self.assertEqual((bruno["nome"], bruno["nif"], bruno["cp_password"], bruno["cc"]), ("Bruno", True, True, True))   # só booleanos
+        texto = json.dumps(b)
+        for segredo in ("123456789", "cifrada", "12345678"):
+            self.assertNotIn(segredo, texto)
+        self.assertTrue(b["urlAdmin"].startswith("http://"))
+        self.assertTrue(b["naLan"])                       # o teste liga-se por loopback
+
+    def test_na_lan(self):
+        from apps import bilhetes as ab
+        from unittest import mock
+        with mock.patch.object(ab, "_ip_publico_de_casa", return_value="82.1.2.3"):
+            self.assertTrue(ab.na_lan("192.168.68.20"))
+            self.assertTrue(ab.na_lan("82.1.2.3"))          # de casa, via NAT loopback do router
+            self.assertFalse(ab.na_lan("85.9.9.9"))         # dados móveis / outra rede
+            self.assertFalse(ab.na_lan("2a01:4f8::1"))
+            self.assertFalse(ab.na_lan("lixo"))
+

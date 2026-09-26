@@ -106,6 +106,9 @@ As PWAs chamam-no com `Authorization: Bearer <access token Google>` — **têm d
 | `GET/POST /financas/lembretes` · `PUT/DELETE /financas/lembretes/{id}` | avisos agendados pelo utilizador (`repeticao` `unica`\|`mensal`, `data`, `hora`, `ativo`); mudar o agendamento volta a armar o aviso |
 | `GET /financas/agregado?de=AAAA-MM&ate=AAAA-MM` | totais por mês/tipo/categoria/descrição (≤ 61 meses), para os relatórios |
 
+| `GET /bilhetes/eu` | quem sou (pelo e-mail Google): `utilizador` e `admin` (a PWA só mostra o separador Admin a administradores) |
+| `GET /bilhetes/admin/utilizadores` | só administradores: resumo dos utilizadores **sem dados pessoais nem segredos** (só booleanos «preenchido»), `urlAdmin` e `naLan` (melhor esforço: IP privado ou o IP público de casa que o DuckDNS aponta) |
+
 **Avisos ntfy da `financas`**: `financas_notificar.py` (timer `deploy/financas-notificar.timer`, de meia em meia hora das 07h às 22h) avisa no dia do vencimento de cada lançamento por pagar e nos lembretes agendados (`financas_lembretes`: únicos ou mensais), no tópico `financas` (`NTFY_FINANCAS_TOPIC`), Priority high, um só aviso por lançamento (`notificado_em`). Instalar: copiar os dois ficheiros de `deploy/` para `/etc/systemd/system/`, `daemon-reload`, `enable --now financas-notificar.timer`; dar ao utilizador de escrita read-write e ao de leitura read-only ao tópico (`ntfy access`).
 
 Erros: `{"erro":{"codigo":"...","mensagem":"..."}}` com 400/401/403/404/405/409/413/415/429/503.
@@ -160,3 +163,15 @@ repositório privado `pereirabmd/backup_database`.
 - **Tabelas `WITHOUT ROWID`** (`rto_dias`, `convidados_opcoes`) não têm `rowid`: as linhas identificam-se pela chave primária (lista de valores) em editar, apagar e reverter. Corrigido a 25/09 (davam erro 500 ao carregar).
 - **Backup no cabeçalho:** «publicado» = data do último commit no repositório privado (só há commit novo quando os dados mudam); «verificado» = última execução do `backup.py` (`state/backup_execucao.json`, escrito em cada execução, mesmo sem nada a publicar); fica vermelho se passar de 30 h ou se a última execução falhou.
 - Edita-se a base **por baixo das apps**: regras que só as apps garantem (ids sequenciais, estados, dependências entre tabelas) não são verificadas.
+
+### Utilizadores do `bilhetes_cp` (`/bilhetes` na página de administração)
+
+`http://192.168.68.103:8890/bilhetes` (mesma password e sessão da página das bases; só LAN): criar, editar, desativar e apagar os utilizadores da tabela
+`bilhetes_utilizadores` (`bilhetes.db`) — conta CP, passageiro, NIF, cartão de cidadão, Passe Verde. Módulo `bilhetes_utilizadores.py`.
+- **Passwords da CP**: cifradas com Fernet; chave `BILHETES_FERNET_KEY` **só** no `.env` do Pi (gerar com `python3 bilhetes_utilizadores.py gerar-chave`; guardar num gestor de passwords: sem ela as passwords guardadas perdem-se).
+  Nunca são devolvidas nem mostradas; campo vazio = manter. As colunas com «password» também não se filtram na página das bases.
+- **Auditoria**: `logs/admin_bilhetes.jsonl` (quem, o quê, quais os **campos** alterados; nunca valores) e um instantâneo da `bilhetes.db` antes de escrever (`data/undo/`).
+- **Importar do `.env` do `bilhetes_cp`**: `python3 bilhetes_utilizadores.py importar-env ~/bilhetes_cp/.env [--id 1]` (campo a campo, imprime só os nomes dos campos).
+- **Fase 1**: os scripts de compra ainda usam o `.env` do `bilhetes_cp`; ver `bilhetes_cp/PLANO_FINAL.md` §9.11.
+- Variáveis opcionais no `.env`: `ADMIN_BILHETES_URL` (o link mostrado na PWA) e `ADMIN_BILHETES_HOST` (domínio cujo IP é o IP público de casa; por omissão `bmdpereira.duckdns.org`).
+

@@ -59,7 +59,13 @@ nav.tabs button{flex:1;border:0;background:transparent;color:rgba(255,255,255,.7
 nav.tabs button svg{width:24px;height:24px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
 nav.tabs button[aria-selected="true"]{color:#fff}
 nav.tabs button[aria-selected="true"]::before{content:"";position:absolute;top:0;left:22%;right:22%;height:3px;border-radius:0 0 3px 3px;background:#fff}
+nav.tabs button[hidden]{display:none}
 body.kb-open nav.tabs{display:none}
+.usr{display:flex;align-items:center;gap:10px;padding:10px 0;border-top:1px solid var(--line, #E4E7E2)}
+.usr:first-of-type{border-top:0}
+.usr .nm{font-weight:600;flex:1}
+.usr .tags{font-size:13px;color:var(--text2)}
+.usr .tags .ok{color:var(--primary-dark)}
 
 /* ---------- avisos persistentes (enquanto a condição durar) ---------- */
 #banners:empty{display:none}
@@ -80,6 +86,7 @@ h3{margin:0;font:600 19px/1.15 var(--font-num)}
 .section-title h2{font-size:22px}
 
 .btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:48px;padding:0 20px;border-radius:12px;border:2px solid var(--primary);background:var(--primary);color:var(--on-primary);font-weight:600}
+a.btn{text-decoration:none}
 .btn:hover{background:var(--primary-hover);border-color:var(--primary-hover)}
 .btn.ghost{background:transparent;color:var(--primary-dark)}
 .btn.ghost:hover{background:var(--primary-light)}
@@ -252,6 +259,7 @@ body.kb-open #toast{--toast-b:84px}
     <button role="tab" data-tab="bilhetes" aria-selected="false"><svg viewBox="0 0 24 24"><path d="M4 8a2 2 0 0 0 0 4v0a2 2 0 0 1 0 4v1a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-1a2 2 0 0 1 0-4v0a2 2 0 0 0 0-4V7a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2z" transform="translate(0 -.5)"/><path d="M14.5 6v2M14.5 11v2M14.5 16v2"/></svg>Bilhetes</button>
     <button role="tab" data-tab="pedidos" aria-selected="false"><svg viewBox="0 0 24 24"><path d="M20 12a8 8 0 1 1-2.4-5.7"/><path d="M20 3v5h-5"/></svg>Pedidos</button>
     <button role="tab" data-tab="registo" aria-selected="false"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></svg>Registo</button>
+    <button role="tab" data-tab="admin" aria-selected="false" hidden><svg viewBox="0 0 24 24"><path d="M12 3l7.5 3v5.5c0 4.6-3.2 8.2-7.5 9.5-4.3-1.3-7.5-4.9-7.5-9.5V6z"/><path d="M9 12l2.2 2.2L15.5 10"/></svg>Admin</button>
   </nav>
 
   <section id="auth" class="overlay" hidden>
@@ -275,7 +283,7 @@ body.kb-open #toast{--toast-b:84px}
    Nenhuma credencial neste ficheiro: as chaves da CP (só para preencher
    horários) ficam no localStorage do telemóvel, importadas por um link.
    ===================================================================== */
-const VERSION = 'v2.0.2';
+const VERSION = 'v2.1.0';
 const CLIENT_ID = '108256538530-fgunbb52s7f3s9aurfpjtaf01v8fjbph.apps.googleusercontent.com';
 const API_URL = 'https://bmdpereira.duckdns.org/dados-api';
 // só a identidade: a API reconhece quem chama pelo e-mail do token (a app já não acede ao Google Sheets)
@@ -363,6 +371,7 @@ const S = {
   data: { passe: [], weekly: [], tickets: [], logs: [], requests: [] },
   anchors: {},   /* partida na 1.ª estação por comboio+data+origem (só com as chaves da CP) */
   editor: null, lastLoad: 0,
+  eu: null, admin: null, adminErro: null,   /* separador Admin: só aparece para administradores (GET /bilhetes/eu) */
 };
 const stationLabel = (key) => S.cfg.names[key] || String(key || '').replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
 const stationCode = (key) => S.cfg.stations[key] || (/^\d{2}-\d+$/.test(key) ? key : null);
@@ -512,6 +521,8 @@ const REAL_API = {
   async setPedidoRetry(id, on, minutos) {
     await apiCall('PUT', `/bilhetes/pedidos/${id}`, { retry: !!on, intervaloMinutos: minutos ? Number(minutos) : null });
   },
+  async eu() { return apiCall('GET', '/bilhetes/eu'); },
+  async adminUtilizadores() { return apiCall('GET', '/bilhetes/admin/utilizadores'); },
   /* data do último carregamento do passe (antes editava-se a célula na Sheet) */
   async setPasse(dataISO) { return apiCall('PUT', '/bilhetes/passe', { dataUltimaCompra: dataISO }); },
 };
@@ -602,6 +613,34 @@ async function loadAnchors() {
   }
   if (changed && S.tab === 'semana' && !S.editor) render();
 }
+/* ---------- separador Admin (só administradores; a edição dos dados é numa página só acessível na rede de casa) ---------- */
+async function loadEu() {
+  if (!api.eu) return;                                   // (a API falsa dos testes não tem)
+  try { S.eu = await api.eu(); } catch { return; }
+  const b = $('#tabs [data-tab="admin"]'); if (b) b.hidden = !S.eu.admin;
+  if (!S.eu.admin && S.tab === 'admin') { S.tab = 'semana'; render(); }
+}
+async function loadAdmin() {
+  S.adminErro = null;
+  try { S.admin = await api.adminUtilizadores(); } catch (e) { S.adminErro = explainError(e); }
+  if (S.tab === 'admin') render();
+}
+function viewAdmin() {
+  if (!S.admin && !S.adminErro) { loadAdmin(); return '<div class="skel"></div><div class="skel"></div>'; }
+  if (S.adminErro) return `<div class="empty">${esc(S.adminErro)}<br><button class="btn ghost" style="margin-top:12px" data-act="admin-reload">Tentar de novo</button></div>`;
+  const a = S.admin, sim = (ok, t) => `<span class="${ok ? 'ok' : ''}">${ok ? '✓' : '✗'} ${t}</span>`;
+  const users = a.utilizadores.map(u => `<div class="usr"><div class="nm">${esc(u.nome)}${u.admin ? ' <span class="muted small">· admin</span>' : ''}${u.ativo ? '' : ' <span class="muted small">· inativo</span>'}<div class="tags">${sim(u.cp_email && u.cp_password, 'conta CP')} · ${sim(u.cc, 'CC')} · ${sim(u.nif, 'NIF')} · ${sim(u.passe_verde, 'Passe Verde')}</div></div></div>`).join('');
+  const fora = a.naLan === false;
+  return `<div class="pass"><h3>Utilizadores</h3>
+      <p class="muted small" style="margin:6px 0 4px">Quem pode ter viagens e Passe Verde próprios. Aqui só vês o que está preenchido; os dados e as passwords editam-se na página de administração.</p>
+      ${users}</div>
+    <div class="pass"><h3>Dados dos utilizadores</h3>
+      ${fora ? `<div class="banner" role="alert" style="border-radius:12px;margin:6px 0 12px"><span><b>Parece que estás fora da rede de casa.</b> A página de administração só abre ligado ao Wi-Fi de casa (não é acessível da internet). Liga-te ao Wi-Fi de casa e volta a tentar.</span></div>`
+        : '<p class="muted small" style="margin:6px 0 12px">Credenciais da CP, NIF, cartão de cidadão e nº do Passe Verde de cada pessoa. Abre-se noutro separador do browser e pede a password de administração.</p>'}
+      <a class="btn ${fora ? 'ghost' : ''} block" href="${esc(a.urlAdmin)}" target="_blank" rel="noopener">Abrir a página de administração</a>
+      <p class="muted small" style="margin:10px 0 0">Só funciona na rede de casa. Fase 1: os dados ficam guardados, mas as compras ainda usam as credenciais atuais do servidor.</p></div>`;
+}
+
 async function refresh() {
   if (S.loading) return;
   S.loading = true; $('#btnRefresh').classList.add('spin'); renderBanners();
@@ -610,7 +649,7 @@ async function refresh() {
   } catch (e) { console.error(e); S.error = explainError(e); }
   S.loading = false; $('#btnRefresh').classList.remove('spin');
   renderBanners(); render();
-  if (S.loaded) loadAnchors();
+  if (S.loaded) { loadAnchors(); loadEu(); }
 }
 
 /* ---------- ícones ---------- */
@@ -628,7 +667,7 @@ function render() {
   $$('#tabs button').forEach(b => b.setAttribute('aria-selected', String(b.dataset.tab === S.tab)));
   const v = $('#view');
   if (!S.loaded && !S.error) { v.innerHTML = '<div class="skel"></div><div class="skel"></div><div class="skel"></div>'; return; }
-  v.innerHTML = ({ semana: viewSemana, bilhetes: viewBilhetes, pedidos: viewPedidos, registo: viewRegisto }[S.tab])();
+  v.innerHTML = ({ semana: viewSemana, bilhetes: viewBilhetes, pedidos: viewPedidos, registo: viewRegisto, admin: viewAdmin }[S.tab])();
 }
 
 function ticketHtml(t, cls = '') {
@@ -1044,7 +1083,8 @@ document.addEventListener('click', async (e) => {
   if (!b) return; const a = b.dataset.act, E = S.editor;
   const di = () => +b.closest('.dayc').dataset.i;
   switch (a) {
-    case 'refresh': refresh(); break;
+    case 'refresh': S.admin = null; refresh(); break;
+    case 'admin-reload': S.adminErro = null; loadAdmin(); render(); break;
     case 'save-passe': {
       const v = $('#passeData')?.value || '';
       if (!validISO(v)) { toast('Indica uma data válida.'); break; }

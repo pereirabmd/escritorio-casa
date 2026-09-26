@@ -69,6 +69,60 @@ class Base(unittest.TestCase):
         self.csrf = b["csrf"]
 
 
+class BilhetesUtilizadoresTests(Base):
+    def setUp(self):
+        super().setUp()
+        import bilhetes_utilizadores as bu
+        self.chave = mock.patch.dict("os.environ", {"BILHETES_FERNET_KEY": bu.gerar_chave()})
+        self.chave.start()
+        c = db.connect_named("bilhetes")
+        c.execute("DELETE FROM bilhetes_utilizadores WHERE id <> 1")
+        c.close()
+        self.entrar()
+
+    def tearDown(self):
+        self.chave.stop()
+
+    def test_paginas_estaticas_e_exigem_sessao_para_a_api(self):
+        self.assertEqual(self.pedir("GET", "/bilhetes")[0], 200)
+        self.assertEqual(self.pedir("GET", "/bilhetes.js")[0], 200)
+        self.assertEqual(self.pedir("GET", "/api/bilhetes/utilizadores", cookie=False)[0], 401)
+        self.assertEqual(self.pedir("POST", "/api/bilhetes/utilizadores", {"nome": "X"}, csrf=False)[0], 403)   # sem CSRF
+
+    def test_criar_editar_apagar_e_a_password_nunca_sai(self):
+        s, b, _ = self.pedir("GET", "/api/bilhetes/utilizadores")
+        self.assertEqual((s, [u["nome"] for u in b["utilizadores"]], b["chave_configurada"]), (200, ["Bruno"], True))
+        s, u, _ = self.pedir("POST", "/api/bilhetes/utilizadores", {"nome": "Camila", "cp_email": "c@cp.pt", "password": "segredo-muito-secreto", "nif": "123456789"})
+        self.assertEqual((s, u["cp_password_definida"]), (201, True))
+        s, u2, _ = self.pedir("PUT", f"/api/bilhetes/utilizadores/{u['id']}", {"passe_verde_numero": "PV1234", "email": "cam@x.pt"})
+        self.assertEqual((s, u2["passe_verde_numero"], u2["email"]), (200, "PV1234", "cam@x.pt"))
+        s, lista, _ = self.pedir("GET", "/api/bilhetes/utilizadores")
+        self.assertNotIn("segredo-muito-secreto", json.dumps(lista))
+        registo = Path(self.tmp.name, "edits.jsonl").with_name("admin_bilhetes.jsonl").read_text(encoding="utf-8")
+        self.assertNotIn("segredo-muito-secreto", registo)
+        self.assertIn('"campos": ["cp_email", "nif", "nome", "password"]', registo)                               # só nomes de campos
+        self.assertEqual(self.pedir("DELETE", f"/api/bilhetes/utilizadores/{u['id']}")[0], 200)
+        self.assertEqual(self.pedir("DELETE", f"/api/bilhetes/utilizadores/{u['id']}")[0], 404)
+
+    def test_erros(self):
+        self.assertEqual(self.pedir("POST", "/api/bilhetes/utilizadores", {"nome": "X", "nif": "123"})[0], 400)
+        self.assertEqual(self.pedir("POST", "/api/bilhetes/utilizadores", {"nome": "bruno"})[0], 409)
+        self.assertEqual(self.pedir("PUT", "/api/bilhetes/utilizadores/1", {"admin": False})[0], 400)
+        self.assertEqual(self.pedir("DELETE", "/api/bilhetes/utilizadores/1")[0], 409)
+        self.assertEqual(self.pedir("PUT", "/api/bilhetes/utilizadores/abc", {"nome": "X"})[0], 404)
+        self.assertEqual(self.pedir("PUT", "/api/bilhetes/utilizadores", {"nome": "X"})[0], 405)
+
+    def test_sem_chave_nao_guarda_password(self):
+        import os
+        antes = os.environ.pop("BILHETES_FERNET_KEY")
+        try:
+            self.assertEqual(self.pedir("GET", "/api/bilhetes/utilizadores")[1]["chave_configurada"], False)
+            self.assertEqual(self.pedir("POST", "/api/bilhetes/utilizadores", {"nome": "X", "password": "abc"})[0], 500)
+            self.assertEqual(len(self.pedir("GET", "/api/bilhetes/utilizadores")[1]["utilizadores"]), 1)
+        finally:
+            os.environ["BILHETES_FERNET_KEY"] = antes
+
+
 class PasswordTests(unittest.TestCase):
     def test_hash_e_verificacao(self):
         h = admin_db.hash_password("segredo-forte", 1000)
@@ -186,7 +240,9 @@ class LeituraTests(Base):
                     for op in ("contem", "vazio", "nvazio"):
                         from urllib.parse import quote
                         s, b, _ = self.pedir("GET", f"/api/linhas?db={base}&tabela={t['nome']}&filtros=" + quote(json.dumps([{"c": c["nome"], "o": op, "v": "1"}]), safe=""))
-                        self.assertEqual(s, 200, f"{base}.{t['nome']}.{c['nome']} {op}: {b}")
+                        # colunas de segredos (password/token/secret...) nunca se filtram: seria adivinhá-las por pesquisa
+                        esperado = 400 if admin_db._SENSIVEL.search(c["nome"]) else 200
+                        self.assertEqual(s, esperado, f"{base}.{t['nome']}.{c['nome']} {op}: {b}")
 
     def test_segredos_saem_mascarados(self):
         s, b, _ = self.pedir("GET", "/api/linhas?db=dados&tabela=tarefas_config")

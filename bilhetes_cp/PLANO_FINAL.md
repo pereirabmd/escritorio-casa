@@ -1354,3 +1354,49 @@ API, do importador e do backup em `dados/`, e a PWA em Chromium (58 verificaçõ
 privado). **Cuidado ao alterar o esquema**: as tabelas são lidas/escritas por dois lados (o Pi em SQL, a PWA pela
 API) — mudar uma coluna exige mudar `store.py` e `apps/bilhetes.py` juntos, e uma migração nova (nunca editar uma
 já aplicada).
+
+### 9.11 Vários utilizadores — fase 1 feita (26/09/2026)
+
+**Decisões do Bruno (26/09/2026):** 4 utilizadores no total — Bruno (administrador), Camila, Bruninho e Davi, cada um com a **sua
+conta CP, o seu NIF, o seu cartão de cidadão e o seu Passe Verde**. As credenciais são introduzidas **só pelo Bruno**, numa página
+acessível apenas na LAN, com ligação a partir da PWA (separador Admin). O Bruno pode marcar viagens para qualquer um; **cada um deve
+também poder configurar as suas** (fase 3). Viajarem no mesmo comboio é possível mas raro (normalmente só 2 em simultâneo). **O ntfy por
+utilizador fica de fora por agora** (sem coluna de ntfy no modelo).
+
+**Feito (fase 1: modelo de dados + página de administração; o comportamento da compra NÃO mudou)**
+- **Migração `dados/migrations_bilhetes/003_utilizadores.sql`**: tabela `bilhetes_utilizadores` (nome, e-mail Google para a PWA — pode ser NULL
+  para quem ainda não tem login próprio —, `admin`, `ativo`, e-mail e password da CP, nome/CC/telemóvel do passageiro, NIF, nº do Passe Verde,
+  data do último carregamento e validade do passe) e `utilizador_id` em viagens, pedidos, compras e logs (por omissão **1** = Bruno, por isso os
+  scripts do Pi, que ainda não indicam o dono, continuam a funcionar sem alterações). Sem `REFERENCES` no `ADD COLUMN` (o SQLite exige `DEFAULT NULL`
+  com chaves estrangeiras ligadas): a integridade é dada por **gatilhos** (dono inexistente aborta; **os registos nunca falham por causa do dono**;
+  um utilizador com dados, e o Bruno, não se apagam — desativa-se). O passe do Bruno espelha-se de `bilhetes_passe` por gatilho enquanto os scripts
+  e a API ainda o escrevem lá. Os ids das viagens/pedidos (`vN`) **não mudaram** (fazem parte do lock de compra) e continuam globais, por isso os
+  locks não colidem entre utilizadores.
+- **Segredos**: `cp_password_enc` é cifrada com **Fernet**; a chave `BILHETES_FERNET_KEY` vive **só** no `.env` do Pi (`~/dados/.env`), nunca na BD nem no
+  Git. **Guardá-la num gestor de passwords**: sem ela as passwords guardadas são irrecuperáveis (voltam a introduzir-se na página). Nenhuma API
+  devolve a password (nem a cifrada); só `cp_password_definida`. Os registos de auditoria guardam só os nomes dos campos alterados.
+- **Página de administração** (`http://192.168.68.103:8890/bilhetes`, no serviço `dados-admin` que já existia — mesma password, sessão, CSRF, só LAN):
+  criar/editar/desativar/apagar utilizadores; NIF validado com o dígito de controlo; CC, telemóvel e nº do passe validados; o Bruno é sempre
+  administrador e ativo. Módulo `dados/bilhetes_utilizadores.py` (também `importar-env`: copiou do `.env` do `bilhetes_cp` as credenciais do Bruno,
+  campo a campo e sem imprimir valores, a 26/09/2026).
+- **PWA v2.1.0**: separador **Admin**, visível só se `GET /bilhetes/eu` disser `admin` (pelo e-mail Google). Mostra a lista de utilizadores com o que está preenchido
+  (só booleanos, sem dados pessoais) e o link para a página da LAN. **Aviso «fora da rede de casa»**: o browser não consegue testar um endereço `http://` da LAN a
+  partir de uma página `https://` (conteúdo misto), por isso a API decide (`naLan` em `GET /bilhetes/admin/utilizadores`): IP de origem privado, **ou igual ao IP público
+  de casa** (o que o DuckDNS aponta para o domínio) — de casa, os pedidos ao domínio público chegam ao nginx com o IP público de casa (NAT loopback), não com um IP
+  privado (verificado no log do nginx). É **melhor esforço**: um telemóvel em casa que use IPv6 aparece como «fora»; o aviso é prudente («parece que estás fora») e o
+  link continua disponível.
+- **Testes**: 276 no `bilhetes_cp` (também a passar no Pi; os ficheiros de teste no Pi estavam desatualizados — foram sincronizados), 189 em `dados/`, e a PWA em Chromium
+  (64 verificações, 6 novas do Admin). Pi (26/09/2026): `bilhetes.db` na versão 3, todas as linhas existentes do utilizador 1, `scheduler --plan-only` igual ao de antes.
+
+**O que falta (por ordem)**
+1. **Fase 2 — scripts por utilizador** (o trabalho pesado; toca no caminho crítico da compra): `cp_ticket.py` lê `CP_EMAIL`/`CP_PASSWORD`/nome/CC/telemóvel/NIF/passe como constantes ao
+   importar e há um só `token.json` — passar a um objeto de credenciais por utilizador (`decifrar()` de `bilhetes_utilizadores.py`), `tokens/<utilizador>.json`, `Leg` com dono,
+   e o scheduler/hot_buy/pre_flight/config_reminder/pass_expiry_check/live_delay a agir por utilizador (estado local `state/*.json` com chave por utilizador; a chave do lock já é única).
+   Depois disto o `.env` deixa de ser a fonte das credenciais e a página de administração passa a valer para as compras (hoje avisa que não).
+2. **Ensaio de simultaneidade** com o `ensaio_compra.py`: 2 e depois 4 utilizadores ao mesmo instante (o Pi tem 4 núcleos e ~540 MB de RAM livres; 4 logins e 4 rajadas na mesma ligação; não se sabe se
+   a CP limita várias contas do mesmo IP). Normalmente só 2 em simultâneo. Duas pessoas no mesmo comboio competem entre si pelos lugares.
+3. **Fase 3 — API e PWA por utilizador**: a API resolve o e-mail Google para um utilizador e **filtra tudo por ele no servidor** (`ACL_BILHETES` passa a ter os e-mails de todos; hoje só o do Bruno); cada um vê e
+   configura as suas viagens, pedidos, bilhetes e passe; o Bruno (admin) escolhe por quem marca; `PUT /bilhetes/semana` e `PUT /bilhetes/passe` passam a ser por utilizador (e o espelho do passe do Bruno deixa de ser preciso).
+4. **Fase 4**: o ntfy por utilizador (uma conta de leitura por pessoa e tópico próprio; Priority high em tudo; cada pessoa no seu telemóvel), e adicionar Camila, Bruninho e Davi na página da LAN (basta o nome; o e-mail Google só quando tiverem login).
+5. **Menor**: «Testar login CP» na página de administração; a chave Fernet num gestor de passwords; se o SD do Pi morrer, a chave perde-se (o backup cifrado com `age` leva as passwords cifradas mas não a chave).
+

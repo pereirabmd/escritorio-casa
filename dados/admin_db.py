@@ -41,6 +41,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
+import bilhetes_utilizadores
 import db
 
 WEB_DIR = Path(__file__).resolve().parent / "admin_web"
@@ -699,7 +700,8 @@ def make_handler(estado: Estado):
                 self._json(500, {"erro": "erro interno"})
 
         def _estatico(self, path: str):
-            nome = {"/": "index.html", "/index.html": "index.html", "/app.js": "app.js", "/app.css": "app.css"}.get(path)
+            nome = {"/": "index.html", "/index.html": "index.html", "/app.js": "app.js", "/app.css": "app.css",
+                    "/bilhetes": "bilhetes.html", "/bilhetes.js": "bilhetes.js"}.get(path)
             if not nome or self.command != "GET":
                 raise AdminError(404, "não encontrado")
             f = WEB_DIR / nome
@@ -761,7 +763,46 @@ def make_handler(estado: Estado):
                 return self._json(200, info_backup())
             if path == "/api/backup/correr" and self.command == "POST":
                 return self._json(200, correr_backup(bool(self._corpo().get("forcar"))))
+            if path == "/api/bilhetes/utilizadores" or path.startswith("/api/bilhetes/utilizadores/"):
+                return self._utilizadores(path)
             raise AdminError(404, "não encontrado")
+
+        def _utilizadores(self, path: str):
+            """Utilizadores do bilhetes_cp (dados pessoais e password da CP cifrada). Nunca devolve segredos; o registo de
+            auditoria (logs/admin_bilhetes.jsonl) guarda só os NOMES dos campos alterados, nunca valores."""
+            resto = path[len("/api/bilhetes/utilizadores"):].strip("/")
+            if resto and not (resto.isdigit() and len(resto) <= 9):
+                raise AdminError(404, "não encontrado")
+            uid = int(resto) if resto else None
+            conn = abrir("bilhetes")
+            try:
+                if self.command == "GET" and uid is None:
+                    return self._json(200, {"utilizadores": bilhetes_utilizadores.listar(conn),
+                                            "chave_configurada": bool(os.environ.get("BILHETES_FERNET_KEY"))})
+                if (self.command, uid is None) not in (("POST", True), ("PUT", False), ("DELETE", False)):
+                    raise AdminError(405, "método não permitido")
+                dados = self._corpo() if self.command in ("POST", "PUT") else {}
+                estado.editor.snapshot("bilhetes", conn, "utilizadores")
+                try:
+                    if self.command == "POST":
+                        r, op, campos = bilhetes_utilizadores.criar(conn, dados), "criar", sorted(dados)
+                        status = 201
+                    elif self.command == "PUT":
+                        r, campos = bilhetes_utilizadores.atualizar(conn, uid, dados)
+                        op, status = "atualizar", 200
+                    else:
+                        r, op, campos, status = bilhetes_utilizadores.apagar(conn, uid), "apagar", [], 200
+                except bilhetes_utilizadores.UtilizadorErro as e:
+                    raise AdminError(e.status, e.mensagem) from None
+                except sqlite3.Error as e:
+                    raise AdminError(400, f"a base recusou: {e}") from None
+                registo = estado.editor.log_path.with_name("admin_bilhetes.jsonl")
+                with open(registo, "a", encoding="utf-8") as f:
+                    f.write(json.dumps({"ts": time.strftime("%Y-%m-%dT%H:%M:%S"), "quem": self._quem, "op": op, "id": r["id"],
+                                        "nome": r["nome"], "campos": [c for c in campos if c != "limpar_password"]}, ensure_ascii=False) + "\n")
+                return self._json(status, r)
+            finally:
+                conn.close()
 
         def _login(self):
             ip = self._ip()

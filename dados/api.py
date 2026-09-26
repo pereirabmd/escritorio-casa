@@ -262,7 +262,7 @@ def make_handler(settings: Settings, verifier: TokenVerifier, rotas):
                 raise ApiError(403, "sem_acesso", "sem acesso a esta aplicação")
 
             # 3) pedido
-            ctx.user, ctx.tz, ctx.groups = email, settings.tz, m.groups()
+            ctx.user, ctx.tz, ctx.groups, ctx.ip = email, settings.tz, m.groups(), ip
             ctx._dbname = APP_DB.get(app, "dados")
             ctx.query = dict(parse_qsl(partes.query, keep_blank_values=True, max_num_fields=20))
             ctx.body = self._ler_corpo() if self.command in ("POST", "PUT") else {}

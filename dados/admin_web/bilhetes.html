@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="pt">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Bilhetes CP · Utilizadores</title>
+<link rel="stylesheet" href="/app.css">
+</head>
+<body>
+<div id="login" class="centro" hidden>
+  <form id="form-login" class="cartao" autocomplete="on">
+    <h1>Bilhetes CP · Utilizadores</h1>
+    <p class="mut">Só na rede local. A mesma password das bases de dados.</p>
+    <label>Password <input type="password" id="pw" autocomplete="current-password" required autofocus></label>
+    <button type="submit" class="primario">Entrar</button>
+    <p id="erro-login" class="erro" role="alert"></p>
+  </form>
+</div>
+
+<div id="app" hidden>
+  <header>
+    <a href="/" class="lnk">&larr; Bases de dados</a>
+    <strong>Bilhetes CP · Utilizadores</strong>
+    <span class="esp"></span>
+    <button id="novo" class="primario">+ Novo utilizador</button>
+  </header>
+  <div id="aviso-fase" class="aviso">
+    <strong>Fase 1.</strong> Os dados guardam-se aqui, mas os scripts de compra ainda usam as credenciais do <code>.env</code> do Pi (um só utilizador).
+    O que alterares nesta página só passa a valer nas compras quando os scripts forem passados a vários utilizadores (fase 2).
+  </div>
+  <div id="aviso-chave" class="aviso" hidden>
+    <strong>Falta a chave de cifra.</strong> <code>BILHETES_FERNET_KEY</code> não está no <code>.env</code> do Pi: não é possível guardar passwords da CP.
+  </div>
+  <main class="coluna">
+    <div id="lista"></div>
+    <p class="mut">Passwords: guardam-se cifradas e nunca são mostradas. Deixa o campo vazio para manter a atual.
+      Um utilizador com viagens ou compras não se apaga (desativa-se). O Bruno é sempre administrador.</p>
+  </main>
+</div>
+
+<dialog id="dlg">
+  <form id="form-util" method="dialog" autocomplete="off">
+    <h2 id="dlg-titulo">Utilizador</h2>
+    <h3>Conta na app</h3>
+    <label>Nome <input id="f-nome" required maxlength="40"></label>
+    <label>E-mail Google (para entrar na PWA) <input id="f-email" type="email" maxlength="120" placeholder="vazio = ainda sem login próprio"></label>
+    <div class="linha-checks">
+      <label class="chk"><input type="checkbox" id="f-admin"> Administrador</label>
+      <label class="chk"><input type="checkbox" id="f-ativo"> Ativo</label>
+    </div>
+    <h3>Conta na CP</h3>
+    <label>E-mail da CP <input id="f-cp_email" type="email" maxlength="120"></label>
+    <label>Password da CP <input id="f-password" type="password" autocomplete="new-password" maxlength="200"></label>
+    <label class="chk" id="linha-limpar"><input type="checkbox" id="f-limpar"> Apagar a password guardada</label>
+    <h3>Passageiro e faturação</h3>
+    <label>Nome do passageiro <input id="f-passageiro_nome" maxlength="100"></label>
+    <div class="dois">
+      <label>Cartão de Cidadão <input id="f-passageiro_cc" maxlength="20"></label>
+      <label>Telemóvel <input id="f-passageiro_telemovel" maxlength="25" placeholder="912345678"></label>
+    </div>
+    <label>NIF <input id="f-nif" inputmode="numeric" maxlength="15"></label>
+    <h3>Passe Ferroviário Verde</h3>
+    <label>Número do passe <input id="f-passe_verde_numero" maxlength="40"></label>
+    <div class="dois">
+      <label>Último carregamento <input id="f-passe_data_ultima_compra" type="date"></label>
+      <label>Validade (dias) <input id="f-passe_validade_dias" type="number" min="1" max="366"></label>
+    </div>
+    <p id="erro-util" class="erro" role="alert"></p>
+    <div class="botoes">
+      <button type="button" id="apagar" class="perigo">Apagar</button>
+      <span class="esp"></span>
+      <button type="button" id="cancelar" class="sec">Cancelar</button>
+      <button type="submit" id="guardar" class="primario">Guardar</button>
+    </div>
+  </form>
+</dialog>
+<div id="toast" role="status"></div>
+<script src="/bilhetes.js"></script>
+</body>
+</html>

@@ -11,7 +11,11 @@ passa por aqui. Consequências que este módulo respeita:
 
 from __future__ import annotations
 
+import ipaddress
+import os
 import re
+import socket
+import time
 from datetime import date, datetime, timedelta
 
 from api import ApiError
@@ -244,7 +248,70 @@ def forcar_pedido(ctx):
     return 200, _pedido(conn.execute("SELECT * FROM bilhetes_pedidos WHERE id=?", (pid,)).fetchone())
 
 
+# --- utilizadores (fase 1: só o modelo de dados e a página de administração da LAN) -----------------------------
+
+ADMIN_URL_PADRAO = "http://192.168.68.103:8890/bilhetes"    # a página de administração só abre na rede de casa
+
+
+_casa = {"ip": None, "ate": 0.0}
+
+
+def _ip_publico_de_casa() -> str | None:
+    """O IP público de casa é o que o DuckDNS aponta para o domínio (o updater do Pi mantém-no). De casa, os pedidos
+    ao domínio público chegam ao nginx com esse IP (NAT loopback do router), não com um IP privado."""
+    if time.monotonic() > _casa["ate"]:
+        try:
+            _casa["ip"] = socket.gethostbyname(os.environ.get("ADMIN_BILHETES_HOST", "bmdpereira.duckdns.org"))
+        except OSError:
+            _casa["ip"] = None
+        _casa["ate"] = time.monotonic() + 300
+    return _casa["ip"]
+
+
+def na_lan(ip: str) -> bool:
+    """Melhor esforço: IP privado/loopback, ou o IP público de casa. Falha para clientes IPv6 (parecem «fora»)."""
+    try:
+        a = ipaddress.ip_address(ip)
+    except ValueError:
+        return False
+    return a.is_private or a.is_loopback or ip == _ip_publico_de_casa()
+
+
+def _utilizador(ctx):
+    return ctx.db().execute("SELECT id, nome, admin, ativo FROM bilhetes_utilizadores WHERE email = ?", (ctx.user,)).fetchone()
+
+
+def _e_admin(row) -> bool:
+    return bool(row and row["admin"] and row["ativo"])
+
+
+def eu(ctx):
+    """Quem sou eu (pelo e-mail Google do token). A PWA só mostra o separador Admin se `admin` for verdadeiro."""
+    u = _utilizador(ctx)
+    return 200, {"utilizador": {"id": u["id"], "nome": u["nome"]} if u else None, "admin": _e_admin(u)}
+
+
+def admin_utilizadores(ctx):
+    """Resumo SEM dados pessoais nem segredos (só se estão preenchidos) — quem edita é a página da LAN."""
+    if not _e_admin(_utilizador(ctx)):
+        raise ApiError(403, "so_admin", "só para administradores")
+    rows = ctx.db().execute(
+        "SELECT id, nome, email, admin, ativo, cp_email <> '' AS cp_email, cp_password_enc <> '' AS cp_password, nif <> '' AS nif, "
+        "passe_verde_numero <> '' AS passe_verde, passageiro_cc <> '' AS cc, passe_data_ultima_compra, passe_validade_dias "
+        "FROM bilhetes_utilizadores ORDER BY id").fetchall()
+    us = []
+    for r in rows:
+        d = dict(r)
+        for k in ("admin", "ativo", "cp_email", "cp_password", "nif", "passe_verde", "cc"):
+            d[k] = bool(d[k])
+        us.append(d)
+    return 200, {"utilizadores": us, "urlAdmin": os.environ.get("ADMIN_BILHETES_URL", ADMIN_URL_PADRAO),
+                      "naLan": na_lan(ctx.ip)}
+
+
 ROUTES = [
+    ("GET", r"^/bilhetes/eu$", eu),
+    ("GET", r"^/bilhetes/admin/utilizadores$", admin_utilizadores),
     ("GET", r"^/bilhetes/dados$", dados),
     ("PUT", r"^/bilhetes/semana$", gravar_semana),
     ("PUT", r"^/bilhetes/passe$", gravar_passe),
