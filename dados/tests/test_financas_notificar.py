@@ -77,6 +77,30 @@ class NotificarTest(unittest.TestCase):
         self.assertEqual(self.titulos(datetime(2031, 6, 10, 9, 5)), ["Mensal"])                    # o mensal volta no mês seguinte
         self.assertEqual(self.titulos(datetime(2031, 5, 10, 21, 0)), [])                            # o único nunca mais
 
+    def test_a_notificacao_leva_o_icone_o_link_e_prioridade_alta(self):
+        import json
+        from unittest import mock
+        env = {"NTFY_SERVER_URL": "https://ntfy.exemplo", "NTFY_WRITE_USER": "u", "NTFY_WRITE_PASSWORD": "p"}
+        enviado = {}
+
+        class Resp:
+            status = 200
+            def __enter__(self): return self
+            def __exit__(self, *a): return False
+
+        def falso(req, timeout=0):
+            enviado["corpo"] = json.loads(req.data)
+            return Resp()
+        with mock.patch("financas_notificar.urllib.request.urlopen", falso):
+            self.assertTrue(fn.publicar({"title": "t", "message": "m"}, env=env))
+        c = enviado["corpo"]
+        self.assertEqual((c["icon"], c["priority"], c["topic"]), ("https://pereirabmd.github.io/escritorio-casa/financas/icon-192.png", 4, "financas"))
+        self.assertTrue(c["click"].endswith("/financas/"))
+        # o ícone pode ser mudado por configuração
+        with mock.patch("financas_notificar.urllib.request.urlopen", falso):
+            fn.publicar({"title": "t", "message": "m"}, env={**env, "NTFY_FINANCAS_ICON_URL": "https://x/i.png"})
+        self.assertEqual(enviado["corpo"]["icon"], "https://x/i.png")
+
     def test_publicar_sem_config_falha_sem_rebentar(self):
         self.assertFalse(fn.publicar({"title": "x", "message": "y"}, env={}))
 

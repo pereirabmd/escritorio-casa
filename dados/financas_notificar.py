@@ -5,7 +5,7 @@ mensais, financas_lembretes). Corre de meia em meia hora (financas-notificar.tim
 nesse dia. Sem insistência: se o dia passar, não há segundo aviso (a app mostra o que está vencido).
 
 Só biblioteca padrão. Config no .env: NTFY_SERVER_URL, NTFY_WRITE_USER, NTFY_WRITE_PASSWORD,
-NTFY_FINANCAS_TOPIC (por omissão `financas`), FINANCAS_URL.
+NTFY_FINANCAS_TOPIC (por omissão `financas`), FINANCAS_URL, NTFY_FINANCAS_ICON_URL (por omissão o ícone da app no GitHub Pages).
 Uso:  python3 financas_notificar.py [--simular]
 """
 
@@ -26,6 +26,7 @@ import db
 
 LOG = logging.getLogger("financas.notificar")
 APP_URL = "https://pereirabmd.github.io/escritorio-casa/financas/"
+ICON_URL = APP_URL + "icon-192.png"     # o ntfy do telemóvel descarrega-o (tem de ser público)
 
 
 def eur(v: float) -> str:
@@ -78,7 +79,7 @@ def publicar(msg: dict, env=os.environ) -> bool:
         LOG.error("NTFY_SERVER_URL/NTFY_WRITE_USER/NTFY_WRITE_PASSWORD em falta no .env")
         return False
     corpo = {"topic": env.get("NTFY_FINANCAS_TOPIC", "financas"), "priority": 4,   # sempre Priority high: aparece no ecrã
-             "click": env.get("FINANCAS_URL", APP_URL), **msg}
+             "click": env.get("FINANCAS_URL", APP_URL), "icon": env.get("NTFY_FINANCAS_ICON_URL", ICON_URL), **msg}
     req = urllib.request.Request(
         base + "/", data=json.dumps(corpo).encode(), method="POST",
         headers={"Content-Type": "application/json",
