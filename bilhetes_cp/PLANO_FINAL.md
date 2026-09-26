@@ -1385,6 +1385,7 @@ utilizador fica de fora por agora** (sem coluna de ntfy no modelo).
   de casa** (o que o DuckDNS aponta para o domínio) — de casa, os pedidos ao domínio público chegam ao nginx com o IP público de casa (NAT loopback), não com um IP
   privado (verificado no log do nginx). É **melhor esforço**: um telemóvel em casa que use IPv6 aparece como «fora»; o aviso é prudente («parece que estás fora») e o
   link continua disponível.
+- **Escrita dos scripts do Pi com o esquema novo (verificado a 26/09/2026 numa cópia da `bilhetes.db` migrada)**: `SqliteStore` — `read_config`/`read_tickets`/`read_requests`, `append_log`, `append_attempts`, `append_ticket`, `append_request`, `update_request` — funcionam e as linhas novas ficam do utilizador 1; `pedidos.py --plan-only`, `scheduler.py --plan-only` e `pass_expiry_check.py` correm sem erros. **Ainda nunca exercitado com uma compra real na CP**: a primeira é a do disparo de 27/09 06:45 (v103, comboio 520), a acompanhar.
 - **Testes**: 276 no `bilhetes_cp` (também a passar no Pi; os ficheiros de teste no Pi estavam desatualizados — foram sincronizados), 189 em `dados/`, e a PWA em Chromium
   (64 verificações, 6 novas do Admin). Pi (26/09/2026): `bilhetes.db` na versão 3, todas as linhas existentes do utilizador 1, `scheduler --plan-only` igual ao de antes.
 
@@ -1398,5 +1399,6 @@ utilizador fica de fora por agora** (sem coluna de ntfy no modelo).
 3. **Fase 3 — API e PWA por utilizador**: a API resolve o e-mail Google para um utilizador e **filtra tudo por ele no servidor** (`ACL_BILHETES` passa a ter os e-mails de todos; hoje só o do Bruno); cada um vê e
    configura as suas viagens, pedidos, bilhetes e passe; o Bruno (admin) escolhe por quem marca; `PUT /bilhetes/semana` e `PUT /bilhetes/passe` passam a ser por utilizador (e o espelho do passe do Bruno deixa de ser preciso).
 4. **Fase 4**: o ntfy por utilizador (uma conta de leitura por pessoa e tópico próprio; Priority high em tudo; cada pessoa no seu telemóvel), e adicionar Camila, Bruninho e Davi na página da LAN (basta o nome; o e-mail Google só quando tiverem login).
-5. **Menor**: «Testar login CP» na página de administração; a chave Fernet num gestor de passwords; se o SD do Pi morrer, a chave perde-se (o backup cifrado com `age` leva as passwords cifradas mas não a chave).
+5. **Achado a 26/09/2026**: `bilhetes_tentativas` (migração 002, registo de todos os pedidos à CP) **não ganhou `utilizador_id`** na 003. Não é urgente (a `perna` `vN`/`pedidoN` é única entre utilizadores, por isso o dono deriva-se da viagem/pedido), mas a fase 2 deve acrescentá-lo (migração 004) para os relatórios por utilizador não dependerem de um join.
+6. **Menor**: «Testar login CP» na página de administração; a chave Fernet num gestor de passwords; se o SD do Pi morrer, a chave perde-se (o backup cifrado com `age` leva as passwords cifradas mas não a chave).
 
