@@ -1,0 +1,9 @@
+[Unit]
+Description=financas — avisos ntfy (de hora a hora, das 08h às 21h)
+
+[Timer]
+OnCalendar=*-*-* 08..21:05:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target

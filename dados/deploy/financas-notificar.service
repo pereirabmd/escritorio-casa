@@ -1,0 +1,27 @@
+# Avisos ntfy da app financas (no dia do vencimento). Ver financas_notificar.py.
+[Unit]
+Description=financas — avisos ntfy no dia do vencimento
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=bpereira
+WorkingDirectory=/home/bpereira/dados
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/usr/bin/python3 financas_notificar.py
+# Endurecimento, como o dados-backup: só escreve na base (notificado_em) e nos logs.
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/home/bpereira/dados/data /home/bpereira/dados/logs
+PrivateTmp=true
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+RestrictNamespaces=true
+LockPersonality=true
+CapabilityBoundingSet=
+SystemCallFilter=@system-service

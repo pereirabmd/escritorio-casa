@@ -1,0 +1,19 @@
+{
+  "name": "Finanças",
+  "short_name": "Finanças",
+  "description": "Contas, faturas e salário: o que há para pagar, o que entra e o que sobra.",
+  "start_url": "./index.html",
+  "scope": "./",
+  "id": "/financas/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#F6F8F7",
+  "theme_color": "#146B55",
+  "lang": "pt-PT",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

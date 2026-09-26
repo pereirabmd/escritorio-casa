@@ -39,7 +39,7 @@ class ApiBase(unittest.TestCase):
                                                  "BILHETES_DB": str(Path(cls.tmp.name) / "b.db")})
         cls.env.start()
         db.migrate_all()
-        cls.settings = api.Settings({"GOOGLE_CLIENT_IDS": CLIENT, "ACL_PESO": EU, "ACL_RTO": EU, "ACL_CONVIDADOS": EU, "ACL_BILHETES": EU, "ACL_TAREFAS": EU, "RATE_IP_POR_MIN": "1000",
+        cls.settings = api.Settings({"GOOGLE_CLIENT_IDS": CLIENT, "ACL_PESO": EU, "ACL_RTO": EU, "ACL_CONVIDADOS": EU, "ACL_BILHETES": EU, "ACL_TAREFAS": EU, "ACL_FINANCAS": EU, "RATE_IP_POR_MIN": "1000",
                                      "RATE_FALHAS_POR_MIN": "1000"})
         cls.verifier = auth.TokenVerifier({CLIENT}, fetch=fetch_falso)
         cls.srv = api.criar_servidor(cls.settings, cls.verifier, porta=0)

@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="pt-PT">
+<head>
+<meta charset="UTF-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://accounts.google.com https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline' https://accounts.google.com/gsi/style https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' https://bmdpereira.duckdns.org https://accounts.google.com https://oauth2.googleapis.com; frame-src https://accounts.google.com; worker-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'">
+<meta name="referrer" content="no-referrer">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<title>Finanças</title>
+<link rel="icon" type="image/png" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#146B55">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Finanças">
+<meta name="description" content="Contas, faturas e salário: o que há para pagar, o que entra e o que sobra.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<section id="login" class="hidden">
+  <img src="icon-192.png" alt="">
+  <h1>Finanças</h1>
+  <p>O que há para pagar, o que entra e o que sobra. Entra com a tua conta Google.</p>
+  <button class="btn" id="signinBtn" type="button">Entrar com Google</button>
+  <div id="loginStatus" role="status"></div>
+</section>
+
+<div id="app" class="hidden">
+  <header class="topbar" id="topbar">
+    <span class="brand">Finanças</span>
+    <div class="month-nav" id="monthNav">
+      <button class="icon-btn" id="mesAnt" type="button" aria-label="Mês anterior"></button>
+      <span class="label" id="mesLabel" aria-live="polite"></span>
+      <button class="icon-btn" id="mesSeg" type="button" aria-label="Mês seguinte"></button>
+    </div>
+    <button class="icon-btn" id="btnRefresh" type="button" aria-label="Atualizar"></button>
+  </header>
+
+  <main>
+    <div id="bannerSync"></div>
+    <div id="erro" class="error-box hidden" role="alert"></div>
+
+    <!-- Lançamentos -->
+    <section class="tab active" id="tab-lanc" role="tabpanel">
+      <div id="bannerAtraso"></div>
+      <div id="bannerPreparado"></div>
+      <div class="totals" id="totaisMes"></div>
+      <div id="listaLanc"></div>
+    </section>
+
+    <!-- Resumo (ativo/passivo) -->
+    <section class="tab" id="tab-resumo" role="tabpanel">
+      <div class="toolbar">
+        <div class="seg" role="group" aria-label="Período">
+          <button type="button" data-modo="mes" aria-pressed="true">Mês civil</button>
+          <button type="button" data-modo="30d" aria-pressed="false">30 dias</button>
+        </div>
+        <span class="muted" id="janelaTxt"></span>
+      </div>
+      <div id="resumoCorpo"></div>
+    </section>
+
+    <!-- Relatórios -->
+    <section class="tab" id="tab-rel" role="tabpanel">
+      <div class="toolbar">
+        <div class="seg" role="group" aria-label="Relatório">
+          <button type="button" data-rel="mensal" aria-pressed="true">Mensal</button>
+          <button type="button" data-rel="anual" aria-pressed="false">Anual</button>
+          <button type="button" data-rel="homologo" aria-pressed="false">Homólogo</button>
+          <button type="button" data-rel="conta" aria-pressed="false">Conta</button>
+        </div>
+      </div>
+      <div id="relCorpo"></div>
+    </section>
+
+    <!-- Ajustes -->
+    <section class="tab" id="tab-ajustes" role="tabpanel">
+      <div class="card">
+        <h2>Categorias</h2>
+        <div id="listaCats"></div>
+        <div class="grid2" style="margin-top:12px;grid-template-columns:1fr auto">
+          <input type="text" id="novaCat" maxlength="40" placeholder="Nova categoria" aria-label="Nome da nova categoria">
+          <button class="btn" id="btnNovaCat" type="button">Adicionar</button>
+        </div>
+      </div>
+      <div class="card">
+        <h2>Avisos</h2>
+        <p class="muted" style="margin:0">Recebes uma notificação no ntfy (tópico <b>financas</b>) no próprio dia do vencimento de cada lançamento por pagar. Não há segundo aviso.</p>
+      </div>
+      <div class="card">
+        <h2>Conta</h2>
+        <button class="btn ghost" id="btnSair" type="button">Terminar sessão</button>
+        <p class="muted" id="versao" style="margin:12px 0 0"></p>
+      </div>
+    </section>
+  </main>
+
+  <button class="fab" id="fab" type="button" aria-label="Novo lançamento"></button>
+
+  <nav class="tabs" aria-label="Secções"><div class="in" role="tablist">
+    <button type="button" role="tab" data-tab="lanc" aria-selected="true"></button>
+    <button type="button" role="tab" data-tab="resumo" aria-selected="false"></button>
+    <button type="button" role="tab" data-tab="rel" aria-selected="false"></button>
+    <button type="button" role="tab" data-tab="ajustes" aria-selected="false"></button>
+  </div></nav>
+</div>
+
+<div class="scrim hidden" id="scrim"></div>
+<form class="sheet hidden" id="sheet" aria-modal="true" role="dialog" aria-labelledby="sheetTitulo" novalidate>
+  <h3 id="sheetTitulo">Novo lançamento</h3>
+  <div class="seg" role="group" aria-label="Tipo" style="margin-top:8px">
+    <button type="button" data-tipo="despesa" aria-pressed="true">Despesa</button>
+    <button type="button" data-tipo="rendimento" aria-pressed="false">Rendimento</button>
+  </div>
+  <label class="f" for="fDesc">Descrição</label>
+  <input type="text" id="fDesc" maxlength="100" required autocomplete="off" placeholder="Ex.: Luz, Renda, Salário">
+  <div class="grid2">
+    <div><label class="f" for="fValor">Valor (€)</label><input type="number" id="fValor" inputmode="decimal" step="0.01" min="0.01" required></div>
+    <div><label class="f" for="fCat">Categoria</label><select id="fCat"></select></div>
+  </div>
+  <div class="grid2">
+    <div><label class="f" for="fVenc">Vencimento</label><input type="date" id="fVenc" required></div>
+    <div><label class="f" for="fPag">Pago em</label><input type="date" id="fPag"></div>
+  </div>
+  <label class="switch"><input type="checkbox" id="fRec"> Recorrente (repete-se todos os meses)</label>
+  <div class="muted" id="fErro" role="alert" style="color:var(--expense);min-height:18px;margin-top:8px"></div>
+  <div class="actions">
+    <button class="btn danger hidden" id="fApagar" type="button">Apagar</button>
+    <button class="btn ghost" id="fCancelar" type="button">Cancelar</button>
+    <button class="btn" id="fGuardar" type="submit">Guardar</button>
+  </div>
+</form>
+
+<div class="toast hidden" id="toast" role="status"></div>
+
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+<script src="app.js"></script>
+</body>
+</html>
