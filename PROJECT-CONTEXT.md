@@ -93,8 +93,16 @@ utilizador ficou de fora da conversa (não é usado aqui).
   dois. Ver `resumo_widget/README.md` para os riscos conhecidos (o `aud` do token, o pedido silencioso em
   segundo plano, e o aspeto real do widget nunca foram vistos fora desta compilação).
 - **Não versionado**: `.gitignore` próprio exclui `app/build/`, `.gradle/`, `local.properties` e `*.apk` — só
-  o código-fonte (Java, Gradle, XML, ícones gerados) vai para o repositório. O `icon-192.png` na raiz desta
-  pasta é só para o cartão da página inicial (abaixo) — não é usado pelo projeto Android.
+  o código-fonte (Java, Gradle, XML, ícones) vai para o repositório. O `icon-192.png` na raiz desta pasta é
+  só para o cartão da página inicial (abaixo) — não é usado pelo projeto Android.
+- **Ícone (27/09/2026, pedido do utilizador)**: `icon-source.png` (imagem dada pelo utilizador, em
+  `Transferências/`, copiada para esta pasta) — a flor de quatro pétalas com o "check" ao centro. As camadas
+  do ícone adaptativo (`res/drawable-nodpi/ic_launcher_background.png` branco liso, `ic_launcher_foreground.png`
+  com o desenho recortado ao conteúdo e reduzido para caber na zona segura de 66dp/108dp, com margem) e o
+  achatado (`ic_launcher_flat.png`, para launchers antigos, a pré-visualização do widget e `icon-192.png` da
+  página inicial) são gerados a partir dele — nunca editar os PNG em `res/` à mão, gerar de novo a partir do
+  `icon-source.png` se precisar de ajustar. Depois de mudar o ícone, o `.apk` tem de ser recompilado e
+  republicado (ver "Publicar uma versão nova" no README) — o antigo (ícone gerado, grelha 2x2) já não existe.
 - **Cliente OAuth Android registado e publicado (27/09/2026)**: `108256538530-qpkatnr3t8pjk7gs76g92kibrd4kv6q4
   .apps.googleusercontent.com`, acrescentado a `GOOGLE_CLIENT_IDS` no `.env` do Pi (lista separada por
   vírgulas; cópia de segurança em `~/dados/.env.bak-antes-resumo-widget`), `dados-api` reiniciada. O `.apk`

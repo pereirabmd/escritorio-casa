@@ -123,4 +123,5 @@ máquina ter pouca RAM livre.
 - **Vários utilizadores**: só o Bruno. Alargar à Camila/Bruninho/Davi seria replicar a mesma app com o
   próprio login de cada um (cada instalação no respetivo telefone).
 - **Teste num telemóvel real**: ver a secção acima.
-- **Ícone da app**: gerado programaticamente (grelha 2x2 branca sobre azul petróleo), não desenhado à mão.
+- **Ícone da app**: `icon-source.png` (dado pelo utilizador, 27/09/2026) — as camadas do ícone adaptativo e o
+  achatado são gerados a partir dele (ver PROJECT-CONTEXT.md, secção deste projeto).
