@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:gravity="center"
+    android:padding="32dp"
+    android:background="@color/widget_bg">
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Resumo"
+        android:textSize="26sp"
+        android:textStyle="bold"
+        android:textColor="@color/brand"
+        android:layout_marginBottom="8dp" />
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Widget do ecrã inicial com tarefas, próxima viagem, RTO e finanças. Autoriza uma vez para o widget poder atualizar-se sozinho."
+        android:textAlignment="center"
+        android:textColor="@color/muted"
+        android:layout_marginBottom="24dp" />
+
+    <Button
+        android:id="@+id/botao_autorizar"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Autorizar com a Google" />
+
+    <TextView
+        android:id="@+id/texto_estado"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="20dp"
+        android:textColor="@color/text"
+        android:textAlignment="center" />
+
+</LinearLayout>

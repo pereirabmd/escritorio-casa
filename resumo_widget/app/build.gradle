@@ -1,0 +1,47 @@
+plugins {
+    id 'com.android.application'
+}
+
+android {
+    namespace 'pt.pereirabmd.resumo'
+    compileSdk 34
+
+    defaultConfig {
+        applicationId "pt.pereirabmd.resumo"
+        minSdk 26
+        targetSdk 34
+        versionCode 1
+        versionName "1.0"
+    }
+
+    signingConfigs {
+        debug {
+            // Chave própria (não a debug.keystore genérica do AGP), para o SHA-1 ser estável entre
+            // recompilações nesta máquina e coincidir com o registado na Google Cloud Console.
+            storeFile file(System.getProperty("user.home") + "/.local/keystores/resumo-debug.jks")
+            storePassword "resumo123"
+            keyAlias "resumo"
+            keyPassword "resumo123"
+        }
+    }
+
+    buildTypes {
+        debug {
+            signingConfig signingConfigs.debug
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
+    lint {
+        abortOnError false
+    }
+}
+
+dependencies {
+    implementation 'androidx.work:work-runtime:2.9.1'
+    implementation 'com.google.android.gms:play-services-auth:21.2.0'
+}

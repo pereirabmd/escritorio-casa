@@ -4,11 +4,11 @@ Contexto de projeto para o repositório `escritorio-casa`. Descreve o **estado a
 
 ## Visão geral
 
-Este repositório não é uma aplicação única — é uma coleção de **PWAs pessoais independentes**, uma por pasta, cada uma um único `index.html` autossuficiente (mais um punhado de ficheiros irmãos: service worker, manifest, ícones). Não há build, bundler nem framework: cada app é HTML/CSS/JS servido tal e qual. O deploy é feito via **GitHub Pages** (build "legacy", diretamente da branch `main`, sem GitHub Actions), em `https://pereirabmd.github.io/escritorio-casa/<pasta>/`.
+Este repositório não é uma aplicação única — é uma coleção de **PWAs pessoais independentes**, uma por pasta, cada uma um único `index.html` autossuficiente (mais um punhado de ficheiros irmãos: service worker, manifest, ícones). Não há build, bundler nem framework: cada app é HTML/CSS/JS servido tal e qual. O deploy é feito via **GitHub Pages** (build "legacy", diretamente da branch `main`, sem GitHub Actions), em `https://pereirabmd.github.io/escritorio-casa/<pasta>/`. **Exceção**: `resumo_widget/` (27/09/2026) é um projeto Android nativo (Gradle/Java, widget do ecrã inicial) — não uma PWA, não publicado no GitHub Pages, compilado localmente e instalado por sideload. Ver a secção própria.
 
 Apps ativas: `financas/` (nova, v1.2.0), `peso/`, `tarefas/`, `RTO/`, `receitas/`, `ciclismo/`, `convidados/` (a lista de convidados do casamento real do utilizador — ver secção própria abaixo, é a exceção às apps "não mantidas"). Existem ainda `enfermagem/`, `xadrez/` e um duplicado histórico em `enfermagemCamila.html`, que continuam sem manutenção.
 
-**Página inicial (`index.html` na raiz, 26/09/2026)**: lista de links para as apps (`https://pereirabmd.github.io/escritorio-casa/`). HTML estático sem JavaScript nem service worker, com CSP mínima, modo claro/escuro e os ícones de cada app (`<pasta>/icon-192.png`; `peso/pesoicon192.png`, `RTO/icon192.png`, `bilhetes_cp/assets/icon-192.png` são as exceções de nome). `enfermagem/` (Turnos) e `xadrez/` estão numa secção «Outras». **Ao criar uma app nova, acrescentar aqui o cartão dela.** A `dados/` (API e consulta da BD) não tem link: a consulta só existe na LAN.
+**Página inicial (`index.html` na raiz, 26/09/2026)**: lista de links para as apps (`https://pereirabmd.github.io/escritorio-casa/`). HTML estático sem JavaScript nem service worker, com CSP mínima, modo claro/escuro e os ícones de cada app (`<pasta>/icon-192.png`; `peso/pesoicon192.png`, `RTO/icon192.png`, `bilhetes_cp/assets/icon-192.png` são as exceções de nome). `enfermagem/` (Turnos) e `xadrez/` estão numa secção «Outras»; «Widget (Android)» (27/09/2026) tem o cartão do `resumo_widget/`, a apontar para o `.apk` no Pi (não para uma pasta deste repositório). **Ao criar uma app nova, acrescentar aqui o cartão dela.** A `dados/` (API e consulta da BD) não tem link: a consulta só existe na LAN.
 
 Na raiz existe também **`push.sh`** (não pertence a nenhuma app): adiciona, comita e faz push de todo o repositório para `main`, com uma guarda contra ficheiros que pareçam credenciais (`.env`, `.pem`, `.key`, `credentials.json`, etc.). Depois do push — e também no caminho em que não há nada para commitar, para permitir forçar um redeploy sem alterar ficheiros — pede explicitamente ao GitHub, via `gh api POST .../pages/builds`, que reconstrua o GitHub Pages, e espera até ~40s a reportar se ficou `built`/`errored`/ainda em curso. É um pedido explícito por cima do que já acontece sozinho (ver nota sobre o build "legacy" acima); exige a CLI `gh` instalada e autenticada, e falha em aviso (não em erro) se não estiver.
 
@@ -49,6 +49,63 @@ Feita depois das apps `financas` v1.2.0, do horário e dos utilizadores do `bilh
 ## Lição registada em memória
 
 O utilizador por vezes escreve um pedido para o domínio de uma app enquanto nomeia outra pasta na primeira linha. Confirmar sempre que o conteúdo real da pasta nomeada corresponde ao que o resto do pedido descreve antes de começar trabalho grande — ver `repo-structure-multi-app.md` na memória.
+
+---
+
+## `resumo_widget/` — widget do ecrã inicial do Android (27/09/2026)
+
+Pedido do utilizador: um widget a sério do ecrã inicial (não uma página web) com um resumo de 4 linhas —
+tarefas, próxima viagem, RTO, finanças —, lendo as mesmas APIs que as PWAs já usam. Antes de começar, o
+utilizador confirmou explicitamente (via perguntas) três decisões que mudam tudo: (1) tem de ser um widget
+nativo do Android, não uma PWA instalável — implica um projeto Android à parte, fora do padrão "só sites
+estáticos" deste repositório; (2) instalação por sideload (sem Play Store, sem conta de programador nem
+revisão da Google); (3) compilado **nesta máquina**, apesar de não ter Java/SDK do Android instalados e ter
+pouca RAM livre (~660 MB de 3,2 GB) — não noutra máquina com Android Studio. Fase 1: só para o telemóvel do
+Bruno (Camila/Bruninho/Davi ficam para depois, replicando a mesma app com o login de cada um). O ntfy por
+utilizador ficou de fora da conversa (não é usado aqui).
+
+- **Ferramentas instaladas de raiz nesta máquina, sem `sudo`** (o utilizador não tem sudo sem password
+  aqui): JDK 17 Temurin (`~/.local/opt/jdk17`), SDK de linha de comandos do Android + `platform-tools` +
+  `platforms;android-34` + `build-tools;34.0.0` (`~/Android/Sdk`), Gradle 8.7 (`~/.local/opt/gradle-8.7`).
+  Uma chave de assinatura própria e estável (não a `debug.keystore` genérica) em
+  `~/.local/keystores/resumo-debug.jks` (fora do repositório, nunca comitar).
+- **Projeto Android** (`resumo_widget/`, Java, sem Kotlin nem OkHttp — só a biblioteca padrão e o
+  imprescindível do Android/Play Services, para reduzir a memória e o tempo de build nesta máquina): pacote
+  `pt.pereirabmd.resumo`, minSdk 26. `ResumoWidgetProvider` (AppWidgetProvider) só desenha o que já está em
+  `SharedPreferences` — nunca faz rede no processo principal; `RefreshWorker` (WorkManager, periódico a cada
+  30 min, que é o mínimo que o próprio Android permite a um widget) busca as 4 APIs e guarda os textos.
+  Tocar numa linha abre a PWA correspondente no browser (`ACTION_VIEW`); não há WebView nem TWA — mais simples
+  e evita `assetlinks.json`/digital asset links.
+- **Autenticação sem mudar o backend**: usa a Authorization API dos serviços de identidade da Google para
+  Android (`com.google.android.gms.auth.api.identity.AuthorizationClient`, só o scope `email`), que devolve
+  um **access token** da mesma forma que as PWAs já enviam — `dados/auth.py` já aceita uma **lista** de
+  client ids (`GOOGLE_CLIENT_IDS`), por isso basta acrescentar o novo cliente OAuth **Android** (registado à
+  parte na consola Google Cloud, com o pacote e o SHA-1 da chave acima) a essa lista no `.env` do Pi — sem
+  tocar em código. **Achado a verificar antes de usar**: a classe `GoogleAuthUtil` (o caminho mais antigo e
+  mais bem documentado para isto) já **não existe** nas versões atuais do `play-services-auth` — confirmado
+  por inspeção direta dos `.aar` da Google, não só por memória; por isso usa-se a API de Authorization mais
+  recente, cuja presença e assinatura dos métodos (`builder()`, `authorize()`, `hasResolution()`,
+  `getAccessToken()`, `getAuthorizationResultFromIntent()`) também foram confirmadas por `javap` sobre os
+  `.aar` reais (`21.2.0`), não assumidas.
+- **Compilado com sucesso nesta máquina** (`assembleDebug`, ~1 min, `.apk` de 3,1 MB, assinado com a chave
+  acima — SHA-1 `12:EA:91:47:84:C2:97:82:B9:C3:E9:99:E1:9A:10:F9:5F:99:71:9B`, confirmado com `apksigner
+  verify`). **Nunca testado num telemóvel ou emulador Android a sério** — esta máquina não tem nenhum dos
+  dois. Ver `resumo_widget/README.md` para os riscos conhecidos (o `aud` do token, o pedido silencioso em
+  segundo plano, e o aspeto real do widget nunca foram vistos fora desta compilação).
+- **Não versionado**: `.gitignore` próprio exclui `app/build/`, `.gradle/`, `local.properties` e `*.apk` — só
+  o código-fonte (Java, Gradle, XML, ícones gerados) vai para o repositório. O `icon-192.png` na raiz desta
+  pasta é só para o cartão da página inicial (abaixo) — não é usado pelo projeto Android.
+- **Cliente OAuth Android registado e publicado (27/09/2026)**: `108256538530-qpkatnr3t8pjk7gs76g92kibrd4kv6q4
+  .apps.googleusercontent.com`, acrescentado a `GOOGLE_CLIENT_IDS` no `.env` do Pi (lista separada por
+  vírgulas; cópia de segurança em `~/dados/.env.bak-antes-resumo-widget`), `dados-api` reiniciada. O `.apk`
+  está publicado em `https://bmdpereira.duckdns.org/resumo-apk/resumo.apk`, servido por uma `location`
+  **estática** nova no vhost `bmdpereira.duckdns.org` (`alias /var/www/resumo-apk/resumo.apk`, fora de
+  `/home/bpereira` porque essa pasta é `700` e o `www-data` do nginx não a atravessa; cópia de segurança do
+  vhost em `/root/bmdpereira.duckdns.org.bak-antes-resumo-apk-*` no Pi, `nginx -t` confirmado antes do
+  reload). Link "Widget (Android)" acrescentado à página inicial do repositório (`index.html` da raiz) —
+  publicar uma versão nova do `.apk` exige repetir o `scp` manualmente (comandos em `resumo_widget/README.md`,
+  secção "Publicar uma versão nova"; não há atualização automática). **Falta só, do lado do utilizador**:
+  descarregar o `.apk` no telemóvel, instalar por sideload, autorizar e adicionar o widget ao ecrã inicial.
 
 ---
 

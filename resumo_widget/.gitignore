@@ -1,0 +1,7 @@
+# Build outputs e caches locais — nunca versionar (o .apk final é para instalar à mão, não para o repo).
+/app/build/
+/build/
+/.gradle/
+local.properties
+*.apk
+*.aab

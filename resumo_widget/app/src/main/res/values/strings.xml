@@ -1,0 +1,4 @@
+<resources>
+    <string name="app_name">Resumo</string>
+    <string name="widget_description">Resumo do dia: tarefas, próxima viagem, RTO e finanças</string>
+</resources>

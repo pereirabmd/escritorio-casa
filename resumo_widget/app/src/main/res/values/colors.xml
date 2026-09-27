@@ -1,0 +1,15 @@
+<resources>
+    <!-- Mesma paleta das PWAs: azul petróleo (financas) para a marca, e as cores de cada app na sua linha. -->
+    <color name="brand">#295B70</color>
+    <color name="widget_bg">#FFFFFF</color>
+    <color name="widget_bg_dark">#18211D</color>
+    <color name="text">#1D2925</color>
+    <color name="text_dark">#E6EEEA</color>
+    <color name="muted">#66736E</color>
+    <color name="muted_dark">#93A39C</color>
+    <color name="tarefas">#5B8C7A</color>
+    <color name="bilhetes">#008542</color>
+    <color name="rto">#3A6B8E</color>
+    <color name="financas">#146B55</color>
+    <color name="warn">#D9535F</color>
+</resources>

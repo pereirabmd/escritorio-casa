@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- RemoteViews: só as views/atributos suportados pelo Android (LinearLayout, TextView, ImageView, sem
+     RecyclerView nem estilos personalizados). Uma linha por app; cada linha abre a PWA correspondente. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="@drawable/widget_background"
+    android:padding="10dp">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:paddingBottom="4dp">
+        <TextView
+            android:id="@+id/widget_titulo"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="Resumo"
+            android:textColor="@color/text"
+            android:textSize="14sp"
+            android:textStyle="bold" />
+        <ImageView
+            android:id="@+id/widget_refresh"
+            android:layout_width="28dp"
+            android:layout_height="28dp"
+            android:padding="4dp"
+            android:src="@drawable/ic_refresh"
+            android:contentDescription="Atualizar" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:id="@+id/linha_tarefas"
+        style="@style/WidgetRow">
+        <ImageView android:id="@+id/icone_tarefas" style="@style/WidgetRowIcon" android:src="@drawable/ic_row_tarefas" />
+        <TextView android:id="@+id/texto_tarefas" style="@style/WidgetRowText" android:text="Tarefas: a carregar…" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:id="@+id/linha_bilhetes"
+        style="@style/WidgetRow">
+        <ImageView android:id="@+id/icone_bilhetes" style="@style/WidgetRowIcon" android:src="@drawable/ic_row_bilhetes" />
+        <TextView android:id="@+id/texto_bilhetes" style="@style/WidgetRowText" android:text="Bilhetes: a carregar…" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:id="@+id/linha_rto"
+        style="@style/WidgetRow">
+        <ImageView android:id="@+id/icone_rto" style="@style/WidgetRowIcon" android:src="@drawable/ic_row_rto" />
+        <TextView android:id="@+id/texto_rto" style="@style/WidgetRowText" android:text="RTO: a carregar…" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:id="@+id/linha_financas"
+        style="@style/WidgetRow">
+        <ImageView android:id="@+id/icone_financas" style="@style/WidgetRowIcon" android:src="@drawable/ic_row_financas" />
+        <TextView android:id="@+id/texto_financas" style="@style/WidgetRowText" android:text="Finanças: a carregar…" />
+    </LinearLayout>
+
+    <TextView
+        android:id="@+id/widget_atualizado"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="2dp"
+        android:gravity="end"
+        android:text=""
+        android:textColor="@color/muted"
+        android:textSize="10sp" />
+
+</LinearLayout>
