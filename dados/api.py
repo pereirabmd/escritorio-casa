@@ -7,6 +7,10 @@ para o fail2ban; aqui trata-se de tudo o que só a aplicação sabe):
 - TODOS os pedidos (menos /saude e o preflight CORS) exigem `Authorization:
   Bearer <access token Google>` validado em auth.py, e o e-mail tem de estar na
   lista da app (`ACL_<APP>` no .env; sem lista = ninguém entra);
+- o backend do Pulse (mesma máquina) entra sem token Google: `X-Pulse-Key` (segredo
+  `PULSE_SERVICE_KEY`, ≥ 32 caracteres) + `X-Pulse-User` (e-mail). Só vale numa ligação
+  direta em loopback — o nginx acrescenta sempre `X-Real-IP`, por isso um pedido vindo da
+  Internet com estes cabeçalhos nunca chega lá; o e-mail continua sujeito a `ACL_<APP>`;
 - CORS só para as origens de CORS_ORIGINS (por omissão o GitHub Pages);
   sem cookies, por isso não há CSRF;
 - limites: corpo ≤ 16 KB, só application/json, timeout de socket, rate limit
@@ -17,6 +21,7 @@ para o fail2ban; aqui trata-se de tudo o que só a aplicação sabe):
 
 from __future__ import annotations
 
+import hmac
 import importlib
 import json
 import logging
@@ -35,6 +40,7 @@ import db
 from auth import AuthError, TokenVerifier, Unauthorized
 
 MAX_BODY = 16 * 1024
+_EMAIL_RE = re.compile(r"^[^@\s]{1,64}@[^@\s]{1,255}$")
 APPS = ["peso", "rto", "convidados", "bilhetes", "tarefas", "financas"]  # módulos em apps/ com NAME e ROUTES
 LOG = logging.getLogger("dados.api")
 
@@ -76,6 +82,8 @@ class Settings:
         self.acl = {k[4:].lower(): _split(v) for k, v in e.items() if k.startswith("ACL_")}
         for a in APPS:
             self.acl.setdefault(a, set())
+        chave = e.get("PULSE_SERVICE_KEY", "").strip()
+        self.service_key = chave if len(chave) >= 32 else ""   # curta demais = desligado (falha fechado)
         self.host, self.port = "127.0.0.1", int(e.get("DADOS_API_PORT", "8898"))
         self.tz = ZoneInfo(e.get("TZ", "Europe/Lisbon"))
         self.limite_ip = int(e.get("RATE_IP_POR_MIN", "120"))
@@ -231,16 +239,20 @@ def make_handler(settings: Settings, verifier: TokenVerifier, rotas):
                 return self._enviar(200, {"ok": True})
 
             # 1) autenticação — antes de revelar se a rota existe
-            auth = self.headers.get("Authorization", "")
-            if not auth.startswith("Bearer "):
-                limite_falhas.allow(ip) or self._raise_429()
-                raise Unauthorized("falta o token")
-            try:
-                email = verifier.verify(auth[7:].strip())
-            except Unauthorized:
-                if not limite_falhas.allow(ip):
-                    self._raise_429()
-                raise
+            chave = self.headers.get("X-Pulse-Key")
+            if chave is not None:
+                email = self._servico(ip, chave)
+            else:
+                auth = self.headers.get("Authorization", "")
+                if not auth.startswith("Bearer "):
+                    limite_falhas.allow(ip) or self._raise_429()
+                    raise Unauthorized("falta o token")
+                try:
+                    email = verifier.verify(auth[7:].strip())
+                except Unauthorized:
+                    if not limite_falhas.allow(ip):
+                        self._raise_429()
+                    raise
             self._user = email
             if not limite_user.allow(email):
                 self._raise_429()
@@ -268,6 +280,18 @@ def make_handler(settings: Settings, verifier: TokenVerifier, rotas):
             ctx.body = self._ler_corpo() if self.command in ("POST", "PUT") else {}
             status, corpo = fn(ctx)
             self._enviar(status, corpo)
+
+        def _servico(self, ip: str, chave: str) -> str:
+            """Autenticação do backend do Pulse: chave de serviço + e-mail do utilizador, só em loopback direto."""
+            direto = self.client_address[0] in ("127.0.0.1", "::1") and "X-Real-IP" not in self.headers \
+                and "X-Forwarded-For" not in self.headers
+            email = self.headers.get("X-Pulse-User", "").strip().lower()
+            if not (direto and settings.service_key and email and _EMAIL_RE.match(email)
+                    and hmac.compare_digest(chave.encode(), settings.service_key.encode())):
+                if not limite_falhas.allow(ip):
+                    self._raise_429()
+                raise Unauthorized("credencial de serviço recusada")
+            return email
 
         def _raise_429(self):
             raise ApiError(429, "demasiados_pedidos", "abranda", {"Retry-After": "60"})
@@ -319,4 +343,7 @@ def main() -> int:
 
 
 if __name__ == "__main__":
+    # Corrido como `python3 api.py`, este ficheiro é `__main__`; os módulos de apps/ fazem `from api import ApiError` e
+    # sem isto importariam uma SEGUNDA cópia (com outra classe ApiError) que o handler não apanha: 400/403/404/409 viravam 500.
+    sys.modules.setdefault("api", sys.modules[__name__])
     sys.exit(main())

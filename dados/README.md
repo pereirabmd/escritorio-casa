@@ -76,6 +76,12 @@ Serviço em `127.0.0.1:8898`, exposto só pelo nginx em `https://bmdpereira.duck
 As PWAs chamam-no com `Authorization: Bearer <access token Google>` — **têm de pedir os scopes
 `openid email` além dos que já pedem** (o e-mail é o que identifica quem chama; sem ele o token é recusado).
 
+**Backend do Pulse (28/09/2026)**: em alternativa ao token Google, aceita `X-Pulse-Key: <PULSE_SERVICE_KEY>` +
+`X-Pulse-User: <e-mail>`. Só vale numa ligação direta em loopback (o nginx acrescenta sempre `X-Real-IP`, por isso
+nada vindo da Internet chega a esta via); o e-mail continua sujeito a `ACL_<APP>` e aos limites por utilizador.
+A chave tem de ter ≥ 32 caracteres (senão a via fica desligada), vive só no `.env` do Pi, e as falhas contam para o
+fail2ban como qualquer 401. Testes: `ServicoPulseTest` em `tests/test_api.py`.
+
 | Método e caminho | Função |
 |---|---|
 | `GET /saude` | `{"ok":true}` (público, sem informação) |

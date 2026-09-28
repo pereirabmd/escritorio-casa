@@ -106,6 +106,47 @@ class AuthTest(ApiBase):
         self.assertNotIn("t" * 30, buf.getvalue())
 
 
+CHAVE = "k" * 40
+
+
+class ServicoPulseTest(ApiBase):
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls.srv.shutdown(); cls.srv.server_close()
+        cls.settings = api.Settings({"GOOGLE_CLIENT_IDS": CLIENT, "ACL_PESO": EU, "PULSE_SERVICE_KEY": CHAVE,
+                                     "RATE_IP_POR_MIN": "1000", "RATE_FALHAS_POR_MIN": "1000"})
+        cls.srv = api.criar_servidor(cls.settings, cls.verifier, porta=0)
+        cls.porta = cls.srv.server_address[1]
+        threading.Thread(target=cls.srv.serve_forever, daemon=True).start()
+
+    def servico(self, chave=CHAVE, utilizador=EU, extra=None, caminho="/peso/registos"):
+        h = {"X-Pulse-Key": chave, "X-Pulse-User": utilizador, **(extra or {})}
+        return self.pedir("GET", caminho, token=None, headers=h)[0]
+
+    def test_chave_certa_e_utilizador_na_acl(self):
+        self.assertEqual(self.servico(), 200)
+
+    def test_utilizador_fora_da_acl_403(self):
+        self.assertEqual(self.servico(utilizador=OUTRO), 403)
+
+    def test_chave_errada_ou_sem_utilizador_401(self):
+        self.assertEqual(self.servico(chave="x" * 40), 401)
+        self.assertEqual(self.servico(utilizador=""), 401)
+        self.assertEqual(self.servico(utilizador="nao-e-email"), 401)
+
+    def test_via_nginx_nunca_conta(self):
+        self.assertEqual(self.servico(extra={"X-Real-IP": "203.0.113.5"}), 401)
+        self.assertEqual(self.servico(extra={"X-Forwarded-For": "203.0.113.5"}), 401)
+
+    def test_google_continua_a_funcionar(self):
+        self.assertEqual(self.pedir("GET", "/peso/registos")[0], 200)
+
+    def test_chave_curta_ou_ausente_desliga_o_servico(self):
+        self.assertEqual(api.Settings({"PULSE_SERVICE_KEY": "curta"}).service_key, "")
+        self.assertEqual(api.Settings({}).service_key, "")
+
+
 class AclTest(unittest.TestCase):
     def test_acl_por_app_a_partir_do_env(self):
         st = api.Settings({"GOOGLE_CLIENT_IDS": "x", "ACL_PESO": " A@x.com , b@x.com ",
@@ -304,3 +345,31 @@ class VerificadorTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ExecutadoComoScriptTest(unittest.TestCase):
+    """Em produção corre-se `python3 api.py` (módulo `__main__`): os erros de validação têm de continuar a ser 4xx."""
+
+    def test_erro_de_validacao_e_400_e_nao_500(self):
+        import os, socket, subprocess, sys, time
+        with tempfile.TemporaryDirectory() as tmp, socket.socket() as s:
+            s.bind(("127.0.0.1", 0)); porta = s.getsockname()[1]; s.close()
+            env = {**os.environ, "DADOS_DB": f"{tmp}/d.db", "BILHETES_DB": f"{tmp}/b.db", "DADOS_API_PORT": str(porta),
+                   "GOOGLE_CLIENT_IDS": CLIENT, "ACL_PESO": EU, "PULSE_SERVICE_KEY": "k" * 40}
+            proc = subprocess.Popen([sys.executable, "api.py"], cwd=Path(api.__file__).parent, env=env,
+                                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            try:
+                for _ in range(50):
+                    try:
+                        c = http.client.HTTPConnection("127.0.0.1", porta, timeout=2); c.request("GET", "/saude")
+                        if c.getresponse().status == 200:
+                            break
+                    except OSError:
+                        time.sleep(0.2)
+                else:
+                    self.fail("o servidor não arrancou")
+                c = http.client.HTTPConnection("127.0.0.1", porta, timeout=5)
+                c.request("GET", "/peso/registos?desde=lixo", headers={"X-Pulse-Key": "k" * 40, "X-Pulse-User": EU})
+                self.assertEqual(c.getresponse().status, 400)
+            finally:
+                proc.terminate(); proc.wait(5)

@@ -34,6 +34,35 @@ class BilhetesApiTest(ApiBase):
         self.assertEqual(self.pedir("GET", "/bilhetes/dados", token="t" * 30 + "outro")[0], 403)
         self.assertEqual(self.pedir("GET", "/bilhetes/dados", token=None)[0], 401)
 
+    def test_proximo_escolhe_a_primeira_viagem_ativa_futura_com_a_compra(self):
+        hoje = datetime.now().date()
+        d = lambda n: (hoje + timedelta(days=n)).isoformat()
+        c = self.bd()
+        for data, hora, comboio, ativo in ((d(-1), "10:00", 1, "SIM"), (d(2), "09:00", 2, "NAO"),
+                                           (d(3), "18:00", 3, "SIM"), (d(3), "08:00", 4, "SIM")):
+            c.execute("INSERT INTO bilhetes_viagens (data, origem, destino, comboio, hora, ativo) VALUES (?,?,?,?,?,?)",
+                      (data, "Lisboa Oriente", "Aveiro", comboio, hora, ativo))
+        c.execute("INSERT INTO bilhetes_compras (data, comboio, origem, destino, hora_partida, carruagem, lugar, referencia) "
+                  "VALUES (?,?,?,?,?,?,?,?)", (d(3), 4, "Lisboa Oriente", "Aveiro", "08:00", "5", "23", "REF-XYZ"))
+        c.close()
+        s, b, _ = self.pedir("GET", "/bilhetes/proximo")
+        self.assertEqual(s, 200)
+        p = b["proximo"]
+        self.assertEqual((p["data"], p["hora"], p["comboio"]), (d(3), "08:00", 4))   # ignora passadas e inativas
+        self.assertEqual(p["compra"], {"carruagem": "5", "lugar": "23", "referencia": "REF-XYZ"})
+        self.assertIn("passe", b)
+
+    def test_proximo_sem_compra_sem_viagens_e_acesso(self):
+        s, b, _ = self.pedir("GET", "/bilhetes/proximo")
+        self.assertEqual((s, b["proximo"]), (200, None))
+        amanha = (datetime.now().date() + timedelta(days=1)).isoformat()
+        c = self.bd()
+        c.execute("INSERT INTO bilhetes_viagens (data, origem, destino, comboio, hora, ativo) VALUES (?,?,?,?,?,?)",
+                  (amanha, "Aveiro", "Lisboa Oriente", 9, "07:00", "SIM")); c.close()
+        self.assertIsNone(self.pedir("GET", "/bilhetes/proximo")[1]["proximo"]["compra"])
+        self.assertEqual(self.pedir("GET", "/bilhetes/proximo", token="t" * 30 + "outro")[0], 403)
+        self.assertEqual(self.pedir("GET", "/bilhetes/proximo", token=None)[0], 401)
+
     def test_usa_a_base_de_dados_propria(self):
         self.assertEqual(self.semana([viagem()])[0], 200)
         c = sqlite3.connect(db.db_path("dados"))

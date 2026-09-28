@@ -117,6 +117,24 @@ def dados(ctx):
     }
 
 
+def proximo(ctx):
+    """A próxima viagem ativa (hoje, se ainda não partiu, ou a seguinte) com a compra já feita, se houver, e o passe.
+    Leve de propósito: é o que o «Hoje» do Pulse precisa, sem os logs nem os pedidos de `/bilhetes/dados`."""
+    conn = ctx.db()
+    agora = datetime.now(ctx.tz)
+    hoje, hora = agora.date().isoformat(), agora.strftime("%H:%M")
+    v = conn.execute("SELECT id, data, origem, destino, comboio, hora, ativo FROM bilhetes_viagens "
+                     "WHERE ativo = 'SIM' AND (data > ? OR (data = ? AND hora >= ?)) "
+                     "ORDER BY data, hora, id LIMIT 1", (hoje, hoje, hora)).fetchone()
+    viagem = None
+    if v:
+        c = conn.execute("SELECT carruagem, lugar, referencia FROM bilhetes_compras "
+                         "WHERE data = ? AND comboio = ? AND hora_partida = ? ORDER BY id DESC LIMIT 1",
+                         (v["data"], v["comboio"], v["hora"])).fetchone()
+        viagem = {**_viagem(v), "compra": {"carruagem": c["carruagem"], "lugar": c["lugar"], "referencia": c["referencia"]} if c else None}
+    return 200, {"proximo": viagem, "passe": _passe(conn, agora.date())}
+
+
 # --- semana -------------------------------------------------------------------
 
 def _viagem_valida(v: object, ini: str, fim: str) -> dict:
@@ -313,6 +331,7 @@ ROUTES = [
     ("GET", r"^/bilhetes/eu$", eu),
     ("GET", r"^/bilhetes/admin/utilizadores$", admin_utilizadores),
     ("GET", r"^/bilhetes/dados$", dados),
+    ("GET", r"^/bilhetes/proximo$", proximo),
     ("PUT", r"^/bilhetes/semana$", gravar_semana),
     ("PUT", r"^/bilhetes/passe$", gravar_passe),
     ("PUT", r"^/bilhetes/pedidos/(\d{1,12})$", gravar_pedido),

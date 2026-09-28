@@ -47,6 +47,42 @@ class TarefasApiTest(ApiBase):
         self.assertEqual((a["ativa"], a["prioridade"], a["rotacaoPessoas"], a["diaMes"]), (True, "Media", "", None))
         self.assertEqual(self.nova(nome="X")["tarefa"]["id"], "T003")
 
+    def test_cid_torna_criar_tarefa_idempotente(self):
+        cid = "cid-tarefa-0001"
+        s1, b1, _ = self.pedir("POST", "/tarefas/tarefas", tarefa(cid=cid))
+        s2, b2, _ = self.pedir("POST", "/tarefas/tarefas", tarefa(cid=cid))
+        self.assertEqual((s1, s2), (201, 200))
+        self.assertEqual(b1["tarefa"], b2["tarefa"])
+        self.assertEqual(len(self.dados()["tarefas"]), 1)
+
+    def test_cid_com_tarefa_pontual_devolve_a_mesma_ocorrencia(self):
+        pontual = tarefa(recorrencia="Pontual", diasSemana="2035-07-04", cid="cid-pontual-01")
+        b1 = self.pedir("POST", "/tarefas/tarefas", pontual)[1]
+        s2, b2, _ = self.pedir("POST", "/tarefas/tarefas", pontual)
+        self.assertEqual(s2, 200)
+        self.assertEqual(b1["instancia"], b2["instancia"])
+        self.assertEqual(len(self.dados()["instancias"]), 1)
+
+    def test_cid_torna_criar_instancia_idempotente(self):
+        tid = self.nova()["tarefa"]["id"]
+        corpo = {"tarefaId": tid, "data": "2035-06-02", "pessoa": "Bruno", "cid": "cid-inst-00001"}
+        s1, b1, _ = self.pedir("POST", "/tarefas/instancias", corpo)
+        s2, b2, _ = self.pedir("POST", "/tarefas/instancias", corpo)
+        self.assertEqual((s1, s2), (201, 200))
+        self.assertEqual(b1["instancia"], b2["instancia"])
+        # sem cid, repetir continua a ser 409 (a regra (tarefa, data) não muda)
+        sem = {"tarefaId": tid, "data": "2035-06-03"}
+        self.assertEqual(self.pedir("POST", "/tarefas/instancias", sem)[0], 201)
+        self.assertEqual(self.pedir("POST", "/tarefas/instancias", sem)[0], 409)
+
+    def test_cid_invalido_e_sem_cid_continua_igual(self):
+        for mau in ("curto", "x" * 65, "com espaco 1234", 12345678, ""):
+            self.assertEqual(self.pedir("POST", "/tarefas/tarefas", tarefa(cid=mau))[0], 400, mau)
+        self.assertEqual(self.pedir("POST", "/tarefas/tarefas", tarefa())[0], 201)
+        # o cid não é um campo editável de uma tarefa já criada
+        tid = self.dados()["tarefas"][0]["id"]
+        self.assertEqual(self.pedir("PUT", f"/tarefas/tarefas/{tid}", {"cid": "cid-nao-edita-1"})[0], 400)
+
     def test_id_continua_acima_do_maior_mesmo_com_buracos(self):
         c = self.bd(); c.execute("INSERT INTO tarefas_tarefas (id, nome, recorrencia) VALUES ('T1144', 'antiga', 'Diaria')"); c.close()
         self.assertEqual(self.nova()["tarefa"]["id"], "T1145")

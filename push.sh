@@ -76,7 +76,7 @@ forcar_deploy_pages(){
 
 # Guarda de segurança: nunca deixar passar ficheiros que pareçam credenciais.
 # (os modelos *.example, como .env.example, só têm placeholders e são permitidos)
-FICHEIROS_SENSIVEIS="$(git status --porcelain | awk '{print $2}' | grep -E '(^|/)\.env($|\.[^/]*$)|\.pem$|\.key$|credentials\.json$|serviceAccount.*\.json$|service-account.*\.json$|\.har$' | grep -v -E '\.example$' || true)"
+FICHEIROS_SENSIVEIS="$(git status --porcelain -uall | awk '{print $2}' | grep -E '(^|/)\.env($|\.[^/]*$)|\.pem$|\.key$|credentials\.json$|serviceAccount.*\.json$|service-account.*\.json$|firebase-adminsdk.*\.json$|\.har$' | grep -v -E '\.example$' || true)"
 if [ -n "$FICHEIROS_SENSIVEIS" ]; then
   echo "Erro: detetados ficheiros potencialmente sensíveis a caminho do commit:" >&2
   echo "$FICHEIROS_SENSIVEIS" >&2

@@ -1,10 +1,10 @@
 # PROJECT-CONTEXT.md
 
-Contexto de projeto para o repositório `escritorio-casa`. Descreve o **estado atual** de cada app e as decisões que não são óbvias a partir do código. Última alteração: 15 de setembro de 2026 — mesma análise de bibliotecas de animação (GSAP/Motion/Anime.js/Three.js) aplicada a `ciclismo/` (Beta 24), `convidados/` (v2.1.0) e `RTO/` (v7.1.1, que também ganhou o formulário de nova nota movido para o topo da aba Notas); cada app só ganhou as bibliotecas com uso concreto — nenhuma ganhou as 4. **27/09/2026**: decisão fechada sobre o controlo dos cartões de crédito da `financas` (fica manual); chave privada `age` do backup guardada num gestor de passwords; tarefa `T1142` (nome corrompido) apagada da BD; utilizador confirmou o `resumo_widget` instalado e a funcionar no telemóvel.
+Contexto de projeto para o repositório `escritorio-casa`. Descreve o **estado atual** de cada app e as decisões que não são óbvias a partir do código. Última alteração: 28 de setembro de 2026 (secção `pulse/` e alterações ao `dados/`; ver abaixo). Anterior: 15 de setembro de 2026 — mesma análise de bibliotecas de animação (GSAP/Motion/Anime.js/Three.js) aplicada a `ciclismo/` (Beta 24), `convidados/` (v2.1.0) e `RTO/` (v7.1.1, que também ganhou o formulário de nova nota movido para o topo da aba Notas); cada app só ganhou as bibliotecas com uso concreto — nenhuma ganhou as 4. **27/09/2026**: decisão fechada sobre o controlo dos cartões de crédito da `financas` (fica manual); chave privada `age` do backup guardada num gestor de passwords; tarefa `T1142` (nome corrompido) apagada da BD; utilizador confirmou o `resumo_widget` instalado e a funcionar no telemóvel.
 
 ## Visão geral
 
-Este repositório não é uma aplicação única — é uma coleção de **PWAs pessoais independentes**, uma por pasta, cada uma um único `index.html` autossuficiente (mais um punhado de ficheiros irmãos: service worker, manifest, ícones). Não há build, bundler nem framework: cada app é HTML/CSS/JS servido tal e qual. O deploy é feito via **GitHub Pages** (build "legacy", diretamente da branch `main`, sem GitHub Actions), em `https://pereirabmd.github.io/escritorio-casa/<pasta>/`. **Exceção**: `resumo_widget/` (27/09/2026) é um projeto Android nativo (Gradle/Java, widget do ecrã inicial) — não uma PWA, não publicado no GitHub Pages, compilado localmente e instalado por sideload. Ver a secção própria.
+Este repositório não é uma aplicação única — é uma coleção de **PWAs pessoais independentes**, uma por pasta, cada uma um único `index.html` autossuficiente (mais um punhado de ficheiros irmãos: service worker, manifest, ícones). Não há build, bundler nem framework: cada app é HTML/CSS/JS servido tal e qual. O deploy é feito via **GitHub Pages** (build "legacy", diretamente da branch `main`, sem GitHub Actions), em `https://pereirabmd.github.io/escritorio-casa/<pasta>/`. **Exceções**: `resumo_widget/` (27/09/2026) é um projeto Android nativo (Gradle/Java, widget do ecrã inicial) e `pulse/` (28/09/2026) é um produto próprio (Android Kotlin/Compose + Web React/Vite + backend FastAPI, ainda só documentação) — não são PWAs de um só ficheiro. O `resumo_widget/` é compilado localmente e instalado por sideload; ver as secções próprias.
 
 Apps ativas: `financas/` (nova, v1.2.0), `peso/`, `tarefas/`, `RTO/`, `receitas/`, `ciclismo/`, `convidados/` (a lista de convidados do casamento real do utilizador — ver secção própria abaixo, é a exceção às apps "não mantidas"). Existem ainda `enfermagem/`, `xadrez/` e um duplicado histórico em `enfermagemCamila.html`, que continuam sem manutenção.
 
@@ -49,6 +49,20 @@ Feita depois das apps `financas` v1.2.0, do horário e dos utilizadores do `bilh
 ## Lição registada em memória
 
 O utilizador por vezes escreve um pedido para o domínio de uma app enquanto nomeia outra pasta na primeira linha. Confirmar sempre que o conteúdo real da pasta nomeada corresponde ao que o resto do pedido descreve antes de começar trabalho grande — ver `repo-structure-multi-app.md` na memória.
+
+---
+
+## `pulse/` — aplicação agregadora (28/09/2026)
+
+Produto à parte, ainda **só com documentação** (sem código). **A fonte de verdade é `pulse/README.md`, `pulse/CLAUDE.md` e `pulse/docs/`** (decisões em `docs/DECISIONS.md`, ADR-031 a 035 desta data) — não duplicar aqui. Aqui ficam só os efeitos no resto do repositório:
+
+- **`dados/api.py` aceita o backend do Pulse**: `X-Pulse-Key` (`PULSE_SERVICE_KEY` no `.env` do Pi, ≥ 32 caracteres) + `X-Pulse-User` (e-mail), só em loopback direto (o nginx põe sempre `X-Real-IP`); o e-mail continua sujeito a `ACL_<APP>`. Em produção desde 28/09/2026. Ver `dados/README.md`.
+- **Novidades no `dados/`** (em produção): `GET /bilhetes/proximo` (viagem ativa seguinte + compra + passe, leve); `cid` idempotente em `POST /tarefas/tarefas` e `/tarefas/instancias` (migração `008_tarefas_cid.sql`, `dados.db` v8).
+- **Bug antigo corrigido**: corrido como `python3 api.py` (módulo `__main__`), as apps importavam uma segunda cópia da `ApiError` e **todo o erro de validação/404/409 saía como 500**; agora são 4xx. Havia testes verdes porque importavam `api` como módulo — o teste `ExecutadoComoScriptTest` corre-o como script.
+- **Segredos do Pulse, todos fora do Git**: `~/.local/secrets/pulse-firebase-adminsdk.json` (chave da service account FCM), `~/.local/keystores/pulse.jks` + `pulse-keystore.properties` (assinatura do APK), `pulse/google-services.json` (ignorado). O `push.sh` passou a recusar também `firebase-adminsdk*.json` e a listar ficheiros um a um (`-uall`).
+- **Decisões que tocam as outras apps**: notificações do Pulse por FCM, as apps atuais mantêm o ntfy (camada comum mais tarde); «adiar» uma tarefa = mudar a `data` da instância; `applicationId` `pt.pereirabmd.pulse`.
+- **Backups manuais antes da migração 008**: `~/dados/data/manual-antes-008-*.db` no Pi (podem apagar-se quando o backup diário confirmar o estado novo).
+- Compilar Kotlin/Compose **cabe** nesta máquina (teste mínimo: 2 min 13 s); ver ADR-035.
 
 ---
 

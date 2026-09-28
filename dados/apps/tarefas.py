@@ -34,6 +34,7 @@ _ISO = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 _HORA = re.compile(r"^([01]\d|2[0-3]):[0-5]\d$")
 _CONCL = re.compile(r"^\d{4}-\d{2}-\d{2} ([01]\d|2[0-3]):[0-5]\d$")
 _CHAVE = re.compile(r"^[A-Za-z][A-Za-z0-9_]{0,79}$")
+_CID = re.compile(r"^[A-Za-z0-9-]{8,64}$")
 _SEGREDO = re.compile(r"_NtfyPasswordEnc$")
 MASCARA = "********"
 
@@ -93,6 +94,14 @@ def _so(b: dict, permitidos: set[str]) -> None:
     extra = set(b) - permitidos
     if extra:
         raise ApiError(400, "campos_desconhecidos", f"campos não aceites: {sorted(extra)[:5]}")
+
+
+def _cid(b: dict) -> str | None:
+    """`cid` opcional do cliente: torna o POST idempotente (fila offline). Sai do corpo antes da validação dos campos."""
+    cid = b.pop("cid", None)
+    if cid is not None and (not isinstance(cid, str) or not _CID.match(cid)):
+        raise ApiError(400, "cid_invalido", "cid tem de ter 8-64 caracteres [A-Za-z0-9-]")
+    return cid
 
 
 def _agora_local(ctx) -> str:
@@ -351,19 +360,26 @@ _PADRAO_TAREFA = {"categoria": "", "icone": "", "diasSemana": "", "diaMes": None
 
 
 def criar_tarefa(ctx):
-    b = ctx.body
+    b = dict(ctx.body)
+    cid = _cid(b)
     _so(b, _CAMPOS_TAREFA)
     for obrigatorio in ("nome", "recorrencia"):
         if obrigatorio not in b:
             raise ApiError(400, f"{obrigatorio}_invalido", f"{obrigatorio} é obrigatório")
     conn = ctx.db()
     with _tx(conn):
+        if cid:
+            ja = conn.execute("SELECT * FROM tarefas_tarefas WHERE cid=?", (cid,)).fetchone()
+            if ja:  # repetição do mesmo pedido: devolve o que já foi criado (e a ocorrência pontual, se houver)
+                inst = conn.execute("SELECT * FROM tarefas_instancias WHERE tarefa_id=? ORDER BY rowid LIMIT 1", (ja["id"],)).fetchone() \
+                    if ja["recorrencia"] == "Pontual" else None
+                return 200, {"tarefa": _tarefa_json(ja), "instancia": _inst_json(inst) if inst else None}
         n = _normalizar_tarefa(conn, {**_PADRAO_TAREFA, **b}, None)
         tid = _proximo(conn, "tarefas_tarefas", "T", 3)
         conn.execute("INSERT INTO tarefas_tarefas (id, nome, categoria, icone, recorrencia, dias_semana, dia_mes, hora_notificacao, "
-                     "pessoa_padrao, ativa, prioridade, rotacao_pessoas, depende_de) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                     "pessoa_padrao, ativa, prioridade, rotacao_pessoas, depende_de, cid) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                      (tid, n["nome"], n["categoria"], n["icone"], n["recorrencia"], n["dias_semana"], n["dia_mes"], n["hora"],
-                      n["pessoa"], n["ativa"], n["prioridade"], n["rotacao"], n["depende"]))
+                      n["pessoa"], n["ativa"], n["prioridade"], n["rotacao"], n["depende"], cid))
         instancia = None
         if n["recorrencia"] == "Pontual" and n["ativa"]:
             # tarefas pontuais não passam pelo gerador: a única ocorrência cria-se já, na data escolhida
@@ -464,17 +480,22 @@ def atualizar_instancias(ctx):
 
 
 def criar_instancia(ctx):
-    b = ctx.body
+    b = dict(ctx.body)
+    cid = _cid(b)
     _so(b, {"tarefaId", "data", "pessoa"})
     conn = ctx.db()
     with _tx(conn):
+        if cid:
+            ja = conn.execute("SELECT * FROM tarefas_instancias WHERE cid=?", (cid,)).fetchone()
+            if ja:
+                return 200, {"instancia": _inst_json(ja)}
         tid = _txt(b.get("tarefaId"), "tarefaId", 12, True)
         _tarefa(conn, tid)
         data = _data(b.get("data"), "data")
         iid = _proximo(conn, "tarefas_instancias", "I", 4)
         try:
-            conn.execute("INSERT INTO tarefas_instancias (id, tarefa_id, data, pessoa, estado) VALUES (?, ?, ?, ?, 'Pendente')",
-                         (iid, tid, data, _txt(b.get("pessoa"), "pessoa", 60)))
+            conn.execute("INSERT INTO tarefas_instancias (id, tarefa_id, data, pessoa, estado, cid) VALUES (?, ?, ?, ?, 'Pendente', ?)",
+                         (iid, tid, data, _txt(b.get("pessoa"), "pessoa", 60), cid))
         except Exception as e:
             if "UNIQUE" in str(e):
                 raise ApiError(409, "conflito", "essa tarefa já tem uma ocorrência nesse dia") from None
