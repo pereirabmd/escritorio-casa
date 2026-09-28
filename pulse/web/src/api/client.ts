@@ -56,7 +56,12 @@ export function mensagemDeErro(e: unknown): string {
     case 'password_atual_errada': return 'A palavra-passe atual não está certa.'
     case 'password_fraca': return 'A palavra-passe nova é demasiado fraca. Segue as regras indicadas.'
     case 'password_igual': return 'A palavra-passe nova tem de ser diferente da atual.'
-    case 'pedido_invalido': return 'Verifica os dados e tenta de novo.'
+    case 'pedido_invalido':
+    case 'parametros_invalidos': return 'Verifica os valores e tenta de novo.'
+    case 'conflito': return 'Já existe esta tarefa nesse dia. Conclui ou salta a de hoje.'
+    case 'data_passada': return 'Escolhe hoje ou uma data futura.'
+    case 'nao_encontrado': return 'Este item já não existe. Atualiza o ecrã.'
+    case 'modulo_indisponivel': return 'Este módulo não está disponível de momento. Tenta de novo daqui a pouco.'
     case 'rede': return e.message
     default: return e.status >= 500 ? 'O servidor não conseguiu responder. Tenta de novo daqui a pouco.' : e.message
   }

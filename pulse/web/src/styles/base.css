@@ -107,3 +107,27 @@ a { color: var(--primary); }
 
 /* números tabulares só onde alinham colunas (o hífen de «palavra-passe» não pode ficar largo) */
 .t-metric, .t-section, .day b, .row-end, .card-head .t-meta { font-variant-numeric: tabular-nums; }
+
+/* --- ações rápidas dos cartões --- */
+.check { width: 32px; height: 32px; flex: none; border-radius: 50%; border: 1.5px solid var(--line); background: transparent; color: transparent; display: grid; place-items: center; transition: background var(--t-fast), color var(--t-fast), border-color var(--t-fast); }
+.check:hover:not(:disabled) { border-color: var(--primary); color: var(--primary); }
+.check:disabled { opacity: 0.55; cursor: default; }
+.link-btn { border: 0; background: transparent; color: var(--primary); font-size: 14px; font-weight: 500; min-height: 32px; padding: 0 var(--s2); border-radius: var(--r-s); display: inline-flex; align-items: center; }
+.link-btn:hover:not(:disabled) { background: var(--surface-2); }
+.link-btn:disabled { opacity: 0.55; cursor: default; }
+.rows > li.open { flex-wrap: wrap; }
+.adiar { flex-basis: 100%; display: flex; gap: var(--s2); flex-wrap: wrap; align-items: center; padding-top: var(--s2); }
+.quick { display: flex; gap: var(--s2); flex-wrap: wrap; align-items: center; }
+.input-sm { min-height: 40px; width: auto; padding: 0 var(--s3); }
+.peso-input { width: 96px; text-align: right; }
+.btn[aria-pressed='true'] { background: var(--surface-2); border-color: var(--primary); }
+button.day { border: 0; background: transparent; font: inherit; }
+button.day[aria-pressed='true'] { background: var(--surface-2); }
+
+/* --- confirmação curta de uma ação --- */
+.avisos { position: fixed; z-index: 20; left: var(--s4); right: var(--s4); bottom: calc(72px + env(safe-area-inset-bottom)); display: grid; justify-items: center; pointer-events: none; }
+.aviso { pointer-events: auto; display: flex; align-items: center; gap: var(--s4); max-width: 480px; width: 100%; padding: var(--s3) var(--s4); border-radius: var(--r-m); background: var(--text); color: var(--bg); font-size: 14px; line-height: 20px; animation: aviso-in var(--t-normal) ease-out; }
+.aviso span { flex: 1; }
+.aviso button { border: 0; background: transparent; color: var(--accent); font-weight: 600; min-height: 32px; padding: 0 var(--s2); border-radius: var(--r-s); }
+@keyframes aviso-in { from { opacity: 0; transform: translateY(8px); } }
+@media (min-width: 900px) { .avisos { left: 248px; bottom: var(--s6); } }

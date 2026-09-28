@@ -1,5 +1,6 @@
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 import { AuthProvider, useAuth } from './auth/AuthContext'
+import { AvisosProvider } from './components/Avisos'
 import { Shell } from './components/Shell'
 import { Icon } from './components/Icon'
 import { BrandLoading, Botao, Notice } from './components/ui'
@@ -41,7 +42,7 @@ function Porta() {
 export function App() {
   return (
     <BrowserRouter basename={import.meta.env.BASE_URL.replace(/\/$/, '')}>
-      <AuthProvider><Porta /></AuthProvider>
+      <AuthProvider><AvisosProvider><Porta /></AvisosProvider></AuthProvider>
     </BrowserRouter>
   )
 }

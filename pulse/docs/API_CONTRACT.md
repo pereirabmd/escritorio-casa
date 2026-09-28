@@ -79,6 +79,29 @@ adiar tarefa, editar semana de RTO, registar peso, pagar conta) usam as rotas de
 
 Evitar que o Android/Web faça dezenas de pedidos se um endpoint agregado puder entregar o estado essencial.
 
+## Ações (`/api/v1/actions`, implementado — fase 7)
+
+Tudo o que altera dados passa pela camada de ações (a interface e, mais tarde, a IA chamam as mesmas):
+
+```text
+GET  /api/v1/actions                 -> catálogo [{nome, modulo, nivel, descricao}]
+POST /api/v1/actions/{nome}          {params: {...}, confirmado?: bool} -> {resultado: <resposta do módulo>}
+```
+
+| Ação | Parâmetros | Escreve em |
+|---|---|---|
+| `tarefas.concluir` / `tarefas.reabrir` | `instancia` (`I…`) | `PUT /tarefas/instancias/{id}` (`estado`, `dataConclusao`) |
+| `tarefas.adiar` | `instancia`, `data?` (por omissão amanhã; nunca no passado) | `PUT /tarefas/instancias/{id}` (`data`); 409 `conflito` se a tarefa já existir nesse dia |
+| `peso.registar` | `peso` (1–1000), `nota?`, `cid?` | `POST /peso/registos` (idempotente com `cid`) |
+| `rto.marcar_dia` | `data`, `marca` (`T`, `C` ou `""` para limpar) | `PUT /rto/dias/{data}` |
+| `financas.pagar` / `financas.anular_pagamento` | `lancamento`, `data?` | `PUT /financas/lancamentos/{id}` (`data_pagamento`) |
+
+Regras: parâmetros validados antes de tocar em nada (400 `parametros_invalidos`; campos a mais recusados); os erros do módulo passam
+tal e qual (409 `conflito`, 404 `nao_encontrado`…); módulo em baixo = 503 `modulo_indisponivel`; ações `sensitive_action` exigem
+`confirmado: true` (409 `confirmacao_necessaria`); cada execução fica em `pulse_activity` com a origem (`ui`/`ia`), o resultado e só
+ids/datas (nunca valores pessoais como o peso). Todas as ações atuais são `safe_action` e têm ação inversa (`reabrir`,
+`anular_pagamento`, marca vazia) para o «Desfazer» da interface.
+
 ## Escritas
 
 Todas as escritas passam pela camada oficial do módulo.

@@ -203,3 +203,14 @@ o rollback do symlink cobre ambas). Mesma origem que a API (`/pulse/api/v1`) par
 restrita (`default-src 'none'`, sem estilos nem scripts inline). React Router com `basename=/pulse` e `try_files` no nginx.
 Sem bibliotecas de UI nem de estado: Design System próprio (tokens Light/Dark, Inter incluída no build, ícones SVG).
 Testes com Vitest + Testing Library. Publicação por `deploy_pi.sh`, que só envia se lint, testes e build passarem.
+
+## ADR-039 — Camada de ações e ações do «Hoje» (28/09/2026)
+Fase 7 começa pelas ações rápidas do «Hoje»: concluir/reabrir e adiar tarefa, registar peso, marcar dia de RTO, pagar/anular conta.
+Em vez de um endpoint por operação, existe uma **camada de ações** (`server/pulse/actions.py`, `POST /api/v1/actions/{nome}`) que é
+o Action/Tool layer do AI_SPEC: catálogo com módulo e nível, parâmetros validados (pydantic, campos extra recusados),
+confirmação para `sensitive_action`, escrita só pela API oficial do módulo (ADR-031) e registo em `pulse_activity` com a origem.
+A interface usa-a hoje; a IA usará a mesma (origem `ia`), sem SQL nem atalhos. Cada ação tem inversa para «Desfazer»; a interface
+mostra uma confirmação curta (não um aviso de condição persistente). O `cid` do registo de peso é gerado na interface e mantém-se
+até haver sucesso, por isso repetir um pedido que falhou não duplica. **Contrato:** `tests/test_contract_dados.py` corre o código
+real do `dados-api` (como script, em bases `teste-*`) e exerce cada ação e o agregado; nada é testado contra bases reais.
+Fora desta fatia (próximas): módulos completos em «Mais» (Tarefas, Peso, RTO, Finanças, Bilhetes CP) e a fila offline do Android.

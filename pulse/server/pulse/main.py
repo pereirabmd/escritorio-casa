@@ -13,7 +13,7 @@ from pulse import VERSION, config, db, logging_setup
 from pulse.accounts import ContaErro
 from datetime import datetime
 
-from pulse.api.v1 import auth, dashboard, health
+from pulse.api.v1 import actions, auth, dashboard, health
 from pulse.ratelimit import RateLimiter
 from pulse.clients.dados import DadosClient, ErroDoModulo, ModuloIndisponivel
 
@@ -46,6 +46,7 @@ def create_app(settings: config.Settings | None = None, dados: DadosClient | Non
     app.include_router(health.router, prefix="/api/v1")
     app.include_router(auth.router, prefix="/api/v1")
     app.include_router(dashboard.router, prefix="/api/v1")
+    app.include_router(actions.router, prefix="/api/v1")
 
     @app.exception_handler(ContaErro)
     async def _conta(_, exc: ContaErro):
