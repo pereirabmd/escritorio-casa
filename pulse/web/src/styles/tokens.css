@@ -1,0 +1,40 @@
+/* Design System Pulse (docs/DESIGN_SYSTEM.md). Light por omissão; Dark pelo sistema ou por escolha (data-theme). */
+:root {
+  --bg: #F7FAFC;
+  --surface: #FFFFFF;
+  --surface-2: #EEF4F6;
+  --primary: #1E5B67;
+  --primary-ink: #FFFFFF;
+  --accent: #22C7B8;
+  --text: #16222A;
+  --text-2: #56666F;
+  --line: rgba(22, 34, 42, 0.11);
+  --success: #2F9E72;
+  --warning: #A97A1E;
+  --warning-bg: rgba(217, 164, 65, 0.16);
+  --error: #C24848;
+  --error-bg: rgba(217, 92, 92, 0.12);
+  --info: #3F7FC0;
+
+  --r-xs: 6px; --r-s: 8px; --r-m: 12px; --r-l: 16px; --r-xl: 20px;
+  --s1: 4px; --s2: 8px; --s3: 12px; --s4: 16px; --s5: 20px; --s6: 24px; --s8: 32px; --s10: 40px; --s12: 48px; --s16: 64px;
+  --t-instant: 110ms; --t-fast: 160ms; --t-normal: 220ms;
+  --font: 'Inter Variable', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --bg: #0C1418; --surface: #142027; --surface-2: #1B2A32;
+    --primary: #56B8C4; --primary-ink: #08161A; --accent: #2DD4C3;
+    --text: #EAF2F4; --text-2: #9DB0B8; --line: rgba(234, 242, 244, 0.12);
+    --success: #3CBF8A; --warning: #D9A441; --warning-bg: rgba(217, 164, 65, 0.16);
+    --error: #E07474; --error-bg: rgba(217, 92, 92, 0.16); --info: #6AA6E6;
+  }
+}
+:root[data-theme='dark'] {
+  --bg: #0C1418; --surface: #142027; --surface-2: #1B2A32;
+  --primary: #56B8C4; --primary-ink: #08161A; --accent: #2DD4C3;
+  --text: #EAF2F4; --text-2: #9DB0B8; --line: rgba(234, 242, 244, 0.12);
+  --success: #3CBF8A; --warning: #D9A441; --warning-bg: rgba(217, 164, 65, 0.16);
+  --error: #E07474; --error-bg: rgba(217, 92, 92, 0.16); --info: #6AA6E6;
+}

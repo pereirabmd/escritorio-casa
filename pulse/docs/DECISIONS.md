@@ -195,3 +195,11 @@ O login do Pulse deixa de ser «Google apenas». Contas próprias, com **e-mail 
 - O Google continua necessário só para **ligar** Gmail/Calendar (fase 10), sem servir de login; «Entrar com Google»
   pode acrescentar-se depois ligado à mesma conta, sem refazer isto. Utilizadores extra só veem os módulos em cujas
   `ACL_<APP>` estiverem (o `dados-api` recusa o resto com 403); filtrar dados por pessoa dentro de cada app é trabalho futuro.
+
+## ADR-038 — Web do Pulse (28/09/2026)
+React + Vite + TypeScript em `pulse/web/`, servida como ficheiros estáticos pelo nginx a partir da release ativa
+(`/opt/pulse/current/web`, e não `/var/www/pulse/` como previa o FOLDER_STRUCTURE: assim Web e API trocam juntas de versão e
+o rollback do symlink cobre ambas). Mesma origem que a API (`/pulse/api/v1`) para o cookie de sessão httpOnly; CSP
+restrita (`default-src 'none'`, sem estilos nem scripts inline). React Router com `basename=/pulse` e `try_files` no nginx.
+Sem bibliotecas de UI nem de estado: Design System próprio (tokens Light/Dark, Inter incluída no build, ícones SVG).
+Testes com Vitest + Testing Library. Publicação por `deploy_pi.sh`, que só envia se lint, testes e build passarem.

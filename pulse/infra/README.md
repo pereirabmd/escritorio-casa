@@ -10,10 +10,11 @@ Estado (28/09/2026): backend instalado e a responder em `https://bmdpereira.duck
 | Logs (`api.log` rotativo; o resto no journald) | `/var/log/pulse/` |
 | Segredos e configuração (root, 600) | `/etc/pulse-app/pulse.env` — **não** `/etc/pulse/`, que é do PulseAudio |
 | Serviço (loopback `127.0.0.1:8897`, sandbox como o `dados-api`, `MemoryMax=200M`) | `pulse-api.service` (`infra/systemd/`) |
-| nginx | `location /pulse/api/` no vhost `bmdpereira.duckdns.org` + zona `pulse_api` em `conf.d/pulse-api.conf` (`infra/nginx/`) |
+| nginx (API) | `location /pulse/api/` no vhost `bmdpereira.duckdns.org` + zona `pulse_api` em `conf.d/pulse-api.conf` (`infra/nginx/pulse-api.conf`) |
+| nginx (Web) | `location /pulse/` e `/pulse/assets/` a servir `/opt/pulse/current/web` (estáticos da release; SPA com `try_files`, CSP restrita) — `infra/nginx/pulse-web.conf` |
 
 ## Publicar uma versão nova
-`pulse/scripts/deploy/deploy_pi.sh` — cria a release, instala dependências, troca o `current`, reinicia e verifica `/health`
+`pulse/scripts/deploy/deploy_pi.sh` — verifica e compila a Web (lint, testes, build), cria a release (`server/` + `web/`), instala dependências, troca o `current`, reinicia e verifica `/health`
 (até 90 s: o primeiro arranque de uma release no Pi 3 demora cerca de 1 min a compilar bytecode); se falhar, volta à
 release anterior. Nunca toca nos dados.
 

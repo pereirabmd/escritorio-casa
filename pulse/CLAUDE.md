@@ -18,7 +18,7 @@ O Pulse deve parecer e comportar-se como uma aplicação comercial profissional,
 - React.
 - Vite.
 - TypeScript.
-- Login Google.
+- Início de sessão por e-mail e palavra-passe (contas criadas pelo administrador; ADR-037).
 - Sem PIN/biometria na Web.
 
 ### Backend

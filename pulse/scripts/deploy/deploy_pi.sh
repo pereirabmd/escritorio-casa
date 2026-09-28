@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Publica o backend do Pulse no Raspberry Pi: nova release em /opt/pulse/releases/beta_YYYYMMDD_X (X = contador global,
+# Publica o Pulse (backend + Web) no Raspberry Pi: nova release em /opt/pulse/releases/beta_YYYYMMDD_X (X = contador global,
 # nunca reinicia), instala as dependências no venv partilhado, troca o symlink `current`, reinicia e verifica /health.
 # Se a verificação falhar, volta à release anterior (rollback de código; os dados nunca se tocam).
 #
@@ -15,9 +15,17 @@ TAG="beta_$(date +%Y%m%d)_$(( ${ULTIMO:-0} + 1 ))"
 DESTINO="/opt/pulse/releases/$TAG"
 echo "Release $TAG"
 
+# Web: instalar, verificar (lint, testes, tsc) e compilar antes de mexer no Pi
+if [ -f "$RAIZ/web/package.json" ]; then
+  ( cd "$RAIZ/web" && npm ci --no-audit --no-fund --silent && npm run lint --silent && npm test --silent && npm run build --silent )
+fi
+
 ssh "$PI" "mkdir -p '$DESTINO'"
 rsync -a --delete --exclude='.venv' --exclude='__pycache__' --exclude='.pytest_cache' --exclude='tests' \
   "$RAIZ/server/" "$PI:$DESTINO/server/"
+if [ -d "$RAIZ/web/dist" ]; then
+  rsync -a --delete "$RAIZ/web/dist/" "$PI:$DESTINO/web/"
+fi
 ssh "$PI" "[ -x /opt/pulse/venv/bin/python ] || python3 -m venv /opt/pulse/venv
 /opt/pulse/venv/bin/pip install -q -r '$DESTINO/server/requirements.txt'
 cd '$DESTINO/server' && /opt/pulse/venv/bin/python -c 'import pulse.main'"
