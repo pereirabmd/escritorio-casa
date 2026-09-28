@@ -1,5 +1,9 @@
 # Autenticação e segurança
 
+> **Atualização 28/09/2026 (ADR-037):** o login do Pulse passa a ser por contas próprias (e-mail + password, criadas pelo
+> administrador). As secções abaixo sobre «login Google» do Pulse ficam substituídas; o que se diz sobre ligar contas Google
+> (Gmail/Calendar), PIN/biometria no Android, segredos, IA e APK mantém-se.
+
 ## Android
 
 Fluxo de conta:

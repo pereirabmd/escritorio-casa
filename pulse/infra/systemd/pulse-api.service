@@ -1,0 +1,35 @@
+# API do Pulse (FastAPI/uvicorn), só em loopback; o nginx expõe /pulse/api/. Código em /opt/pulse/current (symlink
+# para releases/beta_YYYYMMDD_X), dados em /var/lib/pulse, logs em /var/log/pulse, segredos em /etc/pulse-app/pulse.env.
+[Unit]
+Description=Pulse — API (FastAPI)
+After=network-online.target dados-api.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=bpereira
+WorkingDirectory=/opt/pulse/current/server
+EnvironmentFile=/etc/pulse-app/pulse.env
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/opt/pulse/venv/bin/uvicorn pulse.asgi:app --host 127.0.0.1 --port 8897 --no-server-header --proxy-headers --forwarded-allow-ips=127.0.0.1
+Restart=always
+RestartSec=10
+
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/pulse /var/log/pulse
+PrivateTmp=true
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+RestrictNamespaces=true
+LockPersonality=true
+CapabilityBoundingSet=
+SystemCallFilter=@system-service
+MemoryMax=200M
+
+[Install]
+WantedBy=multi-user.target

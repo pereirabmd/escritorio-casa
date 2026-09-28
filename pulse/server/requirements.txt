@@ -1,0 +1,3 @@
+# Dependências de execução (Raspberry Pi, Python 3.13). Fixas: reproduzir o mesmo ambiente no Pi e aqui.
+fastapi==0.141.1
+uvicorn==0.54.0

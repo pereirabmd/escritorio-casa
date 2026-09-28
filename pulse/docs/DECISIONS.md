@@ -164,3 +164,34 @@ o tornaram possível, a manter no `gradle.properties` do Pulse: `org.gradle.jvma
 Por confirmar: o plugin `com.google.gms.google-services` 4.5.0 e o Firebase BoM 34.19.0 podem pedir AGP/Kotlin
 mais recentes; testar o build com essas dependências antes de fixar versões. Um Pulse completo será mais pesado que o
 teste (esperam-se builds limpos de 5-10 min).
+
+## ADR-036 — Instalação do backend no Pi (28/09/2026)
+Segue `FOLDER_STRUCTURE.md`/`OPERATIONS_AND_BACKUP.md`: releases `beta_YYYYMMDD_X` em `/opt/pulse/releases` com `current`
+(symlink), dados em `/var/lib/pulse`, logs em `/var/log/pulse`, serviço `pulse-api` (uvicorn, `127.0.0.1:8897`, mesmo
+sandbox do `dados-api`) e `location /pulse/api/` no nginx existente. Desvios do documento: (1) os segredos ficam em
+`/etc/pulse-app/pulse.env` porque `/etc/pulse/` já é do PulseAudio; (2) o venv (`/opt/pulse/venv`) é partilhado entre
+releases. O backup do `pulse.db` usa o mecanismo existente do `dados/` (`BACKUP_BASES_EXTRA`) em vez de um segundo
+temporizador; restauro testado. Ver `pulse/infra/README.md`.
+
+## ADR-037 — Contas próprias por e-mail e password (substitui ADR-009 e ADR-010) (28/09/2026)
+O login do Pulse deixa de ser «Google apenas». Contas próprias, com **e-mail como identificador de registo** e password,
+**criadas pelo administrador (convite); não há auto-registo.**
+
+- Porquê: o Pulse pode ter mais utilizadores (também sem conta Google) e não depende de clientes OAuth para entrar.
+  O e-mail da conta é o que o Pulse envia como `X-Pulse-User` (ADR-031) e é comparado com as `ACL_<APP>`; por isso o
+  e-mail nunca pode ser reclamado por quem não é o dono: sem auto-registo, é o administrador quem o garante.
+- Password: scrypt (`hashlib`), política mínima (≥ 10 caracteres, sem previsíveis); a inicial dada pelo administrador
+  **obriga a mudar no primeiro acesso** (até lá só `/auth/me`, `/auth/password`, `/auth/logout` funcionam) e mudar
+  termina as outras sessões. Sem SMTP, «esqueci-me da password» = o administrador repõe (`pulse.cli repor`).
+- Sessão própria: token aleatório guardado só como SHA-256 em `pulse_sessions`, validade deslizante de 30 dias
+  (`PULSE_SESSION_DAYS`), revogável e listável por dispositivo. Web: cookie httpOnly/Secure/SameSite=Lax de `Path=/pulse/`
+  e cabeçalho `X-Pulse-Client` obrigatório nos pedidos que alteram (CSRF). Android: `cliente: "android"` devolve o token,
+  enviado em `Authorization: Bearer`; o PIN/biometria continuam só no Android, por cima (ADR do AUTH_AND_SECURITY).
+- Defesa: erro único para e-mail inexistente/password errada/conta desativada (com custo de tempo igual); 5 falhas seguidas
+  bloqueiam a conta 10 min; 10 tentativas/min por IP (mais o `limit_req` do nginx); tudo auditado em `pulse_activity`
+  (nunca passwords).
+- Administração: `python -m pulse.cli criar|repor|desativar|ativar|listar` no servidor (password pelo stdin, nunca na linha de
+  comandos). Sem endpoints de administração de utilizadores por agora.
+- O Google continua necessário só para **ligar** Gmail/Calendar (fase 10), sem servir de login; «Entrar com Google»
+  pode acrescentar-se depois ligado à mesma conta, sem refazer isto. Utilizadores extra só veem os módulos em cujas
+  `ACL_<APP>` estiverem (o `dados-api` recusa o resto com 403); filtrar dados por pessoa dentro de cada app é trabalho futuro.

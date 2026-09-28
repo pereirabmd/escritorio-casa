@@ -164,13 +164,30 @@ def _hash_file(nome: str) -> Path:
     return HASH_FILE if nome == "dados" else STATE_DIR / f"ultimo_backup_{nome}.sha256"
 
 
+_NOME_EXTRA = __import__("re").compile(r"^[a-z][a-z0-9_]{1,30}$")
+
+
+def bases() -> dict[str, Path]:
+    """As bases a copiar: `dados` e `bilhetes` + as extra de `BACKUP_BASES_EXTRA=nome=/caminho[,nome=/caminho]`
+    (ex.: `pulse=/var/lib/pulse/pulse.db`, que vive fora desta pasta). Cada uma vai para `<nome>.sql.age`."""
+    todas = {n: db.db_path(n) for n in db.DATABASES}
+    for item in env("BACKUP_BASES_EXTRA").split(","):
+        if not item.strip():
+            continue
+        nome, sep, caminho = item.partition("=")
+        nome, caminho = nome.strip(), caminho.strip()
+        if not sep or not _NOME_EXTRA.match(nome) or not caminho or nome in todas:
+            raise BackupError(f"BACKUP_BASES_EXTRA inválido ou repetido: {item.strip()!r}")
+        todas[nome] = Path(caminho)
+    return todas
+
+
 def fazer_backup(force: bool = False) -> str:
-    """Faz o backup de TODAS as bases (dados e bilhetes). Só publica as que mudaram desde o último
+    """Faz o backup de TODAS as bases (dados, bilhetes e as extra). Só publica as que mudaram desde o último
     backup bem sucedido; qualquer falha numa delas falha o conjunto (e alerta)."""
     excluir = _excluidas()
     textos: dict[str, str] = {}
-    for nome in db.DATABASES:
-        caminho = db.db_path(nome)
+    for nome, caminho in bases().items():
         if not caminho.is_file():
             continue                      # base ainda não criada
         conn = db.connect(caminho)

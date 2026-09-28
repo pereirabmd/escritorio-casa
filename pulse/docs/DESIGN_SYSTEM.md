@@ -200,3 +200,14 @@ Clique prolongado:
 - reordenar favoritos/fixados.
 
 Nunca deve ser a única forma de aceder a uma funcionalidade essencial.
+
+## Ecrãs de acesso (início de sessão e mudança de palavra-passe)
+
+- Ecrãs limpos, centrados, com o asset de marca e um só objetivo cada; nada de cartões dentro de cartões.
+- Campos de 48 dp, raio 12 dp, rótulo sempre visível (não só placeholder), erro por baixo do campo e em pt-PT
+  («E-mail ou palavra-passe incorretos», «A palavra-passe tem de ter pelo menos 10 caracteres»).
+- Palavras-passe com mostrar/ocultar e compatíveis com gestores de passwords (`autocomplete` correto na Web,
+  autofill no Android).
+- O botão principal (52 dp) mostra loading no próprio botão e desativa-se durante o pedido; erros 429 explicam que há
+  demasiadas tentativas, sem contagens exatas nem dicas sobre que contas existem.
+- Estados: loading, erro, sucesso e degradado (servidor indisponível); Light e Dark com paridade.

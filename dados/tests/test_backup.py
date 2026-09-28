@@ -112,7 +112,8 @@ class VariasBasesTest(unittest.TestCase):
     def test_backup_de_ambas_e_so_a_que_mudou(self):
         with tempfile.TemporaryDirectory() as d:
             d = Path(d)
-            env = {"DADOS_DB": str(d / "dados.db"), "BILHETES_DB": str(d / "bilhetes.db"), "BACKUP_EXCLUIR": ""}
+            env = {"DADOS_DB": str(d / "dados.db"), "BILHETES_DB": str(d / "bilhetes.db"), "BACKUP_EXCLUIR": "",
+                   "BACKUP_BASES_EXTRA": ""}
             with mock.patch.dict("os.environ", env), \
                     mock.patch.object(backup, "STATE_DIR", d / "state"), \
                     mock.patch.object(backup, "HASH_FILE", d / "state" / "dados.h"), \
@@ -136,9 +137,47 @@ class VariasBasesTest(unittest.TestCase):
                 self.assertEqual(novo.execute("SELECT seq FROM sqlite_sequence WHERE name='bilhetes_viagens'").fetchone()[0], 99)
 
 
+class BasesExtraTest(unittest.TestCase):
+    """O `pulse.db` vive fora do dados/: entra no mesmo backup por BACKUP_BASES_EXTRA (ficheiro `pulse.sql.age`)."""
+
+    def _pulse(self, d):
+        c = sqlite3.connect(d / "pulse.db")
+        c.execute("CREATE TABLE pulse_settings (chave TEXT PRIMARY KEY, valor TEXT)")
+        c.execute("INSERT INTO pulse_settings VALUES ('tema', 'escuro')")
+        c.commit(); c.close()
+
+    def test_pulse_db_entra_no_backup_e_recarrega(self):
+        with tempfile.TemporaryDirectory() as d:
+            d = Path(d); self._pulse(d)
+            env = {"DADOS_DB": str(d / "x.db"), "BILHETES_DB": str(d / "y.db"), "BACKUP_EXCLUIR": "",
+                   "BACKUP_BASES_EXTRA": f"pulse={d / 'pulse.db'}"}
+            with mock.patch.dict("os.environ", env), mock.patch.object(backup, "STATE_DIR", d / "state"), \
+                    mock.patch.object(backup, "HASH_FILE", d / "state" / "h"), \
+                    mock.patch.object(backup, "publicar", return_value=True) as pub:
+                self.assertEqual(backup.fazer_backup(), "backup publicado (pulse)")
+                novo = sqlite3.connect(":memory:"); novo.executescript(pub.call_args[0][0]["pulse"])
+                self.assertEqual(novo.execute("SELECT valor FROM pulse_settings").fetchone()[0], "escuro")
+                self.assertEqual(backup.fazer_backup(), "sem alterações desde o último backup")
+                c = sqlite3.connect(d / "pulse.db"); c.execute("UPDATE pulse_settings SET valor='claro'"); c.commit(); c.close()
+                backup.fazer_backup()
+                self.assertEqual(sorted(pub.call_args[0][0]), ["pulse"])
+            self.assertEqual(backup.ficheiro_de("pulse"), "pulse.sql.age")
+
+    def test_configuracao_invalida_falha_alto(self):
+        for mau in ("pulse", "=/x.db", "Pulse=/x.db", "dados=/x.db", "pulse=/a.db,pulse=/b.db"):
+            with mock.patch.dict("os.environ", {"BACKUP_BASES_EXTRA": mau}):
+                with self.assertRaises(backup.BackupError, msg=mau):
+                    backup.bases()
+
+    def test_sem_extra_e_igual_a_antes(self):
+        with mock.patch.dict("os.environ", {"BACKUP_BASES_EXTRA": ""}):
+            self.assertEqual(list(backup.bases()), list(db.DATABASES))
+
+
 class FluxoTest(unittest.TestCase):
     def _correr(self, d, **extra):
-        env = {"DADOS_DB": str(Path(d) / "a.db"), "BILHETES_DB": str(Path(d) / "inexistente.db"), "BACKUP_EXCLUIR": "logs_x", **extra}
+        env = {"DADOS_DB": str(Path(d) / "a.db"), "BILHETES_DB": str(Path(d) / "inexistente.db"), "BACKUP_EXCLUIR": "logs_x",
+               "BACKUP_BASES_EXTRA": "", **extra}
         return mock.patch.dict("os.environ", env)
 
     def test_sem_alteracoes_nao_volta_a_publicar(self):

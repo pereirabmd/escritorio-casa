@@ -73,6 +73,8 @@ A organização deve ser configurável.
 - modo de privacidade rápida;
 - modo degradado com alerta;
 - onboarding inteligente;
+- ecrã de início de sessão (e-mail e palavra-passe) e **ecrã de mudança de palavra-passe**: obrigatório no primeiro acesso e sempre disponível em Definições → Conta;
+- gestão de sessões/dispositivos (ver e terminar sessões);
 - sincronização offline;
 - fila de ações pendentes;
 - atualização interna do APK;

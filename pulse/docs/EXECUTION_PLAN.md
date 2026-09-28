@@ -23,13 +23,15 @@
 - validar backups.
 
 ### Fase 3 — Autenticação e segurança
-- Sign-in/sign-up Google;
-- criação da conta Pulse;
+- contas próprias por e-mail e palavra-passe, criadas pelo administrador (ADR-037; sem auto-registo nem Google no login);
+- backend feito (28/09/2026): login, sessões, mudar palavra-passe, revogação, `pulse.cli`;
+- **ecrãs (Android e Web): início de sessão, mudança obrigatória de palavra-passe no primeiro acesso, Definições → Conta
+  (mudar palavra-passe, sessões/dispositivos, terminar sessão)** — ver `SETTINGS_ADMIN.md`;
 - sessões próprias;
 - Android PIN;
 - Android biometria;
-- Web Google-only;
-- gestão segura de tokens Google.
+- Web: e-mail + palavra-passe (sem PIN/biometria);
+- gestão segura de tokens Google (só para ligar Gmail/Calendar, fase 10).
 
 ### Fase 4 — Shell Android + Web
 - splash/loading;

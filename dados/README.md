@@ -27,6 +27,8 @@ cd ~/dados && cp .env.example .env && chmod 600 .env
 python3 db.py init
 ```
 
+**Bases fora desta pasta (28/09/2026)**: `BACKUP_BASES_EXTRA=nome=/caminho[,nome=/caminho]` no `.env` junta-as ao mesmo backup (ficheiro `<nome>.sql.age`); em uso: `pulse=/var/lib/pulse/pulse.db`. O `dados-backup.service` tem de ter a pasta em `ReadWritePaths`. Um valor inválido falha o backup (e alerta). Testes: `BasesExtraTest`.
+
 ### Estado atual do backup (24/09/2026)
 
 Instalado: repositório privado `pereirabmd/backup_database`, timer diário, alerta no tópico ntfy `backup`, restauro testado. A chave privada `age` está **só** em `~/.age/dados-backup.key` na máquina do utilizador (não no Pi). Para restaurar: descarregar `dados.sql.age` do repositório e `python3 backup.py restore dados.sql.age --identity ~/.age/dados-backup.key --out novo.db`. Os passos abaixo são o procedimento genérico para repetir a instalação.
