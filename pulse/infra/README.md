@@ -63,3 +63,5 @@ O primeiro acesso obriga a mudar a password (`POST /api/v1/auth/password`); até
 - **bilhetes_cp** copia os avisos ntfy para o Pulse com `PULSE_EVENTS_URL=http://127.0.0.1:8897/api/v1/internal/events`, `PULSE_SERVICE_KEY` e `PULSE_EVENTS_USER` no `.env` do `bilhetes_cp` (ver `bilhetes_cp/PLANO_FINAL.md` §9.12).
 - **Módulos**: nada a instalar; ficam em `pulse_settings` (`modulos_desativados`), por isso entram no backup do `pulse.db`.
 
+> O que está por publicar em cada momento, e a ordem, mantém-se na nota «Pendente de deploy no Raspberry Pi» do `PROJECT-CONTEXT.md` (raiz do repositório).
+

@@ -12,6 +12,29 @@ Apps ativas: `financas/` (nova, v1.2.0), `peso/`, `tarefas/`, `RTO/`, `receitas/
 
 Na raiz existe também **`push.sh`** (não pertence a nenhuma app): adiciona, comita e faz push de todo o repositório para `main`, com uma guarda contra ficheiros que pareçam credenciais (`.env`, `.pem`, `.key`, `credentials.json`, etc.). Depois do push — e também no caminho em que não há nada para commitar, para permitir forçar um redeploy sem alterar ficheiros — pede explicitamente ao GitHub, via `gh api POST .../pages/builds`, que reconstrua o GitHub Pages, e espera até ~40s a reportar se ficou `built`/`errored`/ainda em curso. É um pedido explícito por cima do que já acontece sozinho (ver nota sobre o build "legacy" acima); exige a CLI `gh` instalada e autenticada, e falha em aviso (não em erro) se não estiver.
 
+## Pendente de deploy no Raspberry Pi (nota viva — atualizar sempre que se publicar ou se acrescentar algo por publicar)
+
+**Estado a 29/09/2026**: o repositório (`main`, commit `0848767`) está à frente do Pi. O último bundle da Web visto em produção (`index-CvyviP4`) **não tinha** Horário/Piscina das Tarefas, portanto tudo o que veio depois do ADR-042 está por publicar. Quem publica: **o utilizador, ou o Claude Code local no IdeaPad em casa** (`git pull` primeiro). As sessões remotas/geridas têm o modo automático do Claude Code, cujo classificador recusou o `deploy_pi.sh` (não é problema do Pi nem do script); não se contorna — corre-se localmente, ou com `!` no prompt.
+
+**Ordem sugerida (parar se algo falhar; cada passo é independente do seguinte):**
+
+1. **Pulse — servidor + Web** (obrigatório; traz Tarefas completas, Finanças, Bilhetes CP, Compras, módulos ativáveis, notificações, RTO por toque, manifesto Android):
+   `cd ~/escritorio-casa && git pull && pulse/scripts/deploy/deploy_pi.sh` — corre lint/testes/build da Web, cria a release `beta_YYYYMMDD_X`, troca o `current`, reinicia o `pulse-api` e verifica `/health` (até 90 s no 1.º arranque); faz **rollback automático** se falhar. **As migrações `003_notificacoes`, `004_compras` e `005_compras_sugestoes` aplicam-se sozinhas no arranque** e o catálogo de 338 produtos das Compras sincroniza-se no mesmo arranque. Nunca tocam noutros dados.
+2. **`dados-api`** (traz a regra do comboio «em viagem» até à chegada estimada): `rsync -av --exclude='data' --exclude='state' --exclude='logs' --exclude='.env' --exclude='__pycache__' --exclude='tests' ~/escritorio-casa/dados/ casamento-pi:~/dados/ && ssh casamento-pi 'sudo systemctl restart dados-api && sleep 2 && systemctl is-active dados-api'` → deve imprimir `active`. Sem migração de base de dados.
+3. **nginx** (uma barreira extra; não é urgente): acrescentar ao vhost o bloco `location ^~ /pulse/api/v1/internal/ { return 404; }` (está em `pulse/infra/nginx/pulse-api.conf`, secção 3); `sudo nginx -t` **antes** de `sudo systemctl reload nginx`.
+4. **`bilhetes_cp` — cópia dos avisos ntfy para o Pulse** (opcional, desligada por omissão): copiar `bilhetes_cp/scripts/` (o `common.py` mudou) para o Pi e reiniciar os serviços (`cp-scheduler`; ver `bilhetes_cp/PLANO_FINAL.md` §9.8), e só depois pôr no `.env` do `bilhetes_cp` `PULSE_EVENTS_URL=http://127.0.0.1:8897/api/v1/internal/events`, `PULSE_SERVICE_KEY` (a mesma do Pulse) e `PULSE_EVENTS_USER` (e-mail da conta Pulse). Sem as três variáveis nada muda.
+5. **FCM** (opcional, só quando houver a app Android): `/opt/pulse/venv/bin/pip install cryptography`, a service account do Firebase em `/etc/pulse-app/fcm-service-account.json` (root, 600, **fora do Git**) e `PULSE_FCM_CREDENTIALS` em `/etc/pulse-app/pulse.env`; reiniciar o `pulse-api`. **Nunca foi testado contra o Firebase real.**
+
+**Como confirmar que ficou bem:**
+- `curl -s https://bmdpereira.duckdns.org/pulse/api/v1/health` responde `ok` e a versão nova;
+- `ssh casamento-pi 'sqlite3 /var/lib/pulse/pulse.db "PRAGMA user_version; SELECT COUNT(*) FROM shop_products;"'` → `5` e `338`;
+- `ssh casamento-pi 'journalctl -u pulse-api -n 30 --no-pager'` sem erros (deve dizer «migrações aplicadas» e «catálogo de compras: 338 produtos de série novos» no 1.º arranque);
+- na Web (refresh forçado): Tarefas mostra Horário e Piscina, Mais mostra Finanças, Bilhetes CP e Compras, Definições → Administração (conta administradora) mostra os módulos;
+- Android: remover o atalho antigo e reinstalar a partir de `/pulse/` (agora há manifesto);
+- o `pulse.db` já está no backup diário (`BACKUP_BASES_EXTRA`); as tabelas novas entram sem mais configuração.
+
+**Depois de publicar**: apagar do topo desta nota o que ficou feito e registar a data e a release (`beta_YYYYMMDD_X`) aqui; se surgir algo novo por publicar (migração, variável de ambiente, serviço), acrescentá-lo à lista **no mesmo commit** em que nasce.
+
 ## Convenções partilhadas entre apps
 
 - **Autenticação Google**: `peso`, `tarefas`, `RTO`, `receitas` e `ciclismo` usam o mesmo `CLIENT_ID` OAuth (`108256538530-fgunbb52s7f3s9aurfpjtaf01v8fjbph.apps.googleusercontent.com`), via Google Identity Services (token client), com a sessão persistida em `localStorage`.
