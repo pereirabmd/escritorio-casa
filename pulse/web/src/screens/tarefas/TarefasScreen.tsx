@@ -7,10 +7,15 @@ import { Icon } from '../../components/Icon'
 import { BrandLoading, Botao, Notice } from '../../components/ui'
 import { useAcao } from '../../lib/useAcao'
 import { useAsync } from '../../lib/useAsync'
+import { CalendarioTab } from './CalendarioTab'
 import { CatalogoTab } from './CatalogoTab'
+import { ConfigTab } from './ConfigTab'
 import { HojeTab } from './HojeTab'
+import { HorarioTab } from './HorarioTab'
+import { PiscinaTab } from './PiscinaTab'
 
-const ABAS = [{ id: 'hoje', nome: 'Hoje' }, { id: 'tarefas', nome: 'Tarefas' }] as const
+const ABAS = [{ id: 'hoje', nome: 'Hoje' }, { id: 'calendario', nome: 'Calendário' }, { id: 'tarefas', nome: 'Tarefas' }, { id: 'horario', nome: 'Horário' },
+  { id: 'piscina', nome: 'Piscina' }, { id: 'config', nome: 'Config' }] as const
 type Aba = (typeof ABAS)[number]['id']
 
 export function TarefasScreen() {
@@ -38,15 +43,18 @@ export function TarefasScreen() {
       )}
       {estado.fase === 'pronto' && (
         <>
-          <div className="segmented" role="tablist" aria-label="Secções das Tarefas">
+          <div className="segmented scroll" role="tablist" aria-label="Secções das Tarefas">
             {ABAS.map((a) => <button key={a.id} role="tab" id={`${base}-${a.id}`} aria-selected={aba === a.id} aria-controls={`${base}-p`} onClick={() => setAba(a.id)}>{a.nome}</button>)}
           </div>
           {erro && <Notice tipo="error">{erro} <button type="button" className="link-btn" onClick={limparErro}>Fechar</button></Notice>}
           <div role="tabpanel" id={`${base}-p`} aria-labelledby={`${base}-${aba}`} className="tabpanel">
             {aba === 'hoje' && <HojeTab dados={estado.dados} f={f} />}
+            {aba === 'calendario' && <CalendarioTab principal={estado.dados} atualizar={recarregar} />}
             {aba === 'tarefas' && <CatalogoTab dados={estado.dados} f={f} />}
+            {aba === 'horario' && <HorarioTab />}
+            {aba === 'piscina' && <PiscinaTab atualizar={recarregar} />}
+            {aba === 'config' && <ConfigTab atualizar={recarregar} />}
           </div>
-          <p className="t-meta">Calendário, Horário, Piscina e Configuração das Tarefas ainda estão só na app dedicada.</p>
         </>
       )}
     </>

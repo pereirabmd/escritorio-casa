@@ -16,11 +16,12 @@ from datetime import datetime
 from pulse.api.v1 import actions, auth, dashboard, health, rto, tasks, weight
 from pulse.ratelimit import RateLimiter
 from pulse.clients.dados import DadosClient, ErroDoModulo, ModuloIndisponivel
+from pulse.clients.tarefas_api import TarefasApiClient
 
 LOG = logging.getLogger("pulse")
 
 
-def create_app(settings: config.Settings | None = None, dados: DadosClient | None = None) -> FastAPI:
+def create_app(settings: config.Settings | None = None, dados: DadosClient | None = None, avisos: TarefasApiClient | None = None) -> FastAPI:
     settings = settings or config.load()
     logging_setup.configurar(settings.log_dir)
 
@@ -40,6 +41,7 @@ def create_app(settings: config.Settings | None = None, dados: DadosClient | Non
                   openapi_url=None if settings.production else "/api/openapi.json")
     app.state.settings = settings
     app.state.dados = dados or DadosClient(settings.dados_url, settings.service_key)
+    app.state.avisos = avisos or TarefasApiClient(settings.tarefas_url, settings.service_key)   # recálculo imediato dos avisos das tarefas
     app.state.db = lambda: db.connect(settings.db_path)   # uma ligação por uso: os endpoints correm em threads
     app.state.agora = lambda: datetime.now(settings.tz)     # substituível nos testes
     app.state.limite_login = RateLimiter(10)   # tentativas de login por IP e minuto (o nginx limita antes)

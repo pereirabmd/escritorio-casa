@@ -22,6 +22,7 @@ class Settings:
     db_path: Path
     web_base_path: str
     dados_url: str
+    tarefas_url: str
     service_key: str
     log_dir: Path | None
     session_days: int
@@ -64,6 +65,7 @@ def load(environ: dict[str, str] | None = None) -> Settings:
         db_path=db_path,
         web_base_path=_base_path(e.get("PULSE_WEB_BASE_PATH", "/pulse/")),
         dados_url=e.get("PULSE_DADOS_URL", "http://127.0.0.1:8898").rstrip("/"),
+        tarefas_url=e.get("PULSE_TAREFAS_URL", "http://127.0.0.1:8899").rstrip("/"),
         service_key=e.get("PULSE_SERVICE_KEY", "").strip(),
         log_dir=Path(log_dir) if log_dir else None,
         tz=ZoneInfo(e.get("TZ", "Europe/Lisbon")),

@@ -19,6 +19,8 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_valida
 
 from pulse.accounts import ContaErro
 from pulse.clients.dados import DadosClient, ErroDoModulo, ModuloIndisponivel
+from pulse.clients.tarefas_api import TarefasApiClient
+from pulse.services import piscina as piscina_regras
 from pulse.services import rto as rto_regras
 from pulse.services import tarefas as tarefas_regras
 
@@ -30,6 +32,8 @@ class Contexto:
     client: DadosClient
     email: str
     agora: datetime
+    tarefas_api: TarefasApiClient | None = None          # servidor dos avisos ntfy (forçar a geração de ocorrências)
+    avisos_tarefas: Callable[[], None] | None = None     # pede o recálculo dos avisos ntfy depois de mudar tarefas (melhor esforço)
 
     @property
     def hoje(self) -> date:
@@ -84,6 +88,68 @@ class TarefaApagarIn(_Params):
 
 class AdiarIn(InstanciaIn):
     data: date | None = None            # por omissão, amanhã
+
+
+NOME_PESSOA = Annotated[str, Field(min_length=1, max_length=60, pattern=r"^[^,\x00-\x1f]+$")]      # sem vírgulas: as listas de pessoas guardam-se separadas por vírgula
+EMAIL_OPC = Annotated[str, Field(default="", max_length=120, pattern=r"^$|^[^@\s,]+@[^@\s,]+\.[^@\s,]+$")]
+HORA_OPC = Annotated[str, Field(pattern=r"^([01]\d|2[0-3]):[0-5]\d$|^$")]
+
+
+class PiscinaRegistarIn(_Params):
+    item: str = Field(pattern=r"^P\d{2}$")
+
+
+class PiscinaReporIn(PiscinaRegistarIn):
+    """Volta ao estado anterior (o «Desfazer» de «marcar feita»)."""
+    ultimaData: date | None = None
+    proximaData: date | None = None
+    usarIntervaloLongo: bool = False
+    notificacaoEnviada: bool = False
+
+
+class AvisosHorarioIn(_Params):
+    ativos: bool
+
+
+class PreferenciasIn(_Params):
+    naoIncomodarInicio: HORA_OPC
+    naoIncomodarFim: HORA_OPC
+
+
+class PessoaAdicionarIn(_Params):
+    nome: NOME_PESSOA
+    email: EMAIL_OPC = ""
+
+
+class PessoaEditarIn(_Params):
+    nome: NOME_PESSOA               # o nome atual
+    novoNome: NOME_PESSOA
+    email: EMAIL_OPC = ""
+
+
+class PessoaRemoverIn(_Params):
+    nome: NOME_PESSOA
+    substituto: NOME_PESSOA | None = None       # obrigatório se a pessoa tiver tarefas por fazer
+
+
+class ReatribuirIn(_Params):
+    de: NOME_PESSOA
+    para: NOME_PESSOA
+
+
+class AdminIn(_Params):
+    admins: list[Annotated[str, Field(max_length=120)]] | None = Field(default=None, max_length=20)
+    notificacoes: dict[Literal["piscina", "horario"], list[NOME_PESSOA]] | None = None
+
+    @model_validator(mode="after")
+    def _algo(self):
+        if self.admins is None and self.notificacoes is None:
+            raise ValueError("nada para alterar")
+        return self
+
+
+class VazioIn(_Params):
+    pass
 
 
 QUANDO = Annotated[str, Field(pattern=r"^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$")]
@@ -249,6 +315,131 @@ def _adiar(c: Contexto, p: AdiarIn):
         raise ContaErro(400, "data_passada", "não se pode adiar para uma data que já passou")
     # se já existir a mesma tarefa nesse dia, o módulo responde 409 e o Pulse não funde nada (ADR-033)
     return _instancia(c, p.instancia, {"data": destino.isoformat()}), f"{p.instancia} -> {destino.isoformat()}"
+
+
+# --- Tarefas: piscina, horário e configuração ---------------------------------------------------------------------------------
+
+def _dados_tarefas(c: Contexto) -> dict:
+    _, d = c.client.pedir("GET", "/tarefas/dados", c.email)
+    return d or {}
+
+
+def _config_put(c: Contexto, valores: dict | None = None, apagar: list | None = None) -> dict:
+    corpo = {k: v for k, v in (("valores", valores), ("apagar", apagar)) if v}
+    _, r = c.client.pedir("PUT", "/tarefas/config", c.email, corpo=corpo)
+    return r or {}
+
+
+def _piscina_registar(c: Contexto, p: PiscinaRegistarIn):
+    item = piscina_regras.POR_ID.get(p.item)
+    if item is None:
+        raise ErroDoModulo(404, "nao_encontrado", "tarefa da piscina inexistente")
+    dados = _dados_tarefas(c)
+    atual = next((x for x in dados.get("piscina", []) if x["id"] == p.item), None)
+    if atual is None:
+        raise ErroDoModulo(404, "nao_encontrado", "tarefa da piscina ainda não está na base")
+    est = piscina_regras.estacao(tarefas_regras.config_de(dados.get("config", [])), c.hoje)
+    novo = piscina_regras.novo_estado(item, est, atual, c.hoje)
+    c.client.pedir("PUT", f"/tarefas/piscina/{p.item}", c.email, corpo=novo)
+    nome = tarefas_regras.pessoa_do_utilizador(tarefas_regras.config_de(dados.get("config", [])), c.email) or ""
+    try:                                            # quem fez o quê: nunca impede o registo principal
+        c.client.pedir("POST", "/tarefas/auditoria", c.email, corpo={"acao": "piscina_feita", "tarefa": item["nome"], "pessoa": nome, "instanciaId": ""})
+    except (ErroDoModulo, ModuloIndisponivel):
+        pass
+    anterior = {"ultimaData": atual.get("ultimaData") or None, "proximaData": atual.get("proximaData") or None,
+                "usarIntervaloLongo": bool(atual.get("usarIntervaloLongo")), "notificacaoEnviada": bool(atual.get("notificacaoEnviada"))}
+    return {"anterior": anterior, "atual": novo}, p.item
+
+
+def _piscina_repor(c: Contexto, p: PiscinaReporIn):
+    corpo = {"ultimaData": p.ultimaData.isoformat() if p.ultimaData else None, "proximaData": p.proximaData.isoformat() if p.proximaData else None,
+             "usarIntervaloLongo": p.usarIntervaloLongo, "notificacaoEnviada": p.notificacaoEnviada}
+    _, r = c.client.pedir("PUT", f"/tarefas/piscina/{p.item}", c.email, corpo=corpo)
+    return r or {}, p.item
+
+
+def _avisos_horario(c: Contexto, p: AvisosHorarioIn):
+    _config_put(c, {"HorarioAvisos": "TRUE" if p.ativos else "FALSE"})
+    return {"ativos": p.ativos}, "ativos" if p.ativos else "pausados"
+
+
+def _preferencias(c: Contexto, p: PreferenciasIn):
+    if bool(p.naoIncomodarInicio) != bool(p.naoIncomodarFim):
+        raise ContaErro(400, "parametros_invalidos", "parâmetros inválidos: indica o início e o fim da janela (ou deixa ambos vazios)")
+    _config_put(c, {"NaoIncomodarInicio": p.naoIncomodarInicio, "NaoIncomodarFim": p.naoIncomodarFim})
+    return {"ok": True}, ""
+
+
+def _pessoa_adicionar(c: Contexto, p: PessoaAdicionarIn):
+    cfg = tarefas_regras.config_de(_dados_tarefas(c).get("config", []))
+    if p.nome in [x["nome"] for x in tarefas_regras.pessoas(cfg)]:
+        raise ContaErro(409, "pessoa_existe", "já existe uma pessoa com esse nome")
+    n = tarefas_regras.proximo_numero_pessoa(cfg)
+    valores = {f"Pessoa{n}_Nome": p.nome}
+    if p.email:
+        valores[f"Pessoa{n}_Email"] = p.email.lower()
+    _config_put(c, valores)
+    return {"num": n}, f"pessoa {n}"
+
+
+def _pessoa_editar(c: Contexto, p: PessoaEditarIn):
+    cfg = tarefas_regras.config_de(_dados_tarefas(c).get("config", []))
+    atual = next((x for x in tarefas_regras.pessoas(cfg) if x["nome"] == p.nome), None)
+    if atual is None:
+        raise ErroDoModulo(404, "nao_encontrado", "pessoa inexistente")
+    if p.novoNome != p.nome:
+        if p.novoNome in [x["nome"] for x in tarefas_regras.pessoas(cfg)]:
+            raise ContaErro(409, "pessoa_existe", "já existe uma pessoa com esse nome")
+        # o nome novo, as tarefas e as ocorrências dessa pessoa mudam todos no mesmo passo (atómico)
+        c.client.pedir("POST", "/tarefas/pessoas/reatribuir", c.email,
+                       corpo={"de": p.nome, "para": p.novoNome, "apenasPendentes": False, "configChave": f"Pessoa{atual['num']}_Nome"})
+    if p.email.lower() != atual["email"]:
+        _config_put(c, {f"Pessoa{atual['num']}_Email": p.email.lower()})
+    return {"num": atual["num"]}, f"pessoa {atual['num']}"
+
+
+def _pessoa_remover(c: Contexto, p: PessoaRemoverIn):
+    dados = _dados_tarefas(c)
+    cfg = tarefas_regras.config_de(dados.get("config", []))
+    todas = tarefas_regras.pessoas(cfg)
+    atual = next((x for x in todas if x["nome"] == p.nome), None)
+    if atual is None:
+        raise ErroDoModulo(404, "nao_encontrado", "pessoa inexistente")
+    if len(todas) <= 1:
+        raise ContaErro(400, "ultima_pessoa", "tem de existir pelo menos uma pessoa")
+    afetadas = sum(1 for t in dados.get("tarefas", []) if t.get("ativa") and t.get("pessoaPadrao") == p.nome) \
+        + sum(1 for i in dados.get("instancias", []) if i["pessoa"] == p.nome and i["estado"] != "Feita")
+    if afetadas:
+        if not p.substituto or p.substituto == p.nome or p.substituto not in [x["nome"] for x in todas]:
+            raise ContaErro(400, "substituto_necessario", f"{p.nome} tem {afetadas} tarefa(s) por fazer: escolhe quem fica responsável")
+        c.client.pedir("POST", "/tarefas/pessoas/reatribuir", c.email, corpo={"de": p.nome, "para": p.substituto, "apenasPendentes": True})
+    # remove todas as chaves dessa pessoa (nome, e-mail, cor, credenciais ntfy)
+    prefixo = f"Pessoa{atual['num']}_"
+    _config_put(c, apagar=[k for k in cfg if k.startswith(prefixo)])
+    return {"reatribuidas": afetadas}, f"pessoa {atual['num']}" + (f", {afetadas} passadas" if afetadas else "")
+
+
+def _reatribuir(c: Contexto, p: ReatribuirIn):
+    nomes = [x["nome"] for x in tarefas_regras.pessoas(tarefas_regras.config_de(_dados_tarefas(c).get("config", [])))]
+    if p.de == p.para:
+        raise ContaErro(400, "pessoas_iguais", "escolhe pessoas diferentes")
+    if p.de not in nomes or p.para not in nomes:
+        raise ErroDoModulo(404, "nao_encontrado", "pessoa inexistente")
+    _, r = c.client.pedir("POST", "/tarefas/pessoas/reatribuir", c.email, corpo={"de": p.de, "para": p.para, "apenasPendentes": True})
+    return r or {}, f"{p.de} -> {p.para}"
+
+
+def _admin(c: Contexto, p: AdminIn):
+    corpo = {k: getattr(p, k) for k in ("admins", "notificacoes") if getattr(p, k) is not None}
+    _, r = c.client.pedir("PUT", "/tarefas/admin", c.email, corpo=corpo)
+    return r or {}, ", ".join(sorted(corpo))
+
+
+def _gerar(c: Contexto, p: VazioIn):
+    r = c.tarefas_api.gerar(c.email) if c.tarefas_api else None
+    if not r or not r.get("ok"):
+        raise ModuloIndisponivel("o servidor das tarefas não respondeu")
+    return {"criadas": r.get("criadas", 0)}, f"{r.get('criadas', 0)} novas"
 
 
 def _peso(c: Contexto, p: PesoIn):
@@ -453,6 +644,16 @@ ACOES: dict[str, Acao] = {a.nome: a for a in (
     Acao("tarefas.editar", "tarefas", "safe_action", "Altera uma tarefa do catálogo.", TarefaEditarIn, _tarefa_editar),
     Acao("tarefas.apagar", "tarefas", "sensitive_action", "Apaga uma tarefa (desativa-a e salta as ocorrências por fazer).", TarefaApagarIn, _tarefa_apagar),
     Acao("tarefas.adiar", "tarefas", "safe_action", "Passa uma tarefa para outra data (por omissão, amanhã).", AdiarIn, _adiar),
+    Acao("tarefas.piscina_registar", "tarefas", "safe_action", "Regista uma tarefa da piscina como feita hoje (calcula a próxima data).", PiscinaRegistarIn, _piscina_registar),
+    Acao("tarefas.piscina_repor", "tarefas", "safe_action", "Repõe o estado anterior de uma tarefa da piscina (desfaz «feita hoje»).", PiscinaReporIn, _piscina_repor),
+    Acao("tarefas.avisos_horario", "tarefas", "safe_action", "Ativa ou pausa os avisos do horário escolar.", AvisosHorarioIn, _avisos_horario),
+    Acao("tarefas.preferencias", "tarefas", "safe_action", "Define a janela «não incomodar» das notificações.", PreferenciasIn, _preferencias),
+    Acao("tarefas.pessoa_adicionar", "tarefas", "safe_action", "Adiciona uma pessoa às tarefas.", PessoaAdicionarIn, _pessoa_adicionar),
+    Acao("tarefas.pessoa_editar", "tarefas", "safe_action", "Renomeia uma pessoa (e as suas tarefas) ou muda o e-mail.", PessoaEditarIn, _pessoa_editar),
+    Acao("tarefas.pessoa_remover", "tarefas", "sensitive_action", "Remove uma pessoa, passando as tarefas por fazer para outra.", PessoaRemoverIn, _pessoa_remover),
+    Acao("tarefas.reatribuir", "tarefas", "sensitive_action", "Passa as tarefas por fazer de uma pessoa para outra.", ReatribuirIn, _reatribuir),
+    Acao("tarefas.admin", "tarefas", "sensitive_action", "Altera os administradores e quem recebe as notificações gerais (só administradores).", AdminIn, _admin),
+    Acao("tarefas.gerar", "tarefas", "safe_action", "Cria já as ocorrências dos próximos dias.", VazioIn, _gerar),
     Acao("peso.registar", "peso", "safe_action", "Regista o peso.", PesoIn, _peso),
     Acao("peso.editar", "peso", "safe_action", "Corrige um registo de peso.", PesoEditarIn, _peso_editar),
     Acao("peso.eliminar", "peso", "sensitive_action", "Apaga um registo de peso.", RegistoIn, _peso_eliminar),
@@ -495,4 +696,6 @@ def executar(conn: sqlite3.Connection, ctx: Contexto, nome: str, params: dict, o
         _registar(conn, ctx.email, acao, origem, "erro", getattr(e, "codigo", "modulo_indisponivel"))
         raise
     _registar(conn, ctx.email, acao, origem, "ok", detalhe)
+    if acao.modulo == "tarefas" and ctx.avisos_tarefas:
+        ctx.avisos_tarefas()
     return resultado

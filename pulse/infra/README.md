@@ -23,7 +23,7 @@ release anterior. Nunca toca nos dados.
 sudo mkdir -p /opt/pulse/releases /var/lib/pulse /var/log/pulse /etc/pulse-app
 sudo chown -R bpereira:bpereira /opt/pulse /var/lib/pulse /var/log/pulse && sudo chmod 700 /var/lib/pulse /etc/pulse-app
 # /etc/pulse-app/pulse.env (root, 600): PULSE_ENV=production, PULSE_DB_PATH=/var/lib/pulse/pulse.db,
-#   PULSE_WEB_BASE_PATH=/pulse/, PULSE_DADOS_URL=http://127.0.0.1:8898, PULSE_LOG_DIR=/var/log/pulse,
+#   PULSE_WEB_BASE_PATH=/pulse/, PULSE_DADOS_URL=http://127.0.0.1:8898, PULSE_TAREFAS_URL=http://127.0.0.1:8899, PULSE_LOG_DIR=/var/log/pulse,
 #   PULSE_SERVICE_KEY=<a mesma do ~/dados/.env>
 sudo install -m 644 infra/systemd/pulse-api.service /etc/systemd/system/ && sudo systemctl daemon-reload && sudo systemctl enable pulse-api
 # nginx: ver infra/nginx/pulse-api.conf (guardar cópia do vhost; `nginx -t` antes do reload)

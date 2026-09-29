@@ -33,7 +33,7 @@ def cliente(tmp_path_factory):
         s.bind(("127.0.0.1", 0)); porta = s.getsockname()[1]
     env = {**os.environ, "DADOS_DB": str(tmp / "teste-dados.db"), "BILHETES_DB": str(tmp / "teste-bilhetes.db"),
            "DADOS_API_PORT": str(porta), "GOOGLE_CLIENT_IDS": "x.apps.googleusercontent.com", "PULSE_SERVICE_KEY": CHAVE,
-           "RATE_IP_POR_MIN": "100000", "RATE_USER_POR_MIN": "100000", "TZ": "Europe/Lisbon",
+           "ADMIN_TAREFAS": EMAIL, "RATE_IP_POR_MIN": "100000", "RATE_USER_POR_MIN": "100000", "TZ": "Europe/Lisbon",
            **{f"ACL_{a}": EMAIL for a in ("PESO", "RTO", "TAREFAS", "FINANCAS", "BILHETES", "CONVIDADOS")}}
     proc = subprocess.Popen([sys.executable, "api.py"], cwd=DADOS, env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     c = DadosClient(f"http://127.0.0.1:{porta}", CHAVE, timeout=10)
@@ -389,3 +389,96 @@ def test_visao_das_tarefas_com_dados_reais(cliente, conn, ctx):
     v = regras.visao(_tarefas(cliente), ctx.hoje, EMAIL)
     assert any(i["nome"] == "Visível no módulo" for i in v["hoje"])
     assert any(t["nome"] == "Visível no módulo" and t["resumo"] == "Todos os dias" for t in v["tarefas"])
+
+
+# --- Tarefas: piscina, horário e configuração (dados reais) ----------------------------------------------------------------
+
+def _config(c):
+    return {x["chave"]: x["valor"] for x in _tarefas(c)["config"]}
+
+
+def _piscina(c, ctx):
+    from pulse.services import piscina as regras
+    linhas = _tarefas(c)["piscina"]
+    faltam = regras.em_falta(linhas)
+    if faltam:
+        linhas = pedir(c, "POST", "/tarefas/piscina/catalogo", {"itens": faltam})["piscina"]
+    return {p["id"]: p for p in linhas}
+
+
+def test_piscina_catalogo_registar_e_desfazer(cliente, conn, ctx):
+    from pulse.services import piscina as regras
+    assert len(_piscina(cliente, ctx)) == len(regras.CATALOGO)                  # o catálogo completo cabe no que o dados-api aceita
+    r = actions.executar(conn, ctx, "tarefas.piscina_registar", {"item": "P02"})       # quente 3/4 (junho–setembro) ou fria 7
+    linha = _piscina(cliente, ctx)["P02"]
+    assert linha["ultimaData"] == ctx.hoje.isoformat() and linha["proximaData"] > ctx.hoje.isoformat()
+    assert r["anterior"] == {"ultimaData": None, "proximaData": None, "usarIntervaloLongo": False, "notificacaoEnviada": False}
+    assert any(e["acao"] == "piscina_feita" and e["tarefa"] == "Testar pH e cloro" for e in pedir(cliente, "GET", "/tarefas/auditoria")["entradas"])
+    actions.executar(conn, ctx, "tarefas.piscina_repor", {"item": "P02", **r["anterior"]})
+    linha = _piscina(cliente, ctx)["P02"]
+    assert (linha["ultimaData"], linha["proximaData"]) == (None, None)
+    actions.executar(conn, ctx, "tarefas.piscina_registar", {"item": "P13"})           # tarefa de registo: sem próxima data
+    assert not _piscina(cliente, ctx)["P13"]["proximaData"]
+    with pytest.raises(ErroDoModulo) as e:
+        actions.executar(conn, ctx, "tarefas.piscina_registar", {"item": "P99"})
+    assert e.value.status == 404
+
+
+def test_avisos_do_horario_e_preferencias(cliente, conn, ctx):
+    actions.executar(conn, ctx, "tarefas.avisos_horario", {"ativos": False})
+    assert _config(cliente)["HorarioAvisos"] == "FALSE"
+    actions.executar(conn, ctx, "tarefas.avisos_horario", {"ativos": True})
+    assert _config(cliente)["HorarioAvisos"] == "TRUE"
+    actions.executar(conn, ctx, "tarefas.preferencias", {"naoIncomodarInicio": "22:00", "naoIncomodarFim": "07:00"})
+    assert (_config(cliente)["NaoIncomodarInicio"], _config(cliente)["NaoIncomodarFim"]) == ("22:00", "07:00")
+    with pytest.raises(actions.ContaErro):
+        actions.executar(conn, ctx, "tarefas.preferencias", {"naoIncomodarInicio": "22:00", "naoIncomodarFim": ""})
+    r = pedir(cliente, "GET", "/tarefas/horario")
+    from pulse.services import horario
+    assert horario.visao(r["aulas"], _config(cliente), ctx.hoje)["disponivel"] is True
+
+
+def test_pessoas_adicionar_editar_reatribuir_e_remover(cliente, conn, ctx):
+    a = actions.executar(conn, ctx, "tarefas.pessoa_adicionar", {"nome": "Contrato A", "email": "A@Exemplo.pt"})
+    b = actions.executar(conn, ctx, "tarefas.pessoa_adicionar", {"nome": "Contrato B"})
+    assert b["num"] == a["num"] + 1 and _config(cliente)[f"Pessoa{a['num']}_Email"] == "a@exemplo.pt"
+    with pytest.raises(actions.ContaErro) as e:
+        actions.executar(conn, ctx, "tarefas.pessoa_adicionar", {"nome": "Contrato A"})
+    assert e.value.codigo == "pessoa_existe"
+    tid = _criar(conn, ctx, nome="Tarefa da pessoa A", pessoa="Contrato A")["tarefa"]["id"]
+    iid = pedir(cliente, "POST", "/tarefas/instancias", {"tarefaId": tid, "data": ctx.hoje.isoformat(), "pessoa": "Contrato A"})["instancia"]["id"]
+    # renomear leva as tarefas e as ocorrências no mesmo passo
+    actions.executar(conn, ctx, "tarefas.pessoa_editar", {"nome": "Contrato A", "novoNome": "Contrato A2", "email": "novo@exemplo.pt"})
+    cfg = _config(cliente)
+    assert cfg[f"Pessoa{a['num']}_Nome"] == "Contrato A2" and cfg[f"Pessoa{a['num']}_Email"] == "novo@exemplo.pt"
+    assert next(t for t in _tarefas(cliente)["tarefas"] if t["id"] == tid)["pessoaPadrao"] == "Contrato A2"
+    assert estado(cliente, iid)["pessoa"] == "Contrato A2"
+    # reatribuir e remover exigem confirmação
+    with pytest.raises(actions.ContaErro) as e:
+        actions.executar(conn, ctx, "tarefas.reatribuir", {"de": "Contrato A2", "para": "Contrato B"})
+    assert e.value.codigo == "confirmacao_necessaria"
+    with pytest.raises(actions.ContaErro) as e:                                                       # tem tarefas por fazer e não há substituto
+        actions.executar(conn, ctx, "tarefas.pessoa_remover", {"nome": "Contrato A2"}, confirmado=True)
+    assert e.value.codigo == "substituto_necessario"
+    r = actions.executar(conn, ctx, "tarefas.pessoa_remover", {"nome": "Contrato A2", "substituto": "Contrato B"}, confirmado=True)
+    assert r["reatribuidas"] >= 2
+    assert estado(cliente, iid)["pessoa"] == "Contrato B" and not any(k.startswith(f"Pessoa{a['num']}_") for k in _config(cliente))
+    assert next(t for t in _tarefas(cliente)["tarefas"] if t["id"] == tid)["pessoaPadrao"] == "Contrato B"
+    with pytest.raises(actions.ContaErro) as e:                                                       # sobrou só o B: a última pessoa não se remove
+        actions.executar(conn, ctx, "tarefas.pessoa_remover", {"nome": "Contrato B"}, confirmado=True)
+    assert e.value.codigo == "ultima_pessoa"
+
+
+def test_administracao_e_estado_do_pi(cliente, conn, ctx):
+    n = actions.executar(conn, ctx, "tarefas.pessoa_adicionar", {"nome": "Admin Contrato", "email": "admin.contrato@exemplo.pt"})["num"]
+    with pytest.raises(actions.ContaErro):
+        actions.executar(conn, ctx, "tarefas.admin", {"admins": ["admin.contrato@exemplo.pt"]})              # sem confirmação
+    r = actions.executar(conn, ctx, "tarefas.admin", {"admins": ["admin.contrato@exemplo.pt"], "notificacoes": {"piscina": ["Admin Contrato"]}}, confirmado=True)
+    assert "admin.contrato@exemplo.pt" in r["admins"] and next(x for x in r["notificacoes"] if x["id"] == "piscina")["destinatarios"] == ["Admin Contrato"]
+    with pytest.raises(ErroDoModulo) as e:                                                              # só quem está registado com e-mail
+        actions.executar(conn, ctx, "tarefas.admin", {"admins": ["desconhecido@exemplo.pt"]}, confirmado=True)
+    assert e.value.status == 400
+    actions.executar(conn, ctx, "tarefas.admin", {"admins": [], "notificacoes": {"piscina": []}}, confirmado=True)
+    assert pedir(cliente, "GET", "/tarefas/dados")["souAdmin"] is True
+    actions.executar(conn, ctx, "tarefas.pessoa_remover", {"nome": "Admin Contrato"}, confirmado=True)      # há mais pessoas: pode sair
+    assert not any(k.startswith(f"Pessoa{n}_") for k in _config(cliente))

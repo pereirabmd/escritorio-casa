@@ -8,7 +8,9 @@ Funções puras: a data de hoje entra por parâmetro. O filtro por pessoa fica n
 from __future__ import annotations
 
 import re
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
+
+from pulse.services.rto import pascoa
 
 DIAS = ("Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sab")
 RECORRENCIAS = ("Diaria", "Semanal", "Dias especificos", "Mensal", "Trimestral", "Semestral", "Pontual")
@@ -96,3 +98,81 @@ def visao(dados: dict, hoje: date, email: str) -> dict:
         "tarefas": [{**t, "resumo": resumo_recorrencia(t), "hora": t.get("horaNotificacao") or hora_padrao}
                     for t in sorted(ativas.values(), key=lambda t: t["id"])],
     }
+
+
+# --- Calendário -----------------------------------------------------------------------------------------------------------
+
+MAX_DIAS_CALENDARIO = 62
+
+
+def feriados(ano: int) -> dict[str, str]:
+    """Feriados nacionais como na app dedicada (sem o feriado municipal do RTO)."""
+    p = pascoa(ano)
+    fixos = [(1, 1, "Ano Novo"), (4, 25, "Dia da Liberdade"), (5, 1, "Dia do Trabalhador"), (6, 10, "Dia de Portugal"),
+             (8, 15, "Assunção de Nossa Senhora"), (10, 5, "Implantação da República"), (11, 1, "Todos os Santos"),
+             (12, 1, "Restauração da Independência"), (12, 8, "Imaculada Conceição"), (12, 25, "Natal")]
+    out = {date(ano, m, d).isoformat(): nome for m, d, nome in fixos}
+    out[(p - timedelta(days=2)).isoformat()] = "Sexta-feira Santa"
+    out[p.isoformat()] = "Páscoa"
+    out[(p + timedelta(days=60)).isoformat()] = "Corpo de Deus"
+    return out
+
+
+def calendario(dados: dict, de: date, ate: date, hoje: date) -> dict:
+    """Uma entrada por dia de `de` a `ate` (no máximo 62 dias): feriado e ocorrências (de tarefas ativas), na ordem do «Hoje»."""
+    if ate < de or (ate - de).days + 1 > MAX_DIAS_CALENDARIO:
+        raise ValueError("intervalo inválido")
+    cfg = config_de(dados.get("config", []))
+    hora_padrao = cfg.get("HoraPadrao") or "08:00"
+    ativas = {t["id"]: t for t in dados.get("tarefas", []) if t.get("ativa")}
+    por_dia: dict[str, list[dict]] = {}
+    for i in dados.get("instancias", []):
+        if i["tarefaId"] in ativas and de.isoformat() <= i["data"] <= ate.isoformat():
+            por_dia.setdefault(i["data"], []).append(_item(i, ativas[i["tarefaId"]], hora_padrao))
+    ordem = lambda x: (x["hora"] or "99:99", {"Alta": 0, "Media": 1, "Baixa": 2}.get(x["prioridade"], 9), x["nome"])   # noqa: E731
+    fer = {}
+    for ano in {de.year, ate.year}:
+        fer.update(feriados(ano))
+    dias, d = [], de
+    while d <= ate:
+        iso = d.isoformat()
+        dias.append({"data": iso, "feriado": fer.get(iso), "itens": sorted(por_dia.get(iso, []), key=ordem)})
+        d += timedelta(days=1)
+    return {"de": de.isoformat(), "ate": ate.isoformat(), "hoje": hoje.isoformat(), "horaPadrao": hora_padrao, "dias": dias}
+
+
+# --- Config: resumo por pessoa ----------------------------------------------------------------------------------------------
+
+def resumo_pessoas(dados: dict, agora: datetime) -> dict:
+    """Tarefas concluídas por cada pessoa nos últimos 7 dias e o aviso de desequilíbrio (regra da app dedicada)."""
+    cfg = config_de(dados.get("config", []))
+    contagem = {p["nome"]: 0 for p in pessoas(cfg)}
+    limite = (agora - timedelta(days=7)).strftime("%Y-%m-%d %H:%M")
+    for i in dados.get("instancias", []):
+        if i.get("estado") == "Feita" and (i.get("dataConclusao") or "") >= limite and i.get("pessoa") in contagem:
+            contagem[i["pessoa"]] += 1
+    valores = list(contagem.values())
+    quem = None
+    if len(valores) >= 2 and max(valores) >= 3 and max(valores) >= min(valores) * 2:
+        quem = next(n for n, v in contagem.items() if v == max(valores))
+    return {"pessoas": [{"nome": n, "feitas": v} for n, v in contagem.items()], "desequilibrio": quem}
+
+
+def preferencias(cfg: dict[str, str]) -> dict:
+    def inteiro(chave: str, padrao: int) -> int:
+        try:
+            return int(float(cfg.get(chave) or padrao))
+        except ValueError:
+            return padrao
+    return {"horaPadrao": cfg.get("HoraPadrao") or "08:00", "naoIncomodarInicio": cfg.get("NaoIncomodarInicio", ""),
+            "naoIncomodarFim": cfg.get("NaoIncomodarFim", ""), "horarioAvisos": cfg.get("HorarioAvisos", "TRUE").strip().upper() != "FALSE",
+            "horarioAvisoMinutos": inteiro("HorarioAvisoMinutos", 30)}
+
+
+def proximo_numero_pessoa(cfg: dict[str, str]) -> int:
+    nums = [int(m.group(1)) for k in cfg if (m := re.fullmatch(r"Pessoa(\d+)_\w+", k, re.IGNORECASE))]
+    return max(nums, default=0) + 1
+
+
+def numero_da_pessoa(cfg: dict[str, str], nome: str) -> int | None:
+    return next((p["num"] for p in pessoas(cfg) if p["nome"] == nome), None)

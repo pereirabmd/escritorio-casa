@@ -1,12 +1,14 @@
-import { useState } from 'react'
+import { useRef, useState, type FormEvent } from 'react'
 import type { InstanciaTarefa, TarefasModulo } from '../../api/types'
 import { Icon } from '../../components/Icon'
 import { Botao, Spinner } from '../../components/ui'
+import { novoCid } from '../../lib/useAcao'
 import { fmtDataIso } from '../../lib/format'
 import { guardarFiltro, lerFiltro, passaFiltro, quando, urlGoogleCalendar } from '../../lib/tarefas'
 import type { Ferramentas } from './tipos'
 
-function Linha({ i, dados, f }: { i: InstanciaTarefa; dados: TarefasModulo; f: Ferramentas }) {
+/** Uma ocorrência com as ações (concluir, adiar, saltar). Só precisa da data de hoje e da hora padrão. */
+export function Linha({ i, dados, f }: { i: InstanciaTarefa; dados: Pick<TarefasModulo, 'data' | 'horaPadrao'>; f: Ferramentas }) {
   const { executar, ocupado, avisos } = f
   const [adiar, setAdiar] = useState(false)
   const [data, setData] = useState('')
@@ -74,6 +76,37 @@ function Lista({ titulo, itens, vazio, dados, f }: { titulo: string; itens: Inst
   )
 }
 
+/** Tarefa pontual para hoje, com o mínimo de campos (como a «tarefa rápida» da app dedicada). */
+function TarefaRapida({ dados, f }: { dados: TarefasModulo; f: Ferramentas }) {
+  const [aberta, setAberta] = useState(false)
+  const [nome, setNome] = useState('')
+  const [pessoa, setPessoa] = useState(dados.pessoa ?? dados.pessoas[0] ?? '')
+  const cid = useRef(novoCid())
+  if (!aberta) return <div><Botao pequeno variante="secondary" onClick={() => setAberta(true)}>Adicionar tarefa a hoje</Botao></div>
+  async function guardar(ev: FormEvent) {
+    ev.preventDefault()
+    if (!nome.trim()) return
+    const categoria = dados.categorias.includes('Outros') ? 'Outros' : dados.categorias[0] ?? 'Outros'
+    if (await f.executar('rapida', 'tarefas.criar', { nome: nome.trim(), categoria, recorrencia: 'Pontual', data: dados.data, pessoa, cid: cid.current })) {
+      cid.current = novoCid(); setNome(''); setAberta(false); f.avisos.mostrar('Tarefa adicionada a hoje.')
+    }
+  }
+  return (
+    <form className="card" onSubmit={guardar} noValidate aria-label="Tarefa rápida">
+      <h2 className="t-card">Tarefa para hoje</h2>
+      <div className="field"><label htmlFor="tr-nome">Nome</label><input id="tr-nome" className="input" maxLength={200} value={nome} onChange={(e) => setNome(e.target.value)} /></div>
+      {dados.pessoas.length > 0 && (
+        <div className="field"><label htmlFor="tr-pessoa">Pessoa</label>
+          <select id="tr-pessoa" className="input" value={pessoa} onChange={(e) => setPessoa(e.target.value)}>{dados.pessoas.map((p) => <option key={p}>{p}</option>)}</select></div>
+      )}
+      <div className="quick">
+        <Botao type="submit" pequeno carregando={f.ocupado === 'rapida'} disabled={!nome.trim() || f.ocupado !== null}>Adicionar</Botao>
+        <Botao type="button" pequeno variante="secondary" onClick={() => setAberta(false)}>Cancelar</Botao>
+      </div>
+    </form>
+  )
+}
+
 export function HojeTab({ dados, f }: { dados: TarefasModulo; f: Ferramentas }) {
   const [filtro, setFiltro] = useState(() => {
     const v = lerFiltro()
@@ -91,10 +124,11 @@ export function HojeTab({ dados, f }: { dados: TarefasModulo; f: Ferramentas }) 
           <button key={v} type="button" className="chip" aria-pressed={filtro === v} onClick={() => escolher(v)}>{l}</button>
         ))}
       </div>
-      {total > 0 && <p className="t-body2">{feitas.length} de {total} concluídas</p>}
+      {total > 0 && <p className="t-body2">{feitas.length} de {total} concluídas{hoje.length === 0 && <> <span className="pill pill-ok">Tudo feito por hoje</span></>}</p>}
       <Lista titulo="Hoje" itens={[...hoje, ...feitas]} vazio="Sem tarefas para hoje." dados={dados} f={f} />
       <Lista titulo="Atrasadas" itens={dados.atrasadas.filter(ok)} vazio="Nenhuma tarefa atrasada." dados={dados} f={f} />
       <Lista titulo="Amanhã" itens={dados.amanha.filter(ok)} vazio="Nada agendado para amanhã." dados={dados} f={f} />
+      <TarefaRapida dados={dados} f={f} />
     </div>
   )
 }

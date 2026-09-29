@@ -63,4 +63,4 @@ def dados_falso():
 @pytest.fixture
 def settings(tmp_path, dados_falso):
     return config.load({"PULSE_ENV": "test", "PULSE_DB_PATH": str(tmp_path / "teste-pulse.db"),
-                        "PULSE_DADOS_URL": dados_falso, "PULSE_SERVICE_KEY": FalsoDados.CHAVE})
+                        "PULSE_DADOS_URL": dados_falso, "PULSE_TAREFAS_URL": "", "PULSE_SERVICE_KEY": FalsoDados.CHAVE})

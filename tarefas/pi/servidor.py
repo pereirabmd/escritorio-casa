@@ -232,6 +232,15 @@ def autenticar(cabecalho: str) -> tuple[int, str]:
     return (200, email) if email in acl else (403, "sem acesso")
 
 
+def autenticar_servico(chave: str, email: str, direto: bool) -> tuple[int, str]:
+    """Backend do Pulse (mesma máquina): chave de serviço partilhada com o dados-api (`PULSE_SERVICE_KEY`, ≥ 32 caracteres) + e-mail do
+    utilizador, que tem de estar em ACL_TAREFAS. Só vale em loopback direto (sem cabeçalhos de proxy); chave curta = desligado."""
+    segredo, email = common.env("PULSE_SERVICE_KEY").strip(), email.strip().lower()
+    if not direto or len(segredo) < 32 or not email or not hmac.compare_digest(chave.encode(), segredo.encode()):
+        return 401, "credencial de serviço recusada"
+    return (200, email) if email in _acl() else (403, "sem acesso")
+
+
 def _origens_cors() -> set[str]:
     return {x.strip() for x in common.env("CORS_ORIGINS", "https://pereirabmd.github.io").split(",") if x.strip()}
 
@@ -304,7 +313,13 @@ class Handler(BaseHTTPRequestHandler):
             self._responder({"ok": False, "erro": "endpoint desconhecido"}, status=404)
             return
         if caminho in ENDPOINTS_PWA:
-            estado, motivo = autenticar(self.headers.get("Authorization", ""))
+            chave = self.headers.get("X-Pulse-Key")
+            if chave is not None:
+                direto = self.client_address[0] in ("127.0.0.1", "::1") and "X-Real-IP" not in self.headers \
+                    and "X-Forwarded-For" not in self.headers
+                estado, motivo = autenticar_servico(chave, self.headers.get("X-Pulse-User", ""), direto)
+            else:
+                estado, motivo = autenticar(self.headers.get("Authorization", ""))
             if estado != 200:
                 self._responder({"ok": False, "erro": motivo}, status=estado)
                 return

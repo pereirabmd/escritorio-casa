@@ -23,7 +23,7 @@ Migrar aplicações dedicadas para o Pulse sem perda funcional.
 
 ### Tarefas
 - primeira vaga;
-- **em curso (29/09/2026): ver `PARITY_TAREFAS.md`** (Hoje e catálogo feitos; faltam Calendário, Horário, Piscina, Config e o recálculo imediato dos avisos);
+- **completo no Pulse (29/09/2026): ver `PARITY_TAREFAS.md`** (Hoje, Calendário, Tarefas, Horário, Piscina e Config; recálculo imediato dos avisos ligado; o que ficou pendente está na tabela);
 - app dedicada pode continuar permanentemente;
 - existem outros utilizadores que podem não usar o Pulse;
 - partilhar infraestrutura/API.

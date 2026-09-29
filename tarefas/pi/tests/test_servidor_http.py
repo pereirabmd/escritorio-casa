@@ -47,9 +47,9 @@ class ServidorHttpTest(TarefasTestCase):
         threading.Thread(target=self.srv.serve_forever, daemon=True).start()
         self.addCleanup(lambda: (self.srv.shutdown(), self.srv.server_close()))
 
-    def pedir(self, metodo, caminho, corpo=None, token=None, origem=None):
+    def pedir(self, metodo, caminho, corpo=None, token=None, origem=None, extra=None):
         c = http.client.HTTPConnection("127.0.0.1", self.porta, timeout=5)
-        h = {}
+        h = dict(extra or {})
         if token:
             h["Authorization"] = f"Bearer {token}"
         if origem:
@@ -72,6 +72,19 @@ class ServidorHttpTest(TarefasTestCase):
             self.assertEqual((s, b["ok"]), (200, True))
             s, b, _ = self.pedir("POST", "/testar", {"pessoa": "Bruno"}, token="T" * 30)
             self.assertEqual((s, b["ok"]), (200, True))
+
+    def test_backend_do_pulse_entra_com_chave_de_servico_e_email_da_acl(self):
+        chave = "k" * 40
+        cab = lambda k=chave, u="eu@x.com", **o: {"X-Pulse-Key": k, "X-Pulse-User": u, **o}      # noqa: E731
+        with mock.patch.dict("os.environ", {"PULSE_SERVICE_KEY": chave}), \
+                mock.patch.object(common, "ntfy_publish", return_value={"id": "m"}), mock.patch.object(common, "ntfy_cancel", return_value=True):
+            s, b, _ = self.pedir("POST", "/recalcularAgora", {}, extra=cab())
+            self.assertEqual((s, b["ok"]), (200, True))
+            self.assertEqual(self.pedir("POST", "/recalcularAgora", {}, extra=cab(k="errada" * 8))[0], 401)     # chave errada
+            self.assertEqual(self.pedir("POST", "/recalcularAgora", {}, extra=cab(u="intruso@x.com"))[0], 403)  # fora da ACL
+            self.assertEqual(self.pedir("POST", "/recalcularAgora", {}, extra=cab(**{"X-Forwarded-For": "1.2.3.4"}))[0], 401)   # via proxy
+        with mock.patch.dict("os.environ", {"PULSE_SERVICE_KEY": "curta"}):      # chave curta = desligado
+            self.assertEqual(self.pedir("POST", "/recalcularAgora", {}, extra=cab(k="curta"))[0], 401)
 
     def test_falha_fechado_se_a_autenticacao_nao_estiver_configurada(self):
         with mock.patch.dict("os.environ", {"ACL_TAREFAS": ""}):

@@ -87,3 +87,35 @@ export interface TarefasModulo {
   data: string; pessoa: string | null; pessoas: string[]; categorias: string[]; horaPadrao: string
   hoje: InstanciaTarefa[]; feitas: InstanciaTarefa[]; atrasadas: InstanciaTarefa[]; amanha: InstanciaTarefa[]; tarefas: TarefaCatalogo[]
 }
+
+export interface CalendarioDia { data: string; feriado: string | null; itens: InstanciaTarefa[] }
+export interface CalendarioTarefas { de: string; ate: string; hoje: string; horaPadrao: string; dias: CalendarioDia[] }
+
+export interface HorarioAula { disciplina: string; sala: string }
+export interface HorarioBloco { ini: string; fim: string; aulas: HorarioAula[]; dividida: boolean; ultima: boolean }
+export interface HorarioDia { dia: number; nome: string; entra: string; sai: string; aviso: string; totalAulas: number; slots: HorarioBloco[] }
+export interface HorarioDados {
+  disponivel: boolean; anoLetivo: string | null; diaHoje: number; avisos: { ativos: boolean; minutos: number } | null
+  alunos: { nome: string; dias: HorarioDia[] }[]
+}
+
+export interface PiscinaCartao {
+  id: string; nome: string; nota: string; notaLonga: string; tipo: 'periodica' | 'log'; ultima: string; proxima: string
+  estado: 'nunca' | 'ok' | 'hoje' | 'atrasada' | 'registo'; diasDesde: number | null; sugeridoHoje?: boolean; destacar?: boolean
+}
+export interface PiscinaDados { estacao: 'quente' | 'fria'; periodicas: PiscinaCartao[]; outras: PiscinaCartao[] }
+
+export interface PainelAdmin {
+  raiz: string[]; admins: string[]
+  pessoas: { num: number; nome: string; email: string; admin: boolean; fixo: boolean }[]
+  notificacoes: { id: string; nome: string; descricao: string; destinatarios: string[]; padrao: boolean }[]
+}
+export interface DefinicoesTarefas {
+  pessoas: { nome: string; email: string }[]; pessoaAtual: string | null; categorias: string[]
+  preferencias: { horaPadrao: string; naoIncomodarInicio: string; naoIncomodarFim: string; horarioAvisos: boolean; horarioAvisoMinutos: number }
+  resumo: { pessoas: { nome: string; feitas: number }[]; desequilibrio: string | null }
+  auditoria: { ts: string; acao: string; tarefa: string; pessoa: string }[]
+  souAdmin: boolean; admin: PainelAdmin | null
+  saude: { ok?: boolean; saudavel?: boolean; ultimaExecucao?: string | null; minutosDesde?: number | null; contagens?: Record<string, number> } | null
+}
+export interface HistoricoTarefas { linhas: { tarefa: string; categoria: string; data: string; pessoa: string; estado: string; dataConclusao: string }[] }

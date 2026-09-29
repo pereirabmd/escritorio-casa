@@ -245,3 +245,15 @@ utilizadores (ADR-019). O Pulse migra-a por fatias, sobre as mesmas rotas `/tare
 `tarefas.concluir` passou a ler o estado da instância para replicar o lote atómico da app dedicada. Limite conhecido: o Pulse ainda não pede ao `tarefas-api` o
 recálculo imediato dos avisos ntfy (o timer de 5 min apanha-o); fica pendente e na tabela de paridade `PARITY_TAREFAS.md`, tal como Calendário, Horário, Piscina e
 Config (as notificações por pessoa dependem da decisão sobre FCM/ntfy, ADR-032).
+
+## ADR-043 — Tarefas completas e recálculo imediato dos avisos (29/09/2026)
+As restantes secções da app Tarefas (Calendário, Horário, Piscina, Config) entram no Pulse seguindo o padrão dos ADR-040/041: `GET /api/v1/tasks/<secção>` com as regras
+no servidor (`services/tarefas.py`, `horario.py`, `piscina.py`, funções puras) e escritas só por ações (catálogo em `API_CONTRACT.md`). Decisões: **(1)** o Calendário pede um
+intervalo (o mês em grelha de domingo a sábado, ou a semana; máx. 62 dias), em vez de o cliente ter todas as ocorrências; os feriados são os da app dedicada (sem o municipal do RTO).
+**(2)** O catálogo da Piscina é estático no servidor, como na app dedicada; a próxima data e a alternância 3/4 dias são calculadas no servidor e `piscina_registar` devolve o estado
+anterior para o «Desfazer». **(3)** Pessoas: adicionar, renomear (atómico, leva tarefas e ocorrências), remover (só com substituto se houver tarefas por fazer; nunca a última) e
+reatribuir em massa; remover, reatribuir e alterar a administração são ações sensíveis (confirmação). **(4)** A ligação a notificações ntfy por pessoa (utilizador/palavra-passe) **não** se
+migra: o Pulse terá notificações próprias (FCM, ADR-032) e a app dedicada mantém o ntfy. **(5)** Recálculo imediato dos avisos: o `tarefas-api` (`servidor.py`) passou a aceitar a
+chave de serviço do Pulse (`X-Pulse-Key`/`X-Pulse-User`, só em loopback direto, e-mail na `ACL_TAREFAS`; chave curta = desligado) e, depois de cada ação do módulo, o Pulse pede
+`POST /recalcularAgora` **em segundo plano e sem nunca falhar a ação** — é uma otimização, o timer de 5 min continua a ser a rede de segurança. `tarefas.gerar` (criar já as
+ocorrências) usa a mesma via. Consequência operacional: a `PULSE_SERVICE_KEY` tem de estar também no `.env` do `tarefas-api`.

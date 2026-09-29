@@ -23,5 +23,5 @@ def catalogo(_: Sessao = Depends(sessao_ativa)):
 @router.post("/{nome}")
 def executar(nome: str, dados: ExecutarIn, request: Request, s: Sessao = Depends(sessao_ativa), conn=Depends(get_conn)):
     app = request.app.state
-    ctx = actions.Contexto(app.dados, s.user["email"], app.agora())
+    ctx = actions.Contexto(app.dados, s.user["email"], app.agora(), app.avisos, lambda: app.avisos.recalcular_em_fundo(s.user["email"]))
     return {"resultado": actions.executar(conn, ctx, nome, dados.params, origem="ui", confirmado=dados.confirmado)}

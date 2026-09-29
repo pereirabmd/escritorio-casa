@@ -37,3 +37,46 @@ export function urlGoogleCalendar(i: InstanciaTarefa, horaPadrao: string): strin
   const fimTxt = `${fim.getFullYear()}${p(fim.getMonth() + 1)}${p(fim.getDate())}T${p(fim.getHours())}${p(fim.getMinutes())}00`
   return `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent(i.nome)}&dates=${ini}/${fimTxt}&details=${encodeURIComponent(`Tarefa de casa — ${i.pessoa}`)}`
 }
+
+// --- Calendário -------------------------------------------------------------------------------------------------------------
+
+const p2 = (n: number) => String(n).padStart(2, '0')
+export const isoLocal = (d: Date) => `${d.getFullYear()}-${p2(d.getMonth() + 1)}-${p2(d.getDate())}`
+export const dataDeIso = (iso: string) => new Date(`${iso}T12:00:00`)          // meio-dia: imune a mudanças de hora
+export const somarDias = (iso: string, n: number) => { const d = dataDeIso(iso); d.setDate(d.getDate() + n); return isoLocal(d) }
+export const DIAS_CURTO = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb']
+
+/** Primeiro e último dia da grelha do mês (semanas de domingo a sábado, como na app dedicada). */
+export function intervaloMes(ancora: string): [string, string] {
+  const d = dataDeIso(ancora)
+  const primeiro = new Date(d.getFullYear(), d.getMonth(), 1, 12), ultimo = new Date(d.getFullYear(), d.getMonth() + 1, 0, 12)
+  return [somarDias(isoLocal(primeiro), -primeiro.getDay()), somarDias(isoLocal(ultimo), 6 - ultimo.getDay())]
+}
+export function intervaloSemana(ancora: string): [string, string] {
+  const ini = somarDias(ancora, -dataDeIso(ancora).getDay())
+  return [ini, somarDias(ini, 6)]
+}
+export function tituloMes(ancora: string): string {
+  const t = new Intl.DateTimeFormat('pt-PT', { month: 'long', year: 'numeric' }).format(dataDeIso(ancora))
+  return t.charAt(0).toUpperCase() + t.slice(1)
+}
+export function tituloSemana(de: string, ate: string): string {
+  const a = dataDeIso(de), b = dataDeIso(ate)
+  const mes = (d: Date, estilo: 'long' | 'short') => new Intl.DateTimeFormat('pt-PT', { month: estilo }).format(d)
+  return a.getMonth() === b.getMonth() ? `${a.getDate()}–${b.getDate()} de ${mes(b, 'long')}` : `${a.getDate()} ${mes(a, 'short')} – ${b.getDate()} ${mes(b, 'short')}`
+}
+/** Cor estável por categoria (as categorias são livres, por isso não há tabela fixa). */
+export function corCategoria(nome: string): string {
+  let h = 0
+  for (const c of nome) h = (h * 31 + c.charCodeAt(0)) % 360
+  return `hsl(${h} 55% 48%)`
+}
+
+// --- Horário ----------------------------------------------------------------------------------------------------------------
+
+/** Exporta o histórico como CSV (com BOM, para o Excel abrir os acentos). */
+export function csvHistorico(linhas: { tarefa: string; categoria: string; data: string; pessoa: string; estado: string; dataConclusao: string }[]): string {
+  const cab = ['Tarefa', 'Categoria', 'Data', 'Pessoa', 'Estado', 'DataConclusao']
+  const aspas = (v: string) => `"${String(v).replace(/"/g, '""')}"`
+  return '﻿' + [cab, ...linhas.map((l) => [l.tarefa, l.categoria, l.data, l.pessoa, l.estado, l.dataConclusao])].map((l) => l.map(aspas).join(',')).join('\n')
+}

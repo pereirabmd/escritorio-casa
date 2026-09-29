@@ -264,12 +264,13 @@ describe('estados', () => {
     expect(await screen.findByText('Limpar WC')).toBeInTheDocument()
   })
 
-  test('Mais leva às Tarefas e o aviso diz o que ainda só existe na app dedicada', async () => {
+  test('Mais leva às Tarefas e as seis secções estão à vista', async () => {
     window.history.pushState({}, '', `${BASE}/mais`)
     servidorFalso({ 'GET /auth/me': () => [200, { utilizador: UTILIZADOR }], 'GET /tasks': () => [200, TAREFAS] })
     render(<App />)
     await userEvent.click(await screen.findByRole('link', { name: /Tarefas/ }))
     expect(await screen.findByRole('heading', { name: 'Tarefas' })).toBeInTheDocument()
-    expect(await screen.findByText(/Calendário, Horário, Piscina e Configuração/)).toBeInTheDocument()
+    const abas = within(await screen.findByRole('tablist', { name: 'Secções das Tarefas' }))
+    expect(abas.getAllByRole('tab').map((t) => t.textContent)).toEqual(['Hoje', 'Calendário', 'Tarefas', 'Horário', 'Piscina', 'Config'])
   })
 })

@@ -92,9 +92,18 @@ O módulo RTO de um ano (por omissão o atual): `dias` (marcas T/C do ano pedido
 `mensal` (T/C por mês), `hoje` (estado de hoje) e `proximaMudanca`. As regras vivem em `services/rto.py` (porta da app dedicada).
 
 ### `GET /api/v1/tasks` (implementado)
+Depois de qualquer ação do módulo Tarefas o Pulse pede ao `tarefas-api` o recálculo imediato dos avisos ntfy (`POST /recalcularAgora`, chave de serviço, em segundo plano e sem nunca falhar a ação: se não responder, o timer de 5 min reconcilia).
+
 O módulo Tarefas (Hoje e catálogo): `hoje`, `feitas`, `atrasadas` (a mais recente de cada tarefa), `amanha`, `tarefas` (ativas, com `resumo` da repetição e `hora`),
 `pessoas`, `categorias`, `horaPadrao` e `pessoa` (a do utilizador, pelo e-mail da Config). Regras em `services/tarefas.py`. O filtro por pessoa fica na interface;
 nada da Config sensível (palavras-passe do ntfy…) sai.
+
+Restantes secções do módulo (ADR-043), todas só de leitura e com as regras no servidor:
+- `GET /api/v1/tasks/calendar?de=AAAA-MM-DD&ate=AAAA-MM-DD` — um dia por data (máx. 62 dias): `feriado` e `itens` (ocorrências de tarefas ativas, na ordem do «Hoje»); a Web pede o mês (grelha de domingo a sábado) ou a semana; 400 `intervalo_invalido` fora dos limites.
+- `GET /api/v1/tasks/schedule` — horário escolar por aluno do ano letivo em curso: dias com `entra`, `sai`, `aviso` (saída menos os minutos da Config) e blocos (`dividida` = turma dividida, `ultima` = a que fecha o dia; as aulas que o aluno não frequenta não contam). `disponivel: false` se o módulo não responder (o resto do módulo continua).
+- `GET /api/v1/tasks/pool` — piscina: estação, manutenção periódica (por ordem: nunca registadas primeiro, depois pela próxima data; `estado`: `nunca|ok|hoje|atrasada`) e ações condicionais (`registo`). Se faltar alguma tarefa do catálogo na base, acrescenta-a (`POST /tarefas/piscina/catalogo`, nunca toca nas existentes).
+- `GET /api/v1/tasks/settings` — pessoas (nome, e-mail), pessoa do utilizador, preferências (não incomodar, avisos do horário), resumo dos últimos 7 dias por pessoa e `desequilibrio`, últimas 10 ações (auditoria), estado do Pi (`/saude` do `tarefas-api`, `null` se não responder) e, só para administradores, o painel `admin` (administradores e destinatários das notificações gerais).
+- `GET /api/v1/tasks/history` — ocorrências feitas ou saltadas, para a interface exportar em CSV.
 
 ## Ações (`/api/v1/actions`, implementado — fase 7)
 
@@ -113,6 +122,15 @@ POST /api/v1/actions/{nome}          {params: {...}, confirmado?: bool} -> {resu
 | `tarefas.criar` / `tarefas.editar` | `nome`, `categoria`, `recorrencia`, `dias?`/`data?`/`diaMes?` conforme a repetição, `hora?`, `pessoa?`, `prioridade?`, `rotacao?`, `dependeDe?` (+ `tarefa` ao editar, `cid?` ao criar) | `POST` / `PUT /tarefas/tarefas` |
 | `tarefas.apagar` (**sensitive**) | `tarefa` | `DELETE /tarefas/tarefas/{id}` (desativa e salta as pendentes) |
 | `tarefas.adiar` | `instancia`, `data?` (por omissão amanhã; nunca no passado) | `PUT /tarefas/instancias/{id}` (`data`); 409 `conflito` se a tarefa já existir nesse dia |
+| `tarefas.piscina_registar` / `tarefas.piscina_repor` | `item` (`P01`…); a segunda repõe `ultimaData`, `proximaData`, `usarIntervaloLongo`, `notificacaoEnviada` (o «Desfazer») | `PUT /tarefas/piscina/{id}` (próxima data e alternância de intervalo calculadas no servidor) e `POST /tarefas/auditoria` (`piscina_feita`, sem bloquear o registo); devolve `anterior` |
+| `tarefas.avisos_horario` | `ativos` | `PUT /tarefas/config` (`HorarioAvisos`) |
+| `tarefas.preferencias` | `naoIncomodarInicio`, `naoIncomodarFim` (`HH:MM` ou vazios) | `PUT /tarefas/config` |
+| `tarefas.pessoa_adicionar` | `nome` (sem vírgulas), `email?` | `PUT /tarefas/config` (`Pessoa<N>_Nome/_Email`, N = próximo número); 409 `pessoa_existe` |
+| `tarefas.pessoa_editar` | `nome`, `novoNome`, `email?` | renomear: `POST /tarefas/pessoas/reatribuir` (atómico, com `configChave`); e-mail: `PUT /tarefas/config` |
+| `tarefas.pessoa_remover` (**sensitive**) | `nome`, `substituto?` (obrigatório se tiver tarefas por fazer) | `POST /tarefas/pessoas/reatribuir` (só pendentes) e `PUT /tarefas/config` (apaga as chaves `Pessoa<N>_*`); nunca a última pessoa |
+| `tarefas.reatribuir` (**sensitive**) | `de`, `para` | `POST /tarefas/pessoas/reatribuir` (só pendentes) |
+| `tarefas.admin` (**sensitive**) | `admins?`, `notificacoes?` (`piscina`/`horario` → nomes) | `PUT /tarefas/admin` (403 se não for administrador) |
+| `tarefas.gerar` | — | `POST /gerar` no `tarefas-api` (cria já as ocorrências dos próximos dias); 503 se não responder |
 | `peso.registar` | `peso` (1–1000), `nota?`, `cid?`, `quando?` (repor um registo) | `POST /peso/registos` (idempotente com `cid`) |
 | `peso.editar` | `registo`, `quando`, `peso`, `nota?` | `PUT /peso/registos/{id}` |
 | `peso.eliminar` (**sensitive**, exige `confirmado`) | `registo` | `DELETE /peso/registos/{id}` (devolve o registo apagado, para «Desfazer») |

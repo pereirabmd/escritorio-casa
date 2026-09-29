@@ -156,7 +156,6 @@ button.day[aria-pressed='true'] { background: var(--surface-2); }
 .swatch-goal { border-top: 2px dotted var(--success); }
 .grow-input { flex: 1; min-width: 140px; }
 .edit { display: block; }
-.link-danger { color: var(--error); }
 .fields { display: grid; gap: var(--s4); grid-template-columns: 1fr; }
 @media (min-width: 600px) { .fields { grid-template-columns: 1fr 1fr; } }
 select.input { appearance: auto; }
@@ -222,3 +221,30 @@ select.input { appearance: auto; }
 .struck { text-decoration: line-through; color: var(--text-2); }
 .check[data-done='true'] { background: var(--primary); border-color: var(--primary); color: var(--primary-ink); }
 a.link-btn { text-decoration: none; }
+
+/* --- Tarefas: calendário, horário, piscina --- */
+.segmented.scroll[role='tablist'] { grid-auto-columns: max-content; overflow-x: auto; scrollbar-width: none; }
+.segmented.scroll[role='tablist']::-webkit-scrollbar { display: none; }
+.segmented.scroll[role='tablist'] button { padding: 0 12px; }
+.link-danger { color: var(--error); }
+.grow-input { flex: 1; min-width: 0; }
+.cal-cell[data-fora='true'] { opacity: 0.45; }
+.cal-cell[data-feriado='true'] .num { color: var(--error); }
+.cal-cell .dots { display: flex; gap: 3px; min-height: 6px; align-items: center; }
+.cal-cell .dots i { width: 6px; height: 6px; border-radius: 50%; display: block; }
+.hor-slot { align-items: flex-start; }
+.hor-slot[data-agora='true'] { background: color-mix(in srgb, var(--accent) 12%, transparent); border-radius: var(--r-s); }
+.hor-hora { display: grid; min-width: 48px; font-variant-numeric: tabular-nums; }
+.hor-hora span { color: var(--text-2); font-size: 12px; }
+.hor-aula { display: flex; gap: var(--s2); align-items: baseline; }
+.hor-aula span { color: var(--text-2); font-size: 12px; }
+.hor-semana-wrap { overflow-x: auto; }
+.hor-semana { border-collapse: collapse; width: 100%; font-size: 13px; }
+.hor-semana th, .hor-semana td { text-align: left; vertical-align: top; padding: 6px 8px; border-top: 1px solid var(--line); }
+.hor-semana th[data-hoje='true'], .hor-semana td[data-hoje='true'] { background: color-mix(in srgb, var(--accent) 10%, transparent); }
+.hor-semana td[data-dividida='true'] { font-style: italic; }
+.hor-semana .h { display: table-cell; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.hor-semana .h span { display: block; color: var(--text-2); font-size: 12px; }
+.piscina-item[data-destaque='true'] { background: var(--warning-bg); border-radius: var(--r-s); padding-inline: var(--s2); }
+.nota-longa { margin: var(--s1) 0 0; }
+fieldset { border: 0; padding: 0; margin: 0; min-width: 0; }
