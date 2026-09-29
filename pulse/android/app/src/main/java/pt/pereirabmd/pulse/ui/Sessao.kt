@@ -31,6 +31,8 @@ class Sessao(val store: SessionStore, private val scope: CoroutineScope, private
     var temPin by mutableStateOf(store.temPin); private set
     var biometria by mutableStateOf(store.biometria); private set
     var atualizacao: Atualizacao? by mutableStateOf(null); private set
+    /** O que a Google disse ao regressar ao `pulse://google` («ok» ou o motivo do erro); o ecrã de contas mostra-o e limpa-o. */
+    var resultadoGoogle: Pair<Boolean, String>? by mutableStateOf(null)
     private var saiuEm = 0L
 
     init {
@@ -96,6 +98,9 @@ class Sessao(val store: SessionStore, private val scope: CoroutineScope, private
 
     fun aoIrParaSegundoPlano() { saiuEm = agora() }
     fun aoVoltar() { if (temPin && saiuEm > 0 && agora() - saiuEm > BLOQUEIO_MS) bloqueado = true }
+
+    fun regressoGoogle(ok: Boolean, motivo: String) { resultadoGoogle = ok to motivo }
+    fun limparResultadoGoogle() { resultadoGoogle = null }
 
     fun escolherTema(t: Tema) { store.tema = t; tema = t }
 

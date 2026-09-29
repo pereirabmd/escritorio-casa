@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, Query, Request
-from fastapi.responses import RedirectResponse
+from fastapi.responses import HTMLResponse, RedirectResponse
 from pydantic import BaseModel, ConfigDict, Field
 
 from pulse import google_api as g
@@ -34,19 +34,29 @@ def contas(request: Request, s: Sessao = Depends(sessao_ativa), conn=Depends(get
 class LigarIn(BaseModel):
     model_config = ConfigDict(extra="forbid")
     servicos: list[str] = Field(min_length=1, max_length=2)
+    cliente: str = Field(default="web", pattern="^(web|android)$")
 
 
 @router.post("/connect")
 def ligar(d: LigarIn, request: Request, s: Sessao = Depends(sessao_ativa), conn=Depends(get_conn)):
     """Devolve o endereço do ecrã de consentimento da Google. A interface abre-o; o Google regressa a `/google/callback`."""
-    return {"url": contas_google.iniciar(conn, _api(request), s.user["id"], d.servicos, s.user["email"])}
+    return {"url": contas_google.iniciar(conn, _api(request), s.user["id"], d.servicos, s.user["email"], cliente=d.cliente)}
 
 
 @router.get("/callback")
 def regresso(request: Request, code: str = Query(default=""), state: str = Query(default=""), error: str = Query(default=""), conn=Depends(get_conn)):
-    """O regresso do Google. Não usa a sessão: o `state` (um só uso, 10 min) é que diz quem pediu a ligação."""
+    """O regresso do Google. Não usa a sessão: o `state` (um só uso, 10 min) é que diz quem pediu a ligação e de que cliente."""
     web = request.app.state.settings.web_base_path
-    destino = lambda ok, motivo="": RedirectResponse(f"{web}definicoes?google={'ok' if ok else 'erro'}{('&motivo=' + motivo) if motivo else ''}", status_code=303)
+    android = contas_google.cliente_do_pedido(conn, state) == "android" if state else False
+
+    def destino(ok: bool, motivo: str = ""):
+        if android:      # a app Android abre-se por um link direto (pulse://google); a página só serve de ponte, sem scripts (a CSP não os deixa)
+            url = f"pulse://google?resultado={'ok' if ok else 'erro'}{('&motivo=' + motivo) if motivo else ''}"
+            return HTMLResponse(f'<!doctype html><html lang="pt-PT"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">'
+                                f'<meta http-equiv="refresh" content="0;url={url}"><title>Pulse</title></head><body style="font-family:sans-serif;padding:2rem">'
+                                f'<p>{"Conta Google ligada." if ok else "Não foi possível ligar a conta Google."}</p><p><a href="{url}">Voltar ao Pulse</a></p></body></html>')
+        return RedirectResponse(f"{web}definicoes?google={'ok' if ok else 'erro'}{('&motivo=' + motivo) if motivo else ''}", status_code=303)
+
     if error or not code or not state:
         return destino(False, "recusado" if error == "access_denied" else "invalido")
     api = request.app.state.google

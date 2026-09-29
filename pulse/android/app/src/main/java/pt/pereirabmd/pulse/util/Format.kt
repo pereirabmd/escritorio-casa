@@ -16,6 +16,7 @@ private fun decimal(v: Double, casas: Int, agrupar: Boolean): String {
     return sinal + g + if (frac.isEmpty()) "" else ",$frac"
 }
 
+fun fmtDec(v: Double, casas: Int): String = decimal(v, casas, false)
 fun fmtEuro(v: Double): String = decimal(v, 2, true) + NBSP + "€"
 fun fmtPeso(v: Double): String = decimal(v, 1, false) + NBSP + "kg"
 
@@ -55,3 +56,7 @@ fun fmtDias(dias: Int): String = when {
 }
 
 fun plural(n: Int, um: String, varios: String) = if (n == 1) "$n $um" else "$n $varios"
+
+/** Diferença em kg com sinal (a descer é bom no Peso): «−1,2 kg» / «+0,4 kg». */
+fun fmtDeltaKg(d: Double): String = if (Math.abs(d) < 0.05) "0,0${NBSP}kg" else "${if (d < 0) "−" else "+"}${decimal(Math.abs(d), 1, false)}${NBSP}kg"
+fun fmtKg2(v: Double): String = decimal(v, 2, false) + NBSP + "kg"

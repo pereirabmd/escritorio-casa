@@ -45,7 +45,7 @@ def marcar_estado(conn: sqlite3.Connection, conta: int, estado: str, agora: int 
     conn.execute("UPDATE google_accounts SET estado = ?, atualizado = ? WHERE id = ?", (estado, _agora(agora), conta))
 
 
-def iniciar(conn: sqlite3.Connection, api: g.GoogleApi, uid: int, servicos: list[str], login_hint: str = "", agora: int | None = None) -> str:
+def iniciar(conn: sqlite3.Connection, api: g.GoogleApi, uid: int, servicos: list[str], login_hint: str = "", agora: int | None = None, cliente: str = "web") -> str:
     """Devolve o URL do ecrã de consentimento da Google. Guarda o `state` (um só uso, 10 min) e o verificador PKCE."""
     servicos = [s for s in dict.fromkeys(servicos)]
     if not servicos or any(s not in g.SERVICOS for s in servicos):
@@ -54,8 +54,14 @@ def iniciar(conn: sqlite3.Connection, api: g.GoogleApi, uid: int, servicos: list
     conn.execute("DELETE FROM google_oauth_states WHERE criado < ?", (t - g.ESTADO_TTL_S,))
     state = secrets.token_urlsafe(32)
     verificador, desafio = g.pkce()
-    conn.execute("INSERT INTO google_oauth_states (state, user_id, servicos, code_verifier, criado) VALUES (?,?,?,?,?)", (state, uid, ",".join(servicos), verificador, t))
+    conn.execute("INSERT INTO google_oauth_states (state, user_id, servicos, code_verifier, criado, cliente) VALUES (?,?,?,?,?,?)", (state, uid, ",".join(servicos), verificador, t, cliente))
     return api.url_autorizacao(servicos, state, desafio, login_hint)
+
+
+def cliente_do_pedido(conn: sqlite3.Connection, state: str) -> str:
+    """De que cliente (`web` ou `android`) veio o pedido de ligação; `web` se o `state` não existe (o regresso mostra o erro na Web)."""
+    r = conn.execute("SELECT cliente FROM google_oauth_states WHERE state = ?", (state,)).fetchone()
+    return r["cliente"] if r else "web"
 
 
 def concluir(conn: sqlite3.Connection, api: g.GoogleApi, state: str, code: str, agora: int | None = None) -> dict:

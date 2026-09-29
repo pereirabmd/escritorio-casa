@@ -465,6 +465,22 @@ def test_api_ligar_callback_e_remover(app, fake):
     k.close()
 
 
+def test_api_ligar_pelo_android_regressa_ao_link_da_app(app, fake):
+    b = entrar(app)
+    url = b.post("/api/v1/google/connect", json={"servicos": ["calendar"], "cliente": "android"}, headers=H).json()["url"]
+    state = parse_qs(urlparse(url).query)["state"][0]
+    _codigo(fake, f"openid {CAL}")
+    r = b.get(f"/api/v1/google/callback?code=abc&state={state}")
+    assert r.status_code == 200 and "pulse://google?resultado=ok" in r.text                        # ponte sem scripts para a app
+    assert [c["email"] for c in b.get("/api/v1/google/accounts").json()["contas"]] == ["ele@gmail.com"]
+    depois = b.get(f"/api/v1/google/callback?code=abc&state={state}")                                # já gasto: o erro vai para a Web
+    assert depois.status_code == 303 and depois.headers["location"].endswith("motivo=estado_invalido")
+    url2 = b.post("/api/v1/google/connect", json={"servicos": ["calendar"], "cliente": "android"}, headers=H).json()["url"]
+    recusado = b.get(f"/api/v1/google/callback?error=access_denied&state={parse_qs(urlparse(url2).query)['state'][0]}")
+    assert "pulse://google?resultado=erro&amp;motivo=recusado" in recusado.text or "pulse://google?resultado=erro&motivo=recusado" in recusado.text
+    assert b.post("/api/v1/google/connect", json={"servicos": ["calendar"], "cliente": "ios"}, headers=H).status_code in (400, 422)
+
+
 def test_api_calendario_marca_a_conta_que_pede_reautorizacao(app, fake):
     b = entrar(app)
     ligar_via_api(app, BRUNO, "calendar", refresh="morto")

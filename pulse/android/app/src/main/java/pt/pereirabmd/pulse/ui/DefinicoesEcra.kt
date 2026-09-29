@@ -19,6 +19,7 @@ import kotlinx.coroutines.launch
 import pt.pereirabmd.pulse.BuildConfig
 import pt.pereirabmd.pulse.data.*
 import pt.pereirabmd.pulse.data.Updater
+import androidx.compose.foundation.layout.Arrangement
 
 @Composable
 private fun Secao(titulo: String, conteudo: @Composable ColumnScope.() -> Unit) {
@@ -63,6 +64,7 @@ fun AvisoAtualizacao(a: Atualizacao, modifier: Modifier = Modifier) {
 @Composable
 fun EcraDefinicoes(sessao: Sessao, utilizador: Utilizador, aoVoltar: () -> Unit, aoMudarPassword: () -> Unit, aoDefinirPin: () -> Unit) {
     val ctx = LocalContext.current
+    val abrir = LocalAbrir.current
     val c = Pulse.cores
     val scope = rememberCoroutineScope()
     var aVerificar by remember { mutableStateOf(false) }
@@ -78,7 +80,7 @@ fun EcraDefinicoes(sessao: Sessao, utilizador: Utilizador, aoVoltar: () -> Unit,
                 Column(Modifier.weight(1f)) { Texto(utilizador.nome.ifEmpty { utilizador.email }); Meta(utilizador.email + if (utilizador.admin) " · administrador" else "") }
             }
             Botao("Mudar palavra-passe", aoMudarPassword, variante = Variante.SECUNDARIO, pequeno = true)
-            Botao("Ligar contas Google (na Web)", { abrirNaWeb(ctx, "/definicoes") }, variante = Variante.SECUNDARIO, pequeno = true)
+            Botao("Contas Google", { abrir("google") }, variante = Variante.SECUNDARIO, pequeno = true)
             Botao("Terminar sessão", { sessao.sair() }, variante = Variante.PERIGO, pequeno = true)
         }
         Secao("Segurança") {
@@ -102,6 +104,8 @@ fun EcraDefinicoes(sessao: Sessao, utilizador: Utilizador, aoVoltar: () -> Unit,
                 }
             }
         }
+        SessoesSecao()
+        if (utilizador.admin) AdministracaoSecao()
         Secao("Aplicação") {
             Texto("Pulse ${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})")
             val a = sessao.atualizacao
@@ -110,6 +114,71 @@ fun EcraDefinicoes(sessao: Sessao, utilizador: Utilizador, aoVoltar: () -> Unit,
                 if (verificada) Meta("Tens a versão mais recente.")
                 Botao("Procurar atualizações", { aVerificar = true; scope.launch { sessao.verificarAtualizacaoAgora(); verificada = true; aVerificar = false } },
                     variante = Variante.SECUNDARIO, pequeno = true, carregando = aVerificar)
+            }
+        }
+    }
+}
+
+private fun dispositivo(cliente: String, ua: String): String {
+    if (cliente == "android") return "Aplicação Android"
+    val nav = when { "Firefox/" in ua -> "Firefox"; "Edg/" in ua -> "Edge"; "Chrome/" in ua -> "Chrome"; "Safari/" in ua -> "Safari"; else -> "Browser" }
+    val so = when { "Android" in ua -> "Android"; "iPhone" in ua || "iPad" in ua -> "iOS"; "Windows" in ua -> "Windows"; "Mac OS" in ua -> "macOS"; "Linux" in ua -> "Linux"; else -> "" }
+    return if (so.isNotEmpty()) "$nav em $so" else nav
+}
+
+private fun quandoSessao(s: Long): String {
+    val z = java.time.Instant.ofEpochSecond(s).atZone(java.time.ZoneId.systemDefault())
+    return "%02d/%02d/%04d %02d:%02d".format(z.dayOfMonth, z.monthValue, z.year, z.hour, z.minute)
+}
+
+/** Sessões e dispositivos: as que estão abertas nesta conta, com «Terminar» nas outras (como na Web). */
+@Composable
+private fun SessoesSecao() {
+    val c = carga { Api.get("/auth/sessions") }
+    val scope = rememberCoroutineScope()
+    var erro by remember { mutableStateOf<String?>(null) }
+    Secao("Sessões e dispositivos") {
+        erro?.let { Aviso(TipoAviso.ERRO, it) }
+        when (val e = c.estado) {
+            Estado.ACarregar -> Texto2("A carregar…")
+            is Estado.Erro -> { Aviso(TipoAviso.ERRO, e.mensagem); Botao("Tentar de novo", c.recarregar, variante = Variante.SECUNDARIO, pequeno = true) }
+            is Estado.Pronto -> e.dados.objs("sessoes").forEach { s ->
+                val nome = dispositivo(s.txtOu("cliente"), s.txtOu("dispositivo"))
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Icon(Icone.DISPOSITIVO, Pulse.cores.primary)
+                    Column(Modifier.weight(1f)) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) { Texto(nome); if (s.bool("atual")) Pilula("Esta sessão", Pulse.cores.success) }
+                        Meta("Último uso: ${quandoSessao(s.optLong("ultimoUso"))}")
+                    }
+                    if (!s.bool("atual")) LinkBtn("Terminar", {
+                        erro = null
+                        scope.launch { try { Api.delete("/auth/sessions/${s.getInt("id")}"); c.recarregar() } catch (x: Exception) { erro = mensagemDeErro(x) } }
+                    })
+                }
+            }
+        }
+    }
+}
+
+/** Só para administradores: ativar ou desativar módulos para todos os utilizadores. */
+@Composable
+private fun AdministracaoSecao() {
+    val c = carga { Api.get("/modules") }
+    val scope = rememberCoroutineScope()
+    var erro by remember { mutableStateOf<String?>(null) }
+    var ocupado by remember { mutableStateOf<String?>(null) }
+    Secao("Administração") {
+        Texto2("Módulos: um módulo desativado desaparece do Hoje e de Mais para todos os utilizadores, e o servidor recusa os pedidos que lhe chegarem.")
+        erro?.let { Aviso(TipoAviso.ERRO, it) }
+        when (val e = c.estado) {
+            Estado.ACarregar -> Texto2("A carregar…")
+            is Estado.Erro -> Aviso(TipoAviso.ERRO, e.mensagem)
+            is Estado.Pronto -> e.dados.objs("modulos").forEach { m ->
+                val id = m.txtOu("id")
+                Interruptor(m.txtOu("nome"), m.optBoolean("ativo", true), { ativo ->
+                    if (ocupado == null) { ocupado = id; erro = null
+                        scope.launch { try { Api.put("/admin/modules", jo("modulos" to jo(id to ativo))); c.recarregar() } catch (x: Exception) { erro = mensagemDeErro(x) } finally { ocupado = null } } }
+                }, if (m.optBoolean("ativo", true)) "Ativo" else "Desativado")
             }
         }
     }

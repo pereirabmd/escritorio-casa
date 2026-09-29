@@ -23,6 +23,7 @@ object Api {
 
     suspend fun get(caminho: String) = pedir("GET", caminho, null)
     suspend fun post(caminho: String, corpo: JSONObject = JSONObject()) = pedir("POST", caminho, corpo)
+    suspend fun put(caminho: String, corpo: JSONObject = JSONObject()) = pedir("PUT", caminho, corpo)
     suspend fun delete(caminho: String) = pedir("DELETE", caminho, null)
 
     private suspend fun pedir(metodo: String, caminho: String, corpo: JSONObject?): JSONObject = withContext(Dispatchers.IO) {

@@ -1,5 +1,6 @@
 package pt.pereirabmd.pulse
 
+import android.content.Intent
 import android.os.Bundle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -19,9 +20,17 @@ class MainActivity : FragmentActivity() {
         enableEdgeToEdge()
         setContent {
             val scope = rememberCoroutineScope()
-            val s = remember { Sessao(SessionStore(applicationContext), scope).also { it.iniciar(); sessao = it } }
+            val s = remember { Sessao(SessionStore(applicationContext), scope).also { it.iniciar(); sessao = it; tratar(intent) } }
             PulseApp(s)
         }
+    }
+
+    override fun onNewIntent(intent: Intent) { super.onNewIntent(intent); setIntent(intent); tratar(intent) }
+
+    /** O regresso da Google (`pulse://google?resultado=ok|erro&motivo=…`) chega por aqui. */
+    private fun tratar(intent: Intent?) {
+        val uri = intent?.data ?: return
+        if (uri.scheme == "pulse" && uri.host == "google") sessao?.regressoGoogle(uri.getQueryParameter("resultado") == "ok", uri.getQueryParameter("motivo").orEmpty())
     }
 
     override fun onStop() { super.onStop(); sessao?.aoIrParaSegundoPlano() }

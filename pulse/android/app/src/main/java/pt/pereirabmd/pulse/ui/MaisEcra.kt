@@ -36,10 +36,9 @@ private fun ItemLista(icone: Icone, nome: String, nota: String? = null, aoClicar
     }
 }
 
-/** «Mais»: as aplicações do Pulse. Os módulos ainda sem ecrã nativo abrem a Web do Pulse; o que o administrador desativou não aparece. */
+/** «Mais»: as aplicações do Pulse. O que o administrador desativou não aparece. */
 @Composable
-fun EcraMais(aoDefinicoes: () -> Unit) {
-    val ctx = LocalContext.current
+fun EcraMais(aoAbrir: (String) -> Unit, aoDefinicoes: () -> Unit) {
     var ativos by remember { mutableStateOf<List<ModuloInfo>?>(null) }
     LaunchedEffect(Unit) { ativos = try { parseModulos(Api.get("/modules")) } catch (e: Exception) { null } }
     // enquanto a lista não chega (ou falha) mostram-se todos: o servidor recusa o que estiver desativado
@@ -48,12 +47,13 @@ fun EcraMais(aoDefinicoes: () -> Unit) {
         item {
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Texto("Mais", Pulse.page)
-                Texto2("As aplicações completas chegam ao Android por fases. Por agora abrem na Web do Pulse, com a mesma conta.")
+                Texto2("Todas as aplicações do Pulse, num só sítio.")
             }
         }
         item { Texto("Aplicações", Pulse.card, Pulse.cores.text2) }
-        visiveis.forEach { m -> item { ItemLista(m.icone, m.nome, "Na Web") { abrirNaWeb(ctx, m.rota) } } }
+        visiveis.forEach { m -> item { ItemLista(m.icone, m.nome) { aoAbrir(m.id) } } }
         item { Spacer(Modifier.height(4.dp)); Texto("Conta", Pulse.card, Pulse.cores.text2) }
+        item { ItemLista(Icone.EMAIL, "Contas Google") { aoAbrir("google") } }
         item { ItemLista(Icone.DEFINICOES, "Definições", aoClicar = aoDefinicoes) }
     }
 }

@@ -30,10 +30,10 @@ data class Passe(val dataExpira: String?, val diasRestantes: Int?)
 data class BilhetesDados(val proximo: Viagem?, val passe: Passe?)
 data class DiaRto(val data: String, val diaSemana: Int, val marca: String, val hoje: Boolean)
 data class RtoDados(val dias: List<DiaRto>, val escritorio: Int, val casa: Int)
-data class PesoDados(val ultimoQuando: String?, val ultimoPeso: Double?, val registadoHoje: Boolean)
+data class PesoDados(val ultimoQuando: String?, val ultimoPeso: Double?, val registadoHoje: Boolean, val sugestao: Double?)
 data class ContaFin(val id: Int, val descricao: String, val valor: Double, val categoria: String, val diasAte: Int, val vencida: Boolean)
 data class FinancasDados(val proximas: List<ContaFin>, val vencidas: Int, val total: Int, val valorTotal: Double)
-data class ItemCompras(val nome: String, val quantidade: Int?, val nota: String)
+data class ItemCompras(val item: Int, val nome: String, val quantidade: Int?, val nota: String)
 data class ComprasDados(val pendentes: Int, val itens: List<ItemCompras>)
 data class Evento(val titulo: String, val diaInteiro: Boolean, val inicio: String, val local: String)
 data class CalendarioDados(val eventos: List<Evento>, val total: Int, val comProblemas: List<String>)
@@ -84,13 +84,13 @@ fun parseHoje(j: JSONObject): Hoje {
             RtoDados(d.lista("dias") { DiaRto(it.txtOu("data"), it.inteiro("diaSemana", 1), it.txtOu("marca"), it.bool("hoje")) },
                 d.obj("contagem")?.inteiro("T") ?: 0, d.obj("contagem")?.inteiro("C") ?: 0)
         },
-        peso = modulo(m.obj("peso")) { d -> PesoDados(d.obj("ultimo")?.txt("quando"), d.obj("ultimo")?.real("peso"), d.bool("registadoHoje")) },
+        peso = modulo(m.obj("peso")) { d -> PesoDados(d.obj("ultimo")?.txt("quando"), d.obj("ultimo")?.real("peso"), d.bool("registadoHoje"), d.real("sugestao")) },
         financas = modulo(m.obj("financas")) { d ->
             FinancasDados(d.lista("proximas") { ContaFin(it.inteiro("id"), it.txtOu("descricao"), it.real("valor") ?: 0.0, it.txtOu("categoria"), it.inteiro("diasAte"), it.bool("vencida")) },
                 d.inteiro("vencidas"), d.inteiro("total"), d.real("valorTotal") ?: 0.0)
         },
         compras = m.obj("compras")?.let { c ->
-            modulo(c) { d -> ComprasDados(d.inteiro("pendentes"), d.lista("itens") { ItemCompras(it.txtOu("nome"), if (it.isNull("quantidade")) null else it.optInt("quantidade"), it.txtOu("nota")) }) }
+            modulo(c) { d -> ComprasDados(d.inteiro("pendentes"), d.lista("itens") { ItemCompras(it.inteiro("item"), it.txtOu("nome"), if (it.isNull("quantidade")) null else it.optInt("quantidade"), it.txtOu("nota")) }) }
         },
         calendario = modulo(m.obj("calendario")) { d ->
             CalendarioDados(d.lista("eventos") { Evento(it.txtOu("titulo"), it.bool("diaInteiro"), it.txtOu("inicio"), it.txtOu("local")) }, d.inteiro("total"), problemas(d))
@@ -104,3 +104,10 @@ fun parseHoje(j: JSONObject): Hoje {
 data class ModuloInfo(val id: String, val nome: String, val ativo: Boolean)
 
 fun parseModulos(j: JSONObject): List<ModuloInfo> = j.lista("modulos") { ModuloInfo(it.txtOu("id"), it.txtOu("nome"), it.optBoolean("ativo", true)) }
+
+fun JSONObject.objs(k: String): List<JSONObject> = lista(k) { it }
+fun JSONObject.strs(k: String): List<String> {
+    val a = optJSONArray(k) ?: return emptyList()
+    return (0 until a.length()).mapNotNull { if (a.isNull(it)) null else a.optString(it) }
+}
+fun JSONObject.inteiroOuNull(k: String): Int? = if (isNull(k)) null else optInt(k)
