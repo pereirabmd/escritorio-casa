@@ -35,6 +35,7 @@ Migrar aplicações dedicadas para o Pulse sem perda funcional.
 - descontinuação apenas após validação explícita.
 
 ### Compras
+- **Web feita (29/09/2026; ADR-047)**: listas «Casa» partilhada e pessoais, catálogo de 338 produtos, produtos próprios, favoritos, quantidade opcional; falta o offline (Android), widget e IA;
 - nasce no Pulse;
 - não existe app dedicada.
 

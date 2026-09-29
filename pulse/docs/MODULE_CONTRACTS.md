@@ -57,8 +57,8 @@ Mais: funcionalidades completas.
 Sem exposição obrigatória de outras métricas no Hoje.
 
 ## Compras
-Exclusivo Pulse.
-Catálogo pré-carregado, produtos custom, SVG, favoritos, quantidades, estado comprado, toque rápido.
+Exclusivo Pulse (**implementado, ADR-047**).
+Catálogo pré-carregado (338 produtos), produtos custom, SVG, favoritos, quantidade opcional (nunca direta), estado comprado, toque rápido, listas partilhada («Casa») e pessoais, categorias escondíveis e sugestões (ADR-048).
 
 ## UI
 

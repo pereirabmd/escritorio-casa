@@ -20,7 +20,7 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_valida
 from pulse.accounts import ContaErro
 from pulse.clients.dados import DadosClient, ErroDoModulo, ModuloIndisponivel
 from pulse.clients.tarefas_api import TarefasApiClient
-from pulse.services import modulos
+from pulse.services import compras, modulos
 from pulse.services import piscina as piscina_regras
 from pulse.services import rto as rto_regras
 from pulse.services import tarefas as tarefas_regras
@@ -35,6 +35,7 @@ class Contexto:
     agora: datetime
     tarefas_api: TarefasApiClient | None = None          # servidor dos avisos ntfy (forçar a geração de ocorrências)
     avisos_tarefas: Callable[[], None] | None = None     # pede o recálculo dos avisos ntfy depois de mudar tarefas (melhor esforço)
+    conn: sqlite3.Connection | None = None              # o `pulse.db`: só as ações de módulos do próprio Pulse (Compras) o usam; `executar` preenche-o
 
     @property
     def hoje(self) -> date:
@@ -392,6 +393,102 @@ class PedidoRepetirIn(_Params):
 
 class PedidoRefIn(_Params):
     pedido: int = Field(ge=1)
+
+
+# --- Compras (dados do próprio Pulse) ----------------------------------------------------------------------------------------------
+
+ID = Annotated[int, Field(ge=1)]
+NOME_PRODUTO = Annotated[str, Field(min_length=1, max_length=80)]
+CATEGORIA_COMPRAS = Annotated[str, Field(min_length=1, max_length=40)]
+ICONE_COMPRAS = Annotated[str, Field(min_length=1, max_length=40)]
+
+
+class ComprasAdicionarIn(_Params):
+    """Por `produto` (id do catálogo) ou por `nome` (usa o produto com esse nome ou cria um próprio, na `categoria`)."""
+    lista: ID
+    produto: ID | None = None
+    nome: NOME_PRODUTO | None = None
+    categoria: CATEGORIA_COMPRAS | None = None
+    icone: ICONE_COMPRAS | None = None
+    cid: CID | None = None
+
+    @model_validator(mode="after")
+    def _um_so(self):
+        if (self.produto is None) == (self.nome is None):
+            raise ValueError("indica o produto ou o nome")
+        return self
+
+
+class ItemRefIn(_Params):
+    item: ID
+
+
+class ItemCompradoIn(ItemRefIn):
+    comprado: bool
+
+
+class ItemDetalhesIn(ItemRefIn):
+    quantidade: int | None = Field(default=None, ge=1, le=999)
+    nota: str = Field(default="", max_length=80)
+
+
+class ItemMoverIn(ItemRefIn):
+    lista: ID
+
+
+class ListaRefIn(_Params):
+    lista: ID
+
+
+class ItemRestaurarIn(_Params):
+    produto: ID
+    quantidade: int | None = Field(default=None, ge=1, le=999)
+    nota: str = Field(default="", max_length=80)
+    estado: Literal["pendente", "comprado"] = "pendente"
+
+
+class ComprasRestaurarIn(ListaRefIn):
+    itens: list[ItemRestaurarIn] = Field(max_length=500)
+
+
+class ProdutoRefIn(_Params):
+    produto: ID
+
+
+class ProdutoMarcaIn(ProdutoRefIn):
+    valor: bool
+
+
+class CategoriaMarcaIn(_Params):
+    categoria: CATEGORIA_COMPRAS
+    valor: bool
+
+
+class ProdutoCriarIn(_Params):
+    nome: NOME_PRODUTO
+    categoria: CATEGORIA_COMPRAS
+    icone: ICONE_COMPRAS | None = None
+
+
+class ProdutoEditarIn(ProdutoRefIn):
+    nome: NOME_PRODUTO | None = None
+    categoria: CATEGORIA_COMPRAS | None = None
+    icone: ICONE_COMPRAS | None = None
+
+    @model_validator(mode="after")
+    def _algo(self):
+        if not (self.model_fields_set - {"produto"}):
+            raise ValueError("nada para alterar")
+        return self
+
+
+class ListaCriarIn(_Params):
+    nome: Annotated[str, Field(min_length=1, max_length=60)]
+    tipo: Literal["partilhada", "pessoal"] = "pessoal"
+
+
+class ListaEditarIn(ListaRefIn):
+    nome: Annotated[str, Field(min_length=1, max_length=60)]
 
 
 @dataclass(frozen=True)
@@ -905,6 +1002,108 @@ def _pedido_forcar(c: Contexto, p: PedidoRefIn):
     return r, f"pedido {p.pedido}"
 
 
+# --- Compras -----------------------------------------------------------------------------------------------------------------------
+
+def _quem(c: Contexto) -> tuple[int, bool]:
+    """(id, administrador) da conta que executa a ação. As ações de Compras escrevem no `pulse.db` (é o único módulo cujos dados são do Pulse)."""
+    if c.conn is None:
+        raise ContaErro(500, "sem_base", "ação sem ligação à base do Pulse")
+    r = c.conn.execute("SELECT id, admin FROM pulse_users WHERE email = ?", (c.email,)).fetchone()
+    if r is None:
+        raise ContaErro(403, "sem_acesso", "conta desconhecida")
+    return r["id"], bool(r["admin"])
+
+
+def _c_adicionar(c: Contexto, p: ComprasAdicionarIn):
+    uid, _ = _quem(c)
+    r = compras.adicionar(c.conn, uid, p.lista, p.produto, p.nome, p.categoria, p.icone, p.cid, int(c.agora.timestamp()))
+    return r, f"item {r['id']}"
+
+
+def _c_remover(c: Contexto, p: ItemRefIn):
+    uid, _ = _quem(c)
+    return compras.remover(c.conn, uid, p.item), f"item {p.item}"
+
+
+def _c_comprado(c: Contexto, p: ItemCompradoIn):
+    uid, _ = _quem(c)
+    return compras.comprado(c.conn, uid, p.item, p.comprado, int(c.agora.timestamp()), c.hoje.isoformat()), f"item {p.item} {'comprado' if p.comprado else 'por comprar'}"
+
+
+def _c_detalhes(c: Contexto, p: ItemDetalhesIn):
+    uid, _ = _quem(c)
+    return compras.detalhes(c.conn, uid, p.item, p.quantidade, p.nota), f"item {p.item}"
+
+
+def _c_mover(c: Contexto, p: ItemMoverIn):
+    uid, _ = _quem(c)
+    return compras.mover(c.conn, uid, p.item, p.lista), f"item {p.item} -> lista {p.lista}"
+
+
+def _c_limpar(c: Contexto, p: ListaRefIn):
+    uid, _ = _quem(c)
+    r = compras.limpar_comprados(c.conn, uid, p.lista)
+    return r, f"lista {p.lista}: {len(r['removidos'])} comprados"
+
+
+def _c_restaurar(c: Contexto, p: ComprasRestaurarIn):
+    uid, _ = _quem(c)
+    r = compras.restaurar(c.conn, uid, p.lista, [i.model_dump() for i in p.itens], int(c.agora.timestamp()))
+    return r, f"lista {p.lista}: {r['repostos']} repostos"
+
+
+def _c_favorito(c: Contexto, p: ProdutoMarcaIn):
+    uid, _ = _quem(c)
+    return compras.favorito(c.conn, uid, p.produto, p.valor), f"produto {p.produto}"
+
+
+def _c_ocultar(c: Contexto, p: ProdutoMarcaIn):
+    uid, _ = _quem(c)
+    return compras.ocultar(c.conn, uid, p.produto, p.valor), f"produto {p.produto}"
+
+
+def _c_sugestao_ignorar(c: Contexto, p: ProdutoMarcaIn):
+    uid, _ = _quem(c)
+    return compras.sugestao_ignorar(c.conn, uid, p.produto, p.valor), f"produto {p.produto}"
+
+
+def _c_categoria_ocultar(c: Contexto, p: CategoriaMarcaIn):
+    uid, _ = _quem(c)
+    return compras.categoria_ocultar(c.conn, uid, p.categoria, p.valor), f"categoria {p.categoria}"
+
+
+def _c_produto_criar(c: Contexto, p: ProdutoCriarIn):
+    uid, _ = _quem(c)
+    r = compras.produto_criar(c.conn, uid, p.nome, p.categoria, p.icone, int(c.agora.timestamp()))
+    return r, f"produto {r['id']}"
+
+
+def _c_produto_editar(c: Contexto, p: ProdutoEditarIn):
+    uid, admin = _quem(c)
+    return compras.produto_editar(c.conn, uid, admin, p.produto, p.nome, p.categoria, p.icone), f"produto {p.produto}"
+
+
+def _c_produto_apagar(c: Contexto, p: ProdutoRefIn):
+    uid, admin = _quem(c)
+    return compras.produto_apagar(c.conn, uid, admin, p.produto), f"produto {p.produto}"
+
+
+def _c_lista_criar(c: Contexto, p: ListaCriarIn):
+    uid, _ = _quem(c)
+    r = compras.lista_criar(c.conn, uid, p.nome, p.tipo, int(c.agora.timestamp()))
+    return r, f"lista {r['id']}"
+
+
+def _c_lista_editar(c: Contexto, p: ListaEditarIn):
+    uid, _ = _quem(c)
+    return compras.lista_editar(c.conn, uid, p.lista, p.nome), f"lista {p.lista}"
+
+
+def _c_lista_apagar(c: Contexto, p: ListaRefIn):
+    uid, _ = _quem(c)
+    return compras.lista_apagar(c.conn, uid, p.lista), f"lista {p.lista}"
+
+
 ACOES: dict[str, Acao] = {a.nome: a for a in (
     Acao("tarefas.concluir", "tarefas", "safe_action", "Marca uma tarefa como feita (e as atrasadas anteriores da mesma tarefa).", InstanciaIn, _concluir),
     Acao("tarefas.reabrir", "tarefas", "safe_action", "Volta a pôr uma tarefa como por fazer (desfaz «concluir»).", ReabrirIn, _reabrir),
@@ -938,6 +1137,23 @@ ACOES: dict[str, Acao] = {a.nome: a for a in (
     Acao("bilhetes.passe", "bilhetes", "safe_action", "Regista a data do último carregamento do passe.", PasseIn, _passe),
     Acao("bilhetes.pedido_repetir", "bilhetes", "safe_action", "Liga ou desliga a repetição automática de um pedido avulso.", PedidoRepetirIn, _pedido_repetir),
     Acao("bilhetes.pedido_forcar", "bilhetes", "safe_action", "Pede ao Pi uma tentativa imediata de um pedido avulso.", PedidoRefIn, _pedido_forcar),
+    Acao("compras.adicionar", "compras", "safe_action", "Põe um produto (do catálogo ou pelo nome) numa lista de compras.", ComprasAdicionarIn, _c_adicionar),
+    Acao("compras.remover", "compras", "safe_action", "Tira um item de uma lista de compras.", ItemRefIn, _c_remover),
+    Acao("compras.comprado", "compras", "safe_action", "Marca um item como comprado (ou volta a pô-lo por comprar).", ItemCompradoIn, _c_comprado),
+    Acao("compras.detalhes", "compras", "safe_action", "Define a quantidade (opcional) e a nota de um item.", ItemDetalhesIn, _c_detalhes),
+    Acao("compras.mover", "compras", "safe_action", "Passa um item para outra lista.", ItemMoverIn, _c_mover),
+    Acao("compras.limpar_comprados", "compras", "sensitive_action", "Apaga os itens já comprados de uma lista.", ListaRefIn, _c_limpar),
+    Acao("compras.restaurar", "compras", "safe_action", "Repõe itens que se tinham tirado (o «Desfazer» de remover e de limpar).", ComprasRestaurarIn, _c_restaurar),
+    Acao("compras.favorito", "compras", "safe_action", "Marca ou desmarca um produto como favorito (por conta).", ProdutoMarcaIn, _c_favorito),
+    Acao("compras.ocultar", "compras", "safe_action", "Esconde ou mostra um produto no catálogo (por conta).", ProdutoMarcaIn, _c_ocultar),
+    Acao("compras.sugestao_ignorar", "compras", "safe_action", "Deixa de sugerir (ou volta a sugerir) um produto a esta conta.", ProdutoMarcaIn, _c_sugestao_ignorar),
+    Acao("compras.categoria_ocultar", "compras", "safe_action", "Esconde ou mostra uma categoria inteira do catálogo desta conta.", CategoriaMarcaIn, _c_categoria_ocultar),
+    Acao("compras.produto_criar", "compras", "safe_action", "Cria um produto próprio no catálogo.", ProdutoCriarIn, _c_produto_criar),
+    Acao("compras.produto_editar", "compras", "safe_action", "Altera um produto próprio (nome, categoria ou ícone).", ProdutoEditarIn, _c_produto_editar),
+    Acao("compras.produto_apagar", "compras", "sensitive_action", "Apaga um produto próprio e os itens que o usam.", ProdutoRefIn, _c_produto_apagar),
+    Acao("compras.lista_criar", "compras", "safe_action", "Cria uma lista de compras (pessoal ou partilhada).", ListaCriarIn, _c_lista_criar),
+    Acao("compras.lista_editar", "compras", "safe_action", "Renomeia uma lista de compras.", ListaEditarIn, _c_lista_editar),
+    Acao("compras.lista_apagar", "compras", "sensitive_action", "Apaga uma lista de compras e os seus itens.", ListaRefIn, _c_lista_apagar),
     Acao("financas.pagar", "financas", "safe_action", "Marca uma conta como paga.", PagarIn, _pagar),
     Acao("financas.anular_pagamento", "financas", "safe_action", "Volta a pôr uma conta como por pagar.", LancamentoIn, _anular_pagamento),
     Acao("financas.criar", "financas", "safe_action", "Cria um lançamento (despesa ou rendimento).", LancamentoNovoIn, _lancamento_criar),
@@ -972,6 +1188,7 @@ def executar(conn: sqlite3.Connection, ctx: Contexto, nome: str, params: dict, o
         campos = ", ".join(sorted({str(x["loc"][0]) for x in e.errors() if x["loc"]}))
         raise ContaErro(400, "parametros_invalidos", f"parâmetros inválidos: {campos}" if campos else "parâmetros inválidos") from None
     modulos.exigir(conn, acao.modulo)
+    ctx.conn = ctx.conn or conn
     if acao.nivel == "sensitive_action" and not confirmado:
         raise ContaErro(409, "confirmacao_necessaria", "esta ação precisa de confirmação")
     try:

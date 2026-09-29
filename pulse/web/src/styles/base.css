@@ -256,3 +256,17 @@ fieldset { border: 0; padding: 0; margin: 0; min-width: 0; }
 .bolinha { width: 12px; height: 12px; border-radius: 50%; flex: none; }
 .check-line { display: flex; gap: var(--s2); align-items: center; font-size: 14px; }
 .link-ok { color: var(--accent); }
+
+/* --- módulo Compras --- */
+.item-icon { display: inline-grid; place-items: center; width: 36px; height: 36px; border-radius: var(--r-s); background: var(--surface-2); color: var(--text-2); flex: none; }
+.tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: var(--s2); }
+.tile-wrap { position: relative; }
+.tile-wrap[data-oculto='true'] { opacity: 0.5; }
+.tile { display: grid; justify-items: center; align-content: start; gap: var(--s1); width: 100%; min-height: 84px; padding: var(--s3) var(--s2); border: 1px solid var(--line); border-radius: var(--r-m); background: var(--surface); color: var(--text-2); font: inherit; font-size: 13px; line-height: 16px; text-align: center; }
+.tile[aria-pressed='true'] { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, var(--surface)); color: var(--text); }
+.tile[data-comprado='true'] { opacity: 0.6; }
+.tile-nome { overflow-wrap: anywhere; }
+.tile-sm { min-height: 40px; width: 40px; padding: 0; display: inline-grid; place-items: center; font-size: 12px; }
+.star { position: absolute; top: 2px; right: 2px; width: 32px; height: 32px; border: 0; background: transparent; color: var(--text-2); font-size: 18px; line-height: 1; }
+.star[aria-pressed='true'] { color: var(--accent); }
+.icon-grid { display: flex; flex-wrap: wrap; gap: var(--s1); max-height: 168px; overflow-y: auto; }

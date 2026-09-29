@@ -207,7 +207,7 @@ describe('navegação e definições', () => {
     expect(within(nav).getByRole('link', { name: 'Hoje' })).toHaveAttribute('aria-current', 'page')
     await userEvent.click(within(nav).getByRole('link', { name: 'Mais' }))
     expect(await screen.findByRole('heading', { name: 'Mais' })).toBeInTheDocument()
-    expect(screen.getAllByText('Em breve').length).toBe(3)     // Peso, RTO, Tarefas, Finanças e Bilhetes já têm ecrã
+    expect(screen.getAllByText('Em breve').length).toBe(2)     // só Calendário e Email ainda não têm ecrã
   })
 
   test('sessões: lista, marca a atual e termina outra', async () => {

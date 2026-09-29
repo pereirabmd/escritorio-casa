@@ -11,10 +11,11 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
 from pulse import VERSION, config, db, logging_setup, notifications
+from pulse.services import compras
 from pulse.accounts import ContaErro
 from datetime import datetime
 
-from pulse.api.v1 import actions, auth, dashboard, finance, health, modules, notifications as notificacoes, rto, tasks, tickets, weight
+from pulse.api.v1 import actions, auth, dashboard, finance, health, modules, notifications as notificacoes, rto, shopping, tasks, tickets, weight
 from pulse.notifications import FcmCanal
 from pulse.ratelimit import RateLimiter
 from pulse.clients.dados import DadosClient, ErroDoModulo, ModuloIndisponivel
@@ -65,6 +66,13 @@ def create_app(settings: config.Settings | None = None, dados: DadosClient | Non
             conn.close()
         if aplicadas:
             LOG.info("migrações aplicadas: %s", ", ".join(aplicadas))
+        conn = db.connect(settings.db_path)
+        try:
+            novos = compras.sincronizar_catalogo(conn)              # produtos de série novos entram sozinhos a cada arranque
+        finally:
+            conn.close()
+        if novos:
+            LOG.info("catálogo de compras: %d produtos de série novos", novos)
         agendador = asyncio.create_task(_agendador(app)) if settings.scheduler_s > 0 else None
         try:
             yield
@@ -92,6 +100,7 @@ def create_app(settings: config.Settings | None = None, dados: DadosClient | Non
     app.include_router(finance.router, prefix="/api/v1")
     app.include_router(tickets.router, prefix="/api/v1")
     app.include_router(modules.router, prefix="/api/v1")
+    app.include_router(shopping.router, prefix="/api/v1")
     app.include_router(notificacoes.router, prefix="/api/v1")
     app.include_router(notificacoes.internal, prefix="/api/v1")
 

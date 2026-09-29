@@ -13,6 +13,7 @@ por isso a sessão é um cookie httpOnly (nunca um token em JavaScript).
 - **Tarefas** (`/tarefas`; `?aba=hoje|calendario|tarefas|horario|piscina|config`): Hoje (filtro por pessoa, atrasadas, amanhã, concluir/reabrir/saltar/adiar, tarefa rápida, Google Calendar), Calendário (mês/semana com feriados), catálogo (criar, editar, duplicar, apagar), Horário escolar, Piscina, e Config (pessoas, reatribuir, não incomodar, resumo, estado do Pi, exportar CSV, administração). Paridade em `../docs/PARITY_TAREFAS.md`.
 - **Finanças** (`/financas`; `?aba=resumo|lancamentos|relatorios|categorias|lembretes`): resumo «ativo − passivo» (mês ou 30 dias) com aviso persistente de vencidas, lançamentos do mês (criar, editar, pagar/anular, apagar com desfazer; o mês é preparado ao abrir), relatórios por mês e categoria, categorias e lembretes. Paridade em `../docs/PARITY_FINANCAS.md`.
 - **Bilhetes CP** (`/bilhetes`; `?aba=semana|bilhetes|pedidos|registo`): próximo comboio (mantém «Em viagem» até à chegada estimada), Passe Verde, viagens da semana e editor (vários comboios por dia, «Ativo» por dia, desfazer), bilhetes, pedidos avulsos (tentar agora, repetição) e registo. Paridade em `../docs/PARITY_BILHETES.md`.
+- **Compras** (`/compras`; `?aba=lista|catalogo`): listas «Casa» (partilhada), pessoais e partilhadas extra; lista por corredor com detalhes (quantidade opcional, nota, passar para outra lista, remover), comprados com «Limpar» e desfazer; catálogo de 338 produtos com pesquisa sem acentos, favoritos, «Gerir» e criar produto próprio; esconder categorias inteiras («Gerir») e sugestões calmas (a acabar / costumas comprar, com «Não sugerir»); atualiza a cada 30 s. ADR-047/048, `../docs/COMPRAS_CATALOGO.md`.
 - **Módulos** (ADR-046): Definições → Administração (só administradores) liga/desliga módulos para todos; os desativados saem de Mais e do Hoje (`lib/modulos.tsx`).
 - **Instalável no Android**: `public/manifest.webmanifest` + `<link rel="manifest">`.
 - **Ações rápidas nos cartões (fase 7, ADR-039)**, todas por `POST /actions/{nome}`: concluir e adiar tarefa (amanhã ou uma data),
@@ -27,7 +28,7 @@ npm run dev        # http://localhost:5173/pulse/ — /pulse/api é reencaminhad
 npm run lint && npm test && npm run build
 ```
 
-Testes (187, Vitest + Testing Library, com um servidor falso no lugar do `fetch`): formatos, regras de palavra-passe, cliente da API,
+Testes (218, Vitest + Testing Library, com um servidor falso no lugar do `fetch`): formatos, regras de palavra-passe, cliente da API,
 fluxos de acesso, mudança de palavra-passe, os estados do Hoje, sessões e tema.
 
 ## Publicar

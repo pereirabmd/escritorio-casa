@@ -8,6 +8,7 @@ import { ModuloAtivo, ModulosProvider } from './lib/modulos'
 import { ChangePasswordScreen } from './screens/ChangePasswordScreen'
 import { LoginScreen } from './screens/LoginScreen'
 import { MoreScreen } from './screens/MoreScreen'
+import { ComprasScreen } from './screens/compras/ComprasScreen'
 import { BilhetesScreen } from './screens/bilhetes/BilhetesScreen'
 import { FinancasScreen } from './screens/financas/FinancasScreen'
 import { PesoScreen } from './screens/peso/PesoScreen'
@@ -42,6 +43,7 @@ function Porta() {
           <Route path="/rto" element={<ModuloAtivo id="rto" nome="RTO"><RtoScreen /></ModuloAtivo>} />
           <Route path="/tarefas" element={<ModuloAtivo id="tarefas" nome="Tarefas"><TarefasScreen /></ModuloAtivo>} />
           <Route path="/financas" element={<ModuloAtivo id="financas" nome="Finanças"><FinancasScreen /></ModuloAtivo>} />
+          <Route path="/compras" element={<ModuloAtivo id="compras" nome="Compras"><ComprasScreen /></ModuloAtivo>} />
           <Route path="/bilhetes" element={<ModuloAtivo id="bilhetes" nome="Bilhetes CP"><BilhetesScreen /></ModuloAtivo>} />
           <Route path="/definicoes" element={<SettingsScreen />} />
           <Route path="/definicoes/password" element={<ChangePasswordScreen />} />

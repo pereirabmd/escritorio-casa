@@ -27,7 +27,7 @@ def test_version_e_migracao_no_arranque(settings):
     with TestClient(create_app(settings)) as c:
         assert c.get("/api/v1/version").json() == {"versao": "0.1.0"}
         conn = c.app.state.db()
-        assert conn.execute("PRAGMA user_version").fetchone()[0] == 3
+        assert conn.execute("PRAGMA user_version").fetchone()[0] == 5
         conn.close()
 
 

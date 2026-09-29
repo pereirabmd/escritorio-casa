@@ -34,10 +34,12 @@ def test_catalogo_declara_modulo_e_nivel():
     c = {a["nome"]: a for a in actions.catalogo()}
     assert set(c) == {"tarefas.concluir", "tarefas.reabrir", "tarefas.saltar", "tarefas.criar", "tarefas.editar", "tarefas.apagar", "tarefas.adiar", "tarefas.piscina_registar", "tarefas.piscina_repor", "tarefas.avisos_horario", "tarefas.preferencias", "tarefas.pessoa_adicionar", "tarefas.pessoa_editar", "tarefas.pessoa_remover", "tarefas.reatribuir", "tarefas.admin", "tarefas.gerar", "peso.registar", "peso.editar", "peso.eliminar",
                       "peso.configurar", "rto.marcar_dia", "rto.ferias_dia", "rto.nota_criar", "rto.nota_editar", "rto.nota_eliminar",
-                      "rto.nota_restaurar", "rto.gerar_validacoes", "bilhetes.semana", "bilhetes.passe", "bilhetes.pedido_repetir", "bilhetes.pedido_forcar",
+                      "rto.nota_restaurar", "rto.gerar_validacoes", "compras.adicionar", "compras.remover", "compras.comprado", "compras.detalhes", "compras.mover", "compras.limpar_comprados", "compras.restaurar", "compras.favorito", "compras.ocultar", "compras.sugestao_ignorar", "compras.categoria_ocultar", "compras.produto_criar", "compras.produto_editar", "compras.produto_apagar", "compras.lista_criar", "compras.lista_editar", "compras.lista_apagar",
+                      "bilhetes.semana", "bilhetes.passe", "bilhetes.pedido_repetir", "bilhetes.pedido_forcar",
                       "financas.pagar", "financas.anular_pagamento", "financas.criar", "financas.editar", "financas.apagar", "financas.preparar_mes",
                       "financas.categoria_criar", "financas.categoria_editar", "financas.categoria_eliminar", "financas.lembrete_criar", "financas.lembrete_editar", "financas.lembrete_eliminar"}
-    assert all(c[n]["nivel"] == "sensitive_action" for n in ("peso.eliminar", "rto.nota_eliminar", "tarefas.apagar", "tarefas.pessoa_remover", "tarefas.reatribuir", "tarefas.admin", "financas.apagar", "financas.categoria_eliminar", "financas.lembrete_eliminar"))
+    assert all(c[n]["nivel"] == "sensitive_action" for n in ("peso.eliminar", "rto.nota_eliminar", "tarefas.apagar", "tarefas.pessoa_remover", "tarefas.reatribuir", "tarefas.admin", "financas.apagar", "financas.categoria_eliminar", "financas.lembrete_eliminar",
+                                                            "compras.limpar_comprados", "compras.produto_apagar", "compras.lista_apagar"))
     assert all(a["nivel"] in ("read", "safe_action", "sensitive_action") and a["descricao"] for a in c.values())
 
 
@@ -341,7 +343,7 @@ def test_endpoint_traduz_erros(app_cliente):
 def test_endpoint_lista_o_catalogo(app_cliente):
     entrar(app_cliente)
     r = app_cliente.get("/api/v1/actions")
-    assert r.status_code == 200 and len(r.json()["acoes"]) == 44
+    assert r.status_code == 200 and len(r.json()["acoes"]) == 61
 
 
 def test_conta_por_configurar_nao_executa_acoes(app_cliente):

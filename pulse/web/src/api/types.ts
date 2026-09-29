@@ -164,3 +164,17 @@ export interface BilhetesModulo {
   pedidos: PedidoCp[]; registo: RegistoCp[]
   estacoes: string[]; historico: { comboio: number; origem: string; destino: string; hora: string }[]
 }
+
+// --- Compras (GET /shopping) ---
+export interface ListaCompras { id: number; nome: string; tipo: 'partilhada' | 'pessoal'; padrao: boolean; pendentes: number; total: number }
+export interface ItemCompras { id: number; lista: number; produto: number; nome: string; categoria: string; icone: string; quantidade: number | null; nota: string; estado: 'pendente' | 'comprado'; adicionadoPor: string; compradoEm: number | null }
+export interface ProdutoCompras { id: number; nome: string; categoria: string; icone: string; builtin: boolean; criadoPor: number | null; favorito: boolean; oculto: boolean; item: number | null; estado: 'pendente' | 'comprado' | null }
+export interface SugestaoCompras { produto: number; nome: string; categoria: string; icone: string; ultima: string; diasDesde: number; compras: number; intervaloDias?: number }
+export interface ComprasModulo {
+  categorias: { id: string; nome: string; oculta: boolean }[]
+  sugestoes: { acabar: SugestaoCompras[]; frequentes: SugestaoCompras[] }
+  listas: ListaCompras[]; lista: ListaCompras
+  grupos: { categoria: { id: string; nome: string }; itens: ItemCompras[] }[]
+  comprados: ItemCompras[]; pendentes: number
+  produtos: ProdutoCompras[]
+}

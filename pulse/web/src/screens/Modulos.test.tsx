@@ -6,7 +6,7 @@ import { HOJE, servidorFalso, UTILIZADOR, type Rotas } from '../test/api-mock'
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, '')
 const lista = (desativados: string[] = []) => ({
   modulos: [['tarefas', 'Tarefas', true], ['bilhetes', 'Bilhetes CP', true], ['rto', 'RTO', true], ['peso', 'Peso', true], ['financas', 'Finanças', true],
-    ['calendario', 'Calendário', false], ['email', 'Email', false], ['compras', 'Compras', false]]
+    ['compras', 'Compras', true], ['calendario', 'Calendário', false], ['email', 'Email', false]]
     .map(([id, nome, disponivel]) => ({ id, nome, disponivel, ativo: !desativados.includes(id as string) })),
 })
 
@@ -24,7 +24,7 @@ test('Mais esconde os módulos desativados pelo administrador (e mantém os «Em
   await waitFor(() => expect(screen.queryByRole('link', { name: /Peso/ })).not.toBeInTheDocument())
   expect(screen.queryByRole('link', { name: /Finanças/ })).not.toBeInTheDocument()
   expect(screen.getByRole('link', { name: /RTO/ })).toBeInTheDocument()
-  expect(screen.getAllByText('Em breve')).toHaveLength(3)
+  expect(screen.getAllByText('Em breve')).toHaveLength(2)
 })
 
 test('sem resposta de /modules não se esconde nada', async () => {
@@ -61,7 +61,7 @@ describe('Administração', () => {
     await userEvent.click(await within(adm).findByRole('switch', { name: 'Peso: desativado' }))
     await within(adm).findByRole('switch', { name: 'Peso: ativo' })
     expect(corpos).toEqual([{ modulos: { peso: false } }, { modulos: { peso: true } }])
-    expect(within(adm).getAllByText('Em breve')).toHaveLength(3)                              // Calendário, Email e Compras não se alteram
+    expect(within(adm).getAllByText('Em breve')).toHaveLength(2)                              // Calendário e Email não se alteram
   })
 
   test('um erro do servidor aparece e o interruptor não muda', async () => {

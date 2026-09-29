@@ -37,8 +37,8 @@ def entrar(app, email):
 
 def test_por_omissao_tudo_ativo_e_os_em_breve_nao_sao_alteraveis(app):
     j = entrar(app, OUTRO).get("/api/v1/modules").json()["modulos"]
-    assert [m["id"] for m in j] == ["tarefas", "bilhetes", "rto", "peso", "financas", "calendario", "email", "compras"]
-    assert all(m["ativo"] for m in j) and [m["id"] for m in j if not m["disponivel"]] == ["calendario", "email", "compras"]
+    assert [m["id"] for m in j] == ["tarefas", "bilhetes", "rto", "peso", "financas", "compras", "calendario", "email"]
+    assert all(m["ativo"] for m in j) and [m["id"] for m in j if not m["disponivel"]] == ["calendario", "email"]
 
 
 def test_so_o_administrador_altera(app):

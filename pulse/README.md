@@ -13,7 +13,7 @@ O objetivo é concentrar num único produto, com aparência profissional e coere
 - Finanças;
 - Lista de Compras.
 
-**Estado (29/09/2026)**: na Web estão completos Tarefas, Peso, RTO, Finanças e Bilhetes CP (paridade em `docs/PARITY_*.md`); faltam Gmail, Google Calendar e Compras, e a app Android. Os módulos podem ser desativados pelo administrador (Definições → Administração).
+**Estado (29/09/2026)**: na Web estão completos Tarefas, Peso, RTO, Finanças, Bilhetes CP e Compras (paridade em `docs/PARITY_*.md`); faltam Gmail e Google Calendar, e a app Android. Os módulos podem ser desativados pelo administrador (Definições → Administração).
 
 O dashboard **Hoje** apresenta apenas as funcionalidades essenciais e imediatas de cada módulo. As funcionalidades completas ficam em **Mais**.
 
