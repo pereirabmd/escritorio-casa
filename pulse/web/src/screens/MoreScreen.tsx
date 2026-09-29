@@ -1,9 +1,9 @@
 import { Link } from 'react-router-dom'
 import { Icon, type IconName } from '../components/Icon'
 
-const MODULOS: { nome: string; icone: IconName }[] = [
+const MODULOS: { nome: string; icone: IconName; rota?: string }[] = [
   { nome: 'Email', icone: 'email' }, { nome: 'Calendário', icone: 'calendario' }, { nome: 'Tarefas', icone: 'tarefas' },
-  { nome: 'Bilhetes CP', icone: 'bilhete' }, { nome: 'Peso', icone: 'peso' }, { nome: 'RTO', icone: 'rto' },
+  { nome: 'Bilhetes CP', icone: 'bilhete' }, { nome: 'Peso', icone: 'peso', rota: '/peso' }, { nome: 'RTO', icone: 'rto', rota: '/rto' },
   { nome: 'Finanças', icone: 'financas' }, { nome: 'Compras', icone: 'compras' },
 ]
 
@@ -14,7 +14,9 @@ export function MoreScreen() {
       <section className="section" aria-label="Aplicações">
         <h2 className="t-card muted">Aplicações</h2>
         <div className="list">
-          {MODULOS.map((m) => (
+          {MODULOS.map((m) => m.rota ? (
+            <Link key={m.nome} to={m.rota} className="list-item"><Icon nome={m.icone} /><span className="row-main">{m.nome}</span><Icon nome="seta" tamanho={18} /></Link>
+          ) : (
             <div key={m.nome} className="list-item" aria-disabled="true">
               <Icon nome={m.icone} /><span className="row-main">{m.nome}</span><span className="pill">Em breve</span>
             </div>

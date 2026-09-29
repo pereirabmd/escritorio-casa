@@ -214,3 +214,25 @@ mostra uma confirmação curta (não um aviso de condição persistente). O `cid
 até haver sucesso, por isso repetir um pedido que falhou não duplica. **Contrato:** `tests/test_contract_dados.py` corre o código
 real do `dados-api` (como script, em bases `teste-*`) e exerce cada ação e o agregado; nada é testado contra bases reais.
 Fora desta fatia (próximas): módulos completos em «Mais» (Tarefas, Peso, RTO, Finanças, Bilhetes CP) e a fila offline do Android.
+
+## ADR-040 — Estatísticas de módulo no servidor; Peso completo (29/09/2026)
+Primeiro módulo completo em «Mais»: Peso. A lógica de negócio que na app dedicada vivia no JavaScript (IMC, gasto diário, ritmo, progresso,
+sequência, análise por regressão, previsão…) foi **portada para o servidor** (`services/peso.py`, funções puras, 28 testes) e o
+`GET /api/v1/weight` devolve-a calculada: a Web e o Android mostram os mesmos números sem duplicar fórmulas (`ARCHITECTURE.md`: não
+duplicar lógica de negócio). Padrão para os restantes módulos: `GET /api/v1/<módulo>` com dados + resumo calculado, escritas só por ações.
+Apagar um registo é `sensitive_action` (a interface pergunta e envia `confirmado`); o «Desfazer» repõe o registo com a data original
+(`peso.registar` aceita `quando`). O ecrã segue a estrutura da app dedicada (Resumo, Gráfico, Registos, Configuração) com o Design System
+Pulse; a tabela de paridade fica em `PARITY_PESO.md` (o que falta está lá, marcado como pendente).
+
+## ADR-041 — RTO completo (29/09/2026)
+Segundo módulo completo. Seguindo o ADR-040, as regras de negócio que viviam no JavaScript da app dedicada (feriados e Páscoa, classificação das notas em
+férias/astreinte/suspensão, totais, quota pro-rata, saldo e saldo condicional, estado de hoje e próxima mudança) foram portadas para o servidor
+(`services/rto.py`, 28 testes) e `GET /api/v1/rto` devolve tudo calculado. As escritas são ações; a lógica de marcar férias (juntar, encolher, dividir) e o
+gerador de validações vivem no servidor e são exercidos por testes de contrato contra o `dados-api` real. Decisões de interface: o ciclo de toque
+T→C→vazio e os modos Férias/Administrador da app dedicada foram substituídos por um painel do dia com botões explícitos, e o «modo administrador» ficou
+só como interruptor das notas em datas passadas (validado no servidor). Marcar o dia de férias e eliminar notas têm «Desfazer»; eliminar é ação sensível.
+Paridade em `PARITY_RTO.md`.
+
+**Correção (29/09/2026):** a primeira versão do RTO deixou marcar qualquer dia e reduziu o «modo administrador» às notas — não era paridade. Passou a seguir a app
+dedicada: no modo normal só se marcam dias úteis de hoje em diante (fins de semana e dias passados bloqueados, na interface e no servidor: `dia_bloqueado`); o modo
+administrador (com confirmação, aviso visível e parâmetro `admin` nas ações) liberta marcas, férias e notas sem restrições, incluindo fins de semana.

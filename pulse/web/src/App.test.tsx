@@ -207,7 +207,7 @@ describe('navegação e definições', () => {
     expect(within(nav).getByRole('link', { name: 'Hoje' })).toHaveAttribute('aria-current', 'page')
     await userEvent.click(within(nav).getByRole('link', { name: 'Mais' }))
     expect(await screen.findByRole('heading', { name: 'Mais' })).toBeInTheDocument()
-    expect(screen.getAllByText('Em breve').length).toBe(8)
+    expect(screen.getAllByText('Em breve').length).toBe(6)     // o Peso e o RTO já têm ecrã
   })
 
   test('sessões: lista, marca a atual e termina outra', async () => {

@@ -6,16 +6,17 @@ export function useAcao(depois: () => void) {
   const [ocupado, setOcupado] = useState<string | null>(null)
   const [erro, setErro] = useState<string | null>(null)
 
-  const executar = useCallback(async (chave: string, nome: string, params: Record<string, unknown>): Promise<boolean> => {
+  /** Devolve o `resultado` da ação (um objeto, por isso verdadeiro) ou `null` se falhou. */
+  const executar = useCallback(async (chave: string, nome: string, params: Record<string, unknown>, confirmado = false): Promise<Record<string, unknown> | null> => {
     setOcupado(chave)
     setErro(null)
     try {
-      await api.post(`/actions/${nome}`, { params })
+      const r = await api.post<{ resultado?: Record<string, unknown> }>(`/actions/${nome}`, confirmado ? { params, confirmado: true } : { params })
       depois()
-      return true
+      return r.resultado ?? {}
     } catch (e) {
       setErro(mensagemDeErro(e))
-      return false
+      return null
     } finally {
       setOcupado(null)
     }

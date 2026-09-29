@@ -9,11 +9,13 @@ Migrar aplicações dedicadas para o Pulse sem perda funcional.
 ### RTO
 - primeira vaga;
 - preservar todas as funcionalidades;
+- **em curso (29/09/2026): ver `PARITY_RTO.md`** (regras no servidor, ecrã completo na Web; faltam exportar XLSX, puxar para atualizar, atalhos do Android e a fila offline);
 - app dedicada só é descontinuada quando o utilizador declarar a migração concluída.
 
 ### Peso
 - primeira vaga;
-- mesma regra.
+- mesma regra;
+- **em curso (29/09/2026): ver `PARITY_PESO.md`** (estatísticas no servidor, ecrã completo na Web; faltam exportar XLSX, ajudas, celebrações, puxar para atualizar e a fila offline do Android).
 
 ### Bilhetes CP
 - primeira vaga;

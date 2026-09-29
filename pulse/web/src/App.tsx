@@ -7,6 +7,8 @@ import { BrandLoading, Botao, Notice } from './components/ui'
 import { ChangePasswordScreen } from './screens/ChangePasswordScreen'
 import { LoginScreen } from './screens/LoginScreen'
 import { MoreScreen } from './screens/MoreScreen'
+import { PesoScreen } from './screens/peso/PesoScreen'
+import { RtoScreen } from './screens/rto/RtoScreen'
 import { SettingsScreen } from './screens/SettingsScreen'
 import { TodayScreen } from './screens/TodayScreen'
 
@@ -31,6 +33,8 @@ function Porta() {
       <Route element={<Shell />}>
         <Route path="/hoje" element={<TodayScreen />} />
         <Route path="/mais" element={<MoreScreen />} />
+        <Route path="/peso" element={<PesoScreen />} />
+        <Route path="/rto" element={<RtoScreen />} />
         <Route path="/definicoes" element={<SettingsScreen />} />
         <Route path="/definicoes/password" element={<ChangePasswordScreen />} />
         <Route path="*" element={<Navigate to="/hoje" replace />} />

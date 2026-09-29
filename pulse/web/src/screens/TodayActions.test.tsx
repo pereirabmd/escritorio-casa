@@ -110,15 +110,19 @@ describe('rto', () => {
     expect(pedidos.find((p) => p.caminho === '/actions/rto.marcar_dia')!.corpo).toEqual({ params: { data: '2026-09-30', marca: 'C' } })
   })
 
-  test('escolher outro dia e limpar (só aparece «Limpar» se houver marca)', async () => {
+  test('«Limpar» só aparece se o dia tem marca (hoje tem T); fins de semana e dias passados ficam bloqueados', async () => {
     const { pedidos } = abrir({ 'POST /actions/rto.marcar_dia': () => OK })
-    await userEvent.click(await screen.findByRole('button', { name: /29 de setembro: casa/ }))
-    const grupo = screen.getByRole('group', { name: /Marcar 29 de setembro/ })
+    const grupo = await screen.findByRole('group', { name: /Marcar 30 de setembro/ })
     await userEvent.click(within(grupo).getByRole('button', { name: 'Limpar' }))
     await waitFor(() => expect(pedidos.some((p) => p.caminho === '/actions/rto.marcar_dia')).toBe(true))
-    expect(pedidos.find((p) => p.caminho === '/actions/rto.marcar_dia')!.corpo).toEqual({ params: { data: '2026-09-29', marca: '' } })
-    await userEvent.click(screen.getByRole('button', { name: /1 de outubro: sem marca/ }))
-    expect(within(screen.getByRole('group', { name: /Marcar 1 de outubro/ })).queryByRole('button', { name: 'Limpar' })).not.toBeInTheDocument()
+    expect(pedidos.find((p) => p.caminho === '/actions/rto.marcar_dia')!.corpo).toEqual({ params: { data: '2026-09-30', marca: '' } })
+    await userEvent.click(screen.getByRole('button', { name: /29 de setembro: casa/ }))                 // ontem: bloqueado
+    const ontem = screen.getByRole('group', { name: /Marcar 29 de setembro/ })
+    for (const nome of ['Escritório', 'Casa', 'Limpar']) expect(within(ontem).getByRole('button', { name: nome })).toBeDisabled()
+    expect(screen.getByText(/Fim de semana ou dia passado/)).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'ecrã do RTO' })).toHaveAttribute('href', `${BASE}/rto`)
+    await userEvent.click(screen.getByRole('button', { name: /1 de outubro: sem marca/ }))            // amanhã (quinta): livre
+    expect(within(screen.getByRole('group', { name: /Marcar 1 de outubro/ })).getByRole('button', { name: 'Escritório' })).toBeEnabled()
   })
 })
 

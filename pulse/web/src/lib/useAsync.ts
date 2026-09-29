@@ -3,7 +3,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 export type Async<T> = { fase: 'a-carregar' } | { fase: 'erro'; erro: unknown } | { fase: 'pronto'; dados: T }
 
 /** Carrega dados ao montar e permite repetir (mantendo os dados já mostrados). Ignora respostas de pedidos que já não interessam. */
-export function useAsync<T>(carregar: () => Promise<T>): [Async<T>, () => void] {
+export function useAsync<T>(carregar: () => Promise<T>, chave: unknown = null): [Async<T>, () => void] {
   const [estado, setEstado] = useState<Async<T>>({ fase: 'a-carregar' })
   const fn = useRef(carregar)
   const geracao = useRef(0)
@@ -22,7 +22,7 @@ export function useAsync<T>(carregar: () => Promise<T>): [Async<T>, () => void] 
     // o contador é meu (não é um nó do DOM): invalida o pedido em curso quando o componente sai
     // eslint-disable-next-line react-hooks/exhaustive-deps
     return () => { geracao.current++ }
-  }, [buscar])
+  }, [buscar, chave])                 // mudar a `chave` (ex.: o ano) pede de novo, mantendo os dados atuais à vista
 
   const repetir = useCallback(() => {
     setEstado((e) => (e.fase === 'pronto' ? e : { fase: 'a-carregar' }))

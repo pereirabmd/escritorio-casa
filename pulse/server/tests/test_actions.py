@@ -32,8 +32,10 @@ def atividade(conn):
 
 def test_catalogo_declara_modulo_e_nivel():
     c = {a["nome"]: a for a in actions.catalogo()}
-    assert set(c) == {"tarefas.concluir", "tarefas.reabrir", "tarefas.adiar", "peso.registar", "rto.marcar_dia",
-                      "financas.pagar", "financas.anular_pagamento"}
+    assert set(c) == {"tarefas.concluir", "tarefas.reabrir", "tarefas.adiar", "peso.registar", "peso.editar", "peso.eliminar",
+                      "peso.configurar", "rto.marcar_dia", "rto.ferias_dia", "rto.nota_criar", "rto.nota_editar", "rto.nota_eliminar",
+                      "rto.nota_restaurar", "rto.gerar_validacoes", "financas.pagar", "financas.anular_pagamento"}
+    assert c["peso.eliminar"]["nivel"] == "sensitive_action" and c["rto.nota_eliminar"]["nivel"] == "sensitive_action"
     assert all(a["nivel"] in ("read", "safe_action", "sensitive_action") and a["descricao"] for a in c.values())
 
 
@@ -73,6 +75,82 @@ def test_peso_com_cid_e_sem_valores_no_registo_de_atividade(conn, dados_falso):
     correr(conn, dados_falso, "peso.registar", {"peso": 104.8, "cid": "abcd-1234-efgh"})
     assert FalsoDados.escritas == [("POST", "/peso/registos", {"peso": 104.8, "nota": "", "cid": "abcd-1234-efgh"}, EMAIL)]
     assert atividade(conn) == [("peso", "peso.registar", "ui", "ok", "")]          # nada do valor
+
+
+def test_peso_registar_com_data_original_para_o_desfazer(conn, dados_falso):
+    correr(conn, dados_falso, "peso.registar", {"peso": 80, "quando": "2026-09-20 07:30:00"})
+    assert FalsoDados.escritas[0][2] == {"peso": 80, "nota": "", "quando": "2026-09-20 07:30:00"}
+    with pytest.raises(ContaErro):
+        correr(conn, dados_falso, "peso.registar", {"peso": 80, "quando": "20/09/2026"})
+
+
+def test_peso_editar_envia_o_registo_todo(conn, dados_falso):
+    correr(conn, dados_falso, "peso.editar", {"registo": 5, "quando": "2026-09-20 07:30:00", "peso": 79.5, "nota": "jejum"})
+    assert FalsoDados.escritas == [("PUT", "/peso/registos/5", {"quando": "2026-09-20 07:30:00", "peso": 79.5, "nota": "jejum"}, EMAIL)]
+    assert atividade(conn) == [("peso", "peso.editar", "ui", "ok", "registo 5")]
+
+
+def test_peso_eliminar_e_sensivel_e_devolve_o_registo_apagado(conn, dados_falso):
+    with pytest.raises(ContaErro) as e:
+        correr(conn, dados_falso, "peso.eliminar", {"registo": 5})
+    assert e.value.codigo == "confirmacao_necessaria" and FalsoDados.escritas == []
+    FalsoDados.respostas["DELETE /peso/registos/5"] = (200, {"id": 5, "quando": "2026-09-20 07:30:00", "peso": 79.5, "nota": ""})
+    r = correr(conn, dados_falso, "peso.eliminar", {"registo": 5}, confirmado=True)
+    assert r["peso"] == 79.5 and FalsoDados.escritas == [("DELETE", "/peso/registos/5", None, EMAIL)]
+    assert "79" not in str(atividade(conn))
+
+
+def test_peso_configurar_so_envia_o_que_foi_indicado_e_null_apaga(conn, dados_falso):
+    correr(conn, dados_falso, "peso.configurar", {"altura": 180, "sexo": "M", "nascimento": "1990-10-01", "pesoAlvo": None})
+    assert FalsoDados.escritas[0][2] == {"altura": 180.0, "sexo": "M", "nascimento": "1990-10-01", "pesoAlvo": None}
+
+
+@pytest.mark.parametrize("params", [{}, {"altura": 10}, {"altura": 300}, {"sexo": "X"}, {"atividade": 5}, {"diaControlo": 7},
+                                    {"nascimento": "01/10/1990"}, {"pesoMin": 100, "pesoMax": 90}, {"desconhecido": 1}])
+def test_peso_configurar_valida_antes_de_escrever(conn, dados_falso, params):
+    with pytest.raises(ContaErro) as e:
+        correr(conn, dados_falso, "peso.configurar", params)
+    assert e.value.status == 400 and FalsoDados.escritas == []
+
+
+@pytest.mark.parametrize("nome,params", [
+    ("rto.nota_criar", {}), ("rto.nota_criar", {"inicio": "2026-10-10", "fim": "2026-10-01"}), ("rto.nota_criar", {"inicio": "10/10/2026"}),
+    ("rto.nota_criar", {"categoria": "Férias", "inicio": "2026-09-01"}),                        # passado, sem modo administrador
+    ("rto.nota_criar", {"categoria": "x" * 101}), ("rto.nota_editar", {"categoria": "x"}), ("rto.nota_eliminar", {}),
+    ("rto.gerar_validacoes", {"referencia": "2026-10-10", "ate": "2026-10-01"}),
+    ("rto.gerar_validacoes", {"referencia": "2026-01-01", "ate": "2050-01-01"}), ("rto.gerar_validacoes", {"referencia": "2026-01-01", "ate": "2026-03-01", "tipo": "Outra"}),
+    ("rto.ferias_dia", {}), ("rto.ferias_dia", {"data": "amanhã"})])
+def test_rto_notas_validam_antes_de_escrever(conn, dados_falso, nome, params):
+    with pytest.raises((ContaErro, ErroDoModulo)) as e:
+        correr(conn, dados_falso, nome, params, confirmado=True)
+    assert e.value.status in (400, 404) and not [w for w in FalsoDados.escritas if w[0] != "GET"]
+
+
+def test_rto_nota_criar_com_modo_administrador_aceita_o_passado(conn, dados_falso):
+    correr(conn, dados_falso, "rto.nota_criar", {"categoria": " Férias ", "inicio": "2026-09-01", "fim": "2026-09-02", "admin": True, "cid": "nota-cid-0001"})
+    assert FalsoDados.escritas[0][1:3] == ("/rto/notas", {"dataInicio": "2026-09-01", "dataFim": "2026-09-02", "categoria": "Férias", "descricao": "", "cid": "nota-cid-0001"})
+
+
+def test_rto_nota_eliminar_e_sensivel(conn, dados_falso):
+    with pytest.raises(ContaErro) as e:
+        correr(conn, dados_falso, "rto.nota_eliminar", {"nota": 3})
+    assert e.value.codigo == "confirmacao_necessaria" and FalsoDados.escritas == []
+
+
+def test_rto_dias_bloqueados_no_modo_normal_e_livres_em_administrador(conn, dados_falso):
+    # AGORA = quarta 30/09/2026: sábado 03/10, domingo 04/10 e ontem estão bloqueados; hoje e sexta 02/10 não
+    for d in ("2026-10-03", "2026-10-04", "2026-09-29"):
+        for nome, params in (("rto.marcar_dia", {"data": d, "marca": "T"}), ("rto.ferias_dia", {"data": d})):
+            with pytest.raises(ContaErro) as e:
+                correr(conn, dados_falso, nome, params)
+            assert e.value.codigo == "dia_bloqueado"
+    assert not [w for w in FalsoDados.escritas if w[0] != "GET"]
+    for d in ("2026-09-30", "2026-10-02"):
+        correr(conn, dados_falso, "rto.marcar_dia", {"data": d, "marca": "T"})
+    correr(conn, dados_falso, "rto.marcar_dia", {"data": "2026-10-03", "marca": "C", "admin": True})
+    correr(conn, dados_falso, "rto.marcar_dia", {"data": "2026-09-01", "marca": "C", "admin": True})
+    assert [w[1] for w in FalsoDados.escritas] == ["/rto/dias/2026-09-30", "/rto/dias/2026-10-02", "/rto/dias/2026-10-03", "/rto/dias/2026-09-01"]
+    assert all("admin" not in (w[2] or {}) for w in FalsoDados.escritas)                        # o modo administrador não vai para o módulo
 
 
 def test_rto_marca_e_limpa(conn, dados_falso):
@@ -179,7 +257,7 @@ def test_endpoint_traduz_erros(app_cliente):
 def test_endpoint_lista_o_catalogo(app_cliente):
     entrar(app_cliente)
     r = app_cliente.get("/api/v1/actions")
-    assert r.status_code == 200 and len(r.json()["acoes"]) == 7
+    assert r.status_code == 200 and len(r.json()["acoes"]) == 16
 
 
 def test_conta_por_configurar_nao_executa_acoes(app_cliente):

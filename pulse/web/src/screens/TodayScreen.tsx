@@ -1,4 +1,5 @@
 import { useRef, useState, type ReactNode } from 'react'
+import { Link } from 'react-router-dom'
 import { api, mensagemDeErro } from '../api/client'
 import type { BilhetesDados, Conta, EstadoModulo, FinancasDados, Hoje, Modulo, PesoDados, RtoDados, TarefaHoje, TarefasDados } from '../api/types'
 import { useUtilizador } from '../auth/AuthContext'
@@ -6,10 +7,11 @@ import { Icon, type IconName } from '../components/Icon'
 import { BrandLoading, Botao, Esqueleto, Notice, Spinner } from '../components/ui'
 import { fmtDataIso, fmtDataLonga, fmtDias, fmtDiaMes, fmtEuro, fmtPeso, plural, saudacao } from '../lib/format'
 import { useAvisos } from '../components/Avisos'
+import { diaBloqueado } from '../lib/rto'
 import { lerPeso, novoCid, useAcao } from '../lib/useAcao'
 import { useAsync } from '../lib/useAsync'
 
-type Executar = (chave: string, nome: string, params: Record<string, unknown>) => Promise<boolean>
+type Executar = (chave: string, nome: string, params: Record<string, unknown>, confirmado?: boolean) => Promise<Record<string, unknown> | null>
 interface Acoes { executar: Executar; ocupado: string | null; hoje: string }
 
 const NOMES: Record<string, string> = { tarefas: 'Tarefas', bilhetes: 'Bilhetes CP', rto: 'RTO', peso: 'Peso', financas: 'Finanças' }
@@ -112,9 +114,10 @@ function Bilhetes({ m }: { m: Modulo<BilhetesDados> }) {
 
 function Rto({ m, acoes }: { m: Modulo<RtoDados>; acoes: Acoes }) {
   const [escolhido, setEscolhido] = useState<string | null>(null)
-  const { executar, ocupado } = acoes
+  const { executar, ocupado, hoje } = acoes
   const dias = m.dados?.dias ?? []
   const dia = dias.find((d) => d.data === (escolhido ?? dias.find((x) => x.hoje)?.data))
+  const bloqueado = dia ? diaBloqueado(dia.data, hoje) : false          // fim de semana ou dia passado: só no modo administrador do RTO
 
   async function marcar(marca: 'T' | 'C' | '') {
     if (dia) await executar(`rto-${dia.data}`, 'rto.marcar_dia', { data: dia.data, marca })
@@ -122,7 +125,7 @@ function Rto({ m, acoes }: { m: Modulo<RtoDados>; acoes: Acoes }) {
   const descreve = (marca: string) => (marca === 'T' ? 'escritório' : marca === 'C' ? 'casa' : 'sem marca')
 
   return (
-    <Cartao icone="rto" titulo="RTO desta semana" extra={m.dados && <span className="t-meta">{m.dados.contagem.T} escritório · {m.dados.contagem.C} casa</span>}>
+    <Cartao icone="rto" titulo="RTO desta semana" extra={<>{m.dados && <span className="t-meta">{m.dados.contagem.T} escritório · {m.dados.contagem.C} casa</span>}<Link to="/rto" className="link-btn">Abrir</Link></>}>
       <Estado modulo={m}>{() => (
         <>
           <div className="week" role="group" aria-label="Dias da semana">
@@ -136,11 +139,12 @@ function Rto({ m, acoes }: { m: Modulo<RtoDados>; acoes: Acoes }) {
           {dia && (
             <div className="quick" role="group" aria-label={`Marcar ${fmtDiaMes(dia.data)}`}>
               <span className="t-meta">{fmtDiaMes(dia.data)}:</span>
-              <Botao variante="secondary" pequeno aria-pressed={dia.marca === 'T'} disabled={ocupado !== null} onClick={() => void marcar('T')}>Escritório</Botao>
-              <Botao variante="secondary" pequeno aria-pressed={dia.marca === 'C'} disabled={ocupado !== null} onClick={() => void marcar('C')}>Casa</Botao>
-              {dia.marca && <Botao variante="secondary" pequeno disabled={ocupado !== null} onClick={() => void marcar('')}>Limpar</Botao>}
+              <Botao variante="secondary" pequeno aria-pressed={dia.marca === 'T'} disabled={ocupado !== null || bloqueado} onClick={() => void marcar('T')}>Escritório</Botao>
+              <Botao variante="secondary" pequeno aria-pressed={dia.marca === 'C'} disabled={ocupado !== null || bloqueado} onClick={() => void marcar('C')}>Casa</Botao>
+              {dia.marca && <Botao variante="secondary" pequeno disabled={ocupado !== null || bloqueado} onClick={() => void marcar('')}>Limpar</Botao>}
             </div>
           )}
+          {bloqueado && <p className="t-meta">Fim de semana ou dia passado: para alterar, usa o modo administrador no <Link to="/rto">ecrã do RTO</Link>.</p>}
           <div className="legend t-meta"><span>T · Escritório</span><span>C · Casa</span></div>
         </>
       )}</Estado>
@@ -164,7 +168,7 @@ function Peso({ m, acoes }: { m: Modulo<PesoDados>; acoes: Acoes }) {
   }
 
   return (
-    <Cartao icone="peso" titulo="Peso">
+    <Cartao icone="peso" titulo="Peso" extra={<Link to="/peso" className="link-btn">Abrir</Link>}>
       <Estado modulo={m}>{() => {
         const d = m.dados!
         return (

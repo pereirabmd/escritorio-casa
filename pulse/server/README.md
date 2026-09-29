@@ -5,7 +5,7 @@ FastAPI + SQLite (`pulse.db`), Python 3.13 no Raspberry Pi. Base do Marco A, fas
 - `pulse/config.py` — configuração por ambiente; fora de produção a base tem de ser `teste-*.db` (e em produção não pode).
 - `pulse/db.py` + `migrations/NNN_*.sql` — SQLite em WAL, migrações numeradas (nunca editar uma já aplicada).
 - `pulse/clients/dados.py` — cliente do `dados-api` com a chave de serviço (ADR-031); 4xx do módulo preservados, falhas = modo degradado.
-- `pulse/api/v1/` — `health`/`version` e `auth` (login por e-mail+password, sessões, mudar password; ADR-037); contas criadas com `python -m pulse.cli criar` (password pelo stdin); `actions` (`POST /api/v1/actions/{nome}`, a camada de ações: concluir/adiar tarefa, registar peso, marcar RTO, pagar conta; `pulse/actions.py`); `dashboard` (`GET /api/v1/dashboard/today`, o agregado do «Hoje», `pulse/services/dashboard.py`).
+- `pulse/api/v1/` — `health`/`version` e `auth` (login por e-mail+password, sessões, mudar password; ADR-037); contas criadas com `python -m pulse.cli criar` (password pelo stdin); `rto` (`GET /api/v1/rto`, regras em `services/rto.py`); `weight` (`GET /api/v1/weight`, módulo Peso com estatísticas calculadas em `services/peso.py`); `actions` (`POST /api/v1/actions/{nome}`, a camada de ações: concluir/adiar tarefa, registar peso, marcar RTO, pagar conta; `pulse/actions.py`); `dashboard` (`GET /api/v1/dashboard/today`, o agregado do «Hoje», `pulse/services/dashboard.py`).
 
 ## Desenvolver e testar
 

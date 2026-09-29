@@ -37,3 +37,11 @@ export function fmtDias(dias: number): string {
 }
 
 export const plural = (n: number, um: string, varios: string) => (n === 1 ? `${n} ${um}` : `${n} ${varios}`)
+
+/** Diferença em kg com sinal (a descer é bom no Peso): «−1,2 kg» / «+0,4 kg». */
+export function fmtDeltaKg(d: number): string {
+  if (Math.abs(d) < 0.05) return '0,0 kg'
+  return `${d < 0 ? '−' : '+'}${kg.format(Math.abs(d))} kg`
+}
+
+export const fmtKg2 = (v: number) => `${new Intl.NumberFormat('pt-PT', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(v)} kg`
