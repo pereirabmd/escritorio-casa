@@ -116,11 +116,12 @@ def _correr(nome: str, fn, c: DadosClient, email: str, hoje: date) -> tuple[str,
         return nome, {"estado": "erro", "erro": {"codigo": "resposta_inesperada", "mensagem": "resposta inesperada do módulo"}}
 
 
-def hoje(c: DadosClient, email: str, agora: datetime) -> dict:
+def hoje(c: DadosClient, email: str, agora: datetime, desativados: frozenset[str] | set[str] = frozenset()) -> dict:
     dia = agora.date()
-    with ThreadPoolExecutor(max_workers=len(MODULOS)) as pool:
-        resultados = dict(pool.map(lambda kv: _correr(kv[0], kv[1], c, email, dia), MODULOS.items()))
-    modulos = {n: resultados[n] for n in MODULOS}
+    ativos = {n: fn for n, fn in MODULOS.items() if n not in desativados}
+    with ThreadPoolExecutor(max_workers=max(len(ativos), 1)) as pool:
+        resultados = dict(pool.map(lambda kv: _correr(kv[0], kv[1], c, email, dia), ativos.items()))
+    modulos = {n: resultados.get(n, {"estado": "desativado", "dados": None}) for n in MODULOS}      # desativado pelo administrador: não se pede nada ao módulo
     modulos.update({n: {"estado": "nao_ligado", "dados": None} for n in NAO_LIGADOS})
     # «sem_acesso» não é uma falha: o utilizador simplesmente não tem esse módulo
     degradado = any(m["estado"] in ("indisponivel", "erro") for m in modulos.values())

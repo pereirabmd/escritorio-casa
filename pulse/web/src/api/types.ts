@@ -1,12 +1,13 @@
 export interface Utilizador { id: number; email: string; nome: string; admin: boolean; mudarPassword: boolean }
 export interface Sessao { id: number; criada: number; ultimoUso: number; expira: number; dispositivo: string; ip: string; cliente: 'web' | 'android'; atual: boolean }
 
-export type EstadoModulo = 'ok' | 'indisponivel' | 'sem_acesso' | 'erro' | 'nao_ligado'
+export type EstadoModulo = 'ok' | 'indisponivel' | 'sem_acesso' | 'erro' | 'nao_ligado' | 'desativado'
+export interface ModuloInfo { id: string; nome: string; disponivel: boolean; ativo: boolean }
 export interface Modulo<T> { estado: EstadoModulo; dados?: T | null; erro?: { codigo: string; mensagem: string } }
 
 export interface TarefaHoje { id: string; tarefaId: string; nome: string; categoria: string; icone: string; prioridade: 'Alta' | 'Media' | 'Baixa'; hora: string; pessoa: string; estado: string }
 export interface TarefasDados { hoje: TarefaHoje[]; atrasadas: number; feitasHoje: number; totalHoje: number; pessoa: string | null }
-export interface Viagem { id: number; data: string; origem: string; destino: string; comboio: number; hora: string; compra: { carruagem: string; lugar: string; referencia: string } | null }
+export interface Viagem { id: number; data: string; origem: string; destino: string; comboio: number; hora: string; fimEstimado?: string; emCurso?: boolean; compra: { carruagem: string; lugar: string; referencia: string } | null }
 export interface BilhetesDados { proximo: Viagem | null; passe: { dataExpira: string | null; diasRestantes: number | null } | null }
 export interface DiaRto { data: string; diaSemana: number; marca: 'T' | 'C' | ''; hoje: boolean }
 export interface RtoDados { semana: { inicio: string; fim: string }; dias: DiaRto[]; contagem: { T: number; C: number } }
@@ -119,3 +120,47 @@ export interface DefinicoesTarefas {
   saude: { ok?: boolean; saudavel?: boolean; ultimaExecucao?: string | null; minutosDesde?: number | null; contagens?: Record<string, number> } | null
 }
 export interface HistoricoTarefas { linhas: { tarefa: string; categoria: string; data: string; pessoa: string; estado: string; dataConclusao: string }[] }
+
+// --- Finanças (GET /finance, /finance/reports, /finance/reminders) ---
+export interface CategoriaFin { id: number; nome: string; cor: string | null }
+export interface LancamentoFin {
+  id: number; tipo: 'despesa' | 'rendimento'; descricao: string; valor: number; categoria_id: number; categoria: string
+  data_vencimento: string; data_pagamento: string | null; recorrente: boolean; mes_referencia: string; estado: 'pago' | 'vencido' | 'hoje' | 'pendente'
+}
+export interface FinancasModulo {
+  mes: string; hoje: string; categorias: CategoriaFin[]
+  totaisMes: { rendimento: number; despesas: number; porPagar: number }
+  lancamentos: LancamentoFin[]
+  atrasadas: { total: number; itens: LancamentoFin[] }
+  janela: { modo: 'mes' | '30d'; de: string; ate: string }
+  resumo: { rendimento: number; porPagar: number; saldo: number; emAtraso: number; saldoComAtraso: number; porCategoria: { categoriaId: number; nome: string; cor: string | null; total: number }[] }
+}
+export interface RelatorioFin {
+  de: string; ate: string; meses: { mes: string; rendimento: number; despesas: number; saldo: number }[]
+  categorias: { categoriaId: number; nome: string; cor: string | null; total: number; meses: Record<string, number> }[]
+  totais: { rendimento: number; despesas: number }
+}
+export interface LembreteFin { id: number; titulo: string; nota: string; data: string; hora: string; repeticao: 'unica' | 'mensal'; ativo: boolean; ultimo_aviso: string | null }
+
+// --- Bilhetes CP (GET /tickets) ---
+export type EstadoViagem = 'comprado' | 'por_comprar' | 'inativa' | 'em_curso' | 'passada'
+export interface ViagemBilhetes {
+  id: number; data: string; hora: string; origem: string; destino: string; comboio: number; ativo: boolean; estado: EstadoViagem; fimEstimado: string
+  compra: { carruagem: string; lugar: string; referencia: string } | null
+}
+export interface BilheteCp { id: number; data: string; hora: string; origem: string; destino: string; comboio: number; carruagem: string; lugar: string; referencia: string }
+export interface PedidoCp {
+  id: number; data: string; hora: string; origem: string; destino: string; comboio: number; ativo: boolean; retry: boolean; intervaloMinutos: number | null
+  forcar: boolean; estado: string; ultimaTentativa: string | null; referencia: string | null; mensagem: string | null
+}
+export interface RegistoCp { ts: string; tipo: string; data: string | null; perna: string | null; comboio: number | null; status: number | null; resultado: string | null; referencia: string | null; erro: string | null }
+export interface BilhetesModulo {
+  hoje: string
+  passe: { dataUltimaCompra: string | null; validadeDias: number; dataExpira: string | null; diasRestantes: number | null; estado: 'sem_data' | 'expirado' | 'hoje' | 'a_expirar' | 'ok'; percentagem: number | null }
+  proxima: ViagemBilhetes | null; proximas: ViagemBilhetes[]
+  semanaSeguinte: { inicio: string; ativas: number }
+  semana: { inicio: string; dias: string[]; viagens: ViagemBilhetes[] }
+  bilhetes: { proximos: BilheteCp[]; anteriores: BilheteCp[] }
+  pedidos: PedidoCp[]; registo: RegistoCp[]
+  estacoes: string[]; historico: { comboio: number; origem: string; destino: string; hora: string }[]
+}

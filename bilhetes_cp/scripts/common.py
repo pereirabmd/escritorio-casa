@@ -92,7 +92,7 @@ _SENSITIVE_ENV = (
     "CP_PASSWORD", "CP_EMAIL", "CP_PASSENGER_NAME", "CP_PASSENGER_CC",
     "CP_PASSENGER_PHONE", "CP_PASSENGER_NIF", "CP_GREEN_PASS_NUMBER",
     "CP_CONNECT_ID", "CP_CONNECT_SECRET", "CP_API_KEY_TRAVEL",
-    "CP_API_KEY_TICKETING", "NTFY_PASSWORD", "NTFY_TOKEN",
+    "CP_API_KEY_TICKETING", "NTFY_PASSWORD", "NTFY_TOKEN", "PULSE_SERVICE_KEY",
 )
 
 _REGEXES = [
@@ -174,7 +174,19 @@ NTFY_CLICK_URL = "https://pereirabmd.github.io/escritorio-casa/bilhetes_cp/"
 
 
 def notify(title: str, message: str, *, tags: Iterable[str] = (), at: datetime | None = None,
-           logger: logging.Logger | None = None) -> bool:
+           logger: logging.Logger | None = None, tipo: str = "bilhetes.aviso") -> bool:
+    """Avisa por ntfy (o canal em uso) e copia o aviso para o Pulse (a caminho do FCM). Devolve se o ntfy entregou.
+
+    A cópia para o Pulse é um canal independente e de melhor esforço: nunca muda o resultado nem atrasa o ntfy.
+    """
+    tags = list(tags)
+    ok = _notify_ntfy(title, message, tags=tags, at=at, logger=logger)
+    pulse_event(title, message, tipo=tipo, tags=tags, at=at, logger=logger)
+    return ok
+
+
+def _notify_ntfy(title: str, message: str, *, tags: Iterable[str] = (), at: datetime | None = None,
+                 logger: logging.Logger | None = None) -> bool:
     """Publica no ntfy com Priority high (popup no Android). Devolve True se 2xx.
 
     Tenta primeiro NTFY_SERVER_URL e depois o ntfy local do RPi. `at` agenda a
@@ -218,6 +230,42 @@ def notify(title: str, message: str, *, tags: Iterable[str] = (), at: datetime |
                 last_err = f"{base} -> {type(e).__name__}"
                 break
     log.error("NOTIFICAÇÃO NÃO ENTREGUE (%s): %s | %s", last_err, title, message)
+    return False
+
+
+PULSE_EVENT_TIMEOUT = (2, 3)
+
+
+def pulse_event(title: str, message: str, *, tipo: str = "bilhetes.aviso", tags: Iterable[str] = (), at: datetime | None = None,
+                logger: logging.Logger | None = None) -> bool:
+    """Entrega o aviso ao Pulse (`POST /api/v1/internal/events`, só na mesma máquina) para chegar ao Android por FCM.
+
+    Desligado (não faz nada) sem PULSE_EVENTS_URL, PULSE_SERVICE_KEY e PULSE_EVENTS_USER. Nunca levanta exceção: o Pulse em baixo
+    não pode afetar os avisos nem as compras. Com `at`, o Pulse guarda-o e só o envia a essa hora (o FCM não agenda).
+    A `chave` faz repetir o mesmo aviso não o duplicar.
+    """
+    url, key, user = env("PULSE_EVENTS_URL"), env("PULSE_SERVICE_KEY"), env("PULSE_EVENTS_USER")
+    if not (url and key and user):
+        return False
+    log = logger or get_logger("notify")
+    try:
+        import requests
+
+        titulo, corpo = sanitize(title), sanitize(message)
+        quando = int(at.timestamp()) if at is not None else int(time.time() // 60)
+        payload: dict[str, Any] = {
+            "modulo": "bilhetes", "tipo": tipo, "titulo": titulo[:200], "corpo": corpo[:1000],
+            "dados": {"tags": ",".join(tags)[:200], "link": "pulse://bilhetes"},
+            "chave": "cp-" + short_hash(titulo, corpo, quando),
+        }
+        if at is not None:
+            payload["entregarEm"] = quando
+        r = requests.post(url, json=payload, headers={"X-Pulse-Key": key, "X-Pulse-User": user}, timeout=PULSE_EVENT_TIMEOUT)
+        if 200 <= r.status_code < 300:
+            return True
+        log.warning("Pulse não aceitou o evento (HTTP %s)", r.status_code)
+    except Exception as e:  # noqa: BLE001 - melhor esforço: nada aqui pode estragar um aviso ou uma compra
+        log.warning("Pulse não recebeu o evento (%s)", type(e).__name__)
     return False
 
 

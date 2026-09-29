@@ -19,6 +19,7 @@ Migrar aplicações dedicadas para o Pulse sem perda funcional.
 
 ### Bilhetes CP
 - primeira vaga;
+- **Web feita (29/09/2026): ver `PARITY_BILHETES.md`** (Semana, Bilhetes, Pedidos, Registo; falta a verificação do horário na CP);
 - mesma regra.
 
 ### Tarefas
@@ -29,7 +30,7 @@ Migrar aplicações dedicadas para o Pulse sem perda funcional.
 - partilhar infraestrutura/API.
 
 ### Finanças
-- vaga posterior;
+- **Web feita (29/09/2026): ver `PARITY_FINANCAS.md`** (Resumo, Lançamentos, Relatórios, Categorias, Lembretes; faltam o relatório homólogo/histórico de conta e a fila offline);
 - preservar funcionalidades;
 - descontinuação apenas após validação explícita.
 

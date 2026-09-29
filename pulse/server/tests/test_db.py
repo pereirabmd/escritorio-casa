@@ -7,11 +7,11 @@ from pulse import db
 
 def test_migra_do_zero_e_e_idempotente(tmp_path):
     conn = db.connect(tmp_path / "teste-x.db")
-    assert db.migrate(conn) == ["001_base.sql", "002_auth.sql"]
-    assert conn.execute("PRAGMA user_version").fetchone()[0] == 2
+    assert db.migrate(conn) == ["001_base.sql", "002_auth.sql", "003_notificacoes.sql"]
+    assert conn.execute("PRAGMA user_version").fetchone()[0] == 3
     assert db.migrate(conn) == []
     nomes = {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
-    assert {"pulse_settings", "pulse_activity", "pulse_users", "pulse_sessions"} <= nomes
+    assert {"pulse_settings", "pulse_activity", "pulse_users", "pulse_sessions", "pulse_devices", "pulse_events"} <= nomes
     assert conn.execute("PRAGMA journal_mode").fetchone()[0] == "wal"
     assert conn.execute("PRAGMA foreign_keys").fetchone()[0] == 1
 

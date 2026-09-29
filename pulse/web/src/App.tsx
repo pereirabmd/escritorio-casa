@@ -4,9 +4,12 @@ import { AvisosProvider } from './components/Avisos'
 import { Shell } from './components/Shell'
 import { Icon } from './components/Icon'
 import { BrandLoading, Botao, Notice } from './components/ui'
+import { ModuloAtivo, ModulosProvider } from './lib/modulos'
 import { ChangePasswordScreen } from './screens/ChangePasswordScreen'
 import { LoginScreen } from './screens/LoginScreen'
 import { MoreScreen } from './screens/MoreScreen'
+import { BilhetesScreen } from './screens/bilhetes/BilhetesScreen'
+import { FinancasScreen } from './screens/financas/FinancasScreen'
 import { PesoScreen } from './screens/peso/PesoScreen'
 import { RtoScreen } from './screens/rto/RtoScreen'
 import { TarefasScreen } from './screens/tarefas/TarefasScreen'
@@ -30,18 +33,22 @@ function Porta() {
   if (estado.fase === 'anonimo') return <LoginScreen />
   if (estado.utilizador.mudarPassword) return <ChangePasswordScreen obrigatorio />
   return (
-    <Routes>
-      <Route element={<Shell />}>
-        <Route path="/hoje" element={<TodayScreen />} />
-        <Route path="/mais" element={<MoreScreen />} />
-        <Route path="/peso" element={<PesoScreen />} />
-        <Route path="/rto" element={<RtoScreen />} />
-        <Route path="/tarefas" element={<TarefasScreen />} />
-        <Route path="/definicoes" element={<SettingsScreen />} />
-        <Route path="/definicoes/password" element={<ChangePasswordScreen />} />
-        <Route path="*" element={<Navigate to="/hoje" replace />} />
-      </Route>
-    </Routes>
+    <ModulosProvider>
+      <Routes>
+        <Route element={<Shell />}>
+          <Route path="/hoje" element={<TodayScreen />} />
+          <Route path="/mais" element={<MoreScreen />} />
+          <Route path="/peso" element={<ModuloAtivo id="peso" nome="Peso"><PesoScreen /></ModuloAtivo>} />
+          <Route path="/rto" element={<ModuloAtivo id="rto" nome="RTO"><RtoScreen /></ModuloAtivo>} />
+          <Route path="/tarefas" element={<ModuloAtivo id="tarefas" nome="Tarefas"><TarefasScreen /></ModuloAtivo>} />
+          <Route path="/financas" element={<ModuloAtivo id="financas" nome="Finanças"><FinancasScreen /></ModuloAtivo>} />
+          <Route path="/bilhetes" element={<ModuloAtivo id="bilhetes" nome="Bilhetes CP"><BilhetesScreen /></ModuloAtivo>} />
+          <Route path="/definicoes" element={<SettingsScreen />} />
+          <Route path="/definicoes/password" element={<ChangePasswordScreen />} />
+          <Route path="*" element={<Navigate to="/hoje" replace />} />
+        </Route>
+      </Routes>
+    </ModulosProvider>
   )
 }
 

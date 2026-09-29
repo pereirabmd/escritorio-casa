@@ -20,6 +20,7 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_valida
 from pulse.accounts import ContaErro
 from pulse.clients.dados import DadosClient, ErroDoModulo, ModuloIndisponivel
 from pulse.clients.tarefas_api import TarefasApiClient
+from pulse.services import modulos
 from pulse.services import piscina as piscina_regras
 from pulse.services import rto as rto_regras
 from pulse.services import tarefas as tarefas_regras
@@ -234,6 +235,163 @@ class PagarIn(_Params):
 
 class LancamentoIn(_Params):
     lancamento: int = Field(ge=1)
+
+
+DESCRICAO_FIN = Annotated[str, Field(min_length=1, max_length=100)]
+COR = Annotated[str, Field(pattern=r"^#[0-9A-Fa-f]{6}$")]
+MES_FIN = Annotated[str, Field(pattern=r"^\d{4}-(0[1-9]|1[0-2])$")]
+
+
+class LancamentoNovoIn(_Params):
+    tipo: Literal["despesa", "rendimento"]
+    descricao: DESCRICAO_FIN
+    valor: float = Field(gt=0, le=1_000_000_000)
+    categoriaId: int = Field(ge=1)
+    dataVencimento: date
+    dataPagamento: date | None = None
+    recorrente: bool = False
+    mesReferencia: MES_FIN | None = None        # por omissão, o mês do vencimento
+    cid: CID | None = None
+
+    @field_validator("valor")
+    @classmethod
+    def _valor_ok(cls, v: float) -> float:
+        if not math.isfinite(v):
+            raise ValueError("valor tem de ser um número")
+        return round(v, 2)
+
+
+class LancamentoEditarIn(_Params):
+    """Só se enviam os campos a mudar; `dataPagamento: null` volta a pôr por pagar."""
+    lancamento: int = Field(ge=1)
+    tipo: Literal["despesa", "rendimento"] | None = None
+    descricao: DESCRICAO_FIN | None = None
+    valor: float | None = Field(default=None, gt=0, le=1_000_000_000)
+    categoriaId: int | None = Field(default=None, ge=1)
+    dataVencimento: date | None = None
+    dataPagamento: date | None = None
+    recorrente: bool | None = None
+    mesReferencia: MES_FIN | None = None
+
+    @model_validator(mode="after")
+    def _algo(self):
+        if not (self.model_fields_set - {"lancamento"}):
+            raise ValueError("nada para alterar")
+        if self.valor is not None:
+            if not math.isfinite(self.valor):
+                raise ValueError("valor tem de ser um número")
+            self.valor = round(self.valor, 2)
+        return self
+
+
+class MesIn(_Params):
+    mes: MES_FIN
+
+
+class CategoriaIn(_Params):
+    nome: Annotated[str, Field(min_length=1, max_length=40)]
+    cor: COR | None = None
+
+
+class CategoriaEditarIn(_Params):
+    categoria: int = Field(ge=1)
+    nome: Annotated[str, Field(min_length=1, max_length=40)] | None = None
+    cor: COR | None = None
+
+    @model_validator(mode="after")
+    def _algo(self):
+        if not (self.model_fields_set - {"categoria"}):
+            raise ValueError("nada para alterar")
+        return self
+
+
+class CategoriaRefIn(_Params):
+    categoria: int = Field(ge=1)
+
+
+HORA_FIN = Annotated[str, Field(pattern=r"^([01]\d|2[0-3]):[0-5]\d$")]
+
+
+class LembreteIn(_Params):
+    titulo: Annotated[str, Field(min_length=1, max_length=100)]
+    nota: str = Field(default="", max_length=300)
+    data: date
+    hora: HORA_FIN
+    repeticao: Literal["unica", "mensal"] = "unica"
+
+
+class LembreteEditarIn(_Params):
+    lembrete: int = Field(ge=1)
+    titulo: Annotated[str, Field(min_length=1, max_length=100)] | None = None
+    nota: str | None = Field(default=None, max_length=300)
+    data: date | None = None
+    hora: HORA_FIN | None = None
+    repeticao: Literal["unica", "mensal"] | None = None
+    ativo: bool | None = None
+
+    @model_validator(mode="after")
+    def _algo(self):
+        if not (self.model_fields_set - {"lembrete"}):
+            raise ValueError("nada para alterar")
+        return self
+
+
+class LembreteRefIn(_Params):
+    lembrete: int = Field(ge=1)
+
+
+ESTACAO = Annotated[str, Field(min_length=1, max_length=60, pattern=r"^[^\x00-\x1f\x7f]+$")]
+
+
+class ViagemIn(_Params):
+    data: date
+    origem: ESTACAO
+    destino: ESTACAO
+    comboio: int = Field(ge=1, le=99999)
+    hora: str = Field(pattern=r"^([01]\d|2[0-3]):[0-5]\d$")
+    ativo: bool = True
+
+    @model_validator(mode="after")
+    def _distintas(self):
+        if self.origem.strip().lower() == self.destino.strip().lower():
+            raise ValueError("origem e destino são iguais")
+        return self
+
+
+class SemanaIn(_Params):
+    """Substitui as viagens da semana (segunda a domingo) pelas enviadas; o servidor preserva os ids das que continuam (a chave do lock de compra)."""
+    inicio: date
+    viagens: list[ViagemIn] = Field(max_length=100)
+
+    @model_validator(mode="after")
+    def _coerente(self):
+        if self.inicio.weekday() != 0:
+            raise ValueError("a semana começa à segunda-feira")
+        fim = self.inicio + timedelta(days=6)
+        chaves = set()
+        for v in self.viagens:
+            if not self.inicio <= v.data <= fim:
+                raise ValueError("há viagens fora da semana")
+            k = (v.data, v.comboio, v.hora)
+            if k in chaves:
+                raise ValueError("há viagens repetidas")
+            chaves.add(k)
+        return self
+
+
+class PasseIn(_Params):
+    dataUltimaCompra: date
+    validadeDias: int | None = Field(default=None, ge=1, le=366)
+
+
+class PedidoRepetirIn(_Params):
+    pedido: int = Field(ge=1)
+    retry: bool
+    intervaloMinutos: int | None = Field(default=None, ge=1, le=1440)
+
+
+class PedidoRefIn(_Params):
+    pedido: int = Field(ge=1)
 
 
 @dataclass(frozen=True)
@@ -636,6 +794,117 @@ def _anular_pagamento(c: Contexto, p: LancamentoIn):
     return r, f"lançamento {p.lancamento}"
 
 
+_CAMPOS_FIN = {"tipo": "tipo", "descricao": "descricao", "valor": "valor", "categoriaId": "categoria_id",
+               "recorrente": "recorrente", "mesReferencia": "mes_referencia"}
+
+
+def _corpo_lancamento(p: BaseModel, campos: set[str] | None = None) -> dict:
+    """Do formato do Pulse (camelCase, datas) para o do módulo (snake_case, texto ISO); só os campos indicados."""
+    v = p.model_dump(exclude={"lancamento", "cid"})
+    corpo = {}
+    for k, val in v.items():
+        if campos is not None and k not in campos:
+            continue
+        if k == "dataVencimento":
+            if val is not None:
+                corpo["data_vencimento"] = val.isoformat()
+        elif k == "dataPagamento":
+            corpo["data_pagamento"] = val.isoformat() if val else None
+        elif k in _CAMPOS_FIN and val is not None:
+            corpo[_CAMPOS_FIN[k]] = val
+    return corpo
+
+
+def _lancamento_criar(c: Contexto, p: LancamentoNovoIn):
+    corpo = _corpo_lancamento(p)
+    if p.cid:
+        corpo["cid"] = p.cid
+    _, r = c.client.pedir("POST", "/financas/lancamentos", c.email, corpo=corpo)
+    return r, f"lançamento {(r or {}).get('id', '?')}"
+
+
+def _lancamento_editar(c: Contexto, p: LancamentoEditarIn):
+    _, r = c.client.pedir("PUT", f"/financas/lancamentos/{p.lancamento}", c.email, corpo=_corpo_lancamento(p, p.model_fields_set - {"lancamento"}))
+    return r, f"lançamento {p.lancamento}"
+
+
+def _lancamento_apagar(c: Contexto, p: LancamentoIn):
+    """Devolve o lançamento apagado: a interface usa-o para o «Desfazer» (voltar a criá-lo)."""
+    _, r = c.client.pedir("DELETE", f"/financas/lancamentos/{p.lancamento}", c.email)
+    return r, f"lançamento {p.lancamento}"
+
+
+def _mes_preparar(c: Contexto, p: MesIn):
+    _, r = c.client.pedir("POST", f"/financas/meses/{p.mes}/preparar", c.email)
+    return r, f"{p.mes}: {(r or {}).get('criados', 0)} criados"
+
+
+def _categoria_criar(c: Contexto, p: CategoriaIn):
+    _, r = c.client.pedir("POST", "/financas/categorias", c.email, corpo=p.model_dump(exclude_none=True))
+    return r, f"categoria {(r or {}).get('id', '?')}"
+
+
+def _categoria_editar(c: Contexto, p: CategoriaEditarIn):
+    _, r = c.client.pedir("PUT", f"/financas/categorias/{p.categoria}", c.email, corpo=p.model_dump(exclude={"categoria"}, exclude_none=True))
+    return r, f"categoria {p.categoria}"
+
+
+def _categoria_eliminar(c: Contexto, p: CategoriaRefIn):
+    _, r = c.client.pedir("DELETE", f"/financas/categorias/{p.categoria}", c.email)
+    return r or {}, f"categoria {p.categoria}"
+
+
+def _corpo_lembrete(p: BaseModel, campos: set[str]) -> dict:
+    v = p.model_dump(exclude={"lembrete"})
+    return {k: (val.isoformat() if isinstance(val, date) else val) for k, val in v.items() if k in campos and val is not None}
+
+
+def _lembrete_criar(c: Contexto, p: LembreteIn):
+    _, r = c.client.pedir("POST", "/financas/lembretes", c.email, corpo=_corpo_lembrete(p, set(LembreteIn.model_fields)))
+    return r, f"lembrete {(r or {}).get('id', '?')}"
+
+
+def _lembrete_editar(c: Contexto, p: LembreteEditarIn):
+    _, r = c.client.pedir("PUT", f"/financas/lembretes/{p.lembrete}", c.email, corpo=_corpo_lembrete(p, p.model_fields_set - {"lembrete"}))
+    return r, f"lembrete {p.lembrete}"
+
+
+def _lembrete_eliminar(c: Contexto, p: LembreteRefIn):
+    _, r = c.client.pedir("DELETE", f"/financas/lembretes/{p.lembrete}", c.email)
+    return r, f"lembrete {p.lembrete}"
+
+
+# --- Bilhetes CP -----------------------------------------------------------------------------------------------------------------
+
+def _corpo_viagem(v: ViagemIn) -> dict:
+    return {"data": v.data.isoformat(), "origem": v.origem.strip(), "destino": v.destino.strip(), "comboio": v.comboio, "hora": v.hora, "ativo": "SIM" if v.ativo else "NAO"}
+
+
+def _semana(c: Contexto, p: SemanaIn):
+    """Guarda a semana. Devolve também as viagens que lá estavam, para o «Desfazer» (voltar a gravar a semana com elas)."""
+    fim = (p.inicio + timedelta(days=6)).isoformat()
+    _, d = c.client.pedir("GET", "/bilhetes/dados", c.email)
+    antes = [{k: v[k] for k in ("data", "origem", "destino", "comboio", "hora", "ativo")} for v in (d or {}).get("viagens", []) if p.inicio.isoformat() <= v["data"] <= fim]
+    _, r = c.client.pedir("PUT", "/bilhetes/semana", c.email, corpo={"inicio": p.inicio.isoformat(), "viagens": [_corpo_viagem(v) for v in p.viagens]})
+    return {**(r or {}), "anteriores": antes}, f"semana {p.inicio.isoformat()}: {len(p.viagens)} viagens"
+
+
+def _passe(c: Contexto, p: PasseIn):
+    corpo = {"dataUltimaCompra": p.dataUltimaCompra.isoformat(), **({"validadeDias": p.validadeDias} if p.validadeDias else {})}
+    _, r = c.client.pedir("PUT", "/bilhetes/passe", c.email, corpo=corpo)
+    return r, f"passe {p.dataUltimaCompra.isoformat()}"
+
+
+def _pedido_repetir(c: Contexto, p: PedidoRepetirIn):
+    _, r = c.client.pedir("PUT", f"/bilhetes/pedidos/{p.pedido}", c.email, corpo={"retry": p.retry, "intervaloMinutos": p.intervaloMinutos})
+    return r, f"pedido {p.pedido}"
+
+
+def _pedido_forcar(c: Contexto, p: PedidoRefIn):
+    _, r = c.client.pedir("POST", f"/bilhetes/pedidos/{p.pedido}/forcar", c.email)
+    return r, f"pedido {p.pedido}"
+
+
 ACOES: dict[str, Acao] = {a.nome: a for a in (
     Acao("tarefas.concluir", "tarefas", "safe_action", "Marca uma tarefa como feita (e as atrasadas anteriores da mesma tarefa).", InstanciaIn, _concluir),
     Acao("tarefas.reabrir", "tarefas", "safe_action", "Volta a pôr uma tarefa como por fazer (desfaz «concluir»).", ReabrirIn, _reabrir),
@@ -665,8 +934,22 @@ ACOES: dict[str, Acao] = {a.nome: a for a in (
     Acao("rto.nota_eliminar", "rto", "sensitive_action", "Apaga uma nota do RTO.", NotaEliminarIn, _nota_eliminar),
     Acao("rto.nota_restaurar", "rto", "safe_action", "Repõe uma nota apagada, com o mesmo id (desfaz «eliminar»).", NotaEditarIn, _nota_restaurar),
     Acao("rto.gerar_validacoes", "rto", "safe_action", "Gera validações de 14 em 14 dias, alternando os dois tipos.", ValidacoesIn, _validacoes),
+    Acao("bilhetes.semana", "bilhetes", "safe_action", "Guarda as viagens de uma semana (substitui as da semana; o Pi lê a nova configuração).", SemanaIn, _semana),
+    Acao("bilhetes.passe", "bilhetes", "safe_action", "Regista a data do último carregamento do passe.", PasseIn, _passe),
+    Acao("bilhetes.pedido_repetir", "bilhetes", "safe_action", "Liga ou desliga a repetição automática de um pedido avulso.", PedidoRepetirIn, _pedido_repetir),
+    Acao("bilhetes.pedido_forcar", "bilhetes", "safe_action", "Pede ao Pi uma tentativa imediata de um pedido avulso.", PedidoRefIn, _pedido_forcar),
     Acao("financas.pagar", "financas", "safe_action", "Marca uma conta como paga.", PagarIn, _pagar),
     Acao("financas.anular_pagamento", "financas", "safe_action", "Volta a pôr uma conta como por pagar.", LancamentoIn, _anular_pagamento),
+    Acao("financas.criar", "financas", "safe_action", "Cria um lançamento (despesa ou rendimento).", LancamentoNovoIn, _lancamento_criar),
+    Acao("financas.editar", "financas", "safe_action", "Altera um lançamento.", LancamentoEditarIn, _lancamento_editar),
+    Acao("financas.apagar", "financas", "sensitive_action", "Apaga um lançamento.", LancamentoIn, _lancamento_apagar),
+    Acao("financas.preparar_mes", "financas", "safe_action", "Prepara o mês copiando os lançamentos recorrentes do mês anterior.", MesIn, _mes_preparar),
+    Acao("financas.categoria_criar", "financas", "safe_action", "Cria uma categoria.", CategoriaIn, _categoria_criar),
+    Acao("financas.categoria_editar", "financas", "safe_action", "Renomeia uma categoria ou muda a cor.", CategoriaEditarIn, _categoria_editar),
+    Acao("financas.categoria_eliminar", "financas", "sensitive_action", "Apaga uma categoria sem lançamentos.", CategoriaRefIn, _categoria_eliminar),
+    Acao("financas.lembrete_criar", "financas", "safe_action", "Agenda um lembrete (aviso ntfy), único ou mensal.", LembreteIn, _lembrete_criar),
+    Acao("financas.lembrete_editar", "financas", "safe_action", "Altera ou pausa um lembrete.", LembreteEditarIn, _lembrete_editar),
+    Acao("financas.lembrete_eliminar", "financas", "sensitive_action", "Apaga um lembrete.", LembreteRefIn, _lembrete_eliminar),
 )}
 
 
@@ -688,6 +971,7 @@ def executar(conn: sqlite3.Connection, ctx: Contexto, nome: str, params: dict, o
     except ValidationError as e:
         campos = ", ".join(sorted({str(x["loc"][0]) for x in e.errors() if x["loc"]}))
         raise ContaErro(400, "parametros_invalidos", f"parâmetros inválidos: {campos}" if campos else "parâmetros inválidos") from None
+    modulos.exigir(conn, acao.modulo)
     if acao.nivel == "sensitive_action" and not confirmado:
         raise ContaErro(409, "confirmacao_necessaria", "esta ação precisa de confirmação")
     try:

@@ -55,3 +55,11 @@ ssh casamento-pi "$ADM listar\""    # também: desativar / ativar --email …
 ```
 (Executar sempre como `bpereira`, dono do `pulse.db`; como root os ficheiros WAL ficavam com o dono errado.)
 O primeiro acesso obriga a mudar a password (`POST /api/v1/auth/password`); até lá só `/auth/me`, `/auth/password` e `/auth/logout`.
+
+## Notificações e módulos (ADR-045/046, 29/09/2026)
+- A migração `003_notificacoes.sql` aplica-se sozinha no arranque. O agendador de fundo (`PULSE_SCHEDULER_S`, 30 s) corre no próprio `pulse-api`.
+- **Bloco novo do nginx**: `location ^~ /pulse/api/v1/internal/ { return 404; }` (em `nginx/pulse-api.conf`) — a entrada de eventos das outras apps é só em `http://127.0.0.1:8897`. `nginx -t` antes do reload.
+- **FCM (opcional)**: instalar `cryptography` no venv (`/opt/pulse/venv/bin/pip install cryptography`), pôr a service account em `/etc/pulse-app/fcm-service-account.json` (root, 600) e `PULSE_FCM_CREDENTIALS` no `pulse.env`. Sem isto os eventos ficam na caixa (`GET /notifications`).
+- **bilhetes_cp** copia os avisos ntfy para o Pulse com `PULSE_EVENTS_URL=http://127.0.0.1:8897/api/v1/internal/events`, `PULSE_SERVICE_KEY` e `PULSE_EVENTS_USER` no `.env` do `bilhetes_cp` (ver `bilhetes_cp/PLANO_FINAL.md` §9.12).
+- **Módulos**: nada a instalar; ficam em `pulse_settings` (`modulos_desativados`), por isso entram no backup do `pulse.db`.
+

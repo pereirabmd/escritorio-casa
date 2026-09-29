@@ -7,13 +7,15 @@ import { Icon, type IconName } from '../components/Icon'
 import { BrandLoading, Botao, Esqueleto, Notice, Spinner } from '../components/ui'
 import { fmtDataIso, fmtDataLonga, fmtDias, fmtDiaMes, fmtEuro, fmtPeso, plural, saudacao } from '../lib/format'
 import { useAvisos } from '../components/Avisos'
-import { diaBloqueado } from '../lib/rto'
+import { diaBloqueado, proximaMarca } from '../lib/rto'
 import { lerPeso, novoCid, useAcao } from '../lib/useAcao'
 import { useAsync } from '../lib/useAsync'
 
 type Executar = (chave: string, nome: string, params: Record<string, unknown>, confirmado?: boolean) => Promise<Record<string, unknown> | null>
 interface Acoes { executar: Executar; ocupado: string | null; hoje: string }
 
+/** Estados em que o cartão nem aparece: o utilizador não tem o módulo, ou o administrador desativou-o. */
+const SEM = new Set<string>(['sem_acesso', 'desativado'])
 const NOMES: Record<string, string> = { tarefas: 'Tarefas', bilhetes: 'Bilhetes CP', rto: 'RTO', peso: 'Peso', financas: 'Finanças' }
 const DIA = ['S', 'T', 'Q', 'Q', 'S', 'S', 'D']
 
@@ -88,7 +90,7 @@ function Tarefas({ m, acoes }: { m: Modulo<TarefasDados>; acoes: Acoes }) {
 
 function Bilhetes({ m }: { m: Modulo<BilhetesDados> }) {
   return (
-    <Cartao icone="bilhete" titulo="Próximo comboio">
+    <Cartao icone="bilhete" titulo="Próximo comboio" extra={<Link to="/bilhetes" className="link-btn">Abrir</Link>}>
       <Estado modulo={m}>{() => {
         const { proximo: v, passe } = m.dados!
         return (
@@ -98,6 +100,7 @@ function Bilhetes({ m }: { m: Modulo<BilhetesDados> }) {
                 <div className="trip"><span className="t-section">{v.hora}</span><span className="t-body">{v.origem}</span><span className="arrow"><Icon nome="seta" tamanho={16} /></span><span className="t-body">{v.destino}</span></div>
                 <div className="trip t-body2">
                   <span>{fmtDiaMes(v.data)}</span><span>Comboio {v.comboio}</span>
+                  {v.emCurso && <span className="pill pill-soon">Em viagem · chega por volta das {v.fimEstimado}</span>}
                   {v.compra ? <span className="pill pill-ok">Comprado · carruagem {v.compra.carruagem}, lugar {v.compra.lugar}</span> : <span className="pill">Por comprar</span>}
                 </div>
               </div>
@@ -113,16 +116,16 @@ function Bilhetes({ m }: { m: Modulo<BilhetesDados> }) {
 }
 
 function Rto({ m, acoes }: { m: Modulo<RtoDados>; acoes: Acoes }) {
-  const [escolhido, setEscolhido] = useState<string | null>(null)
+  const avisos = useAvisos()
   const { executar, ocupado, hoje } = acoes
   const dias = m.dados?.dias ?? []
-  const dia = dias.find((d) => d.data === (escolhido ?? dias.find((x) => x.hoje)?.data))
-  const bloqueado = dia ? diaBloqueado(dia.data, hoje) : false          // fim de semana ou dia passado: só no modo administrador do RTO
-
-  async function marcar(marca: 'T' | 'C' | '') {
-    if (dia) await executar(`rto-${dia.data}`, 'rto.marcar_dia', { data: dia.data, marca })
-  }
   const descreve = (marca: string) => (marca === 'T' ? 'escritório' : marca === 'C' ? 'casa' : 'sem marca')
+
+  /** Toque num dia: vazio → T → C → vazio. Fins de semana e dias passados só no modo administrador do ecrã do RTO. */
+  async function alternar(d: RtoDados['dias'][number]) {
+    if (diaBloqueado(d.data, hoje)) { avisos.mostrar('Fim de semana ou dia passado: para alterar, usa o modo administrador no ecrã do RTO.'); return }
+    await executar(`rto-${d.data}`, 'rto.marcar_dia', { data: d.data, marca: proximaMarca(d.marca) })
+  }
 
   return (
     <Cartao icone="rto" titulo="RTO desta semana" extra={<>{m.dados && <span className="t-meta">{m.dados.contagem.T} escritório · {m.dados.contagem.C} casa</span>}<Link to="/rto" className="link-btn">Abrir</Link></>}>
@@ -130,22 +133,13 @@ function Rto({ m, acoes }: { m: Modulo<RtoDados>; acoes: Acoes }) {
         <>
           <div className="week" role="group" aria-label="Dias da semana">
             {dias.map((d) => (
-              <button type="button" className="day" key={d.data} data-hoje={d.hoje} aria-pressed={dia?.data === d.data} onClick={() => setEscolhido(d.data)}
+              <button type="button" className="day" key={d.data} data-hoje={d.hoje} disabled={ocupado !== null} onClick={() => void alternar(d)}
                 aria-label={`${DIA[d.diaSemana - 1]} ${fmtDiaMes(d.data)}: ${descreve(d.marca)}`}>
                 <span>{DIA[d.diaSemana - 1]}</span><b>{Number(d.data.slice(8))}</b><span className="mark" data-m={d.marca}>{d.marca || ''}</span>
               </button>
             ))}
           </div>
-          {dia && (
-            <div className="quick" role="group" aria-label={`Marcar ${fmtDiaMes(dia.data)}`}>
-              <span className="t-meta">{fmtDiaMes(dia.data)}:</span>
-              <Botao variante="secondary" pequeno aria-pressed={dia.marca === 'T'} disabled={ocupado !== null || bloqueado} onClick={() => void marcar('T')}>Escritório</Botao>
-              <Botao variante="secondary" pequeno aria-pressed={dia.marca === 'C'} disabled={ocupado !== null || bloqueado} onClick={() => void marcar('C')}>Casa</Botao>
-              {dia.marca && <Botao variante="secondary" pequeno disabled={ocupado !== null || bloqueado} onClick={() => void marcar('')}>Limpar</Botao>}
-            </div>
-          )}
-          {bloqueado && <p className="t-meta">Fim de semana ou dia passado: para alterar, usa o modo administrador no <Link to="/rto">ecrã do RTO</Link>.</p>}
-          <div className="legend t-meta"><span>T · Escritório</span><span>C · Casa</span></div>
+          <div className="legend t-meta"><span>Toca num dia: T · Escritório → C · Casa → vazio</span></div>
         </>
       )}</Estado>
     </Cartao>
@@ -274,11 +268,11 @@ export function TodayScreen() {
             <Notice tipo="error">{erro} <button type="button" className="link-btn" onClick={limparErro}>Fechar</button></Notice>
           )}
           <div className="grid">
-            {estado.dados.modulos.tarefas.estado !== 'sem_acesso' && <Tarefas m={estado.dados.modulos.tarefas} acoes={{ executar, ocupado, hoje: estado.dados.data }} />}
-            {estado.dados.modulos.bilhetes.estado !== 'sem_acesso' && <Bilhetes m={estado.dados.modulos.bilhetes} />}
-            {estado.dados.modulos.rto.estado !== 'sem_acesso' && <Rto m={estado.dados.modulos.rto} acoes={{ executar, ocupado, hoje: estado.dados.data }} />}
-            {estado.dados.modulos.peso.estado !== 'sem_acesso' && <Peso m={estado.dados.modulos.peso} acoes={{ executar, ocupado, hoje: estado.dados.data }} />}
-            {estado.dados.modulos.financas.estado !== 'sem_acesso' && <Financas m={estado.dados.modulos.financas} acoes={{ executar, ocupado, hoje: estado.dados.data }} />}
+            {!SEM.has(estado.dados.modulos.tarefas.estado) && <Tarefas m={estado.dados.modulos.tarefas} acoes={{ executar, ocupado, hoje: estado.dados.data }} />}
+            {!SEM.has(estado.dados.modulos.bilhetes.estado) && <Bilhetes m={estado.dados.modulos.bilhetes} />}
+            {!SEM.has(estado.dados.modulos.rto.estado) && <Rto m={estado.dados.modulos.rto} acoes={{ executar, ocupado, hoje: estado.dados.data }} />}
+            {!SEM.has(estado.dados.modulos.peso.estado) && <Peso m={estado.dados.modulos.peso} acoes={{ executar, ocupado, hoje: estado.dados.data }} />}
+            {!SEM.has(estado.dados.modulos.financas.estado) && <Financas m={estado.dados.modulos.financas} acoes={{ executar, ocupado, hoje: estado.dados.data }} />}
           </div>
           <>
             <p className="t-meta">Calendário e Email ainda não estão ligados.</p>

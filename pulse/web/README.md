@@ -11,8 +11,12 @@ por isso a sessão é um cookie httpOnly (nunca um token em JavaScript).
 - **Peso completo** (`/peso`, a partir de Mais ou do cartão do Hoje; `?aba=resumo|grafico|registos|config`): resumo com estatísticas, gráfico SVG com períodos e média móvel, registos (registar, editar, eliminar com desfazer) e configuração. Paridade em `../docs/PARITY_PESO.md`.
 - **RTO completo** (`/rto`; `?aba=calendario|ano|notas`): calendário mensal com T/C/férias/astreinte/feriados, painel do dia, hoje e próxima mudança, totais e saldo com «como se calcula», comparação com o mês anterior, visão do ano e notas (criar, editar, eliminar com desfazer, gerador de validações). Paridade em `../docs/PARITY_RTO.md`.
 - **Tarefas** (`/tarefas`; `?aba=hoje|calendario|tarefas|horario|piscina|config`): Hoje (filtro por pessoa, atrasadas, amanhã, concluir/reabrir/saltar/adiar, tarefa rápida, Google Calendar), Calendário (mês/semana com feriados), catálogo (criar, editar, duplicar, apagar), Horário escolar, Piscina, e Config (pessoas, reatribuir, não incomodar, resumo, estado do Pi, exportar CSV, administração). Paridade em `../docs/PARITY_TAREFAS.md`.
+- **Finanças** (`/financas`; `?aba=resumo|lancamentos|relatorios|categorias|lembretes`): resumo «ativo − passivo» (mês ou 30 dias) com aviso persistente de vencidas, lançamentos do mês (criar, editar, pagar/anular, apagar com desfazer; o mês é preparado ao abrir), relatórios por mês e categoria, categorias e lembretes. Paridade em `../docs/PARITY_FINANCAS.md`.
+- **Bilhetes CP** (`/bilhetes`; `?aba=semana|bilhetes|pedidos|registo`): próximo comboio (mantém «Em viagem» até à chegada estimada), Passe Verde, viagens da semana e editor (vários comboios por dia, «Ativo» por dia, desfazer), bilhetes, pedidos avulsos (tentar agora, repetição) e registo. Paridade em `../docs/PARITY_BILHETES.md`.
+- **Módulos** (ADR-046): Definições → Administração (só administradores) liga/desliga módulos para todos; os desativados saem de Mais e do Hoje (`lib/modulos.tsx`).
+- **Instalável no Android**: `public/manifest.webmanifest` + `<link rel="manifest">`.
 - **Ações rápidas nos cartões (fase 7, ADR-039)**, todas por `POST /actions/{nome}`: concluir e adiar tarefa (amanhã ou uma data),
-  registar peso (campo pré-preenchido com o último valor), marcar o dia de RTO (Escritório/Casa/Limpar) e pagar uma conta, com
+  registar peso (campo pré-preenchido com o último valor), marcar o dia de RTO (um toque no dia: vazio → T → C → vazio, sem seletor) e pagar uma conta, com
   «Desfazer» onde faz sentido. Erros em pt-PT no próprio ecrã; abrir o Hoje nunca escreve nada.
 
 ## Desenvolver
@@ -23,7 +27,7 @@ npm run dev        # http://localhost:5173/pulse/ — /pulse/api é reencaminhad
 npm run lint && npm test && npm run build
 ```
 
-Testes (112, Vitest + Testing Library, com um servidor falso no lugar do `fetch`): formatos, regras de palavra-passe, cliente da API,
+Testes (187, Vitest + Testing Library, com um servidor falso no lugar do `fetch`): formatos, regras de palavra-passe, cliente da API,
 fluxos de acesso, mudança de palavra-passe, os estados do Hoje, sessões e tema.
 
 ## Publicar

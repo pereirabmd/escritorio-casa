@@ -45,7 +45,7 @@ Por conta:
 - Tasks.
 
 ### Módulos
-- ativar/desativar;
+- ativar/desativar (**implementado, ADR-046**): Definições → Administração, só administradores, vale para todos os utilizadores;
 - organização;
 - favoritos;
 - fixados.

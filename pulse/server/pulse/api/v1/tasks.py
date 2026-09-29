@@ -5,13 +5,14 @@ from datetime import date
 from fastapi import APIRouter, Depends, Query, Request
 
 from pulse.accounts import ContaErro
+from pulse.api.v1.modules import exigir_modulo
 from pulse.api.v1.auth import Sessao, sessao_ativa
 from pulse.clients.dados import ErroDoModulo, ModuloIndisponivel
 from pulse.services import horario as horario_regras
 from pulse.services import piscina as piscina_regras
 from pulse.services import tarefas
 
-router = APIRouter(prefix="/tasks", tags=["tarefas"])
+router = APIRouter(prefix="/tasks", tags=["tarefas"], dependencies=[Depends(exigir_modulo("tarefas"))])
 
 
 def _dados(request: Request, s: Sessao) -> dict:

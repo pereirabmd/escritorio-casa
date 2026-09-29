@@ -1402,3 +1402,12 @@ utilizador fica de fora por agora** (sem coluna de ntfy no modelo).
 5. **Achado a 26/09/2026**: `bilhetes_tentativas` (migração 002, registo de todos os pedidos à CP) **não ganhou `utilizador_id`** na 003. Não é urgente (a `perna` `vN`/`pedidoN` é única entre utilizadores, por isso o dono deriva-se da viagem/pedido), mas a fase 2 deve acrescentá-lo (migração 004) para os relatórios por utilizador não dependerem de um join.
 6. **Menor**: «Testar login CP» na página de administração; a chave Fernet num gestor de passwords; se o SD do Pi morrer, a chave perde-se (o backup cifrado com `age` leva as passwords cifradas mas não a chave).
 
+### 9.12 Cópia dos avisos para o Pulse — preparação para o FCM (29/09/2026)
+O ntfy **continua a ser o canal em uso** (Priority high em tudo, sem alterações). Em paralelo, `common.notify` chama `common.pulse_event`, que copia cada aviso para o Pulse
+(`POST http://127.0.0.1:8897/api/v1/internal/events`, só na mesma máquina) para chegar ao Android por FCM quando a app Android existir (ADR-032/045 em `pulse/docs/DECISIONS.md`).
+- **Desligado por omissão**: só age com `PULSE_EVENTS_URL`, `PULSE_SERVICE_KEY` (a mesma do Pulse, ≥ 32 caracteres) e `PULSE_EVENTS_USER` (e-mail da conta Pulse) no `.env`.
+- **Melhor esforço**: timeout de 2 s + 3 s, todas as exceções apanhadas; o resultado de `notify` continua a ser só o do ntfy, e o Pulse em baixo nunca atrasa nem estraga um aviso ou uma compra. Se o ntfy falhar, o Pulse recebe na mesma.
+- **Idempotente**: `chave = cp-<hash(título, corpo, hora|minuto)>`; repetir o mesmo aviso não o duplica. Os avisos agendados (`at=`, ex.: T-24h) levam `entregarEm`: o Pulse guarda-os e envia-os à hora (o FCM não agenda).
+- **Segurança**: `PULSE_SERVICE_KEY` entrou na lista de valores redigidos dos logs (`_SENSITIVE_ENV`).
+- **Passar o Android de ntfy para FCM** (mais tarde): registar o token (`POST /api/v1/devices`) e deixar de subscrever o tópico ntfy no telemóvel; nada a alterar aqui. Testes: `PulseEventTests` (6; total 282).
+

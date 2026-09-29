@@ -39,7 +39,7 @@ class FalsoDados(BaseHTTPRequestHandler):
         if self.headers.get("X-Pulse-Key") != self.CHAVE:
             return self._resp(401, {"erro": {"codigo": "nao_autenticado", "mensagem": "sem chave"}})
         FalsoDados.pedidos.append((self.path, self.headers.get("X-Pulse-User")))
-        fixa = FalsoDados.respostas.get(self.path.split("?")[0])
+        fixa = FalsoDados.respostas.get(self.path) or FalsoDados.respostas.get(self.path.split("?")[0])
         if fixa is not None:
             return self._resp(*fixa)
         if self.path.startswith("/conflito"):

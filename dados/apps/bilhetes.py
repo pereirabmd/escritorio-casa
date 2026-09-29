@@ -25,6 +25,7 @@ DB = "bilhetes"
 
 MAX_VIAGENS_SEMANA = 100
 MAX_LOGS = 1500
+DURACAO_ESTIMADA_MIN = 180                       # a chegada não está guardada: a viagem conta como «em curso» até partida + 3 h
 PEDIDO_TERMINAL = {"CONFIRMADO", "AMBIGUO"}      # nunca se relançam (nem por Retry nem por Forçar)
 _ISO_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 _HORA_RE = re.compile(r"^([01]\d|2[0-3]):[0-5]\d$")
@@ -118,20 +119,25 @@ def dados(ctx):
 
 
 def proximo(ctx):
-    """A próxima viagem ativa (hoje, se ainda não partiu, ou a seguinte) com a compra já feita, se houver, e o passe.
+    """A viagem ativa em curso (até à chegada estimada) ou, se não houver, a seguinte com a compra já feita, se houver, e o passe.
     Leve de propósito: é o que o «Hoje» do Pulse precisa, sem os logs nem os pedidos de `/bilhetes/dados`."""
     conn = ctx.db()
-    agora = datetime.now(ctx.tz)
-    hoje, hora = agora.date().isoformat(), agora.strftime("%H:%M")
-    v = conn.execute("SELECT id, data, origem, destino, comboio, hora, ativo FROM bilhetes_viagens "
-                     "WHERE ativo = 'SIM' AND (data > ? OR (data = ? AND hora >= ?)) "
-                     "ORDER BY data, hora, id LIMIT 1", (hoje, hoje, hora)).fetchone()
+    agora = datetime.now(ctx.tz).replace(tzinfo=None)
+    ontem = (agora.date() - timedelta(days=1)).isoformat()
+    v = fim = None
+    for r in conn.execute("SELECT id, data, origem, destino, comboio, hora, ativo FROM bilhetes_viagens "
+                          "WHERE ativo = 'SIM' AND data >= ? ORDER BY data, hora, id", (ontem,)):
+        f = datetime.fromisoformat(f"{r['data']}T{r['hora']}") + timedelta(minutes=DURACAO_ESTIMADA_MIN)
+        if f >= agora:                               # ainda não terminou
+            v, fim = r, f
+            break
     viagem = None
     if v:
         c = conn.execute("SELECT carruagem, lugar, referencia FROM bilhetes_compras "
                          "WHERE data = ? AND comboio = ? AND hora_partida = ? ORDER BY id DESC LIMIT 1",
                          (v["data"], v["comboio"], v["hora"])).fetchone()
-        viagem = {**_viagem(v), "compra": {"carruagem": c["carruagem"], "lugar": c["lugar"], "referencia": c["referencia"]} if c else None}
+        viagem = {**_viagem(v), "fimEstimado": fim.strftime("%H:%M"), "emCurso": fim - timedelta(minutes=DURACAO_ESTIMADA_MIN) <= agora,
+                  "compra": {"carruagem": c["carruagem"], "lugar": c["lugar"], "referencia": c["referencia"]} if c else None}
     return 200, {"proximo": viagem, "passe": _passe(conn, agora.date())}
 
 

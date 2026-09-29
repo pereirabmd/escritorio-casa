@@ -185,6 +185,69 @@ class NotifyTests(unittest.TestCase):
         self.assertIn("NÃO ENTREGUE", cm.output[0])
 
 
+class PulseEventTests(unittest.TestCase):
+    ENV = {"PULSE_EVENTS_URL": "http://127.0.0.1:8897/api/v1/internal/events", "PULSE_SERVICE_KEY": "s" * 40, "PULSE_EVENTS_USER": "eu@exemplo.pt"}
+
+    def _posts(self, ntfy_status=200, pulse_status=201):
+        enviados = []
+
+        def fake_post(url, json=None, headers=None, auth=None, timeout=None):
+            enviados.append((url, json, headers, timeout))
+            return mock.Mock(status_code=pulse_status if "internal/events" in url else ntfy_status)
+        return enviados, fake_post
+
+    def test_desligado_por_omissao_e_nao_toca_no_ntfy(self):
+        enviados, fake = self._posts()
+        with mock.patch("requests.post", fake):
+            self.assertTrue(common.notify("t", "m"))
+        self.assertFalse(any("internal/events" in u for u, *_ in enviados))
+
+    def test_copia_o_aviso_para_o_pulse_sem_mudar_o_resultado_do_ntfy(self):
+        enviados, fake = self._posts()
+        with mock.patch.dict("os.environ", self.ENV), mock.patch("requests.post", fake):
+            self.assertTrue(common.notify("Comprado", "Carruagem 21", tags=["train"]))
+        (url, corpo, cab, tmo) = next(e for e in enviados if "internal/events" in e[0])
+        self.assertEqual(cab, {"X-Pulse-Key": "s" * 40, "X-Pulse-User": "eu@exemplo.pt"})
+        self.assertEqual((corpo["modulo"], corpo["tipo"], corpo["titulo"]), ("bilhetes", "bilhetes.aviso", "Comprado"))
+        self.assertEqual(corpo["dados"], {"tags": "train", "link": "pulse://bilhetes"})
+        self.assertNotIn("entregarEm", corpo)
+        self.assertRegex(corpo["chave"], r"^cp-[0-9a-f]{12}$")
+        self.assertEqual(tmo, common.PULSE_EVENT_TIMEOUT)                       # nunca segura o aviso mais que uns segundos
+
+    def test_aviso_agendado_leva_a_hora_de_entrega_e_a_chave_e_estavel(self):
+        enviados, fake = self._posts()
+        at = datetime.now(common.TZ) + timedelta(hours=2)
+        with mock.patch.dict("os.environ", self.ENV), mock.patch("requests.post", fake):
+            common.notify("Lembrete", "x", at=at); common.notify("Lembrete", "x", at=at)
+        ev = [e[1] for e in enviados if "internal/events" in e[0]]
+        self.assertEqual(ev[0]["entregarEm"], int(at.timestamp()))
+        self.assertEqual(ev[0]["chave"], ev[1]["chave"])                        # repetir não duplica no Pulse
+
+    def test_pulse_em_baixo_ou_a_recusar_nunca_estraga_o_ntfy(self):
+        import requests
+
+        def fake(url, **kw):
+            if "internal/events" in url:
+                raise requests.ConnectionError("pulse em baixo")
+            return mock.Mock(status_code=200)
+        with mock.patch.dict("os.environ", self.ENV), mock.patch("requests.post", fake):
+            self.assertTrue(common.notify("t", "m"))
+        enviados, fake2 = self._posts(pulse_status=401)
+        with mock.patch.dict("os.environ", self.ENV), mock.patch("requests.post", fake2):
+            self.assertTrue(common.notify("t", "m"))
+
+    def test_ntfy_a_falhar_continua_a_avisar_o_pulse_e_devolve_falso(self):
+        enviados, fake = self._posts(ntfy_status=500)
+        with mock.patch.dict("os.environ", self.ENV), mock.patch("requests.post", fake):
+            with self.assertLogs("cp.notify", level="ERROR"):
+                self.assertFalse(common.notify("t", "m"))
+        self.assertTrue(any("internal/events" in e[0] for e in enviados))
+
+    def test_a_chave_de_servico_nunca_aparece_nos_logs(self):
+        with mock.patch.dict("os.environ", self.ENV):
+            self.assertNotIn("s" * 40, common.sanitize(f"chave {'s' * 40} usada"))
+
+
 class PurchaseLockTests(unittest.TestCase):
     def test_lock_exclusivo_e_estado_persistente(self):
         a, b = common.PurchaseLock("teste-lock-1"), common.PurchaseLock("teste-lock-1")

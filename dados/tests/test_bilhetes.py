@@ -52,6 +52,18 @@ class BilhetesApiTest(ApiBase):
         self.assertEqual(p["compra"], {"carruagem": "5", "lugar": "23", "referencia": "REF-XYZ"})
         self.assertIn("passe", b)
 
+    def test_proximo_mantem_a_viagem_em_curso_ate_ao_fim_estimado(self):
+        agora = datetime.now()
+        c = self.bd()
+        for comboio, quando in ((1, agora - timedelta(hours=1)), (2, agora - timedelta(hours=4)), (3, agora + timedelta(hours=5))):
+            if quando.date() != agora.date():
+                self.skipTest("perto da meia-noite")
+            c.execute("INSERT INTO bilhetes_viagens (data, origem, destino, comboio, hora, ativo) VALUES (?,?,?,?,?,?)",
+                      (quando.date().isoformat(), "Lisboa Oriente", "Aveiro", comboio, quando.strftime("%H:%M"), "SIM"))
+        c.close()
+        p = self.pedir("GET", "/bilhetes/proximo")[1]["proximo"]
+        self.assertEqual((p["comboio"], p["emCurso"]), (1, True))       # partiu há 1 h, ainda dentro das 3 h estimadas
+
     def test_proximo_sem_compra_sem_viagens_e_acesso(self):
         s, b, _ = self.pedir("GET", "/bilhetes/proximo")
         self.assertEqual((s, b["proximo"]), (200, None))

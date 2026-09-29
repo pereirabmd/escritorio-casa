@@ -2,10 +2,11 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends, Query, Request
 
+from pulse.api.v1.modules import exigir_modulo
 from pulse.api.v1.auth import Sessao, sessao_ativa
 from pulse.services import rto
 
-router = APIRouter(prefix="/rto", tags=["rto"])
+router = APIRouter(prefix="/rto", tags=["rto"], dependencies=[Depends(exigir_modulo("rto"))])
 
 
 @router.get("")

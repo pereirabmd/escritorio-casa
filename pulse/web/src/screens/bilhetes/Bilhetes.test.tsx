@@ -1,0 +1,199 @@
+import { render, screen, waitFor, within } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
+import { App } from '../../App'
+import { diasParaEditor, linhaVazia, segundaDe, somarDias, validarDias, viagensParaEnviar } from '../../lib/bilhetes'
+import { servidorFalso, UTILIZADOR, type Rotas } from '../../test/api-mock'
+
+const BASE = import.meta.env.BASE_URL.replace(/\/$/, '')
+const OK: [number, unknown] = [200, { resultado: { anteriores: [] } }]
+
+const viagem = (id: number, data: string, hora: string, estado: string, extra = {}) =>
+  ({ id, data, hora, origem: 'Aveiro', destino: 'Lisboa Oriente', comboio: 520 + id, ativo: estado !== 'inativa', estado, fimEstimado: '12:00', compra: null, ...extra })
+const DIAS = ['2026-10-05', '2026-10-06', '2026-10-07', '2026-10-08', '2026-10-09', '2026-10-10', '2026-10-11']
+const DADOS = {
+  hoje: '2026-09-30',
+  passe: { dataUltimaCompra: '2026-09-05', validadeDias: 29, dataExpira: '2026-10-05', diasRestantes: 5, estado: 'ok', percentagem: 17 },
+  proxima: viagem(3, '2026-09-30', '09:00', 'em_curso', { compra: { carruagem: '5', lugar: '12', referencia: 'R2' } }),
+  proximas: [],
+  semanaSeguinte: { inicio: '2026-10-05', ativas: 2 },
+  semana: { inicio: '2026-10-05', dias: DIAS, viagens: [viagem(6, '2026-10-05', '07:27', 'por_comprar'), viagem(7, '2026-10-06', '07:27', 'comprado', { compra: { carruagem: '21', lugar: '53', referencia: 'R7' } })] },
+  bilhetes: {
+    proximos: [{ id: 2, data: '2026-09-30', hora: '09:00', origem: 'Aveiro', destino: 'Lisboa Oriente', comboio: 522, carruagem: '5', lugar: '12', referencia: 'R2' }],
+    anteriores: [{ id: 1, data: '2026-09-29', hora: '07:00', origem: 'Aveiro', destino: 'Lisboa Oriente', comboio: 520, carruagem: '21', lugar: '53', referencia: 'R1' }],
+  },
+  pedidos: [{ id: 4, data: '2026-10-08', hora: '07:00', origem: 'Aveiro', destino: 'Lisboa Oriente', comboio: 520, ativo: true, retry: false, intervaloMinutos: 15, forcar: false, estado: 'ESGOTADO', ultimaTentativa: null, referencia: null, mensagem: 'sem lugares' }],
+  registo: [
+    { ts: '2026-09-30 06:00:00', tipo: 'ERRO', data: '2026-09-30', perna: 'v1', comboio: 520, status: 500, resultado: 'FALHA', referencia: null, erro: 'a CP não respondeu' },
+    { ts: '2026-09-29 06:00:00', tipo: 'COMPRA', data: '2026-09-29', perna: 'v1', comboio: 520, status: 200, resultado: 'CONFIRMED', referencia: 'R1', erro: null }],
+  estacoes: ['Aveiro', 'Lisboa Oriente'], historico: [{ comboio: 525, origem: 'Aveiro', destino: 'Lisboa Oriente', hora: '07:27' }],
+}
+
+function abrir(aba: string, extra: Rotas = {}, dados: unknown = DADOS) {
+  window.history.pushState({}, '', `${BASE}/bilhetes?aba=${aba}`)
+  const s = servidorFalso({ 'GET /auth/me': () => [200, { utilizador: UTILIZADOR }], 'GET /tickets': () => [200, dados], ...extra })
+  render(<App />)
+  return s
+}
+const corpo = (p: { caminho: string; corpo: unknown }[], c: string) => p.find((x) => x.caminho === c)?.corpo
+
+afterEach(() => { vi.unstubAllGlobals(); localStorage.clear() })
+
+describe('lib', () => {
+  test('semanas de segunda a domingo e datas', () => {
+    expect(segundaDe('2026-09-30')).toBe('2026-09-28')
+    expect(segundaDe('2026-10-04')).toBe('2026-09-28')                    // domingo
+    expect(somarDias('2026-12-31', 1)).toBe('2027-01-01')
+  })
+  test('validação por dia: origem/destino, comboio, hora, repetidas; dias passados e vazios não se validam', () => {
+    const dias = [
+      { data: 'a', ativo: true, passado: false, viagens: [linhaVazia('Aveiro', 'Aveiro'), { origem: 'Aveiro', destino: 'Lisboa', comboio: 'x', hora: '25:00' }] },
+      { data: 'b', ativo: true, passado: false, viagens: [{ origem: 'A', destino: 'B', comboio: '520', hora: '07:00' }, { origem: 'A', destino: 'B', comboio: '520', hora: '07:00' }] },
+      { data: 'c', ativo: true, passado: true, viagens: [linhaVazia()] }, { data: 'd', ativo: true, passado: false, viagens: [] },
+    ]
+    const e = validarDias(dias)
+    expect(e[0]).toEqual(['Viagem 1: a origem e o destino são iguais.', 'Viagem 1: comboio inválido.', 'Viagem 1: hora inválida.', 'Viagem 2: comboio inválido.', 'Viagem 2: hora inválida.'])
+    expect(e[1]).toEqual(['Viagem 2: repete a viagem 1.']); expect(e[2]).toEqual([]); expect(e[3]).toEqual([])
+  })
+  test('editor: o «ativo» é por dia; o corpo enviado tem tudo', () => {
+    const dias = diasParaEditor(DIAS, DADOS.semana.viagens as never, '2026-09-30')
+    expect(dias[0]).toMatchObject({ data: '2026-10-05', ativo: true, passado: false, viagens: [{ origem: 'Aveiro', destino: 'Lisboa Oriente', comboio: '526', hora: '07:27' }] })
+    expect(viagensParaEnviar([{ ...dias[0], ativo: false }])).toEqual([{ data: '2026-10-05', origem: 'Aveiro', destino: 'Lisboa Oriente', comboio: 526, hora: '07:27', ativo: false }])
+  })
+})
+
+test('Mais leva aos Bilhetes CP e o cartão do Hoje tem ligação', async () => {
+  window.history.pushState({}, '', `${BASE}/mais`)
+  servidorFalso({ 'GET /auth/me': () => [200, { utilizador: UTILIZADOR }], 'GET /tickets': () => [200, DADOS] })
+  render(<App />)
+  await userEvent.click(await screen.findByRole('link', { name: /Bilhetes CP/ }))
+  expect(await screen.findByRole('heading', { name: 'Bilhetes CP' })).toBeInTheDocument()
+})
+
+describe('Semana', () => {
+  test('mostra a viagem em curso, o passe e as viagens da semana com o estado', async () => {
+    abrir('semana')
+    const em = await screen.findByRole('region', { name: 'Próximo comboio' })
+    expect(within(em).getByText('Em viagem')).toBeInTheDocument()
+    expect(within(em).getByText(/chega por volta das 12:00/)).toBeInTheDocument()
+    expect(within(em).getByText(/Carruagem 5, lugar 12/)).toBeInTheDocument()
+    expect(screen.getByText(/Válido até 05\/10/)).toBeInTheDocument()
+    const sem = screen.getByRole('region', { name: 'Viagens da semana' })
+    expect(within(sem).getByText('Por comprar')).toBeInTheDocument()
+    expect(within(sem).getByText('Comprado')).toBeInTheDocument()
+    expect(within(sem).getByText(/carruagem 21, lugar 53/)).toBeInTheDocument()
+  })
+
+  test('aviso quando falta configurar a semana seguinte', async () => {
+    abrir('semana', {}, { ...DADOS, semanaSeguinte: { inicio: '2026-10-05', ativas: 0 } })
+    expect(await screen.findByText(/Falta configurar a semana de 05\/10 a 11\/10/)).toBeInTheDocument()
+  })
+
+  test('atualizar o passe envia a data', async () => {
+    const s = abrir('semana', { 'POST /actions/bilhetes.passe': () => OK })
+    await userEvent.click(await screen.findByRole('button', { name: 'Atualizar carregamento' }))
+    const campo = screen.getByLabelText('Data do último carregamento')
+    await userEvent.clear(campo); await userEvent.type(campo, '2026-09-30')
+    await userEvent.click(screen.getByRole('button', { name: 'Guardar' }))
+    await waitFor(() => expect(corpo(s.pedidos, '/actions/bilhetes.passe')).toEqual({ params: { dataUltimaCompra: '2026-09-30' } }))
+  })
+
+  test('navegar de semana pede essa semana ao servidor', async () => {
+    const pedidos: string[] = []
+    abrir('semana', { 'GET /tickets?semana=2026-10-12': () => { pedidos.push('12'); return [200, { ...DADOS, semana: { inicio: '2026-10-12', dias: DIAS.map((d) => somarDias(d, 7)), viagens: [] } }] } })
+    await userEvent.click(await screen.findByRole('button', { name: 'Semana seguinte' }))
+    await waitFor(() => expect(pedidos).toEqual(['12']))
+    expect(await screen.findByText('Sem viagens nesta semana.')).toBeInTheDocument()
+  })
+
+  test('configurar a semana: adicionar uma viagem e guardar; «Desfazer» repõe a anterior', async () => {
+    const anteriores = [{ data: '2026-10-05', origem: 'Aveiro', destino: 'Lisboa Oriente', comboio: 526, hora: '07:27', ativo: true }]
+    const s = abrir('semana', { 'POST /actions/bilhetes.semana': () => [200, { resultado: { anteriores } }] })
+    await userEvent.click(await screen.findByRole('button', { name: 'Configurar semana' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Adicionar viagem a qua 07/10' }))
+    const grupo = screen.getByRole('group', { name: 'qua 07/10, viagem 1' })
+    await userEvent.type(within(grupo).getByLabelText('Comboio'), '4609')
+    await userEvent.type(within(grupo).getByLabelText('Hora de partida'), '18:10')
+    await userEvent.click(screen.getByRole('button', { name: 'Guardar semana' }))
+    await waitFor(() => expect(corpo(s.pedidos, '/actions/bilhetes.semana')).toBeTruthy())
+    const { params } = corpo(s.pedidos, '/actions/bilhetes.semana') as { params: { inicio: string; viagens: Record<string, unknown>[] } }
+    expect(params.inicio).toBe('2026-10-05')
+    expect(params.viagens).toHaveLength(3)
+    expect(params.viagens[2]).toEqual({ data: '2026-10-07', origem: 'Aveiro', destino: 'Lisboa Oriente', comboio: 4609, hora: '18:10', ativo: true })
+    await userEvent.click(await screen.findByRole('button', { name: 'Desfazer' }))
+    await waitFor(() => expect(s.pedidos.filter((p) => p.caminho === '/actions/bilhetes.semana')).toHaveLength(2))
+    expect((s.pedidos.filter((p) => p.caminho === '/actions/bilhetes.semana')[1].corpo as { params: { viagens: unknown } }).params.viagens).toEqual(anteriores)
+  })
+
+  test('validação: sem comboio nem hora não guarda e explica', async () => {
+    const s = abrir('semana', { 'POST /actions/bilhetes.semana': () => OK })
+    await userEvent.click(await screen.findByRole('button', { name: 'Configurar semana' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Adicionar viagem a qui 08/10' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Guardar semana' }))
+    expect(await screen.findByText('Viagem 1: comboio inválido.')).toBeInTheDocument()
+    expect(screen.getByText('Viagem 1: hora inválida.')).toBeInTheDocument()
+    expect(corpo(s.pedidos, '/actions/bilhetes.semana')).toBeUndefined()
+  })
+
+  test('o interruptor «Ativo» é por dia e a viagem do histórico preenche a linha', async () => {
+    const s = abrir('semana', { 'POST /actions/bilhetes.semana': () => OK })
+    await userEvent.click(await screen.findByRole('button', { name: 'Configurar semana' }))
+    const dia = screen.getByRole('group', { name: 'seg 05/10' })
+    await userEvent.click(within(dia).getByLabelText('Ativo'))
+    await userEvent.click(screen.getByRole('button', { name: 'Adicionar viagem a sex 09/10' }))
+    await userEvent.selectOptions(screen.getByLabelText(/Comboios que já usei \(viagem 1 de sex 09\/10\)/), '0')
+    await userEvent.click(screen.getByRole('button', { name: 'Guardar semana' }))
+    await waitFor(() => expect(corpo(s.pedidos, '/actions/bilhetes.semana')).toBeTruthy())
+    const v = (corpo(s.pedidos, '/actions/bilhetes.semana') as { params: { viagens: { data: string; ativo: boolean; comboio: number }[] } }).params.viagens
+    expect(v.find((x) => x.data === '2026-10-05')!.ativo).toBe(false)
+    expect(v.find((x) => x.data === '2026-10-09')).toMatchObject({ comboio: 525, hora: '07:27', ativo: true })
+  })
+})
+
+describe('Bilhetes', () => {
+  test('próximos e anteriores com carruagem e lugar', async () => {
+    abrir('bilhetes')
+    const p = await screen.findByRole('region', { name: 'Próximos bilhetes' })
+    expect(within(p).getByText('Carruagem 5 · Lugar 12')).toBeInTheDocument()
+    expect(within(screen.getByRole('region', { name: 'Bilhetes anteriores' })).getByText('Carruagem 21 · Lugar 53')).toBeInTheDocument()
+  })
+  test('sem bilhetes mostra o estado vazio', async () => {
+    abrir('bilhetes', {}, { ...DADOS, bilhetes: { proximos: [], anteriores: [] } })
+    expect(await screen.findByText(/Ainda não há bilhetes comprados/)).toBeInTheDocument()
+  })
+})
+
+describe('Pedidos', () => {
+  test('tentar agora e ligar a repetição com os minutos', async () => {
+    const s = abrir('pedidos', { 'POST /actions/bilhetes.pedido_forcar': () => OK, 'POST /actions/bilhetes.pedido_repetir': () => OK })
+    expect(await screen.findByText('Esgotado')).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: 'Tentar agora' }))
+    await waitFor(() => expect(corpo(s.pedidos, '/actions/bilhetes.pedido_forcar')).toEqual({ params: { pedido: 4 } }))
+    const min = screen.getByLabelText('Minutos entre tentativas')
+    await userEvent.clear(min); await userEvent.type(min, '20')
+    await userEvent.click(screen.getByLabelText('Repetir de'))
+    await waitFor(() => expect(corpo(s.pedidos, '/actions/bilhetes.pedido_repetir')).toEqual({ params: { pedido: 4, retry: true, intervaloMinutos: 20 } }))
+  })
+  test('estado incerto pede para confirmar na App CP e não deixa tentar', async () => {
+    abrir('pedidos', {}, { ...DADOS, pedidos: [{ ...DADOS.pedidos[0], estado: 'AMBIGUO' }] })
+    expect(await screen.findByText(/Confirma na App CP/)).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Tentar agora' })).not.toBeInTheDocument()
+  })
+  test('sem pedidos', async () => {
+    abrir('pedidos', {}, { ...DADOS, pedidos: [] })
+    expect(await screen.findByText(/Sem pedidos pendentes/)).toBeInTheDocument()
+  })
+})
+
+describe('Registo', () => {
+  test('filtros Tudo / Compras / Problemas', async () => {
+    abrir('registo')
+    const reg = await screen.findByRole('region', { name: 'Registo' })
+    expect(within(reg).getAllByRole('listitem')).toHaveLength(2)
+    await userEvent.click(screen.getByRole('button', { name: 'Compras' }))
+    expect(within(screen.getByRole('region', { name: 'Registo' })).getAllByRole('listitem')).toHaveLength(1)
+    expect(screen.getByText('Comprado')).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: 'Problemas' }))
+    expect(screen.getByText('a CP não respondeu')).toBeInTheDocument()
+    expect(within(screen.getByRole('region', { name: 'Registo' })).getAllByRole('listitem')).toHaveLength(1)
+  })
+})

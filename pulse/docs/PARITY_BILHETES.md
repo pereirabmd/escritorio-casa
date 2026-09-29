@@ -1,0 +1,21 @@
+# Paridade — Bilhetes CP
+
+App original: `bilhetes_cp/` (PWA v2.1.0 + scripts no Pi). **A app dedicada não se descontinua** até o utilizador o declarar (ADR-046); o Pulse partilha a mesma API/BD (`/bilhetes/*` do `dados-api`) e o Pi continua a comprar e a avisar por ntfy (cópia para o Pulse em `PLANO_FINAL.md` §9.12). Estado a 29/09/2026: **Web feita** (Semana, Bilhetes, Pedidos, Registo); pendentes na tabela.
+
+Legenda: **Feito** · **Pendente** · **Substituído** · **Descartado**.
+
+| Funcionalidade | App original | Pulse | Estado | Notas |
+|---|---|---|---|---|
+| Próximo comboio com o bilhete (carruagem, lugar, ref.) | Semana | Semana e Hoje | Feito | mantém-se «Em viagem» até à chegada **estimada** (partida + 180 min) |
+| Aviso «falta configurar a semana» | Semana | Semana | Feito | |
+| Passe Verde: dias restantes, barra, estado, atualizar a data do carregamento | Semana/Definições | Semana | Feito | `bilhetes.passe` |
+| Viagens da semana com o estado (comprado, por comprar, inativa, em viagem) | Semana | Semana | Feito | navegar entre semanas |
+| Editor da semana: várias viagens por dia, «Ativo» por dia, validações | Editor | Semana → Configurar semana | Feito | `bilhetes.semana`; preserva os ids; «Desfazer» |
+| «Comboios que já usei» | Editor | Editor | Feito | |
+| Verificação do horário na CP (chaves no telemóvel, âncora da compra) | Editor | — | **Pendente** | precisa das chaves da CP no cliente ou de um serviço no Pi |
+| Bilhetes comprados (próximos e anteriores) | Bilhetes | Bilhetes | Feito | |
+| Pedidos avulsos: tentar agora, repetição automática de X em X min | Pedidos | Pedidos | Feito | estado incerto pede confirmação na App CP |
+| Registo (compras, erros, verificações) com filtros | Registo | Registo | Feito | |
+| Página de administração de utilizadores (LAN) | Admin | — | **Mantido no Pi** | só abre na rede de casa |
+| Notificações ntfy | Pi | — | **Mantido no Pi** | copiadas para o Pulse (FCM no futuro, ADR-045) |
+| Fila offline / puxar para atualizar | Global | — | **Pendente** | Android (fase 5) |

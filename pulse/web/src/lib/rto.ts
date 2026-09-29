@@ -57,3 +57,8 @@ export function diaBloqueado(data: string, hoje: string): boolean {
   const dow = new Date(a, m - 1, d).getDay()
   return dow === 0 || dow === 6 || data < hoje
 }
+
+/** Um toque num dia: vazio → Escritório (T) → Casa (C) → vazio. */
+export function proximaMarca(atual: string | undefined): 'T' | 'C' | '' {
+  return atual === 'T' ? 'C' : atual === 'C' ? '' : 'T'
+}

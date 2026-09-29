@@ -5,6 +5,7 @@ import type { Sessao } from '../api/types'
 import { useAuth, useUtilizador } from '../auth/AuthContext'
 import { Icon } from '../components/Icon'
 import { Botao, Esqueleto, Notice } from '../components/ui'
+import { useModulos } from '../lib/modulos'
 import { useAsync } from '../lib/useAsync'
 import { aplicarTema, guardarTema, lerTema, type Tema } from '../lib/theme'
 import { VERSAO } from '../version'
@@ -56,6 +57,42 @@ function Sessoes() {
   )
 }
 
+/** Só para administradores: ativar ou desativar módulos para todos os utilizadores. */
+function AdministracaoModulos() {
+  const { lista, definir } = useModulos()
+  const [ocupado, setOcupado] = useState<string | null>(null)
+  const [erro, setErro] = useState<string | null>(null)
+
+  async function alternar(id: string, ativo: boolean) {
+    setOcupado(id); setErro(null)
+    try {
+      definir((await api.put<{ modulos: typeof lista }>('/admin/modules', { modulos: { [id]: ativo } })).modulos)
+    } catch (e) {
+      setErro(mensagemDeErro(e))
+    } finally {
+      setOcupado(null)
+    }
+  }
+  return (
+    <section className="section" aria-label="Administração">
+      <h2 className="t-card muted">Administração</h2>
+      <p className="t-body2">Módulos: um módulo desativado desaparece do Hoje e de Mais para todos os utilizadores, e o servidor recusa os pedidos que lhe chegarem.</p>
+      {erro && <Notice tipo="error">{erro}</Notice>}
+      <div className="list" role="group" aria-label="Módulos">
+        {lista.map((m) => (
+          <div className="list-item" key={m.id}>
+            <span className="row-main">{m.nome}</span>
+            {m.disponivel ? (
+              <button type="button" role="switch" className="chip" aria-checked={m.ativo} aria-label={`${m.nome}: ${m.ativo ? 'ativo' : 'desativado'}`}
+                disabled={ocupado !== null} onClick={() => void alternar(m.id, !m.ativo)}>{m.ativo ? 'Ativo' : 'Desativado'}</button>
+            ) : <span className="pill">Em breve</span>}
+          </div>
+        ))}
+      </div>
+    </section>
+  )
+}
+
 export function SettingsScreen() {
   const u = useUtilizador()
   const { sair } = useAuth()
@@ -71,6 +108,7 @@ export function SettingsScreen() {
           <Link to="/definicoes/password" className="list-item"><Icon nome="chave" /><span className="row-main">Mudar palavra-passe</span><Icon nome="seta" tamanho={18} /></Link>
         </div>
       </section>
+      {u.admin && <AdministracaoModulos />}
       <Sessoes />
       <section className="section" aria-label="Aparência">
         <h2 className="t-card muted">Aparência</h2>

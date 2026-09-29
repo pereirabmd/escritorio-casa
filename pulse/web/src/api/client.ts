@@ -43,6 +43,7 @@ async function pedir<T>(metodo: string, caminho: string, corpo?: unknown): Promi
 export const api = {
   get: <T>(caminho: string) => pedir<T>('GET', caminho),
   post: <T>(caminho: string, corpo?: unknown) => pedir<T>('POST', caminho, corpo ?? {}),
+  put: <T>(caminho: string, corpo?: unknown) => pedir<T>('PUT', caminho, corpo ?? {}),
   del: <T>(caminho: string) => pedir<T>('DELETE', caminho),
 }
 
@@ -62,6 +63,8 @@ export function mensagemDeErro(e: unknown): string {
     case 'data_passada': return 'Escolhe hoje ou uma data futura.'
     case 'nao_encontrado': return 'Este item já não existe. Atualiza o ecrã.'
     case 'modulo_indisponivel': return 'Este módulo não está disponível de momento. Tenta de novo daqui a pouco.'
+    case 'modulo_desativado': return 'Este módulo foi desativado pelo administrador.'
+    case 'sem_permissao': return 'Só o administrador pode fazer isto.'
     case 'rede': return e.message
     default: return e.status >= 500 ? 'O servidor não conseguiu responder. Tenta de novo daqui a pouco.' : e.message
   }

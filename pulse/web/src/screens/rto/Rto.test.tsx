@@ -108,64 +108,69 @@ describe('Calendário', () => {
     expect(within(c).getByText('Escritório').nextSibling).toHaveTextContent('sem alteração')
   })
 
-  test('modo normal: dias passados e fins de semana bloqueados, com a explicação; dias úteis futuros livres', async () => {
+  const marcas = (p: { caminho: string; corpo: unknown }[]) => p.filter((x) => x.caminho === '/actions/rto.marcar_dia').map((x) => x.corpo)
+
+  test('modo normal: tocar num dia útil futuro passa de vazio a T; passados e fins de semana ficam bloqueados com explicação', async () => {
     const { pedidos } = abrir({ 'POST /actions/rto.marcar_dia': () => OK })
-    await userEvent.click(await dia(/^9 de Setembro/))                                    // passado
-    let painel = screen.getByRole('group', { name: 'Dia 09/09/2026' })
-    for (const nome of ['Escritório', 'Casa', 'Férias']) expect(within(painel).getByRole('button', { name: nome })).toBeDisabled()
-    expect(within(painel).getByText(/bloqueado\. Ativa o modo administrador/)).toBeInTheDocument()
-    await userEvent.click(await dia(/^12 de Setembro/))                                   // sábado (e passado)
-    expect(within(screen.getByRole('group', { name: 'Dia 12/09/2026' })).getByRole('button', { name: 'Casa' })).toBeDisabled()
+    expect(screen.queryByRole('button', { name: 'Escritório' })).not.toBeInTheDocument()          // sem seletor: o toque alterna
+    await userEvent.click(await dia(/^9 de Setembro/))                                            // passado
+    await userEvent.click(await dia(/^12 de Setembro/))                                           // sábado (e passado)
+    expect(await screen.findAllByText(/Fim de semana ou dia já passado/)).not.toHaveLength(0)
+    expect(marcas(pedidos)).toEqual([])
     await userEvent.click(screen.getByRole('button', { name: 'Mês seguinte' }))
-    await userEvent.click(await dia(/^6 de Outubro/))                                     // terça futura
-    painel = screen.getByRole('group', { name: 'Dia 06/10/2026' })
-    await userEvent.click(within(painel).getByRole('button', { name: 'Escritório' }))
-    await waitFor(() => expect(pedidos.some((p) => p.caminho === '/actions/rto.marcar_dia')).toBe(true))
-    expect(pedidos.find((p) => p.caminho === '/actions/rto.marcar_dia')!.corpo).toEqual({ params: { data: '2026-10-06', marca: 'T', admin: false } })
-    await userEvent.click(await dia(/^10 de Outubro/))                                    // sábado futuro
-    expect(within(screen.getByRole('group', { name: 'Dia 10/10/2026' })).getByRole('button', { name: 'Escritório' })).toBeDisabled()
+    await userEvent.click(await dia(/^6 de Outubro/))                                             // terça futura
+    await waitFor(() => expect(marcas(pedidos)).toHaveLength(1))
+    expect(marcas(pedidos)).toEqual([{ params: { data: '2026-10-06', marca: 'T', admin: false } }])
+    await userEvent.click(await dia(/^10 de Outubro/))                                            // sábado futuro
+    expect(marcas(pedidos)).toHaveLength(1)
+  })
+
+  test('o toque percorre T → C → vazio (no modo administrador, sobre dias com marca)', async () => {
+    const { pedidos } = abrir({ 'POST /actions/rto.marcar_dia': () => OK })
+    await ativarAdmin()
+    await userEvent.click(await dia(/^1 de Setembro/))                                            // T → C
+    await userEvent.click(await dia(/^2 de Setembro/))                                            // C → vazio
+    await userEvent.click(await dia(/^12 de Setembro/))                                           // vazio → T (sábado passado, admin)
+    await waitFor(() => expect(marcas(pedidos)).toHaveLength(3))
+    expect(marcas(pedidos)).toEqual([
+      { params: { data: '2026-09-01', marca: 'C', admin: true } }, { params: { data: '2026-09-02', marca: '', admin: true } },
+      { params: { data: '2026-09-12', marca: 'T', admin: true } }])
+    await userEvent.click(screen.getByRole('button', { name: 'Desativar' }))
+    await userEvent.click(await dia(/^12 de Setembro/))
+    expect(marcas(pedidos)).toHaveLength(3)                                                       // de volta ao modo normal: bloqueado
   })
 
   test('modo administrador: pede confirmação, mostra o aviso e liberta fins de semana e dias passados', async () => {
-    const { pedidos } = abrir({ 'POST /actions/rto.marcar_dia': () => OK })
+    abrir({ 'POST /actions/rto.marcar_dia': () => OK })
     await userEvent.click(await screen.findByRole('button', { name: 'Administrador' }))
     await userEvent.click(within(screen.getByRole('alertdialog', { name: 'Ativar modo administrador' })).getByRole('button', { name: 'Cancelar' }))
-    expect(screen.queryByText(/Modo administrador ativo/)).not.toBeInTheDocument()       // cancelar mantém o modo normal
+    expect(screen.queryByText(/Modo administrador ativo/)).not.toBeInTheDocument()                // cancelar mantém o modo normal
     await ativarAdmin()
     expect(screen.getByText(/Modo administrador ativo/)).toBeInTheDocument()
     expect(screen.getByText('Sem restrições de data')).toBeInTheDocument()
-    await userEvent.click(await dia(/^12 de Setembro/))                                   // sábado passado
-    const painel = screen.getByRole('group', { name: 'Dia 12/09/2026' })
-    await userEvent.click(within(painel).getByRole('button', { name: 'Casa' }))
-    await waitFor(() => expect(pedidos.some((p) => p.caminho === '/actions/rto.marcar_dia')).toBe(true))
-    expect(pedidos.find((p) => p.caminho === '/actions/rto.marcar_dia')!.corpo).toEqual({ params: { data: '2026-09-12', marca: 'C', admin: true } })
-    await userEvent.click(screen.getByRole('button', { name: 'Desativar' }))
-    expect(screen.queryByText(/Modo administrador ativo/)).not.toBeInTheDocument()
-    expect(within(screen.getByRole('group', { name: 'Dia 12/09/2026' })).getByRole('button', { name: 'Casa' })).toBeDisabled()
   })
 
-  test('dia com marca: «Limpar»; dia de férias: T/C desativados e «Remover férias»', async () => {
+  test('seletor Férias: com ele ligado o toque marca F (e volta a tirar); sem ele, um dia de férias não muda', async () => {
     const { pedidos } = abrir({ 'POST /actions/rto.marcar_dia': () => OK, 'POST /actions/rto.ferias_dia': () => OK })
     await ativarAdmin()
-    await userEvent.click(await dia(/^2 de Setembro/))
-    await userEvent.click(within(screen.getByRole('group', { name: 'Dia 02/09/2026' })).getByRole('button', { name: 'Limpar' }))
-    await waitFor(() => expect(pedidos.some((p) => p.caminho === '/actions/rto.marcar_dia')).toBe(true))
-    expect(pedidos.find((p) => p.caminho === '/actions/rto.marcar_dia')!.corpo).toEqual({ params: { data: '2026-09-02', marca: '', admin: true } })
+    await userEvent.click(await dia(/^29 de Setembro/))                                           // férias, com o seletor desligado
+    expect(await screen.findByText('Dia de férias: liga «Férias» para o remover.')).toBeInTheDocument()
+    expect(marcas(pedidos)).toEqual([])
+    const chip = screen.getByRole('button', { name: 'Férias' })
+    expect(chip).toHaveAttribute('aria-pressed', 'false')
+    await userEvent.click(chip)
+    expect(chip).toHaveAttribute('aria-pressed', 'true')
     await userEvent.click(await dia(/^29 de Setembro/))
-    const painel = screen.getByRole('group', { name: 'Dia 29/09/2026' })
-    expect(within(painel).getByRole('button', { name: 'Escritório' })).toBeDisabled()
-    expect(within(painel).getByText('Dia de férias: não conta para o RTO.')).toBeInTheDocument()
-    expect(within(painel).getByText(/Páscoa/)).toBeInTheDocument()
-    await userEvent.click(within(painel).getByRole('button', { name: 'Remover férias' }))
     expect(await screen.findByText('Dia de férias removido.')).toBeInTheDocument()
     expect(pedidos.find((p) => p.caminho === '/actions/rto.ferias_dia')!.corpo).toEqual({ params: { data: '2026-09-29', admin: true } })
+    expect(marcas(pedidos)).toEqual([])                                                           // em modo Férias nunca se mexe em T/C
   })
 
   test('marcar férias num dia útil futuro oferece desfazer (repete a ação, que alterna)', async () => {
     const { pedidos } = abrir({ 'POST /actions/rto.ferias_dia': () => OK })
     await userEvent.click(await screen.findByRole('button', { name: 'Mês seguinte' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Férias' }))
     await userEvent.click(await dia(/^6 de Outubro/))
-    await userEvent.click(within(screen.getByRole('group', { name: 'Dia 06/10/2026' })).getByRole('button', { name: 'Férias' }))
     expect(await screen.findByText('Dia marcado como férias.')).toBeInTheDocument()
     await userEvent.click(screen.getByRole('button', { name: 'Desfazer' }))
     await waitFor(() => expect(pedidos.filter((p) => p.caminho === '/actions/rto.ferias_dia').length).toBe(2))

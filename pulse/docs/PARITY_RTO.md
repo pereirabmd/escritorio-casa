@@ -10,10 +10,10 @@ Legenda: **Feito** · **Pendente** · **Substituído** (feito de outra forma, de
 | Feriados portugueses (fixos, Sexta-feira Santa, Corpo de Deus) | Calendário | Calendário | Feito | calculados no servidor (`services/rto.py`, com a Páscoa); vêm 3 anos de cada vez |
 | Letras F (férias), A (astreinte) e feriado na célula; A+f quando coincidem | Calendário | Calendário | Feito | férias não aparecem ao fim de semana; astreinte sim |
 | Informação de um dia (feriado, notas que o cobrem) | Toque longo | Painel do dia | Substituído | toque no dia abre o painel; o toque longo deixa de ser a única via |
-| Marcar o dia (ciclo vazio → T → C → vazio) | Toque no dia | Painel: Escritório / Casa / Limpar | Substituído | botões explícitos em vez de ciclo (menos erros) |
+| Marcar o dia (ciclo vazio → T → C → vazio) | Toque no dia | Toque no dia (Calendário e cartão do Hoje) | Feito | sem seletor; o painel do dia é só de leitura (notas e feriado). Fins de semana e dias passados só no modo administrador |
 | Fins de semana e dias passados bloqueados no modo normal | Calendário | Calendário | Feito | só dias úteis de hoje em diante; regra validada também no servidor (`dia_bloqueado`), por isso vale para o Android e para a IA |
-| Modo Férias (tocar num dia marca/desmarca férias, junta/divide notas) | Modo | Painel: Férias / Remover férias | Feito | (sujeito ao mesmo bloqueio de fins de semana e passado) | mesma lógica de juntar (dias úteis vizinhos), encolher, dividir e apagar; limpa a marca T/C do dia |
-| Modo Administrador (sem restrições: fins de semana, dias e notas passados) | Modo (com confirmação) | Calendário → Administrador (com confirmação) | Feito | aviso visível em todos os separadores enquanto ativo; o ciclo T→C→Férias passou a botões |
+| Modo Férias (tocar num dia marca/desmarca férias, junta/divide notas) | Modo | Seletor «Férias»: ligado, o toque marca/tira F | Feito | (sujeito ao mesmo bloqueio de fins de semana e passado) | mesma lógica de juntar (dias úteis vizinhos), encolher, dividir e apagar; limpa a marca T/C do dia |
+| Modo Administrador (sem restrições: fins de semana, dias e notas passados) | Modo (com confirmação) | Calendário → Administrador (com confirmação) | Feito | aviso visível em todos os separadores enquanto ativo; o ciclo é T→C→vazio por toque e as férias têm o seletor próprio |
 | Totais T e C do ano, % da quota anual | Cabeçalho | Totais | Feito | férias nunca contam |
 | Quota pro-rata, saldo e saldo condicional (astreinte -1, suspensão) | Cabeçalho | Totais | Feito | arredondamento igual ao JavaScript (meio para cima); cores por escalão (<0, ≤10, >10) |
 | «Como se calcula o saldo» | Diálogo | Totais (secção que abre) | Feito | |

@@ -1,0 +1,17 @@
+{
+  "name": "Pulse",
+  "short_name": "Pulse",
+  "description": "O teu dia num só sítio: tarefas, comboios, RTO, peso e finanças",
+  "lang": "pt-PT",
+  "id": "/pulse/",
+  "start_url": "/pulse/",
+  "scope": "/pulse/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#F7FAFC",
+  "theme_color": "#F7FAFC",
+  "icons": [
+    { "src": "/pulse/pulse-icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/pulse/pulse-icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" }
+  ]
+}

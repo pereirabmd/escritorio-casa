@@ -3,7 +3,7 @@ import type { RtoModulo } from '../../api/types'
 import { Icon } from '../../components/Icon'
 import { Botao } from '../../components/ui'
 import { fmtDataIso, fmtDataLonga, plural } from '../../lib/format'
-import { DIAS_SEMANA, diaBloqueado, hojeLocal, iso, marcaDaCelula, nomeMes, notasDoDia, semanasDoMes, textoHoje, textoProximaMudanca } from '../../lib/rto'
+import { DIAS_SEMANA, diaBloqueado, hojeLocal, iso, marcaDaCelula, nomeMes, notasDoDia, proximaMarca, semanasDoMes, textoHoje, textoProximaMudanca } from '../../lib/rto'
 import type { Ferramentas } from './tipos'
 
 interface Props extends Ferramentas { mes: number; ano: number; irPara: (ano: number, mes: number) => void; admin: boolean; setAdmin: (v: boolean) => void }
@@ -47,6 +47,7 @@ export function CalendarioTab({ dados, executar, ocupado, avisos, mes, ano, irPa
   const hojeIso = hojeLocal()
   const [escolhido, setEscolhido] = useState<string | null>(null)
   const [confirmarAdmin, setConfirmarAdmin] = useState(false)
+  const [modoFerias, setModoFerias] = useState(false)          // com «Férias» ligado, tocar num dia marca/desmarca férias (F)
   const semanas = useMemo(() => semanasDoMes(ano, mes), [ano, mes])
   const ferias = useMemo(() => new Set(dados.ferias), [dados.ferias])
   const dia = escolhido && escolhido.startsWith(`${ano}-${String(mes + 1).padStart(2, '0')}`) ? escolhido : null
@@ -66,11 +67,18 @@ export function CalendarioTab({ dados, executar, ocupado, avisos, mes, ano, irPa
   const atual = contar(ano, mes), ant = contar(anterior.a, anterior.m)
   const dif = (n: number) => (n === 0 ? 'sem alteração' : `${n > 0 ? '↑' : '↓'} ${plural(Math.abs(n), 'dia', 'dias')}`)
 
-  async function marcar(data: string, marca: 'T' | 'C' | '') {
-    await executar(`dia-${data}`, 'rto.marcar_dia', { data, marca, admin })
+  async function alternarFerias(data: string) {
+    const eraFerias = ferias.has(data)
+    if (await executar(`ferias-${data}`, 'rto.ferias_dia', { data, admin })) avisos.mostrar(eraFerias ? 'Dia de férias removido.' : 'Dia marcado como férias.', () => void executar(`ferias-${data}`, 'rto.ferias_dia', { data, admin }))
   }
-  async function alternarFerias(data: string, ativo: boolean) {
-    if (await executar(`ferias-${data}`, 'rto.ferias_dia', { data, admin })) avisos.mostrar(ativo ? 'Dia de férias removido.' : 'Dia marcado como férias.', () => void executar(`ferias-${data}`, 'rto.ferias_dia', { data, admin }))
+  /** Toque num dia. Com «Férias» ligado: marca/desmarca F. Sem ele: vazio → T → C → vazio. */
+  async function tocar(data: string) {
+    setEscolhido(data)
+    if (ocupado !== null) return
+    if (!admin && diaBloqueado(data, hojeIso)) { avisos.mostrar('Fim de semana ou dia já passado: ativa o modo administrador para o alterar.'); return }
+    if (modoFerias) { await alternarFerias(data); return }
+    if (ferias.has(data)) { avisos.mostrar('Dia de férias: liga «Férias» para o remover.'); return }
+    await executar(`dia-${data}`, 'rto.marcar_dia', { data, marca: proximaMarca(dados.dias[data]), admin })
   }
 
   return (
@@ -104,6 +112,10 @@ export function CalendarioTab({ dados, executar, ocupado, avisos, mes, ano, irPa
           <button type="button" className="link-btn" onClick={() => { const h = new Date(); irPara(h.getFullYear(), h.getMonth()); setEscolhido(iso(h.getFullYear(), h.getMonth(), h.getDate())) }}>Hoje</button>
           <button type="button" className="icon-round" aria-label="Mês seguinte" onClick={() => irPara(seguinte.a, seguinte.m)}><Icon nome="seta" tamanho={20} /></button>
         </div>
+        <div className="quick">
+          <button type="button" className="chip" aria-pressed={modoFerias} onClick={() => setModoFerias((v) => !v)}>Férias</button>
+          <span className="t-meta">{modoFerias ? 'Toca num dia para marcar ou tirar férias (F)' : 'Toca num dia: T → C → vazio'}</span>
+        </div>
         <div className="cal" role="grid" aria-label={`${nomeMes(mes)} ${ano}`}>
           <div className="cal-row" role="row">{DIAS_SEMANA.map((d, i) => <div key={i} className="cal-dow" role="columnheader">{d}</div>)}</div>
           {semanas.map((s, i) => (
@@ -115,7 +127,7 @@ export function CalendarioTab({ dados, executar, ocupado, avisos, mes, ano, irPa
                 const desc = c.texto === 'Af' ? 'astreinte e feriado' : marcaTexto(c.texto || (data in dados.feriados ? 'f' : ''))
                 return (
                   <button key={j} type="button" role="gridcell" className="cal-cell" data-marca={c.classe} data-hoje={data === hojeIso} data-fds={j >= 5} data-info={info}
-                    aria-pressed={dia === data} aria-label={`${Number(data.slice(8))} de ${nomeMes(mes)}: ${desc}`} onClick={() => setEscolhido(dia === data ? null : data)}>
+                    aria-pressed={dia === data} aria-label={`${Number(data.slice(8))} de ${nomeMes(mes)}: ${desc}`} onClick={() => void tocar(data)}>
                     <span className="num">{Number(data.slice(8))}</span><span className="mk">{c.texto}</span>
                   </button>
                 )
@@ -131,13 +143,6 @@ export function CalendarioTab({ dados, executar, ocupado, avisos, mes, ano, irPa
             {[...(dia in dados.feriados ? [{ k: 'Feriado', v: dados.feriados[dia] }] : []), ...notasDoDia(dados.notas, dia).map((n) => ({ k: n.categoria || 'Nota', v: n.descricao }))]
               .map((l, i) => <div className="t-body2" key={i}><strong>{l.k}</strong>{l.v ? ` — ${l.v}` : ''}</div>)}
             {ferias.has(dia) && <p className="t-meta">Dia de férias: não conta para o RTO.</p>}
-            {diaBloqueado(dia, hojeIso) && !admin && <p className="t-meta">Fim de semana ou dia já passado: bloqueado. Ativa o modo administrador para o alterar.</p>}
-            <div className="quick">
-              <Botao variante="secondary" pequeno aria-pressed={dados.dias[dia] === 'T'} disabled={ocupado !== null || ferias.has(dia) || (!admin && diaBloqueado(dia, hojeIso))} onClick={() => void marcar(dia, 'T')}>Escritório</Botao>
-              <Botao variante="secondary" pequeno aria-pressed={dados.dias[dia] === 'C'} disabled={ocupado !== null || ferias.has(dia) || (!admin && diaBloqueado(dia, hojeIso))} onClick={() => void marcar(dia, 'C')}>Casa</Botao>
-              {dados.dias[dia] && <Botao variante="secondary" pequeno disabled={ocupado !== null || (!admin && diaBloqueado(dia, hojeIso))} onClick={() => void marcar(dia, '')}>Limpar</Botao>}
-              <Botao variante="secondary" pequeno aria-pressed={ferias.has(dia)} disabled={ocupado !== null || (!admin && diaBloqueado(dia, hojeIso))} onClick={() => void alternarFerias(dia, ferias.has(dia))}>{ferias.has(dia) ? 'Remover férias' : 'Férias'}</Botao>
-            </div>
           </div>
         )}
       </section>

@@ -2,10 +2,11 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends, Request
 
+from pulse.api.v1.modules import exigir_modulo
 from pulse.api.v1.auth import Sessao, sessao_ativa
 from pulse.services import peso
 
-router = APIRouter(prefix="/weight", tags=["peso"])
+router = APIRouter(prefix="/weight", tags=["peso"], dependencies=[Depends(exigir_modulo("peso"))])
 
 
 @router.get("")

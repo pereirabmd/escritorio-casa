@@ -2,6 +2,7 @@ import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { App } from '../App'
 import { HOJE, servidorFalso, UTILIZADOR, type Rotas } from '../test/api-mock'
+import { proximaMarca } from '../lib/rto'
 import { lerPeso } from '../lib/useAcao'
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, '')
@@ -102,27 +103,36 @@ describe('peso', () => {
 })
 
 describe('rto', () => {
-  test('por omissão está escolhido o dia de hoje; marcar Casa envia a data e a marca', async () => {
+  const marca = (p: { caminho: string; corpo: unknown }[]) => p.filter((x) => x.caminho === '/actions/rto.marcar_dia').map((x) => x.corpo)
+
+  test('não há seletor: tocar num dia passa de T a C (hoje tem T)', async () => {
     const { pedidos } = abrir({ 'POST /actions/rto.marcar_dia': () => OK })
-    const grupo = await screen.findByRole('group', { name: /Marcar 30 de setembro/ })
-    await userEvent.click(within(grupo).getByRole('button', { name: 'Casa' }))
-    await waitFor(() => expect(pedidos.some((p) => p.caminho === '/actions/rto.marcar_dia')).toBe(true))
-    expect(pedidos.find((p) => p.caminho === '/actions/rto.marcar_dia')!.corpo).toEqual({ params: { data: '2026-09-30', marca: 'C' } })
+    await screen.findByRole('group', { name: 'Dias da semana' })
+    expect(screen.queryByRole('button', { name: 'Escritório' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Casa' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Limpar' })).not.toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: /30 de setembro: escritório/ }))
+    await waitFor(() => expect(marca(pedidos)).toHaveLength(1))
+    expect(marca(pedidos)).toEqual([{ params: { data: '2026-09-30', marca: 'C' } }])
   })
 
-  test('«Limpar» só aparece se o dia tem marca (hoje tem T); fins de semana e dias passados ficam bloqueados', async () => {
+  test('um dia sem marca passa a T', async () => {
     const { pedidos } = abrir({ 'POST /actions/rto.marcar_dia': () => OK })
-    const grupo = await screen.findByRole('group', { name: /Marcar 30 de setembro/ })
-    await userEvent.click(within(grupo).getByRole('button', { name: 'Limpar' }))
-    await waitFor(() => expect(pedidos.some((p) => p.caminho === '/actions/rto.marcar_dia')).toBe(true))
-    expect(pedidos.find((p) => p.caminho === '/actions/rto.marcar_dia')!.corpo).toEqual({ params: { data: '2026-09-30', marca: '' } })
-    await userEvent.click(screen.getByRole('button', { name: /29 de setembro: casa/ }))                 // ontem: bloqueado
-    const ontem = screen.getByRole('group', { name: /Marcar 29 de setembro/ })
-    for (const nome of ['Escritório', 'Casa', 'Limpar']) expect(within(ontem).getByRole('button', { name: nome })).toBeDisabled()
-    expect(screen.getByText(/Fim de semana ou dia passado/)).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: 'ecrã do RTO' })).toHaveAttribute('href', `${BASE}/rto`)
-    await userEvent.click(screen.getByRole('button', { name: /1 de outubro: sem marca/ }))            // amanhã (quinta): livre
-    expect(within(screen.getByRole('group', { name: /Marcar 1 de outubro/ })).getByRole('button', { name: 'Escritório' })).toBeEnabled()
+    await userEvent.click(await screen.findByRole('button', { name: /1 de outubro: sem marca/ }))
+    await waitFor(() => expect(marca(pedidos)).toHaveLength(1))
+    expect(marca(pedidos)).toEqual([{ params: { data: '2026-10-01', marca: 'T' } }])
+  })
+
+  test('a sequência completa é vazio → T → C → vazio', () => {
+    expect([undefined, 'T', 'C', ''].map(proximaMarca)).toEqual(['T', 'C', '', 'T'])
+  })
+
+  test('fins de semana e dias passados não alteram nada e explicam porquê', async () => {
+    const { pedidos } = abrir({ 'POST /actions/rto.marcar_dia': () => OK })
+    await userEvent.click(await screen.findByRole('button', { name: /29 de setembro: casa/ }))          // ontem
+    await userEvent.click(screen.getByRole('button', { name: /3 de outubro: sem marca/ }))              // sábado
+    expect(await screen.findAllByText(/Fim de semana ou dia passado/)).not.toHaveLength(0)
+    expect(marca(pedidos)).toEqual([])
   })
 })
 

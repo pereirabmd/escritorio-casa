@@ -105,6 +105,24 @@ Restantes secções do módulo (ADR-043), todas só de leitura e com as regras n
 - `GET /api/v1/tasks/settings` — pessoas (nome, e-mail), pessoa do utilizador, preferências (não incomodar, avisos do horário), resumo dos últimos 7 dias por pessoa e `desequilibrio`, últimas 10 ações (auditoria), estado do Pi (`/saude` do `tarefas-api`, `null` se não responder) e, só para administradores, o painel `admin` (administradores e destinatários das notificações gerais).
 - `GET /api/v1/tasks/history` — ocorrências feitas ou saltadas, para a interface exportar em CSV.
 
+### Finanças (ADR-044, implementado)
+- `GET /api/v1/finance?mes=AAAA-MM&janela=mes|30d` — o mês (`lancamentos` com `estado` derivado: `pago|vencido|hoje|pendente`; `totaisMes`), as despesas vencidas por pagar (`atrasadas`), a janela do resumo (`mes` = mês civil por vencimento; `30d` = hoje..+29) e o `resumo` «ativo − passivo» (`rendimento`, `porPagar`, `saldo`, `emAtraso` = vencidas antes da janela, `saldoComAtraso`, `porCategoria`), mais as `categorias`. Regras em `services/financas.py` (porta da app `financas/`). Ler não escreve: o mês só é preparado pela ação `financas.preparar_mes`.
+- `GET /api/v1/finance/reports?de=AAAA-MM&ate=AAAA-MM` — totais por mês (`rendimento`, `despesas`, `saldo`) e por categoria (com o valor de cada mês); máx. 61 meses (400 `intervalo_invalido`).
+- `GET /api/v1/finance/reminders` — lembretes agendados (avisos ntfy próprios da Finanças).
+
+### Bilhetes CP (ADR-046, implementado)
+- `GET /api/v1/tickets?semana=AAAA-MM-DD` — `proxima`/`proximas` (a viagem ativa em curso, até à chegada **estimada**, ou a seguinte), `semana` (a segunda-feira à volta da data pedida, por omissão a próxima; `dias` e `viagens` dessa semana), `semanaSeguinte` (`ativas` = 0 → falta configurar), `passe` (com `estado`: `sem_data|expirado|hoje|a_expirar|ok`), `bilhetes` (`proximos`, `anteriores`), `pedidos` (pendentes, com `retry`/`forcar` booleanos), `registo` (80 mais recentes, o mais novo primeiro), `estacoes` e `historico` (comboios já usados). Cada viagem traz `estado`: `comprado|por_comprar|inativa|em_curso|passada`, `fimEstimado` e a `compra` (carruagem, lugar, referência). Regras em `services/bilhetes.py`; a chegada estimada é partida + 180 min (não está guardada).
+- Ações: `bilhetes.semana` (`inicio` = segunda-feira, `viagens[]` `{data, origem, destino, comboio, hora, ativo}`; substitui a semana e devolve `anteriores` para o «Desfazer»), `bilhetes.passe` (`dataUltimaCompra`, `validadeDias?`), `bilhetes.pedido_repetir` (`pedido`, `retry`, `intervaloMinutos?`), `bilhetes.pedido_forcar` (`pedido`).
+
+### Módulos e administração (ADR-046, implementado)
+- `GET /api/v1/modules` — `{modulos: [{id, nome, disponivel, ativo}]}` (Calendário, Email e Compras são `disponivel: false`).
+- `PUT /api/v1/admin/modules` `{modulos: {<id>: bool}}` — só administradores (403 `sem_permissao`); ativa ou desativa módulos **para todos**. Um módulo desativado responde 403 `modulo_desativado` na sua API e nas suas ações, aparece como `{estado: "desativado"}` no Hoje e sai de Mais. Fica no centro de atividade (`modulo.ativar`/`modulo.desativar`).
+
+### Notificações (ADR-045, implementado)
+- `POST /api/v1/devices` `{token, nome?, plataforma?}` — regista (ou renova) o token FCM do dispositivo; devolve `{id}`. `DELETE /api/v1/devices/{id}` remove o do próprio utilizador.
+- `GET /api/v1/notifications?desde=<id>&limite=50` — a caixa de eventos do utilizador (mais recentes primeiro; não mostra os `agendado`), com `naoLidas`. `POST /api/v1/notifications/read` `{ids?}` marca lidas (sem `ids`, todas).
+- `POST /api/v1/internal/events` — **só na mesma máquina** (chave `X-Pulse-Key` ≥ 32 caracteres + `X-Pulse-User`; recusa qualquer pedido com `X-Real-IP`/`X-Forwarded-For`, isto é, vindo do nginx). Corpo: `{modulo, tipo, titulo, corpo?, dados?{str:str}, chave?, entregarEm?}`. `chave` torna o pedido idempotente; `entregarEm` (segundos Unix) no futuro agenda o envio (o FCM não agenda: o Pulse espera, ADR-032). Resposta 201 `{id, novo, estado}`; estados `agendado|novo|enviado|sem_canal|erro`.
+
 ## Ações (`/api/v1/actions`, implementado — fase 7)
 
 Tudo o que altera dados passa pela camada de ações (a interface e, mais tarde, a IA chamam as mesmas):
@@ -142,6 +160,11 @@ POST /api/v1/actions/{nome}          {params: {...}, confirmado?: bool} -> {resu
 | `rto.nota_restaurar` | como editar (repõe com o mesmo id) | `PUT /rto/notas/{id}` (upsert) |
 | `rto.gerar_validacoes` | `referencia`, `ate`, `tipo` | `POST /rto/notas/lote` em lotes de 100 |
 | `financas.pagar` / `financas.anular_pagamento` | `lancamento`, `data?` | `PUT /financas/lancamentos/{id}` (`data_pagamento`) |
+| `financas.criar` / `financas.editar` | `tipo`, `descricao`, `valor`, `categoriaId`, `dataVencimento`, `dataPagamento?`, `recorrente?`, `mesReferencia?`, `cid?` (editar: `lancamento` + só o que muda; `dataPagamento: null` volta a pôr por pagar) | `POST`/`PUT /financas/lancamentos` |
+| `financas.apagar` (sensível) | `lancamento` | `DELETE /financas/lancamentos/{id}` (devolve o lançamento, para o «Desfazer») |
+| `financas.preparar_mes` | `mes` | `POST /financas/meses/{mes}/preparar` (idempotente; copia os recorrentes) |
+| `financas.categoria_criar` / `_editar` / `_eliminar` (sensível) | `nome`, `cor?` / `categoria` | `/financas/categorias` (só apaga categorias sem lançamentos) |
+| `financas.lembrete_criar` / `_editar` / `_eliminar` (sensível) | `titulo`, `nota?`, `data`, `hora`, `repeticao` (`unica|mensal`) / `lembrete`, `ativo?` | `/financas/lembretes` |
 
 Regra do RTO: sem `admin: true` só se marcam (T/C/férias) dias úteis de hoje em diante (400 `dia_bloqueado`); `admin` também liberta as notas em datas passadas (400 `data_passada`).
 

@@ -27,6 +27,9 @@ class Settings:
     log_dir: Path | None
     session_days: int
     tz: ZoneInfo
+    fcm_credentials: Path | None = None       # ficheiro JSON da service account (só no Pi, fora do repositório); vazio = FCM desligado
+    scheduler_s: int = 30                     # intervalo do agendador de notificações (0 = desligado)
+    fcm_project: str = ""                    # projeto Firebase (por omissão o `project_id` do ficheiro)
 
     @property
     def production(self) -> bool:
@@ -70,4 +73,7 @@ def load(environ: dict[str, str] | None = None) -> Settings:
         log_dir=Path(log_dir) if log_dir else None,
         tz=ZoneInfo(e.get("TZ", "Europe/Lisbon")),
         session_days=_inteiro(e.get("PULSE_SESSION_DAYS", "30"), "PULSE_SESSION_DAYS", 1, 365),
+        fcm_credentials=Path(e["PULSE_FCM_CREDENTIALS"].strip()) if e.get("PULSE_FCM_CREDENTIALS", "").strip() else None,
+        fcm_project=e.get("PULSE_FCM_PROJECT", "").strip(),
+        scheduler_s=_inteiro(e.get("PULSE_SCHEDULER_S", "30"), "PULSE_SCHEDULER_S", 0, 3600),
     )
