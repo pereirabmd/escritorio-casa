@@ -236,3 +236,12 @@ Paridade em `PARITY_RTO.md`.
 **Correção (29/09/2026):** a primeira versão do RTO deixou marcar qualquer dia e reduziu o «modo administrador» às notas — não era paridade. Passou a seguir a app
 dedicada: no modo normal só se marcam dias úteis de hoje em diante (fins de semana e dias passados bloqueados, na interface e no servidor: `dia_bloqueado`); o modo
 administrador (com confirmação, aviso visível e parâmetro `admin` nas ações) liberta marcas, férias e notas sem restrições, incluindo fins de semana.
+
+## ADR-042 — Tarefas: primeira fatia (29/09/2026)
+A app Tarefas é a maior (Hoje, Calendário, Tarefas, Horário, Piscina, Config com pessoas, notificações e administração) e continua em paralelo para outros
+utilizadores (ADR-019). O Pulse migra-a por fatias, sobre as mesmas rotas `/tarefas/*` do `dados-api` e a mesma BD (partilha de infraestrutura). **Fatia 1:** Hoje
+(filtro por pessoa, concluir com fecho das atrasadas anteriores, saltar, adiar, ligação ao Google Calendar) e catálogo (criar, editar, duplicar, apagar). As regras
+(atrasadas por tarefa, ordenação, resumo da repetição, pessoa do utilizador) vivem em `services/tarefas.py`; `GET /api/v1/tasks` devolve tudo calculado.
+`tarefas.concluir` passou a ler o estado da instância para replicar o lote atómico da app dedicada. Limite conhecido: o Pulse ainda não pede ao `tarefas-api` o
+recálculo imediato dos avisos ntfy (o timer de 5 min apanha-o); fica pendente e na tabela de paridade `PARITY_TAREFAS.md`, tal como Calendário, Horário, Piscina e
+Config (as notificações por pessoa dependem da decisão sobre FCM/ntfy, ADR-032).

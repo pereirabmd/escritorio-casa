@@ -91,6 +91,11 @@ O módulo RTO de um ano (por omissão o atual): `dias` (marcas T/C do ano pedido
 (datas), `marcasNotas` (a letra F/A de cada dia), `totais` (T, C, condicional, créditos de astreinte, quota pro-rata, saldo, saldo condicional),
 `mensal` (T/C por mês), `hoje` (estado de hoje) e `proximaMudanca`. As regras vivem em `services/rto.py` (porta da app dedicada).
 
+### `GET /api/v1/tasks` (implementado)
+O módulo Tarefas (Hoje e catálogo): `hoje`, `feitas`, `atrasadas` (a mais recente de cada tarefa), `amanha`, `tarefas` (ativas, com `resumo` da repetição e `hora`),
+`pessoas`, `categorias`, `horaPadrao` e `pessoa` (a do utilizador, pelo e-mail da Config). Regras em `services/tarefas.py`. O filtro por pessoa fica na interface;
+nada da Config sensível (palavras-passe do ntfy…) sai.
+
 ## Ações (`/api/v1/actions`, implementado — fase 7)
 
 Tudo o que altera dados passa pela camada de ações (a interface e, mais tarde, a IA chamam as mesmas):
@@ -102,7 +107,11 @@ POST /api/v1/actions/{nome}          {params: {...}, confirmado?: bool} -> {resu
 
 | Ação | Parâmetros | Escreve em |
 |---|---|---|
-| `tarefas.concluir` / `tarefas.reabrir` | `instancia` (`I…`) | `PUT /tarefas/instancias/{id}` (`estado`, `dataConclusao`) |
+| `tarefas.concluir` | `instancia` (`I…`) | `PUT /tarefas/instancias/{id}`; se estava Atrasada, `PUT /tarefas/instancias` (lote atómico) também para as atrasadas anteriores da mesma tarefa; devolve `tambem` |
+| `tarefas.reabrir` | `instancia`, `tambem?` | `PUT` (uma) ou lote (várias) com `estado=Pendente` |
+| `tarefas.saltar` | `instancia` | `PUT /tarefas/instancias/{id}` (`estado=Saltada`) |
+| `tarefas.criar` / `tarefas.editar` | `nome`, `categoria`, `recorrencia`, `dias?`/`data?`/`diaMes?` conforme a repetição, `hora?`, `pessoa?`, `prioridade?`, `rotacao?`, `dependeDe?` (+ `tarefa` ao editar, `cid?` ao criar) | `POST` / `PUT /tarefas/tarefas` |
+| `tarefas.apagar` (**sensitive**) | `tarefa` | `DELETE /tarefas/tarefas/{id}` (desativa e salta as pendentes) |
 | `tarefas.adiar` | `instancia`, `data?` (por omissão amanhã; nunca no passado) | `PUT /tarefas/instancias/{id}` (`data`); 409 `conflito` se a tarefa já existir nesse dia |
 | `peso.registar` | `peso` (1–1000), `nota?`, `cid?`, `quando?` (repor um registo) | `POST /peso/registos` (idempotente com `cid`) |
 | `peso.editar` | `registo`, `quando`, `peso`, `nota?` | `PUT /peso/registos/{id}` |

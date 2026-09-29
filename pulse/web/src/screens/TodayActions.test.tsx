@@ -27,7 +27,7 @@ describe('tarefas', () => {
     expect(await screen.findByText('Tarefa concluída.')).toBeInTheDocument()
     await userEvent.click(screen.getByRole('button', { name: 'Desfazer' }))
     await waitFor(() => expect(pedidos.some((p) => p.caminho === '/actions/tarefas.reabrir')).toBe(true))
-    expect(pedidos.find((p) => p.caminho === '/actions/tarefas.reabrir')!.corpo).toEqual({ params: { instancia: 'I1' } })
+    expect(pedidos.find((p) => p.caminho === '/actions/tarefas.reabrir')!.corpo).toEqual({ params: { instancia: 'I1', tambem: [] } })
   })
 
   test('adiar para amanhã', async () => {

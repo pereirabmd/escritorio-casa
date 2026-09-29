@@ -213,3 +213,12 @@ select.input { appearance: auto; }
 .main > *, .card { min-width: 0; }
 .cal-cell { min-height: 38px; min-width: 0; }
 .mode-row { display: flex; align-items: center; gap: var(--s3); flex-wrap: wrap; }
+
+/* --- módulo Tarefas --- */
+.chips { display: flex; flex-wrap: wrap; gap: var(--s2); }
+.chip { min-height: 36px; padding: 0 var(--s4); border-radius: 18px; border: 1px solid var(--line); background: transparent; font-size: 14px; font-weight: 500; color: var(--text-2); }
+.chip[aria-pressed='true'] { background: var(--primary); border-color: var(--primary); color: var(--primary-ink); }
+.field .lbl { font-size: 14px; line-height: 20px; font-weight: 500; }
+.struck { text-decoration: line-through; color: var(--text-2); }
+.check[data-done='true'] { background: var(--primary); border-color: var(--primary); color: var(--primary-ink); }
+a.link-btn { text-decoration: none; }

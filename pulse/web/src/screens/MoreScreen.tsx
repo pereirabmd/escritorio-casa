@@ -2,7 +2,7 @@ import { Link } from 'react-router-dom'
 import { Icon, type IconName } from '../components/Icon'
 
 const MODULOS: { nome: string; icone: IconName; rota?: string }[] = [
-  { nome: 'Email', icone: 'email' }, { nome: 'Calendário', icone: 'calendario' }, { nome: 'Tarefas', icone: 'tarefas' },
+  { nome: 'Email', icone: 'email' }, { nome: 'Calendário', icone: 'calendario' }, { nome: 'Tarefas', icone: 'tarefas', rota: '/tarefas' },
   { nome: 'Bilhetes CP', icone: 'bilhete' }, { nome: 'Peso', icone: 'peso', rota: '/peso' }, { nome: 'RTO', icone: 'rto', rota: '/rto' },
   { nome: 'Finanças', icone: 'financas' }, { nome: 'Compras', icone: 'compras' },
 ]

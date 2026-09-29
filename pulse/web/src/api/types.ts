@@ -77,3 +77,13 @@ export interface RtoModulo {
   hoje: HojeRto
   proximaMudanca: { tipo: 'feriado' | 'ferias'; dias: number; nome?: string; data: string } | null
 }
+
+export interface InstanciaTarefa { id: string; tarefaId: string; nome: string; categoria: string; prioridade: 'Alta' | 'Media' | 'Baixa'; hora: string; pessoa: string; estado: string; data: string; dataConclusao: string }
+export interface TarefaCatalogo {
+  id: string; nome: string; categoria: string; recorrencia: string; diasSemana: string; diaMes: number | null; horaNotificacao: string
+  pessoaPadrao: string; ativa: boolean; prioridade: 'Alta' | 'Media' | 'Baixa'; rotacaoPessoas: string; dependeDe: string; resumo: string; hora: string
+}
+export interface TarefasModulo {
+  data: string; pessoa: string | null; pessoas: string[]; categorias: string[]; horaPadrao: string
+  hoje: InstanciaTarefa[]; feitas: InstanciaTarefa[]; atrasadas: InstanciaTarefa[]; amanha: InstanciaTarefa[]; tarefas: TarefaCatalogo[]
+}

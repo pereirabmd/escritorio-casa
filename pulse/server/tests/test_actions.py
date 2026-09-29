@@ -32,17 +32,98 @@ def atividade(conn):
 
 def test_catalogo_declara_modulo_e_nivel():
     c = {a["nome"]: a for a in actions.catalogo()}
-    assert set(c) == {"tarefas.concluir", "tarefas.reabrir", "tarefas.adiar", "peso.registar", "peso.editar", "peso.eliminar",
+    assert set(c) == {"tarefas.concluir", "tarefas.reabrir", "tarefas.saltar", "tarefas.criar", "tarefas.editar", "tarefas.apagar", "tarefas.adiar", "peso.registar", "peso.editar", "peso.eliminar",
                       "peso.configurar", "rto.marcar_dia", "rto.ferias_dia", "rto.nota_criar", "rto.nota_editar", "rto.nota_eliminar",
                       "rto.nota_restaurar", "rto.gerar_validacoes", "financas.pagar", "financas.anular_pagamento"}
-    assert c["peso.eliminar"]["nivel"] == "sensitive_action" and c["rto.nota_eliminar"]["nivel"] == "sensitive_action"
+    assert all(c[n]["nivel"] == "sensitive_action" for n in ("peso.eliminar", "rto.nota_eliminar", "tarefas.apagar"))
     assert all(a["nivel"] in ("read", "safe_action", "sensitive_action") and a["descricao"] for a in c.values())
 
 
+def dados_tarefas(*instancias):
+    FalsoDados.respostas["/tarefas/dados"] = (200, {"tarefas": [], "config": [], "piscina": [], "instancias": [
+        {"id": i, "tarefaId": t, "data": d, "pessoa": "Bruno", "estado": e, "dataConclusao": ""} for i, t, d, e in instancias]})
+
+
 def test_concluir_escreve_no_modulo_em_nome_do_utilizador(conn, dados_falso):
-    correr(conn, dados_falso, "tarefas.concluir", {"instancia": "I0042"})
+    dados_tarefas(("I0042", "T001", "2026-09-30", "Pendente"))
+    r = correr(conn, dados_falso, "tarefas.concluir", {"instancia": "I0042"})
+    assert r["tambem"] == []
     assert FalsoDados.escritas == [("PUT", "/tarefas/instancias/I0042", {"estado": "Feita", "dataConclusao": "2026-09-30 10:05"}, EMAIL)]
     assert atividade(conn) == [("tarefas", "tarefas.concluir", "ui", "ok", "I0042")]
+
+
+def test_concluir_atrasada_conclui_as_atrasadas_anteriores_da_mesma_tarefa_de_uma_vez(conn, dados_falso):
+    dados_tarefas(("I1", "T001", "2026-09-27", "Atrasada"), ("I2", "T001", "2026-09-28", "Atrasada"), ("I3", "T001", "2026-09-29", "Atrasada"),
+                  ("I4", "T002", "2026-09-29", "Atrasada"), ("I5", "T001", "2026-09-26", "Feita"), ("I6", "T001", "2026-09-30", "Pendente"))
+    r = correr(conn, dados_falso, "tarefas.concluir", {"instancia": "I3"})
+    assert r["tambem"] == ["I1", "I2"]
+    assert FalsoDados.escritas == [("PUT", "/tarefas/instancias", {"atualizacoes": [
+        {"id": i, "estado": "Feita", "dataConclusao": "2026-09-30 10:05"} for i in ("I3", "I1", "I2")]}, EMAIL)]      # só as atrasadas da MESMA tarefa
+    assert atividade(conn) == [("tarefas", "tarefas.concluir", "ui", "ok", "I3 (+2 atrasadas)")]
+
+
+def test_concluir_pendente_nao_mexe_nas_atrasadas(conn, dados_falso):
+    dados_tarefas(("I1", "T001", "2026-09-28", "Atrasada"), ("I6", "T001", "2026-09-30", "Pendente"))
+    correr(conn, dados_falso, "tarefas.concluir", {"instancia": "I6"})
+    assert [w[1] for w in FalsoDados.escritas] == ["/tarefas/instancias/I6"]
+
+
+def test_concluir_instancia_inexistente_e_404_e_nao_escreve(conn, dados_falso):
+    dados_tarefas(("I1", "T001", "2026-09-30", "Pendente"))
+    with pytest.raises(ErroDoModulo) as e:
+        correr(conn, dados_falso, "tarefas.concluir", {"instancia": "I99"})
+    assert e.value.status == 404 and FalsoDados.escritas == []
+
+
+def test_reabrir_varias_e_saltar(conn, dados_falso):
+    correr(conn, dados_falso, "tarefas.reabrir", {"instancia": "I3", "tambem": ["I1", "I2"]})
+    assert FalsoDados.escritas[0][2] == {"atualizacoes": [{"id": i, "estado": "Pendente", "dataConclusao": ""} for i in ("I3", "I1", "I2")]}
+    correr(conn, dados_falso, "tarefas.saltar", {"instancia": "I9"})
+    assert FalsoDados.escritas[1] == ("PUT", "/tarefas/instancias/I9", {"estado": "Saltada"}, EMAIL)
+
+
+TAREFA = {"nome": " Limpar WC ", "categoria": "Limpeza", "recorrencia": "Semanal", "dias": ["Seg", "Qua"], "hora": "09:00", "pessoa": "Bruno",
+          "prioridade": "Alta", "rotacao": ["Bruno", "Camila"], "dependeDe": "T002"}
+
+
+def test_tarefa_criar_mapeia_para_o_formato_do_modulo(conn, dados_falso):
+    correr(conn, dados_falso, "tarefas.criar", {**TAREFA, "cid": "tarefa-cid-01"})
+    assert FalsoDados.escritas == [("POST", "/tarefas/tarefas", {"nome": "Limpar WC", "categoria": "Limpeza", "recorrencia": "Semanal", "diasSemana": "Seg,Qua", "diaMes": None,
+        "horaNotificacao": "09:00", "pessoaPadrao": "Bruno", "prioridade": "Alta", "rotacaoPessoas": "Bruno,Camila", "dependeDe": "T002", "cid": "tarefa-cid-01"}, EMAIL)]
+
+
+def test_tarefa_criar_por_tipo_de_recorrencia(conn, dados_falso):
+    base = {"nome": "X", "categoria": "Casa"}
+    correr(conn, dados_falso, "tarefas.criar", {**base, "recorrencia": "Diaria", "dias": ["Seg"], "diaMes": 3, "data": "2026-10-01"})     # o que não se aplica é ignorado
+    correr(conn, dados_falso, "tarefas.criar", {**base, "recorrencia": "Mensal", "diaMes": 15})
+    correr(conn, dados_falso, "tarefas.criar", {**base, "recorrencia": "Trimestral", "data": "2026-10-01"})
+    correr(conn, dados_falso, "tarefas.criar", {**base, "recorrencia": "Pontual", "data": "2026-10-05"})
+    corpos = [w[2] for w in FalsoDados.escritas]
+    assert [(c["recorrencia"], c["diasSemana"], c["diaMes"]) for c in corpos] == [("Diaria", "", None), ("Mensal", "", 15), ("Trimestral", "2026-10-01", None), ("Pontual", "2026-10-05", None)]
+
+
+def test_tarefa_editar_e_apagar(conn, dados_falso):
+    correr(conn, dados_falso, "tarefas.editar", {**TAREFA, "tarefa": "T007"})
+    assert FalsoDados.escritas[0][:2] == ("PUT", "/tarefas/tarefas/T007")
+    with pytest.raises(ContaErro) as e:
+        correr(conn, dados_falso, "tarefas.apagar", {"tarefa": "T007"})
+    assert e.value.codigo == "confirmacao_necessaria" and len(FalsoDados.escritas) == 1
+    correr(conn, dados_falso, "tarefas.apagar", {"tarefa": "T007"}, confirmado=True)
+    assert FalsoDados.escritas[1] == ("DELETE", "/tarefas/tarefas/T007", None, EMAIL)
+
+
+@pytest.mark.parametrize("params", [
+    {"nome": "X", "categoria": "Casa", "recorrencia": "Semanal"}, {"nome": "X", "categoria": "Casa", "recorrencia": "Dias especificos", "dias": []},
+    {"nome": "X", "categoria": "Casa", "recorrencia": "Mensal"}, {"nome": "X", "categoria": "Casa", "recorrencia": "Mensal", "diaMes": 32},
+    {"nome": "X", "categoria": "Casa", "recorrencia": "Pontual"}, {"nome": "X", "categoria": "Casa", "recorrencia": "Semestral"},
+    {"nome": "", "categoria": "Casa", "recorrencia": "Diaria"}, {"nome": "X", "categoria": "", "recorrencia": "Diaria"},
+    {"nome": "X", "categoria": "Casa", "recorrencia": "Anual"}, {"nome": "X", "categoria": "Casa", "recorrencia": "Diaria", "hora": "25:00"},
+    {"nome": "X", "categoria": "Casa", "recorrencia": "Diaria", "prioridade": "Urgente"}, {"nome": "X", "categoria": "Casa", "recorrencia": "Semanal", "dias": ["Seg", "Xpto"]},
+    {"nome": "X", "categoria": "Casa", "recorrencia": "Diaria", "extra": 1}])
+def test_tarefa_criar_valida_antes_de_escrever(conn, dados_falso, params):
+    with pytest.raises(ContaErro) as e:
+        correr(conn, dados_falso, "tarefas.criar", params)
+    assert e.value.status == 400 and FalsoDados.escritas == []
 
 
 def test_reabrir_desfaz_o_concluir(conn, dados_falso):
@@ -237,9 +318,10 @@ def test_endpoint_exige_sessao_e_csrf(app_cliente):
 
 def test_endpoint_executa_e_devolve_o_resultado(app_cliente):
     entrar(app_cliente)
+    dados_tarefas(("I1", "T001", "2026-09-30", "Pendente"))
     FalsoDados.respostas["PUT /tarefas/instancias/I1"] = (200, {"instancia": {"id": "I1", "estado": "Feita"}})
     r = app_cliente.post("/api/v1/actions/tarefas.concluir", json={"params": {"instancia": "I1"}}, headers=H)
-    assert r.status_code == 200 and r.json() == {"resultado": {"instancia": {"id": "I1", "estado": "Feita"}}}
+    assert r.status_code == 200 and r.json() == {"resultado": {"instancia": {"id": "I1", "estado": "Feita"}, "tambem": []}}
     assert FalsoDados.escritas[0][3] == EMAIL
 
 
@@ -257,7 +339,7 @@ def test_endpoint_traduz_erros(app_cliente):
 def test_endpoint_lista_o_catalogo(app_cliente):
     entrar(app_cliente)
     r = app_cliente.get("/api/v1/actions")
-    assert r.status_code == 200 and len(r.json()["acoes"]) == 16
+    assert r.status_code == 200 and len(r.json()["acoes"]) == 20
 
 
 def test_conta_por_configurar_nao_executa_acoes(app_cliente):

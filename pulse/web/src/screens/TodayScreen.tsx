@@ -43,8 +43,8 @@ function Tarefas({ m, acoes }: { m: Modulo<TarefasDados>; acoes: Acoes }) {
   const { executar, ocupado, hoje } = acoes
 
   async function concluir(t: TarefaHoje) {
-    if (await executar(t.id, 'tarefas.concluir', { instancia: t.id }))
-      avisos.mostrar('Tarefa concluída.', () => void executar(t.id, 'tarefas.reabrir', { instancia: t.id }))
+    const r = await executar(t.id, 'tarefas.concluir', { instancia: t.id }) as { tambem?: string[] } | null
+    if (r) avisos.mostrar('Tarefa concluída.', () => void executar(t.id, 'tarefas.reabrir', { instancia: t.id, tambem: r.tambem ?? [] }))
   }
   async function adiarPara(t: TarefaHoje, para?: string) {
     if (await executar(t.id, 'tarefas.adiar', para ? { instancia: t.id, data: para } : { instancia: t.id })) {
@@ -54,7 +54,7 @@ function Tarefas({ m, acoes }: { m: Modulo<TarefasDados>; acoes: Acoes }) {
   }
 
   return (
-    <Cartao icone="tarefas" titulo="Tarefas de hoje" extra={m.dados && m.dados.totalHoje > 0 && <span className="t-meta">{m.dados.feitasHoje} de {m.dados.totalHoje}</span>}>
+    <Cartao icone="tarefas" titulo="Tarefas de hoje" extra={<>{m.dados && m.dados.totalHoje > 0 && <span className="t-meta">{m.dados.feitasHoje} de {m.dados.totalHoje}</span>}<Link to="/tarefas" className="link-btn">Abrir</Link></>}>
       <Estado modulo={m}>{() => {
         const d = m.dados!
         return (

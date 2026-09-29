@@ -15,11 +15,12 @@ from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 from typing import Annotated, Callable, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator, model_validator
 
 from pulse.accounts import ContaErro
 from pulse.clients.dados import DadosClient, ErroDoModulo, ModuloIndisponivel
 from pulse.services import rto as rto_regras
+from pulse.services import tarefas as tarefas_regras
 
 CID = Annotated[str, Field(pattern=r"^[A-Za-z0-9-]{8,64}$")]
 
@@ -41,6 +42,44 @@ class _Params(BaseModel):
 
 class InstanciaIn(_Params):
     instancia: str = Field(pattern=r"^I\d{1,20}$")
+
+
+class ReabrirIn(InstanciaIn):
+    tambem: list[Annotated[str, Field(pattern=r"^I\d{1,20}$")]] = Field(default_factory=list, max_length=100)     # as que «concluir» fechou de uma vez
+
+
+class TarefaIn(_Params):
+    """Uma tarefa do catálogo (campos e regras da app dedicada; o servidor do módulo volta a validar)."""
+    nome: str = Field(min_length=1, max_length=200)
+    categoria: str = Field(min_length=1, max_length=100)
+    recorrencia: Literal["Diaria", "Semanal", "Dias especificos", "Mensal", "Trimestral", "Semestral", "Pontual"]
+    dias: list[Literal["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sab"]] = Field(default_factory=list)      # Semanal / Dias especificos
+    data: date | None = None                                                                                  # Pontual / Trimestral / Semestral
+    diaMes: int | None = Field(default=None, ge=1, le=31)                                                     # Mensal
+    hora: str = Field(default="", pattern=r"^([01]\d|2[0-3]):[0-5]\d$|^$")
+    pessoa: str = Field(default="", max_length=60)
+    prioridade: Literal["Alta", "Media", "Baixa"] = "Media"
+    rotacao: list[str] = Field(default_factory=list, max_length=20)
+    dependeDe: str = Field(default="", max_length=12)
+    cid: CID | None = None
+
+    @model_validator(mode="after")
+    def _coerente(self):
+        if self.recorrencia in tarefas_regras.COM_DIAS and not self.dias:
+            raise ValueError("escolhe pelo menos um dia da semana")
+        if self.recorrencia in tarefas_regras.COM_DATA and self.data is None:
+            raise ValueError("falta a data")
+        if self.recorrencia == "Mensal" and self.diaMes is None:
+            raise ValueError("falta o dia do mês")
+        return self
+
+
+class TarefaEditarIn(TarefaIn):
+    tarefa: str = Field(pattern=r"^T\d{1,8}$")
+
+
+class TarefaApagarIn(_Params):
+    tarefa: str = Field(pattern=r"^T\d{1,8}$")
 
 
 class AdiarIn(InstanciaIn):
@@ -147,11 +186,61 @@ def _instancia(c: Contexto, iid: str, corpo: dict) -> dict:
 
 
 def _concluir(c: Contexto, p: InstanciaIn):
-    return _instancia(c, p.instancia, {"estado": "Feita", "dataConclusao": c.agora.strftime("%Y-%m-%d %H:%M")}), p.instancia
+    """Concluir uma tarefa atrasada conclui também as outras ocorrências atrasadas da mesma tarefa (só a última aparece nas listas),
+    numa só chamada atómica — como na app dedicada. O resultado diz quais foram, para o «Desfazer» as reabrir todas."""
+    _, dados = c.client.pedir("GET", "/tarefas/dados", c.email)
+    atual = next((i for i in (dados or {}).get("instancias", []) if i["id"] == p.instancia), None)
+    if atual is None:
+        raise ErroDoModulo(404, "nao_encontrado", f"instância {p.instancia} inexistente")
+    quando = c.agora.strftime("%Y-%m-%d %H:%M")
+    anteriores = [i["id"] for i in dados["instancias"] if atual["estado"] == "Atrasada" and i["id"] != atual["id"]
+                  and i["tarefaId"] == atual["tarefaId"] and i["estado"] == "Atrasada"]
+    if not anteriores:
+        r = _instancia(c, p.instancia, {"estado": "Feita", "dataConclusao": quando})
+        return {**r, "tambem": []}, p.instancia
+    _, r = c.client.pedir("PUT", "/tarefas/instancias", c.email,
+                          corpo={"atualizacoes": [{"id": i, "estado": "Feita", "dataConclusao": quando} for i in [p.instancia, *anteriores]]})
+    return {**(r or {}), "tambem": anteriores}, f"{p.instancia} (+{len(anteriores)} atrasadas)"
 
 
-def _reabrir(c: Contexto, p: InstanciaIn):
-    return _instancia(c, p.instancia, {"estado": "Pendente", "dataConclusao": ""}), p.instancia
+def _reabrir(c: Contexto, p: ReabrirIn):
+    if not p.tambem:
+        return _instancia(c, p.instancia, {"estado": "Pendente", "dataConclusao": ""}), p.instancia
+    _, r = c.client.pedir("PUT", "/tarefas/instancias", c.email,
+                          corpo={"atualizacoes": [{"id": i, "estado": "Pendente", "dataConclusao": ""} for i in [p.instancia, *p.tambem]]})
+    return r or {}, f"{p.instancia} (+{len(p.tambem)})"
+
+
+def _saltar(c: Contexto, p: InstanciaIn):
+    return _instancia(c, p.instancia, {"estado": "Saltada"}), p.instancia
+
+
+def _corpo_tarefa(p: TarefaIn) -> dict:
+    ehData = p.recorrencia in tarefas_regras.COM_DATA
+    return {"nome": p.nome.strip(), "categoria": p.categoria.strip(), "recorrencia": p.recorrencia,
+            # como na app dedicada: `diasSemana` guarda os dias («Seg,Qua») ou, nas tarefas com data, a data ISO
+            "diasSemana": p.data.isoformat() if ehData and p.data else ",".join(p.dias) if p.recorrencia in tarefas_regras.COM_DIAS else "",
+            "diaMes": p.diaMes if p.recorrencia == "Mensal" else None, "horaNotificacao": p.hora, "pessoaPadrao": p.pessoa,
+            "prioridade": p.prioridade, "rotacaoPessoas": ",".join(p.rotacao), "dependeDe": p.dependeDe}
+
+
+def _tarefa_criar(c: Contexto, p: TarefaIn):
+    corpo = _corpo_tarefa(p)
+    if p.cid:
+        corpo["cid"] = p.cid
+    _, r = c.client.pedir("POST", "/tarefas/tarefas", c.email, corpo=corpo)
+    return r, f"tarefa {(r.get('tarefa') or {}).get('id', '?')}"
+
+
+def _tarefa_editar(c: Contexto, p: TarefaEditarIn):
+    _, r = c.client.pedir("PUT", f"/tarefas/tarefas/{p.tarefa}", c.email, corpo=_corpo_tarefa(p))
+    return r, f"tarefa {p.tarefa}"
+
+
+def _tarefa_apagar(c: Contexto, p: TarefaApagarIn):
+    """«Apagar» é desativar e saltar o que estava por fazer; o histórico mantém-se (o módulo trata de tudo numa transação)."""
+    _, r = c.client.pedir("DELETE", f"/tarefas/tarefas/{p.tarefa}", c.email)
+    return r or {}, f"tarefa {p.tarefa}"
 
 
 def _adiar(c: Contexto, p: AdiarIn):
@@ -357,8 +446,12 @@ def _anular_pagamento(c: Contexto, p: LancamentoIn):
 
 
 ACOES: dict[str, Acao] = {a.nome: a for a in (
-    Acao("tarefas.concluir", "tarefas", "safe_action", "Marca uma tarefa de hoje como feita.", InstanciaIn, _concluir),
-    Acao("tarefas.reabrir", "tarefas", "safe_action", "Volta a pôr uma tarefa como por fazer (desfaz «concluir»).", InstanciaIn, _reabrir),
+    Acao("tarefas.concluir", "tarefas", "safe_action", "Marca uma tarefa como feita (e as atrasadas anteriores da mesma tarefa).", InstanciaIn, _concluir),
+    Acao("tarefas.reabrir", "tarefas", "safe_action", "Volta a pôr uma tarefa como por fazer (desfaz «concluir»).", ReabrirIn, _reabrir),
+    Acao("tarefas.saltar", "tarefas", "safe_action", "Salta uma tarefa (não a faz desta vez).", InstanciaIn, _saltar),
+    Acao("tarefas.criar", "tarefas", "safe_action", "Cria uma tarefa no catálogo.", TarefaIn, _tarefa_criar),
+    Acao("tarefas.editar", "tarefas", "safe_action", "Altera uma tarefa do catálogo.", TarefaEditarIn, _tarefa_editar),
+    Acao("tarefas.apagar", "tarefas", "sensitive_action", "Apaga uma tarefa (desativa-a e salta as ocorrências por fazer).", TarefaApagarIn, _tarefa_apagar),
     Acao("tarefas.adiar", "tarefas", "safe_action", "Passa uma tarefa para outra data (por omissão, amanhã).", AdiarIn, _adiar),
     Acao("peso.registar", "peso", "safe_action", "Regista o peso.", PesoIn, _peso),
     Acao("peso.editar", "peso", "safe_action", "Corrige um registo de peso.", PesoEditarIn, _peso_editar),

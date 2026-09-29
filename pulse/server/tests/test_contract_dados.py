@@ -326,3 +326,66 @@ def test_marcar_fim_de_semana_e_passado_so_em_modo_administrador(rto_limpo, conn
     actions.executar(conn, ctx, "rto.ferias_dia", {"data": sabado.isoformat(), "admin": True})            # férias ao fim de semana, em admin
     assert _ferias(rto_limpo) == [(sabado.isoformat(), sabado.isoformat())]
     assert sabado.isoformat() not in pedir(rto_limpo, "GET", "/rto/dias")["dias"]                        # e limpa a marca desse dia
+
+
+# --- Tarefas: catálogo, concluir com atrasadas, saltar (dados-api real) ------------------------------------------------------------------
+
+def _tarefas(c):
+    return pedir(c, "GET", "/tarefas/dados")
+
+
+def _criar(conn, ctx, **kw):
+    return actions.executar(conn, ctx, "tarefas.criar", {"nome": "Tarefa de contrato", "categoria": "Casa", "recorrencia": "Diaria", **kw})
+
+
+def test_criar_editar_e_apagar_tarefa(cliente, conn, ctx):
+    r = _criar(conn, ctx, nome="Limpar filtros", recorrencia="Semanal", dias=["Seg", "Qua"], hora="09:30", prioridade="Alta", cid="tarefa-contrato-1")
+    tid = r["tarefa"]["id"]
+    assert (r["tarefa"]["recorrencia"], r["tarefa"]["diasSemana"], r["tarefa"]["prioridade"], r["tarefa"]["horaNotificacao"]) == ("Semanal", "Seg,Qua", "Alta", "09:30")
+    assert actions.executar(conn, ctx, "tarefas.criar", {"nome": "Limpar filtros", "categoria": "Casa", "recorrencia": "Semanal", "dias": ["Seg", "Qua"],
+                                                         "cid": "tarefa-contrato-1"})["tarefa"]["id"] == tid              # o mesmo cid não duplica
+    e = actions.executar(conn, ctx, "tarefas.editar", {"tarefa": tid, "nome": "Limpar filtros (mês)", "categoria": "Limpeza", "recorrencia": "Mensal", "diaMes": 5, "hora": "10:00"})
+    assert (e["tarefa"]["nome"], e["tarefa"]["recorrencia"], e["tarefa"]["diaMes"], e["tarefa"]["diasSemana"]) == ("Limpar filtros (mês)", "Mensal", 5, "")
+    with pytest.raises(actions.ContaErro):
+        actions.executar(conn, ctx, "tarefas.apagar", {"tarefa": tid})                                                       # sem confirmação
+    actions.executar(conn, ctx, "tarefas.apagar", {"tarefa": tid}, confirmado=True)
+    assert next(t for t in _tarefas(cliente)["tarefas"] if t["id"] == tid)["ativa"] is False                                 # desativada, não perdida
+
+
+def test_tarefa_pontual_cria_a_ocorrencia_e_o_dados_api_valida_o_resto(cliente, conn, ctx):
+    r = _criar(conn, ctx, nome="Marcar dentista", recorrencia="Pontual", data=(ctx.hoje + timedelta(days=3)).isoformat())
+    assert r["instancia"]["estado"] == "Pendente" and r["instancia"]["data"] == (ctx.hoje + timedelta(days=3)).isoformat()
+    with pytest.raises(ErroDoModulo) as e:
+        _criar(conn, ctx, nome="Dependência fantasma", dependeDe="T99999")
+    assert e.value.status == 400
+
+
+def test_concluir_atrasada_fecha_as_anteriores_e_o_desfazer_reabre_todas(cliente, conn, ctx):
+    tid = _criar(conn, ctx, nome="Regar plantas")["tarefa"]["id"]
+    ids = []
+    for atras in (4, 3, 2):
+        i = pedir(cliente, "POST", "/tarefas/instancias", {"tarefaId": tid, "data": (ctx.hoje - timedelta(days=atras)).isoformat()})["instancia"]["id"]
+        pedir(cliente, "PUT", f"/tarefas/instancias/{i}", {"estado": "Atrasada"})
+        ids.append(i)
+    r = actions.executar(conn, ctx, "tarefas.concluir", {"instancia": ids[-1]})
+    assert sorted(r["tambem"]) == sorted(ids[:-1])
+    estados = {i["id"]: i["estado"] for i in _tarefas(cliente)["instancias"] if i["id"] in ids}
+    assert set(estados.values()) == {"Feita"}
+    actions.executar(conn, ctx, "tarefas.reabrir", {"instancia": ids[-1], "tambem": r["tambem"]})
+    assert {i["estado"] for i in _tarefas(cliente)["instancias"] if i["id"] in ids} == {"Pendente"}
+
+
+def test_saltar(cliente, conn, ctx):
+    tid = _criar(conn, ctx, nome="Passar aspirador")["tarefa"]["id"]
+    i = pedir(cliente, "POST", "/tarefas/instancias", {"tarefaId": tid, "data": ctx.hoje.isoformat()})["instancia"]["id"]
+    actions.executar(conn, ctx, "tarefas.saltar", {"instancia": i})
+    assert next(x for x in _tarefas(cliente)["instancias"] if x["id"] == i)["estado"] == "Saltada"
+
+
+def test_visao_das_tarefas_com_dados_reais(cliente, conn, ctx):
+    from pulse.services import tarefas as regras
+    tid = _criar(conn, ctx, nome="Visível no módulo")["tarefa"]["id"]
+    pedir(cliente, "POST", "/tarefas/instancias", {"tarefaId": tid, "data": ctx.hoje.isoformat()})
+    v = regras.visao(_tarefas(cliente), ctx.hoje, EMAIL)
+    assert any(i["nome"] == "Visível no módulo" for i in v["hoje"])
+    assert any(t["nome"] == "Visível no módulo" and t["resumo"] == "Todos os dias" for t in v["tarefas"])
