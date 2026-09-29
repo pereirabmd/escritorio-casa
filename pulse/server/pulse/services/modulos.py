@@ -15,7 +15,7 @@ CHAVE = "modulos_desativados"
 # (id, nome, tem ecrã e API)
 MODULOS: tuple[tuple[str, str, bool], ...] = (
     ("tarefas", "Tarefas", True), ("bilhetes", "Bilhetes CP", True), ("rto", "RTO", True), ("peso", "Peso", True), ("financas", "Finanças", True),
-    ("compras", "Compras", True), ("calendario", "Calendário", False), ("email", "Email", False),
+    ("compras", "Compras", True), ("calendario", "Calendário", True), ("email", "Email", True),
 )
 DISPONIVEIS = {m[0] for m in MODULOS if m[2]}
 

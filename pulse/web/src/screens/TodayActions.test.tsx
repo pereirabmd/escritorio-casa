@@ -170,3 +170,39 @@ describe('erros e segurança', () => {
     expect(escritas(pedidos)[0]).toMatchObject({ cabecalhos: { 'X-Pulse-Client': 'web' } })
   })
 })
+
+
+describe('compras', () => {
+  test('mostra alguns itens da lista, a quantidade só quando existe, e a ligação ao módulo', async () => {
+    abrir()
+    const cartao = (await screen.findByRole('heading', { name: 'Lista de compras' })).closest('section')!
+    expect(within(cartao).getByText('Maçã')).toBeInTheDocument()
+    expect(within(cartao).getByText('6×')).toBeInTheDocument()
+    expect(within(cartao).getByText('1 L')).toBeInTheDocument()
+    expect(within(cartao).getByText('7 por comprar')).toBeInTheDocument()
+    expect(within(cartao).getByText('e mais 5')).toBeInTheDocument()
+    expect(within(cartao).getByRole('link', { name: 'Abrir' })).toHaveAttribute('href', `${BASE}/compras`)
+  })
+
+  test('um toque marca como comprado e o Hoje recarrega com o seguinte no lugar', async () => {
+    let comprados = 0
+    const { pedidos } = abrir({ 'POST /actions/compras.comprado': () => { comprados++; return OK } })
+    await userEvent.click(await screen.findByRole('button', { name: 'Marcar como comprado: Maçã' }))
+    await waitFor(() => expect(pedidos.find((p) => p.caminho === '/actions/compras.comprado')?.corpo).toEqual({ params: { item: 10, comprado: true } }))
+    expect(comprados).toBe(1)
+    expect(await screen.findByRole('button', { name: 'Desfazer' })).toBeInTheDocument()
+    expect(pedidos.filter((p) => p.caminho === '/dashboard/today').length).toBeGreaterThanOrEqual(2)        // recarregou o Hoje
+  })
+
+  test('lista vazia convida a escolher produtos', async () => {
+    abrir({}, { ...HOJE, modulos: { ...HOJE.modulos, compras: { estado: 'ok', dados: { lista: { id: 1, nome: 'Casa' }, pendentes: 0, itens: [] } } } })
+    expect(await screen.findByText('Nada por comprar.')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Escolher produtos' })).toHaveAttribute('href', `${BASE}/compras?aba=catalogo`)
+  })
+
+  test('não aparece se o módulo estiver desativado', async () => {
+    abrir({}, { ...HOJE, modulos: { ...HOJE.modulos, compras: { estado: 'desativado', dados: null } } })
+    await screen.findByText('Próximo comboio')
+    expect(screen.queryByRole('heading', { name: 'Lista de compras' })).not.toBeInTheDocument()
+  })
+})

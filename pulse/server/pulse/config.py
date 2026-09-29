@@ -28,6 +28,10 @@ class Settings:
     session_days: int
     tz: ZoneInfo
     fcm_credentials: Path | None = None       # ficheiro JSON da service account (só no Pi, fora do repositório); vazio = FCM desligado
+    google_client_id: str = ""              # cliente OAuth «Web» do Google Cloud (Gmail/Calendar); vazio = integração desligada
+    google_client_secret: str = ""
+    google_redirect_uri: str = ""            # tem de coincidir com o registado no Google Cloud
+    google_key: str = ""                     # chave Fernet (url-safe, 32 bytes) que cifra os refresh tokens em repouso
     scheduler_s: int = 30                     # intervalo do agendador de notificações (0 = desligado)
     fcm_project: str = ""                    # projeto Firebase (por omissão o `project_id` do ficheiro)
 
@@ -75,5 +79,9 @@ def load(environ: dict[str, str] | None = None) -> Settings:
         session_days=_inteiro(e.get("PULSE_SESSION_DAYS", "30"), "PULSE_SESSION_DAYS", 1, 365),
         fcm_credentials=Path(e["PULSE_FCM_CREDENTIALS"].strip()) if e.get("PULSE_FCM_CREDENTIALS", "").strip() else None,
         fcm_project=e.get("PULSE_FCM_PROJECT", "").strip(),
+        google_client_id=e.get("PULSE_GOOGLE_CLIENT_ID", "").strip(),
+        google_client_secret=e.get("PULSE_GOOGLE_CLIENT_SECRET", "").strip(),
+        google_redirect_uri=e.get("PULSE_GOOGLE_REDIRECT_URI", "").strip(),
+        google_key=e.get("PULSE_GOOGLE_KEY", "").strip(),
         scheduler_s=_inteiro(e.get("PULSE_SCHEDULER_S", "30"), "PULSE_SCHEDULER_S", 0, 3600),
     )

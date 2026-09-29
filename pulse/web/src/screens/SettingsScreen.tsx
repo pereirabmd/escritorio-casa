@@ -1,10 +1,11 @@
 import { useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import { api, mensagemDeErro } from '../api/client'
-import type { Sessao } from '../api/types'
+import type { ContaGoogle, ServicoGoogle, Sessao } from '../api/types'
 import { useAuth, useUtilizador } from '../auth/AuthContext'
 import { Icon } from '../components/Icon'
 import { Botao, Esqueleto, Notice } from '../components/ui'
+import { irPara } from '../lib/navegacao'
 import { useModulos } from '../lib/modulos'
 import { useAsync } from '../lib/useAsync'
 import { aplicarTema, guardarTema, lerTema, type Tema } from '../lib/theme'
@@ -52,6 +53,87 @@ function Sessoes() {
             </div>
           ))}
         </div>
+      )}
+    </section>
+  )
+}
+
+const MOTIVOS_GOOGLE: Record<string, string> = {
+  recusado: 'Não deste as permissões à Google. Podes tentar de novo quando quiseres.', estado_invalido: 'O pedido de ligação expirou. Tenta de novo.',
+  sem_permissoes: 'A conta não deu as permissões pedidas.', sem_refresh_token: 'A Google não deu acesso duradouro. Remove a app em myaccount.google.com/permissions e liga de novo.',
+  google_recusou: 'A Google recusou o pedido. Tenta de novo.', google_desligado: 'A integração com a Google não está configurada neste servidor.', invalido: 'O regresso da Google foi inválido.',
+}
+
+/** Ligar Gmail e Calendar: o servidor guarda o acesso; a Web nunca vê tokens. */
+function ContasGoogle() {
+  const [estado, recarregar] = useAsync(() => api.get<{ configurado: boolean; contas: ContaGoogle[] }>('/google/accounts'))
+  const [params] = useSearchParams()
+  const [servicos, setServicos] = useState<ServicoGoogle[]>(['gmail', 'calendar'])
+  const [ocupado, setOcupado] = useState<string | null>(null)
+  const [erro, setErro] = useState<string | null>(null)
+  const [remover, setRemover] = useState<number | null>(null)
+  const resultado = params.get('google')
+
+  async function ligar() {
+    setOcupado('ligar'); setErro(null)
+    try {
+      irPara((await api.post<{ url: string }>('/google/connect', { servicos })).url)
+    } catch (e) {
+      setErro(mensagemDeErro(e)); setOcupado(null)
+    }
+  }
+  async function apagar(id: number) {
+    setOcupado(`rm-${id}`); setErro(null)
+    try {
+      await api.del(`/google/accounts/${id}`)
+      setRemover(null); recarregar()
+    } catch (e) {
+      setErro(mensagemDeErro(e))
+    } finally {
+      setOcupado(null)
+    }
+  }
+  const alternar = (s: ServicoGoogle) => setServicos((atual) => (atual.includes(s) ? atual.filter((x) => x !== s) : [...atual, s]))
+
+  return (
+    <section className="section" aria-label="Contas Google">
+      <h2 className="t-card muted">Contas Google</h2>
+      <p className="t-body2">Liga contas para ver o Gmail e o Calendar no Pulse. O acesso fica guardado (cifrado) no servidor e podes removê-lo quando quiseres. O Pulse nunca envia nem apaga emails.</p>
+      {resultado === 'ok' && <Notice tipo="info">Conta Google ligada.</Notice>}
+      {resultado === 'erro' && <Notice tipo="error">{MOTIVOS_GOOGLE[params.get('motivo') ?? ''] ?? 'Não foi possível ligar a conta Google.'}</Notice>}
+      {erro && <Notice tipo="error">{erro}</Notice>}
+      {estado.fase === 'a-carregar' && <div className="list"><div className="list-item"><Esqueleto linhas={2} /></div></div>}
+      {estado.fase === 'erro' && <Notice tipo="error">{mensagemDeErro(estado.erro)} <button className="btn btn-secondary btn-sm" onClick={recarregar}>Tentar de novo</button></Notice>}
+      {estado.fase === 'pronto' && (
+        <>
+          {estado.dados.contas.length > 0 && (
+            <div className="list">
+              {estado.dados.contas.map((c) => (
+                <div className="list-item" key={c.id}>
+                  <div className="row-main">
+                    <div className="t-body">{c.email}{c.estado === 'reautorizar' && <> <span className="pill pill-soon">Volta a ligar</span></>}</div>
+                    <div className="t-meta">{c.servicos.map((x) => (x === 'gmail' ? 'Gmail' : 'Calendário')).join(' · ')}</div>
+                  </div>
+                  {remover === c.id ? (
+                    <span role="group" aria-label={`Remover ${c.email}`} className="quick">
+                      <Botao variante="danger" pequeno carregando={ocupado === `rm-${c.id}`} disabled={ocupado !== null} onClick={() => void apagar(c.id)}>Remover</Botao>
+                      <Botao variante="secondary" pequeno onClick={() => setRemover(null)}>Cancelar</Botao>
+                    </span>
+                  ) : <Botao variante="secondary" pequeno onClick={() => setRemover(c.id)} aria-label={`Remover a conta ${c.email}`}>Remover</Botao>}
+                </div>
+              ))}
+            </div>
+          )}
+          {!estado.dados.configurado ? <Notice tipo="warning">A integração com a Google ainda não está configurada neste servidor (ver <code>pulse/docs/GOOGLE_SETUP.md</code>).</Notice> : (
+            <div className="stack">
+              <div className="chips" role="group" aria-label="O que ligar">
+                <button type="button" className="chip" aria-pressed={servicos.includes('gmail')} onClick={() => alternar('gmail')}>Gmail</button>
+                <button type="button" className="chip" aria-pressed={servicos.includes('calendar')} onClick={() => alternar('calendar')}>Calendário</button>
+              </div>
+              <div><Botao pequeno carregando={ocupado === 'ligar'} disabled={servicos.length === 0 || ocupado !== null} onClick={() => void ligar()}>Ligar conta Google</Botao></div>
+            </div>
+          )}
+        </>
       )}
     </section>
   )
@@ -108,6 +190,7 @@ export function SettingsScreen() {
           <Link to="/definicoes/password" className="list-item"><Icon nome="chave" /><span className="row-main">Mudar palavra-passe</span><Icon nome="seta" tamanho={18} /></Link>
         </div>
       </section>
+      <ContasGoogle />
       {u.admin && <AdministracaoModulos />}
       <Sessoes />
       <section className="section" aria-label="Aparência">

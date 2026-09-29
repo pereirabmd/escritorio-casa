@@ -140,7 +140,8 @@ describe('Hoje', () => {
     expect(screen.getByText('Venceu há 3 dias')).toBeInTheDocument()
     expect(screen.getByText('2 escritório · 1 casa')).toBeInTheDocument()
     expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent(/Bruno$/)
-    expect(screen.getByText('Calendário e Email ainda não estão ligados.')).toBeInTheDocument()
+    expect(screen.getByText('Liga uma conta Google para veres aqui os eventos de hoje.')).toBeInTheDocument()       // sem contas Google ligadas
+    expect(screen.getByText('Liga uma conta Google para veres aqui os emails importantes por ler.')).toBeInTheDocument()
   })
 
   test('não escreve nada nem usa emojis: só lê o agregado', async () => {
@@ -207,7 +208,7 @@ describe('navegação e definições', () => {
     expect(within(nav).getByRole('link', { name: 'Hoje' })).toHaveAttribute('aria-current', 'page')
     await userEvent.click(within(nav).getByRole('link', { name: 'Mais' }))
     expect(await screen.findByRole('heading', { name: 'Mais' })).toBeInTheDocument()
-    expect(screen.getAllByText('Em breve').length).toBe(2)     // só Calendário e Email ainda não têm ecrã
+    expect(screen.queryByText('Em breve')).not.toBeInTheDocument()     // todos os módulos já têm ecrã
   })
 
   test('sessões: lista, marca a atual e termina outra', async () => {

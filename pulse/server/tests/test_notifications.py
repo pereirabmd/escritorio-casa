@@ -296,3 +296,19 @@ def test_agendador_de_fundo_entrega_sozinho(tmp_path, dados_falso):
                 break
             time.sleep(0.1)
     assert len(canal.enviados) == 1
+
+
+def test_fcm_assina_o_jwt_com_rsa_de_verdade():
+    """Sem simular a assinatura: gera uma chave RSA, deixa o canal assinar e verifica a assinatura com a chave pública."""
+    from cryptography.hazmat.primitives import hashes, serialization
+    from cryptography.hazmat.primitives.asymmetric import padding, rsa
+    chave = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    pem = chave.private_bytes(serialization.Encoding.PEM, serialization.PrivateFormat.PKCS8, serialization.NoEncryption()).decode()
+    g = GoogleFalso()
+    canal = FcmCanal({"client_email": "sa@p.iam", "private_key": pem, "project_id": "proj"}, transporte=g, agora=lambda: 1000.0)
+    canal.enviar(TOKEN, EV)
+    jwt = parse_qs(next(p for p in g.pedidos if "oauth2" in p[1])[3].decode())["assertion"][0]
+    cab, pl, sig = jwt.split(".")
+    dec = lambda b: __import__("base64").urlsafe_b64decode(b + "=" * (-len(b) % 4))
+    chave.public_key().verify(dec(sig), f"{cab}.{pl}".encode(), padding.PKCS1v15(), hashes.SHA256())        # levanta se a assinatura for inválida
+    assert json.loads(dec(cab)) == {"alg": "RS256", "typ": "JWT"}

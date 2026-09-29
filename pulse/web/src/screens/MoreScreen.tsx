@@ -3,7 +3,7 @@ import { Icon, type IconName } from '../components/Icon'
 import { useModulos } from '../lib/modulos'
 
 const MODULOS: { id?: string; nome: string; icone: IconName; rota?: string }[] = [
-  { nome: 'Email', icone: 'email' }, { nome: 'Calendário', icone: 'calendario' }, { id: 'tarefas', nome: 'Tarefas', icone: 'tarefas', rota: '/tarefas' },
+  { id: 'email', nome: 'Email', icone: 'email', rota: '/email' }, { id: 'calendario', nome: 'Calendário', icone: 'calendario', rota: '/calendario' }, { id: 'tarefas', nome: 'Tarefas', icone: 'tarefas', rota: '/tarefas' },
   { id: 'bilhetes', nome: 'Bilhetes CP', icone: 'bilhete', rota: '/bilhetes' }, { id: 'peso', nome: 'Peso', icone: 'peso', rota: '/peso' }, { id: 'rto', nome: 'RTO', icone: 'rto', rota: '/rto' },
   { id: 'financas', nome: 'Finanças', icone: 'financas', rota: '/financas' }, { id: 'compras', nome: 'Compras', icone: 'compras', rota: '/compras' },
 ]

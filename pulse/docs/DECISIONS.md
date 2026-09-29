@@ -299,3 +299,12 @@ e ao voltar ao separador (o que a Camila acrescenta vê-se no supermercado); not
 **«Costumas comprar»** — 2 ou mais dias de compra nos últimos 90 dias. Um produto nunca está nas duas. Ficam de fora os produtos escondidos (ou de categoria escondida), os marcados «Não sugerir» (por conta, com desfazer) e os que já estão
 por comprar na lista escolhida. Sem inteligência remota: é aritmética sobre o histórico, calculada no servidor (`services/compras.sugestoes`) para Web e Android mostrarem o mesmo.
 
+
+## ADR-049 — Google: Calendário e Email (29/09/2026)
+Os módulos **Calendário** e **Email** passam a existir, sobre contas Google que o utilizador liga em Definições (o login do Pulse continua a ser o do ADR-037, sem Google).
+**(1) Ligação.** OAuth 2.0 de servidor com PKCE: `POST /google/connect` devolve o endereço de consentimento, o Google regressa a `GET /google/callback` (sem sessão: o `state`, de um só uso e 10 min, diz quem pediu; tabela `google_oauth_states`) e a Web volta a Definições com `?google=ok|erro`.
+Um utilizador pode ligar várias contas e escolher, por conta, **Gmail**, **Calendar** ou ambos. **(2) Segredos.** O refresh token vive só em `google_accounts` (`006_google.sql`), cifrado com Fernet (`PULSE_GOOGLE_KEY`); nunca sai para a Web nem para o Android.
+Sem `PULSE_GOOGLE_CLIENT_ID/SECRET/REDIRECT_URI/KEY` (ou sem `cryptography`, em `requirements-google.txt`) a integração fica desligada: `google_desligado` (503) e os cartões dizem «não ligado». **(3) Scopes mínimos.** Gmail só `gmail.modify` (ler, lida, arquivar, estrela; **nunca enviar nem apagar**);
+Calendar `calendar.events` + `calendar.readonly`. **(4) Escritas só por ações** (`calendario.criar|editar|apagar`, `email.lida|arquivar|estrela`; apagar evento é sensível). Ler uma mensagem **não** a marca como lida, e o corpo vem em texto simples, sem HTML nem anexos.
+**(5) Autorização terminada.** Se o Google recusar o refresh token, a conta passa a `reautorizar` (409 na ação) e a Web mostra um aviso persistente enquanto durar, com o botão para voltar a ligar. Um erro noutra conta não estraga as restantes: a resposta traz o estado de cada conta.
+**(6) Hoje.** O Hoje ganha os cartões de Calendário e Email (só os dados do dia; sem conta ligada convidam a ligar, `nao_ligado`). `GET /calendar` pede no máximo 62 dias, como o Calendário de Tarefas. Sem notificações de e-mail: alinhado com «lembretes ajudam, não impõem».

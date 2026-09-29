@@ -1,9 +1,10 @@
 import { useRef, useState, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import { api, mensagemDeErro } from '../api/client'
-import type { BilhetesDados, Conta, EstadoModulo, FinancasDados, Hoje, Modulo, PesoDados, RtoDados, TarefaHoje, TarefasDados } from '../api/types'
+import type { BilhetesDados, CalendarioHoje, ComprasHoje, EmailHoje, Conta, EstadoModulo, FinancasDados, Hoje, Modulo, PesoDados, RtoDados, TarefaHoje, TarefasDados } from '../api/types'
 import { useUtilizador } from '../auth/AuthContext'
 import { Icon, type IconName } from '../components/Icon'
+import { ShopIcon } from '../components/ShopIcon'
 import { BrandLoading, Botao, Esqueleto, Notice, Spinner } from '../components/ui'
 import { fmtDataIso, fmtDataLonga, fmtDias, fmtDiaMes, fmtEuro, fmtPeso, plural, saudacao } from '../lib/format'
 import { useAvisos } from '../components/Avisos'
@@ -16,7 +17,7 @@ interface Acoes { executar: Executar; ocupado: string | null; hoje: string }
 
 /** Estados em que o cartão nem aparece: o utilizador não tem o módulo, ou o administrador desativou-o. */
 const SEM = new Set<string>(['sem_acesso', 'desativado'])
-const NOMES: Record<string, string> = { tarefas: 'Tarefas', bilhetes: 'Bilhetes CP', rto: 'RTO', peso: 'Peso', financas: 'Finanças' }
+const NOMES: Record<string, string> = { tarefas: 'Tarefas', bilhetes: 'Bilhetes CP', rto: 'RTO', peso: 'Peso', financas: 'Finanças', compras: 'Compras' }
 const DIA = ['S', 'T', 'Q', 'Q', 'S', 'S', 'D']
 
 function Cartao({ icone, titulo, extra, children }: { icone: IconName; titulo: string; extra?: ReactNode; children: ReactNode }) {
@@ -108,6 +109,107 @@ function Bilhetes({ m }: { m: Modulo<BilhetesDados> }) {
             {passe && passe.diasRestantes !== null && passe.dataExpira && (
               <p className="t-meta">Passe válido até {fmtDataIso(passe.dataExpira)} ({plural(Math.max(passe.diasRestantes, 0), 'dia', 'dias')})</p>
             )}
+          </>
+        )
+      }}</Estado>
+    </Cartao>
+  )
+}
+
+/** Cartão de um módulo Google que o utilizador ainda não ligou: convida a ligar, sem ruído. */
+function LigarGoogle({ icone, titulo, texto }: { icone: IconName; titulo: string; texto: string }) {
+  return (
+    <Cartao icone={icone} titulo={titulo}>
+      <p className="t-body2">{texto}</p>
+      <div><Link to="/definicoes" className="link-btn">Ligar conta Google</Link></div>
+    </Cartao>
+  )
+}
+
+const Problemas = ({ contas }: { contas: { id: number; email: string }[] }) => (
+  contas.length > 0 ? <p className="t-meta">A conta {contas.map((c) => c.email).join(', ')} pede nova autorização. <Link to="/definicoes" className="link-btn">Volta a ligá-la</Link></p> : null
+)
+
+function Calendario({ m }: { m: Modulo<CalendarioHoje> }) {
+  if (m.estado === 'nao_ligado') return <LigarGoogle icone="calendario" titulo="Calendário de hoje" texto="Liga uma conta Google para veres aqui os eventos de hoje." />
+  return (
+    <Cartao icone="calendario" titulo="Calendário de hoje" extra={<Link to="/calendario" className="link-btn">Abrir</Link>}>
+      <Estado modulo={m}>{() => {
+        const d = m.dados!
+        return (
+          <>
+            {d.eventos.length === 0 ? <p className="t-body2">Sem eventos hoje.</p> : (
+              <ul className="rows">
+                {d.eventos.map((e) => (
+                  <li key={`${e.conta}-${e.calendario}-${e.id}`}>
+                    <span className="t-meta agenda-hora">{e.diaInteiro ? 'Dia todo' : e.inicio}</span>
+                    <div className="row-main"><div className="t-body">{e.titulo}</div>{e.local && <div className="t-meta">{e.local}</div>}</div>
+                  </li>
+                ))}
+              </ul>
+            )}
+            {d.total > d.eventos.length && <p className="t-meta">e mais {d.total - d.eventos.length}</p>}
+            <Problemas contas={d.comProblemas} />
+          </>
+        )
+      }}</Estado>
+    </Cartao>
+  )
+}
+
+function Email({ m }: { m: Modulo<EmailHoje> }) {
+  if (m.estado === 'nao_ligado') return <LigarGoogle icone="email" titulo="Emails importantes" texto="Liga uma conta Google para veres aqui os emails importantes por ler." />
+  return (
+    <Cartao icone="email" titulo="Emails importantes" extra={<>{m.dados && m.dados.porLer > 0 && <span className="t-meta">{m.dados.porLer} por ler</span>}<Link to="/email" className="link-btn">Abrir</Link></>}>
+      <Estado modulo={m}>{() => {
+        const d = m.dados!
+        return (
+          <>
+            {d.mensagens.length === 0 ? <p className="t-body2">Nada importante por ler.</p> : (
+              <ul className="rows">
+                {d.mensagens.map((x) => (
+                  <li key={`${x.conta}-${x.id}`}><div className="row-main"><div className="t-body mail-nova">{x.de}</div><div className="t-body2">{x.assunto}</div></div></li>
+                ))}
+              </ul>
+            )}
+            {d.porLer > d.mensagens.length && <p className="t-meta">e mais {d.porLer - d.mensagens.length}</p>}
+            <Problemas contas={d.comProblemas} />
+          </>
+        )
+      }}</Estado>
+    </Cartao>
+  )
+}
+
+/** Alguns itens da lista «Casa»: tocar num marca-o como comprado e o seguinte ocupa o lugar (o Hoje volta a carregar). */
+function Compras({ m, acoes }: { m: Modulo<ComprasHoje>; acoes: Acoes }) {
+  const avisos = useAvisos()
+  const { executar, ocupado } = acoes
+
+  async function comprar(item: number, nome: string) {
+    if (await executar(`compra-${item}`, 'compras.comprado', { item, comprado: true })) {
+      avisos.mostrar(`${nome} comprado.`, () => void executar('desfazer', 'compras.comprado', { item, comprado: false }))
+    }
+  }
+  return (
+    <Cartao icone="compras" titulo="Lista de compras" extra={<>{m.dados && m.dados.pendentes > 0 && <span className="t-meta">{m.dados.pendentes} por comprar</span>}<Link to="/compras" className="link-btn">Abrir</Link></>}>
+      <Estado modulo={m}>{() => {
+        const d = m.dados!
+        return d.itens.length === 0 ? <p className="t-body2">Nada por comprar. <Link to="/compras?aba=catalogo" className="link-btn">Escolher produtos</Link></p> : (
+          <>
+            <ul className="rows">
+              {d.itens.map((i) => (
+                <li key={i.item}>
+                  <button type="button" className="check" data-done={false} aria-pressed={false} disabled={ocupado !== null}
+                    aria-label={`Marcar como comprado: ${i.nome}`} onClick={() => void comprar(i.item, i.nome)}>
+                    {ocupado === `compra-${i.item}` ? <Spinner /> : <Icon nome="certo" tamanho={16} />}
+                  </button>
+                  <span className="item-icon"><ShopIcon nome={i.icone} tamanho={22} /></span>
+                  <div className="row-main"><div className="t-body">{i.nome}{i.quantidade !== null && <span className="pill"> {i.quantidade}×</span>}</div>{i.nota && <div className="t-meta">{i.nota}</div>}</div>
+                </li>
+              ))}
+            </ul>
+            {d.pendentes > d.itens.length && <p className="t-meta">e mais {d.pendentes - d.itens.length}</p>}
           </>
         )
       }}</Estado>
@@ -268,16 +370,16 @@ export function TodayScreen() {
             <Notice tipo="error">{erro} <button type="button" className="link-btn" onClick={limparErro}>Fechar</button></Notice>
           )}
           <div className="grid">
+            {!SEM.has(estado.dados.modulos.calendario.estado) && <Calendario m={estado.dados.modulos.calendario} />}
             {!SEM.has(estado.dados.modulos.tarefas.estado) && <Tarefas m={estado.dados.modulos.tarefas} acoes={{ executar, ocupado, hoje: estado.dados.data }} />}
+            {!SEM.has(estado.dados.modulos.email.estado) && <Email m={estado.dados.modulos.email} />}
             {!SEM.has(estado.dados.modulos.bilhetes.estado) && <Bilhetes m={estado.dados.modulos.bilhetes} />}
             {!SEM.has(estado.dados.modulos.rto.estado) && <Rto m={estado.dados.modulos.rto} acoes={{ executar, ocupado, hoje: estado.dados.data }} />}
             {!SEM.has(estado.dados.modulos.peso.estado) && <Peso m={estado.dados.modulos.peso} acoes={{ executar, ocupado, hoje: estado.dados.data }} />}
+            {estado.dados.modulos.compras && !SEM.has(estado.dados.modulos.compras.estado) && <Compras m={estado.dados.modulos.compras} acoes={{ executar, ocupado, hoje: estado.dados.data }} />}
             {!SEM.has(estado.dados.modulos.financas.estado) && <Financas m={estado.dados.modulos.financas} acoes={{ executar, ocupado, hoje: estado.dados.data }} />}
           </div>
-          <>
-            <p className="t-meta">Calendário e Email ainda não estão ligados.</p>
-            <div><Botao variante="secondary" pequeno onClick={recarregar}>Atualizar</Botao></div>
-          </>
+          <div><Botao variante="secondary" pequeno onClick={recarregar}>Atualizar</Botao></div>
         </>
       )}
     </>

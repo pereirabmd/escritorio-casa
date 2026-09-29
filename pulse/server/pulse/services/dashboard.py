@@ -10,8 +10,13 @@ from __future__ import annotations
 import re
 from concurrent.futures import ThreadPoolExecutor
 from datetime import date, datetime, timedelta
+from typing import Callable
 
 from pulse.clients.dados import DadosClient, ErroDoModulo, ModuloIndisponivel
+
+class NaoLigado(Exception):
+    """O módulo existe mas o utilizador ainda não o ligou (ex.: sem conta Google): o cartão convida a ligar."""
+
 
 MAX_CONTAS = 5
 _PRIORIDADE = {"Alta": 0, "Media": 1, "Baixa": 2}
@@ -107,6 +112,8 @@ NAO_LIGADOS = ("calendario", "email")
 def _correr(nome: str, fn, c: DadosClient, email: str, hoje: date) -> tuple[str, dict]:
     try:
         return nome, {"estado": "ok", "dados": fn(c, email, hoje)}
+    except NaoLigado:
+        return nome, {"estado": "nao_ligado", "dados": None}
     except ModuloIndisponivel as e:
         return nome, {"estado": "indisponivel", "erro": {"codigo": "modulo_indisponivel", "mensagem": str(e)}}
     except ErroDoModulo as e:
@@ -116,13 +123,18 @@ def _correr(nome: str, fn, c: DadosClient, email: str, hoje: date) -> tuple[str,
         return nome, {"estado": "erro", "erro": {"codigo": "resposta_inesperada", "mensagem": "resposta inesperada do módulo"}}
 
 
-def hoje(c: DadosClient, email: str, agora: datetime, desativados: frozenset[str] | set[str] = frozenset()) -> dict:
+def hoje(c: DadosClient, email: str, agora: datetime, desativados: frozenset[str] | set[str] = frozenset(),
+         locais: dict[str, Callable[[date], dict]] | None = None) -> dict:
+    """`locais`: módulos cujos dados não vêm do `dados-api` (Compras e Google, no `pulse.db`/na rede). Cada função recebe o dia,
+    abre a sua própria ligação (as threads do agregado não partilham ligações SQLite) e corre em paralelo com os outros."""
     dia = agora.date()
-    ativos = {n: fn for n, fn in MODULOS.items() if n not in desativados}
+    locais = locais or {}
+    fontes = {**MODULOS, **{n: (lambda f: lambda _c, _e, d: f(d))(f) for n, f in locais.items()}}
+    ativos = {n: fn for n, fn in fontes.items() if n not in desativados}
     with ThreadPoolExecutor(max_workers=max(len(ativos), 1)) as pool:
         resultados = dict(pool.map(lambda kv: _correr(kv[0], kv[1], c, email, dia), ativos.items()))
-    modulos = {n: resultados.get(n, {"estado": "desativado", "dados": None}) for n in MODULOS}      # desativado pelo administrador: não se pede nada ao módulo
-    modulos.update({n: {"estado": "nao_ligado", "dados": None} for n in NAO_LIGADOS})
+    modulos = {n: resultados.get(n, {"estado": "desativado", "dados": None}) for n in fontes}      # desativado pelo administrador: não se pede nada ao módulo
+    modulos.update({n: {"estado": "nao_ligado", "dados": None} for n in NAO_LIGADOS if n not in modulos})
     # «sem_acesso» não é uma falha: o utilizador simplesmente não tem esse módulo
     degradado = any(m["estado"] in ("indisponivel", "erro") for m in modulos.values())
     return {"estado": "degradado" if degradado else "ok", "geradoEm": agora.isoformat(timespec="seconds"),

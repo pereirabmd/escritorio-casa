@@ -7,11 +7,11 @@ from pulse import db
 
 def test_migra_do_zero_e_e_idempotente(tmp_path):
     conn = db.connect(tmp_path / "teste-x.db")
-    assert db.migrate(conn) == ["001_base.sql", "002_auth.sql", "003_notificacoes.sql", "004_compras.sql", "005_compras_sugestoes.sql"]
-    assert conn.execute("PRAGMA user_version").fetchone()[0] == 5
+    assert db.migrate(conn) == ["001_base.sql", "002_auth.sql", "003_notificacoes.sql", "004_compras.sql", "005_compras_sugestoes.sql", "006_google.sql"]
+    assert conn.execute("PRAGMA user_version").fetchone()[0] == 6
     assert db.migrate(conn) == []
     nomes = {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
-    assert {"pulse_settings", "pulse_activity", "pulse_users", "pulse_sessions", "pulse_devices", "pulse_events", "shop_products", "shop_lists", "shop_items", "shop_history", "shop_user_categories"} <= nomes
+    assert {"pulse_settings", "pulse_activity", "pulse_users", "pulse_sessions", "pulse_devices", "pulse_events", "shop_products", "shop_lists", "shop_items", "shop_history", "shop_user_categories", "google_accounts", "google_oauth_states"} <= nomes
     assert conn.execute("PRAGMA journal_mode").fetchone()[0] == "wal"
     assert conn.execute("PRAGMA foreign_keys").fetchone()[0] == 1
 

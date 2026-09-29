@@ -17,10 +17,12 @@ from typing import Annotated, Callable, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator, model_validator
 
+from pulse import google_api as g
 from pulse.accounts import ContaErro
+from pulse.google_api import GoogleApi
 from pulse.clients.dados import DadosClient, ErroDoModulo, ModuloIndisponivel
 from pulse.clients.tarefas_api import TarefasApiClient
-from pulse.services import compras, modulos
+from pulse.services import calendario, compras, contas_google, correio, modulos
 from pulse.services import piscina as piscina_regras
 from pulse.services import rto as rto_regras
 from pulse.services import tarefas as tarefas_regras
@@ -35,6 +37,7 @@ class Contexto:
     agora: datetime
     tarefas_api: TarefasApiClient | None = None          # servidor dos avisos ntfy (forçar a geração de ocorrências)
     avisos_tarefas: Callable[[], None] | None = None     # pede o recálculo dos avisos ntfy depois de mudar tarefas (melhor esforço)
+    google: GoogleApi | None = None                     # Gmail/Calendar (ADR-049); None = não configurado
     conn: sqlite3.Connection | None = None              # o `pulse.db`: só as ações de módulos do próprio Pulse (Compras) o usam; `executar` preenche-o
 
     @property
@@ -489,6 +492,60 @@ class ListaCriarIn(_Params):
 
 class ListaEditarIn(ListaRefIn):
     nome: Annotated[str, Field(min_length=1, max_length=60)]
+
+
+# --- Google: Calendar e Gmail (ADR-049) --------------------------------------------------------------------------------------------
+
+HORA_G = Annotated[str, Field(pattern=r"^([01]\d|2[0-3]):[0-5]\d$")]
+ID_GOOGLE = Annotated[str, Field(pattern=r"^[A-Za-z0-9_@.\-]{1,200}$")]        # ids de calendário (o e-mail) e de evento/mensagem
+
+
+class CalendarioCriarIn(_Params):
+    conta: ID
+    calendario: ID_GOOGLE = "primary"
+    titulo: Annotated[str, Field(min_length=1, max_length=200)]
+    data: date
+    dataFim: date | None = None                     # inclusive; por omissão o mesmo dia
+    inicio: HORA_G | None = None                    # sem horas = dia inteiro
+    fim: HORA_G | None = None
+    local: str = Field(default="", max_length=200)
+    descricao: str = Field(default="", max_length=500)
+
+
+class CalendarioEditarIn(_Params):
+    conta: ID
+    calendario: ID_GOOGLE = "primary"
+    evento: ID_GOOGLE
+    titulo: Annotated[str, Field(min_length=1, max_length=200)] | None = None
+    data: date | None = None
+    dataFim: date | None = None
+    inicio: HORA_G | None = None
+    fim: HORA_G | None = None
+    local: str | None = Field(default=None, max_length=200)
+    descricao: str | None = Field(default=None, max_length=500)
+
+
+class CalendarioApagarIn(_Params):
+    conta: ID
+    calendario: ID_GOOGLE = "primary"
+    evento: ID_GOOGLE
+
+
+class MensagemIn(_Params):
+    conta: ID
+    mensagem: Annotated[str, Field(pattern=r"^[A-Za-z0-9_\-]{6,64}$")]
+
+
+class MensagemLidaIn(MensagemIn):
+    lida: bool
+
+
+class MensagemArquivadaIn(MensagemIn):
+    arquivado: bool
+
+
+class MensagemEstrelaIn(MensagemIn):
+    estrela: bool
 
 
 @dataclass(frozen=True)
@@ -1104,6 +1161,66 @@ def _c_lista_apagar(c: Contexto, p: ListaRefIn):
     return compras.lista_apagar(c.conn, uid, p.lista), f"lista {p.lista}"
 
 
+# --- Google -----------------------------------------------------------------------------------------------------------------------
+
+def _google(c: Contexto, servico: str, conta: int) -> tuple[GoogleApi, dict]:
+    if c.google is None:
+        raise ContaErro(503, "google_desligado", "a integração com a Google não está configurada neste servidor")
+    uid, _ = _quem(c)
+    return c.google, contas_google.obter(c.conn, uid, conta, servico)
+
+
+def _traduzir(c: Contexto, conta: int, e: g.GoogleErro) -> ContaErro:
+    if e.reautorizar:
+        contas_google.marcar_estado(c.conn, conta, "reautorizar")
+        return ContaErro(409, "reautorizar", "a autorização desta conta Google terminou: volta a ligá-la em Definições")
+    if e.codigo == "sem_permissao":
+        return ContaErro(403, "sem_permissao", "esta conta Google não deu permissão para isto")
+    return ContaErro(502, "google_indisponivel", "a Google não respondeu como esperado; tenta de novo")
+
+
+def _chamar(c: Contexto, conta: int, fn):
+    try:
+        return fn()
+    except g.GoogleErro as e:
+        raise _traduzir(c, conta, e) from e
+
+
+def _cal_criar(c: Contexto, p: CalendarioCriarIn):
+    api, conta = _google(c, "calendar", p.conta)
+    r = _chamar(c, p.conta, lambda: calendario.criar(api, conta, c.agora.tzinfo, p.calendario, p.titulo, p.data, p.dataFim, p.inicio, p.fim, p.local, p.descricao))
+    return r, f"evento em {p.data.isoformat()}"
+
+
+def _cal_editar(c: Contexto, p: CalendarioEditarIn):
+    api, conta = _google(c, "calendar", p.conta)
+    campos = p.model_fields_set
+    r = _chamar(c, p.conta, lambda: calendario.editar(api, conta, c.agora.tzinfo, p.calendario, p.evento, p.titulo, p.data, p.dataFim, p.inicio, p.fim,
+                                                     p.local if "local" in campos else None, p.descricao if "descricao" in campos else None))
+    return r, "evento editado"
+
+
+def _cal_apagar(c: Contexto, p: CalendarioApagarIn):
+    api, conta = _google(c, "calendar", p.conta)
+    r = _chamar(c, p.conta, lambda: calendario.apagar(api, conta, c.agora.tzinfo, p.calendario, p.evento))
+    return r, "evento apagado"
+
+
+def _mail_lida(c: Contexto, p: MensagemLidaIn):
+    api, conta = _google(c, "gmail", p.conta)
+    return _chamar(c, p.conta, lambda: correio.marcar_lida(api, conta, p.mensagem, p.lida, c.agora.tzinfo)), f"mensagem {'lida' if p.lida else 'por ler'}"
+
+
+def _mail_arquivar(c: Contexto, p: MensagemArquivadaIn):
+    api, conta = _google(c, "gmail", p.conta)
+    return _chamar(c, p.conta, lambda: correio.arquivar(api, conta, p.mensagem, p.arquivado, c.agora.tzinfo)), f"mensagem {'arquivada' if p.arquivado else 'na entrada'}"
+
+
+def _mail_estrela(c: Contexto, p: MensagemEstrelaIn):
+    api, conta = _google(c, "gmail", p.conta)
+    return _chamar(c, p.conta, lambda: correio.estrela(api, conta, p.mensagem, p.estrela, c.agora.tzinfo)), f"mensagem {'com' if p.estrela else 'sem'} estrela"
+
+
 ACOES: dict[str, Acao] = {a.nome: a for a in (
     Acao("tarefas.concluir", "tarefas", "safe_action", "Marca uma tarefa como feita (e as atrasadas anteriores da mesma tarefa).", InstanciaIn, _concluir),
     Acao("tarefas.reabrir", "tarefas", "safe_action", "Volta a pôr uma tarefa como por fazer (desfaz «concluir»).", ReabrirIn, _reabrir),
@@ -1137,6 +1254,12 @@ ACOES: dict[str, Acao] = {a.nome: a for a in (
     Acao("bilhetes.passe", "bilhetes", "safe_action", "Regista a data do último carregamento do passe.", PasseIn, _passe),
     Acao("bilhetes.pedido_repetir", "bilhetes", "safe_action", "Liga ou desliga a repetição automática de um pedido avulso.", PedidoRepetirIn, _pedido_repetir),
     Acao("bilhetes.pedido_forcar", "bilhetes", "safe_action", "Pede ao Pi uma tentativa imediata de um pedido avulso.", PedidoRefIn, _pedido_forcar),
+    Acao("calendario.criar", "calendario", "safe_action", "Cria um evento no Google Calendar (sem horas = dia inteiro).", CalendarioCriarIn, _cal_criar),
+    Acao("calendario.editar", "calendario", "safe_action", "Altera um evento do Google Calendar.", CalendarioEditarIn, _cal_editar),
+    Acao("calendario.apagar", "calendario", "sensitive_action", "Apaga um evento do Google Calendar.", CalendarioApagarIn, _cal_apagar),
+    Acao("email.lida", "email", "safe_action", "Marca uma mensagem do Gmail como lida ou por ler.", MensagemLidaIn, _mail_lida),
+    Acao("email.arquivar", "email", "safe_action", "Arquiva uma mensagem do Gmail (ou volta a pô-la na entrada).", MensagemArquivadaIn, _mail_arquivar),
+    Acao("email.estrela", "email", "safe_action", "Marca ou desmarca uma mensagem do Gmail com estrela.", MensagemEstrelaIn, _mail_estrela),
     Acao("compras.adicionar", "compras", "safe_action", "Põe um produto (do catálogo ou pelo nome) numa lista de compras.", ComprasAdicionarIn, _c_adicionar),
     Acao("compras.remover", "compras", "safe_action", "Tira um item de uma lista de compras.", ItemRefIn, _c_remover),
     Acao("compras.comprado", "compras", "safe_action", "Marca um item como comprado (ou volta a pô-lo por comprar).", ItemCompradoIn, _c_comprado),

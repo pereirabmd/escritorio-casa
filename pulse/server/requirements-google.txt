@@ -1,0 +1,3 @@
+# Opcional: cifra em repouso das contas Google (Gmail/Calendar) e assinatura do FCM. Isolada de propósito: se não instalar no Pi
+# (sem roda pré-compilada), o resto do Pulse arranca na mesma e as integrações Google/FCM ficam desligadas.
+cryptography==50.0.1

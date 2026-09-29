@@ -1,6 +1,6 @@
 # Pulse — instalação no Raspberry Pi
 
-Estado (28/09/2026): backend instalado e a responder em `https://bmdpereira.duckdns.org/pulse/api/v1/health`.
+Estado (29/09/2026, release beta_20260929_11 com Google Calendário/Email): backend instalado e a responder em `https://bmdpereira.duckdns.org/pulse/api/v1/health`.
 
 | O quê | Onde |
 |---|---|

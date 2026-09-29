@@ -35,10 +35,10 @@ def entrar(app, email):
     return c
 
 
-def test_por_omissao_tudo_ativo_e_os_em_breve_nao_sao_alteraveis(app):
+def test_por_omissao_todos_os_modulos_estao_ativos_e_disponiveis(app):
     j = entrar(app, OUTRO).get("/api/v1/modules").json()["modulos"]
     assert [m["id"] for m in j] == ["tarefas", "bilhetes", "rto", "peso", "financas", "compras", "calendario", "email"]
-    assert all(m["ativo"] for m in j) and [m["id"] for m in j if not m["disponivel"]] == ["calendario", "email"]
+    assert all(m["ativo"] and m["disponivel"] for m in j)                      # já não há módulos «Em breve»
 
 
 def test_so_o_administrador_altera(app):
@@ -47,7 +47,7 @@ def test_so_o_administrador_altera(app):
     assert next(m for m in entrar(app, OUTRO).get("/api/v1/modules").json()["modulos"] if m["id"] == "peso")["ativo"] is False   # vale para todos
 
 
-@pytest.mark.parametrize("mau", [{"modulos": {}}, {"modulos": {"calendario": False}}, {"modulos": {"inexistente": False}}, {"modulos": {"peso": "nao"}}, {"peso": False}])
+@pytest.mark.parametrize("mau", [{"modulos": {}}, {"modulos": {"inexistente": False}}, {"modulos": {"peso": "nao"}}, {"peso": False}])
 def test_pedidos_invalidos(app, mau):
     assert entrar(app, ADMIN).put("/api/v1/admin/modules", json=mau, headers=H).status_code == 400
 
@@ -92,6 +92,6 @@ def test_servico_guarda_so_o_que_esta_desativado(tmp_path):
     with pytest.raises(ContaErro):
         modulos.exigir(c, "rto")
     modulos.exigir(c, "peso")
-    c.execute("UPDATE pulse_settings SET valor = 'rto,lixo,calendario' WHERE chave = ?", (modulos.CHAVE,))
+    c.execute("UPDATE pulse_settings SET valor = 'rto,lixo,inexistente' WHERE chave = ?", (modulos.CHAVE,))
     assert modulos.desativados(c) == {"rto"}                                                # valores estranhos ignoram-se
     c.close()

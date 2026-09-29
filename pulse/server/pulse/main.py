@@ -15,7 +15,8 @@ from pulse.services import compras
 from pulse.accounts import ContaErro
 from datetime import datetime
 
-from pulse.api.v1 import actions, auth, dashboard, finance, health, modules, notifications as notificacoes, rto, shopping, tasks, tickets, weight
+from pulse.api.v1 import actions, auth, dashboard, calendar, finance, google as google_rotas, health, mail, modules, notifications as notificacoes, rto, shopping, tasks, tickets, weight
+from pulse.google_api import GoogleApi, GoogleConfig, criar_cofre
 from pulse.notifications import FcmCanal
 from pulse.ratelimit import RateLimiter
 from pulse.clients.dados import DadosClient, ErroDoModulo, ModuloIndisponivel
@@ -40,6 +41,18 @@ async def _agendador(app: FastAPI) -> None:
             LOG.exception("falha no agendador de notificações")
 
 
+def _google(settings: config.Settings) -> GoogleApi | None:
+    """A integração Google só liga com cliente OAuth, redirect, chave de cifra válida e a biblioteca `cryptography`."""
+    if not (settings.google_client_id and settings.google_client_secret and settings.google_redirect_uri and settings.google_key):
+        return None
+    cofre = criar_cofre(settings.google_key)
+    if cofre is None:
+        LOG.error("Google desligado: chave de cifra inválida ou `cryptography` não instalada")
+        return None
+    LOG.info("Google ligado (Gmail/Calendar)")
+    return GoogleApi(GoogleConfig(settings.google_client_id, settings.google_client_secret, settings.google_redirect_uri, settings.google_key), cofre)
+
+
 def _canais(settings: config.Settings) -> list:
     """FCM só liga se houver ficheiro de credenciais e ele for válido; uma falha nunca impede o Pulse de arrancar."""
     if settings.fcm_credentials is None:
@@ -53,7 +66,8 @@ def _canais(settings: config.Settings) -> list:
     return [canal]
 
 
-def create_app(settings: config.Settings | None = None, dados: DadosClient | None = None, avisos: TarefasApiClient | None = None, canais: list | None = None) -> FastAPI:
+def create_app(settings: config.Settings | None = None, dados: DadosClient | None = None, avisos: TarefasApiClient | None = None, canais: list | None = None,
+               google: GoogleApi | None = None) -> FastAPI:
     settings = settings or config.load()
     logging_setup.configurar(settings.log_dir)
 
@@ -86,6 +100,7 @@ def create_app(settings: config.Settings | None = None, dados: DadosClient | Non
     app.state.settings = settings
     app.state.dados = dados or DadosClient(settings.dados_url, settings.service_key)
     app.state.avisos = avisos or TarefasApiClient(settings.tarefas_url, settings.service_key)   # recálculo imediato dos avisos das tarefas
+    app.state.google = google if google is not None else _google(settings)                    # Gmail/Calendar: None = não configurado
     app.state.canais = canais if canais is not None else _canais(settings)      # canais de entrega das notificações (FCM, se configurado)
     app.state.db = lambda: db.connect(settings.db_path)   # uma ligação por uso: os endpoints correm em threads
     app.state.agora = lambda: datetime.now(settings.tz)     # substituível nos testes
@@ -101,6 +116,9 @@ def create_app(settings: config.Settings | None = None, dados: DadosClient | Non
     app.include_router(tickets.router, prefix="/api/v1")
     app.include_router(modules.router, prefix="/api/v1")
     app.include_router(shopping.router, prefix="/api/v1")
+    app.include_router(google_rotas.router, prefix="/api/v1")
+    app.include_router(calendar.router, prefix="/api/v1")
+    app.include_router(mail.router, prefix="/api/v1")
     app.include_router(notificacoes.router, prefix="/api/v1")
     app.include_router(notificacoes.internal, prefix="/api/v1")
 

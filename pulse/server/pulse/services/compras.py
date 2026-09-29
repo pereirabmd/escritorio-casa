@@ -389,6 +389,21 @@ def sugestoes(conn, uid: int, lista: int, hoje: date) -> dict:
     return {"acabar": limpo(acabar, LIMITE_ACABAR), "frequentes": limpo(frequentes, LIMITE_FREQUENTES)}
 
 
+DASHBOARD_ITENS = 5
+
+
+def resumo_hoje(conn, uid: int, n: int = DASHBOARD_ITENS) -> dict:
+    """O cartão do Hoje: alguns itens por comprar da lista «Casa» (pela ordem dos corredores). Marcar um como comprado faz aparecer o seguinte."""
+    l = conn.execute("SELECT id, nome FROM shop_lists WHERE padrao = 1").fetchone()
+    ordem = {c[0]: i for i, c in enumerate(cat.CATEGORIAS)}
+    rows = conn.execute("SELECT i.id, i.product_id, i.quantidade, i.nota, p.nome, p.categoria, p.icone FROM shop_items i JOIN shop_products p ON p.id = i.product_id "
+                        "WHERE i.list_id = ? AND i.estado = 'pendente'", (l["id"],)).fetchall()
+    rows = sorted(rows, key=lambda r: (ordem.get(r["categoria"], 99), r["nome"].lower()))
+    return {"lista": {"id": l["id"], "nome": l["nome"]}, "pendentes": len(rows),
+            "itens": [{"item": r["id"], "produto": r["product_id"], "nome": r["nome"], "categoria": r["categoria"], "icone": r["icone"],
+                       "quantidade": r["quantidade"], "nota": r["nota"]} for r in rows[:n]]}
+
+
 # --- leitura -------------------------------------------------------------------------------------------------------------------
 
 def visao(conn, uid: int, lista: int | None = None, hoje: date | None = None) -> dict:

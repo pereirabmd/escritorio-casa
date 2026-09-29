@@ -15,6 +15,10 @@ export interface PesoDados { ultimo: { quando: string; peso: number } | null; re
 export interface Conta { id: number; descricao: string; valor: number; categoria: string; dataVencimento: string; diasAte: number; vencida: boolean }
 export interface FinancasDados { proximas: Conta[]; vencidas: number; total: number; valorTotal: number }
 
+export interface CalendarioHoje { eventos: EventoGoogle[]; total: number; contas: number; comProblemas: EstadoContaGoogle[] }
+export interface EmailHoje { porLer: number; mensagens: MensagemGoogle[]; contas: number; comProblemas: EstadoContaGoogle[] }
+export interface ComprasHoje { lista: { id: number; nome: string }; pendentes: number; itens: { item: number; produto: number; nome: string; categoria: string; icone: string; quantidade: number | null; nota: string }[] }
+
 export interface Hoje {
   estado: 'ok' | 'degradado'
   geradoEm: string
@@ -26,8 +30,9 @@ export interface Hoje {
     rto: Modulo<RtoDados>
     peso: Modulo<PesoDados>
     financas: Modulo<FinancasDados>
-    calendario: Modulo<null>
-    email: Modulo<null>
+    compras?: Modulo<ComprasHoje>
+    calendario: Modulo<CalendarioHoje>
+    email: Modulo<EmailHoje>
   }
 }
 
@@ -178,3 +183,20 @@ export interface ComprasModulo {
   comprados: ItemCompras[]; pendentes: number
   produtos: ProdutoCompras[]
 }
+
+// --- Google: contas, Calendar e Gmail (GET /google/accounts, /calendar, /mail) ---
+export type ServicoGoogle = 'gmail' | 'calendar'
+export interface ContaGoogle { id: number; email: string; nome: string; servicos: ServicoGoogle[]; estado: 'ok' | 'reautorizar' }
+export interface EstadoContaGoogle { id: number; email: string; estado: 'ok' | 'reautorizar' | 'erro'; erro?: string; total?: number }
+export interface EventoGoogle {
+  id: string; conta: number; contaEmail: string; calendario: string; calendarioNome: string; cor: string | null; titulo: string; data: string; dataFim: string
+  inicio: string | null; fim: string | null; diaInteiro: boolean; local: string; descricao: string; link: string; podeEditar: boolean
+}
+export interface AgendaGoogle {
+  ligado: boolean; configurado: boolean; de: string; ate: string; contas: EstadoContaGoogle[]
+  calendarios: { conta: number; id: string; nome: string; cor: string | null; principal: boolean; podeEditar: boolean }[]
+  dias: { data: string; eventos: EventoGoogle[] }[]
+}
+export interface MensagemGoogle { id: string; conta: number; contaEmail: string; thread: string; de: string; deEmail: string; assunto: string; resumo: string; data: string; lida: boolean; estrela: boolean; importante: boolean; entrada: boolean }
+export interface MensagemDetalhe extends MensagemGoogle { para: string; corpo: string; temAnexos: boolean }
+export interface CaixaGoogle { ligado: boolean; configurado: boolean; filtro: string; contas: EstadoContaGoogle[]; mensagens: MensagemGoogle[] }

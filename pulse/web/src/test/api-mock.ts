@@ -38,6 +38,9 @@ export const HOJE = {
     financas: { estado: 'ok', dados: { proximas: [
       { id: 2, descricao: 'Luz', valor: 1245.5, categoria: 'Habitação', dataVencimento: '2026-10-05', diasAte: 5, vencida: false },
       { id: 1, descricao: 'Água', valor: 20, categoria: 'Habitação', dataVencimento: '2026-09-27', diasAte: -3, vencida: true }], vencidas: 1, total: 2, valorTotal: 1265.5 } },
+    compras: { estado: 'ok', dados: { lista: { id: 1, nome: 'Casa' }, pendentes: 7, itens: [
+      { item: 10, produto: 1, nome: 'Maçã', categoria: 'frutas-legumes', icone: 'fruta', quantidade: 6, nota: '' },
+      { item: 11, produto: 2, nome: 'Leite meio-gordo', categoria: 'laticinios', icone: 'leite', quantidade: null, nota: '1 L' }] } },
     calendario: { estado: 'nao_ligado', dados: null }, email: { estado: 'nao_ligado', dados: null },
   },
 }

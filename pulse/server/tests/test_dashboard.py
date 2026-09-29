@@ -170,3 +170,45 @@ def test_endpoint_recusa_conta_que_ainda_tem_de_mudar_a_password(app_cliente):
     r = app_cliente.get("/api/v1/dashboard/today")
     assert r.status_code == 403 and r.json()["erro"]["codigo"] == "mudar_password"
     assert FalsoDados.pedidos == []
+
+
+# --- cartão das Compras (dados do próprio pulse.db) ---------------------------------------------------------------------------
+
+def _produto(conn, nome):
+    return conn.execute("SELECT id FROM shop_products WHERE nome = ?", (nome,)).fetchone()["id"]
+
+
+def test_compras_no_hoje_mostra_alguns_itens_por_corredor_e_o_seguinte_entra_quando_um_e_comprado(app_cliente):
+    preparar()
+    app_cliente.post("/api/v1/auth/login", json={"email": EMAIL, "password": "1234qweR"})
+    vazio = app_cliente.get("/api/v1/dashboard/today").json()["modulos"]["compras"]
+    assert vazio["estado"] == "ok" and vazio["dados"]["itens"] == [] and vazio["dados"]["lista"]["nome"] == "Casa" and vazio["dados"]["pendentes"] == 0
+    H = {"X-Pulse-Client": "web"}
+    lista = vazio["dados"]["lista"]["id"]
+    ids = {}
+    conn = app_cliente.app.state.db()
+    for nome in ("Champô", "Bacalhau", "Arroz agulha", "Leite meio-gordo", "Maçã", "Ovos", "Fraldas"):
+        ids[nome] = app_cliente.post("/api/v1/actions/compras.adicionar", json={"params": {"lista": lista, "produto": _produto(conn, nome)}}, headers=H).json()["resultado"]["id"]
+    conn.close()
+    d = app_cliente.get("/api/v1/dashboard/today").json()["modulos"]["compras"]["dados"]
+    assert d["pendentes"] == 7 and [i["nome"] for i in d["itens"]] == ["Maçã", "Arroz agulha", "Leite meio-gordo", "Ovos", "Bacalhau"]      # 5, pela ordem dos corredores
+    assert app_cliente.post("/api/v1/actions/compras.comprado", json={"params": {"item": ids["Maçã"], "comprado": True}}, headers=H).status_code == 200
+    d = app_cliente.get("/api/v1/dashboard/today").json()["modulos"]["compras"]["dados"]
+    assert d["pendentes"] == 6 and [i["nome"] for i in d["itens"]] == ["Arroz agulha", "Leite meio-gordo", "Ovos", "Bacalhau", "Champô"]   # a comprada saiu e entrou o seguinte
+
+
+def test_compras_desativadas_nao_sao_pedidas_e_o_cartao_diz_desativado(app_cliente):
+    preparar()
+    conn = app_cliente.app.state.db(); conn.execute("UPDATE pulse_users SET admin = 1"); conn.close()
+    app_cliente.post("/api/v1/auth/login", json={"email": EMAIL, "password": "1234qweR"})
+    app_cliente.put("/api/v1/admin/modules", json={"modulos": {"compras": False}}, headers={"X-Pulse-Client": "web"})
+    assert app_cliente.get("/api/v1/dashboard/today").json()["modulos"]["compras"] == {"estado": "desativado", "dados": None}
+
+
+def test_um_erro_nas_compras_nao_derruba_o_resto_do_hoje(app_cliente, monkeypatch):
+    preparar()
+    from pulse.services import compras
+    monkeypatch.setattr(compras, "resumo_hoje", lambda *a, **k: (_ for _ in ()).throw(KeyError("x")))
+    app_cliente.post("/api/v1/auth/login", json={"email": EMAIL, "password": "1234qweR"})
+    j = app_cliente.get("/api/v1/dashboard/today").json()
+    assert j["modulos"]["compras"]["estado"] == "erro" and j["modulos"]["peso"]["estado"] == "ok" and j["estado"] == "degradado"

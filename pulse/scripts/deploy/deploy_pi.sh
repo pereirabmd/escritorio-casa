@@ -28,6 +28,8 @@ if [ -d "$RAIZ/web/dist" ]; then
 fi
 ssh "$PI" "[ -x /opt/pulse/venv/bin/python ] || python3 -m venv /opt/pulse/venv
 /opt/pulse/venv/bin/pip install -q -r '$DESTINO/server/requirements.txt'
+# opcional (Google/FCM): se não houver roda pré-compilada no Pi, o Pulse arranca na mesma e essas integrações ficam desligadas
+/opt/pulse/venv/bin/pip install -q -r '$DESTINO/server/requirements-google.txt' || echo 'AVISO: cryptography nao instalou; Google e FCM ficam desligados'
 cd '$DESTINO/server' && /opt/pulse/venv/bin/python -c 'import pulse.main'"
 
 ANTERIOR="$(ssh "$PI" 'readlink -f /opt/pulse/current 2>/dev/null || true')"

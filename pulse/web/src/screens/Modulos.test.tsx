@@ -6,7 +6,7 @@ import { HOJE, servidorFalso, UTILIZADOR, type Rotas } from '../test/api-mock'
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, '')
 const lista = (desativados: string[] = []) => ({
   modulos: [['tarefas', 'Tarefas', true], ['bilhetes', 'Bilhetes CP', true], ['rto', 'RTO', true], ['peso', 'Peso', true], ['financas', 'Finanças', true],
-    ['compras', 'Compras', true], ['calendario', 'Calendário', false], ['email', 'Email', false]]
+    ['compras', 'Compras', true], ['calendario', 'Calendário', true], ['email', 'Email', true]]
     .map(([id, nome, disponivel]) => ({ id, nome, disponivel, ativo: !desativados.includes(id as string) })),
 })
 
@@ -18,13 +18,13 @@ function abrir(caminho: string, extra: Rotas = {}, utilizador = UTILIZADOR) {
 }
 afterEach(() => { vi.unstubAllGlobals(); localStorage.clear() })
 
-test('Mais esconde os módulos desativados pelo administrador (e mantém os «Em breve»)', async () => {
+test('Mais esconde os módulos desativados pelo administrador', async () => {
   abrir('/mais', { 'GET /modules': () => [200, lista(['peso', 'financas'])] })
   await screen.findByRole('link', { name: /Tarefas/ })
   await waitFor(() => expect(screen.queryByRole('link', { name: /Peso/ })).not.toBeInTheDocument())
   expect(screen.queryByRole('link', { name: /Finanças/ })).not.toBeInTheDocument()
   expect(screen.getByRole('link', { name: /RTO/ })).toBeInTheDocument()
-  expect(screen.getAllByText('Em breve')).toHaveLength(2)
+  expect(screen.getByRole('link', { name: /Calendário/ })).toBeInTheDocument()
 })
 
 test('sem resposta de /modules não se esconde nada', async () => {
@@ -61,7 +61,7 @@ describe('Administração', () => {
     await userEvent.click(await within(adm).findByRole('switch', { name: 'Peso: desativado' }))
     await within(adm).findByRole('switch', { name: 'Peso: ativo' })
     expect(corpos).toEqual([{ modulos: { peso: false } }, { modulos: { peso: true } }])
-    expect(within(adm).getAllByText('Em breve')).toHaveLength(2)                              // Calendário e Email não se alteram
+    expect(within(adm).queryByText('Em breve')).not.toBeInTheDocument()                        // já não há módulos por chegar
   })
 
   test('um erro do servidor aparece e o interruptor não muda', async () => {
