@@ -65,3 +65,6 @@ O primeiro acesso obriga a mudar a password (`POST /api/v1/auth/password`); até
 
 > O que está por publicar em cada momento, e a ordem, mantém-se na nota «Pendente de deploy no Raspberry Pi» do `PROJECT-CONTEXT.md` (raiz do repositório).
 
+
+## APK Android (ADR-050)
+`scripts/deploy/publicar_apk.sh` publica o APK em `/opt/pulse/apk/` (`pulse-<versão>.apk`, `pulse.apk`, `version.json`; guarda os 3 últimos), fora das releases. O nginx serve-o em `/pulse/apk/` (bloco `location ^~ /pulse/apk/` em `nginx/pulse-web.conf`, já aplicado no vhost a 29/09/2026). A app lê o `version.json` para se atualizar.

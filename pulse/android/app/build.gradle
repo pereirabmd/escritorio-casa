@@ -1,0 +1,69 @@
+import java.util.Properties
+
+plugins {
+    id 'com.android.application'
+    id 'org.jetbrains.kotlin.android'
+}
+
+// A chave de assinatura fica fora do repositório (ADR-034): ~/.local/keystores/pulse-keystore.properties
+def ksProps = new Properties()
+def ksFile = new File(System.getProperty('user.home'), '.local/keystores/pulse-keystore.properties')
+if (ksFile.exists()) ksFile.withInputStream { ksProps.load(it) }
+
+android {
+    namespace 'pt.pereirabmd.pulse'
+    compileSdk 34
+
+    defaultConfig {
+        applicationId 'pt.pereirabmd.pulse'
+        minSdk 29
+        targetSdk 34
+        versionCode 1
+        versionName '0.1.0'
+        // Endereço do servidor Pulse; mudar aqui para apontar a outro ambiente.
+        buildConfigField 'String', 'SERVER', '"https://bmdpereira.duckdns.org/pulse"'
+    }
+
+    signingConfigs {
+        release {
+            if (ksFile.exists()) {
+                storeFile file(ksProps['storeFile'])
+                storePassword ksProps['storePassword']
+                keyAlias ksProps['keyAlias']
+                keyPassword ksProps['keyPassword']
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            if (ksFile.exists()) signingConfig signingConfigs.release
+        }
+    }
+
+    buildFeatures { compose true; buildConfig true }
+    composeOptions { kotlinCompilerExtensionVersion '1.5.14' }
+    compileOptions { sourceCompatibility JavaVersion.VERSION_17; targetCompatibility JavaVersion.VERSION_17 }
+    kotlinOptions { jvmTarget = '17' }
+    packagingOptions { resources { excludes += '/META-INF/{AL2.0,LGPL2.1}' } }
+    testOptions { unitTests.returnDefaultValues = true }
+}
+
+dependencies {
+    implementation platform('androidx.compose:compose-bom:2024.06.00')
+    implementation 'androidx.compose.ui:ui'
+    implementation 'androidx.compose.foundation:foundation'
+    implementation 'androidx.compose.material3:material3'
+    implementation 'androidx.activity:activity-compose:1.9.0'
+    implementation 'androidx.fragment:fragment-ktx:1.7.1'          // BiometricPrompt precisa de FragmentActivity
+    implementation 'androidx.lifecycle:lifecycle-runtime-compose:2.8.2'
+    implementation 'androidx.biometric:biometric:1.1.0'
+    implementation 'androidx.security:security-crypto:1.1.0-alpha06'
+    implementation 'io.coil-kt:coil-compose:2.6.0'
+    implementation 'io.coil-kt:coil-gif:2.6.0'                       // WebP animados (assets de marca)
+    implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1'
+
+    testImplementation 'junit:junit:4.13.2'
+    testImplementation 'org.json:json:20240303'
+}

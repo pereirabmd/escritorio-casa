@@ -29,6 +29,10 @@ O Pulse deve parecer e comportar-se como uma aplicação comercial profissional,
 
 Não introduzir React Native, Flutter ou wrappers Web para substituir o APK Android nativo sem decisão explícita.
 
+## Android e Web em paridade
+
+Desde 29/09/2026 cada funcionalidade nova é entregue **no APK e na Web** (`docs/PARITY_ANDROID.md`), com as regras no servidor. Discutir e esclarecer todas as dúvidas com o utilizador **antes** de implementar.
+
 ## Linguagem
 
 Toda a interface destinada ao utilizador deve ser escrita em português de Portugal (`pt-PT`).

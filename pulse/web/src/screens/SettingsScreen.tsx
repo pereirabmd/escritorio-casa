@@ -201,6 +201,11 @@ export function SettingsScreen() {
           ))}
         </div>
       </section>
+      <section className="section" aria-label="App Android">
+        <h2 className="t-card muted">App Android</h2>
+        <p className="t-body2">A app nativa do Pulse, instalada fora da Play Store. A app atualiza-se sozinha a partir daqui.</p>
+        <div><a className="btn btn-secondary btn-sm" href={`${import.meta.env.BASE_URL}apk/pulse.apk`}>Descarregar o APK</a></div>
+      </section>
       <section className="section" aria-label="Sistema">
         <h2 className="t-card muted">Sistema</h2>
         <p className="t-body2">Pulse Web {VERSAO}</p>

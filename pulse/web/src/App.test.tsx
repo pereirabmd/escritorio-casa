@@ -225,6 +225,12 @@ describe('navegação e definições', () => {
     expect(pedidos.some((p) => p.metodo === 'DELETE' && p.caminho === '/auth/sessions/2')).toBe(true)
   })
 
+  test('Definições oferece o APK Android (o link da página de resumo aponta para o mesmo ficheiro)', async () => {
+    abrir({ ...base, 'GET /auth/sessions': () => [200, { sessoes: [] }] }, '/definicoes')
+    const link = await screen.findByRole('link', { name: 'Descarregar o APK' })
+    expect(link.getAttribute('href')).toMatch(/apk\/pulse\.apk$/)
+  })
+
   test('mudar de tema aplica-se ao documento e fica guardado', async () => {
     abrir({ ...base, 'GET /auth/sessions': () => [200, { sessoes: [] }] }, '/definicoes')
     await userEvent.click(await screen.findByRole('button', { name: 'Escuro' }))
