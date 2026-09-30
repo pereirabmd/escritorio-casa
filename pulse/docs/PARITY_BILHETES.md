@@ -17,5 +17,5 @@ Legenda: **Feito** · **Pendente** · **Substituído** · **Descartado**.
 | Pedidos avulsos: tentar agora, repetição automática de X em X min | Pedidos | Pedidos | Feito | estado incerto pede confirmação na App CP |
 | Registo (compras, erros, verificações) com filtros | Registo | Registo | Feito | |
 | Página de administração de utilizadores (LAN) | Admin | — | **Mantido no Pi** | só abre na rede de casa |
-| Notificações ntfy | Pi | — | **Mantido no Pi** | copiadas para o Pulse (FCM no futuro, ADR-045) |
+| Notificações ntfy | Pi | — | **Mantido no Pi** | desde 30/09/2026 cada aviso chega também ao Pulse por FCM (ADR-058); o ntfy continua em paralelo |
 | Fila offline / puxar para atualizar | Global | — | **Pendente** | Android (fase 5) |
