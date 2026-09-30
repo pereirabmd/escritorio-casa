@@ -267,3 +267,10 @@ def test_atualizacao_parcial_so_pede_os_modulos_indicados(app_cliente):
     assert [p[0].split("?")[0] for p in FalsoDados.pedidos] == ["/peso/registos"]      # nada mais foi pedido (nem tarefas, nem Google)
     assert set(app_cliente.get("/api/v1/dashboard/today?modulos=tarefas,rto,nao_existe").json()["modulos"]) == {"tarefas", "rto"}
     assert len(app_cliente.get("/api/v1/dashboard/today").json()["modulos"]) >= 7
+
+
+def test_ecras_com_ligacao_sqlite_nao_rebentam_com_a_middleware(app_cliente):
+    """Regressão: a middleware de tempos não pode mudar de thread (o `get_conn` fecha a ligação onde a abriu)."""
+    app_cliente.post("/api/v1/auth/login", json={"email": EMAIL, "password": "1234qweR"})
+    for caminho in ("/api/v1/auth/sessions", "/api/v1/dashboard/order", "/api/v1/modules"):
+        assert app_cliente.get(caminho).status_code == 200, caminho

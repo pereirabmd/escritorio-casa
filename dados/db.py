@@ -84,6 +84,21 @@ def connect(path: Path | str | None = None) -> sqlite3.Connection:
     return conn
 
 
+_MANTIDAS: list[sqlite3.Connection] = []
+
+
+def manter_aberta(path: Path | str) -> sqlite3.Connection:
+    """Mantém uma ligação aberta à base durante a vida do processo (o serviço chama-a no arranque).
+
+    Em WAL, a última ligação a fechar faz um checkpoint e apaga o `-wal`, com `fsync` no cartão SD. Como cada pedido abre e fecha
+    a sua ligação, *cada escrita* pagava isso (no Pi: mediana de 70 ms, 10 % acima de 1,4 s, máximo 2,8 s). Com esta ligação sempre
+    aberta, fechar a do pedido é barato e o checkpoint só acontece de vez em quando (mediana de 7 ms)."""
+    conn = connect(path)
+    conn.execute("SELECT count(*) FROM sqlite_master").fetchone()
+    _MANTIDAS.append(conn)
+    return conn
+
+
 def _migrations(directory: Path) -> list[tuple[int, Path]]:
     found = []
     for f in sorted(directory.glob("*.sql")):

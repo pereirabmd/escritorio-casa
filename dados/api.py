@@ -333,6 +333,8 @@ def main() -> int:
         if not settings.acl[app]:
             LOG.warning("ACL_%s vazia: ninguém tem acesso à app %s", app.upper(), app)
     db.migrate_all()  # o serviço arranca sempre com o esquema em dia (todas as bases)
+    for nome in db.DATABASES:
+        db.manter_aberta(db.db_path(nome))     # sem isto cada escrita fecha a última ligação e paga um checkpoint no cartão SD
     srv = criar_servidor(settings)
     LOG.info("a escutar em %s:%d", settings.host, settings.port)
     try:

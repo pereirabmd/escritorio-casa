@@ -24,7 +24,16 @@ def connect(path: Path) -> sqlite3.Connection:
         os.chmod(path, 0o600)   # só o dono lê a base (o WAL/SHM herdam estas permissões)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA journal_mode=WAL")
+    conn.execute("PRAGMA synchronous=NORMAL")   # em WAL é seguro contra corrupção; só o fim de uma escrita pode perder-se num corte de luz (sem fsync por escrita no cartão SD)
     conn.execute("PRAGMA foreign_keys=ON")
+    return conn
+
+
+def manter_aberta(path: Path) -> sqlite3.Connection:
+    """Ligação sempre aberta durante a vida do servidor: sem ela, cada pedido que escreve e fecha a última ligação paga um
+    checkpoint com `fsync` no cartão SD (no Pi: mediana de 70 ms e até quase 3 s por escrita, contra 7 ms com ela)."""
+    conn = connect(path)
+    conn.execute("SELECT count(*) FROM sqlite_master").fetchone()
     return conn
 
 

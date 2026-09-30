@@ -67,6 +67,30 @@ def _canais(settings: config.Settings) -> list:
     return [canal]
 
 
+class PedidosLentos:
+    """Regista os pedidos que demoram mais de meio segundo (diagnóstico de lentidão; o log de acesso do uvicorn não tem tempos).
+    ASGI puro: um `BaseHTTPMiddleware` corre o endpoint noutra thread e rebentava o fecho das ligações SQLite (`get_conn`)."""
+
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] != "http":
+            return await self.app(scope, receive, send)
+        t, estado = time.monotonic(), {}
+
+        async def enviar(msg):
+            if msg["type"] == "http.response.start":
+                estado["status"] = msg["status"]
+            await send(msg)
+        try:
+            await self.app(scope, receive, enviar)
+        finally:
+            dt = time.monotonic() - t
+            if dt > 0.5:
+                logging.getLogger("pulse.lento").warning("%s %s demorou %.2fs (%s)", scope["method"], scope["path"], dt, estado.get("status"))
+
+
 def create_app(settings: config.Settings | None = None, dados: DadosClient | None = None, avisos: TarefasApiClient | None = None, canais: list | None = None,
                google: GoogleApi | None = None) -> FastAPI:
     settings = settings or config.load()
@@ -89,9 +113,11 @@ def create_app(settings: config.Settings | None = None, dados: DadosClient | Non
         if novos:
             LOG.info("catálogo de compras: %d produtos de série novos", novos)
         agendador = asyncio.create_task(_agendador(app)) if settings.scheduler_s > 0 else None
+        mantida = db.manter_aberta(settings.db_path)
         try:
             yield
         finally:
+            mantida.close()
             if agendador:
                 agendador.cancel()
 
@@ -107,15 +133,7 @@ def create_app(settings: config.Settings | None = None, dados: DadosClient | Non
     app.state.agora = lambda: datetime.now(settings.tz)     # substituível nos testes
     app.state.limite_login = RateLimiter(10)   # tentativas de login por IP e minuto (o nginx limita antes)
 
-    @app.middleware("http")
-    async def pedidos_lentos(request, call_next):
-        """Regista os pedidos que demoram mais de meio segundo (diagnóstico de lentidão; o log de acesso do uvicorn não tem tempos)."""
-        t = time.monotonic()
-        resposta = await call_next(request)
-        dt = time.monotonic() - t
-        if dt > 0.5:
-            logging.getLogger("pulse.lento").warning("%s %s demorou %.2fs (%s)", request.method, request.url.path, dt, resposta.status_code)
-        return resposta
+    app.add_middleware(PedidosLentos)
 
     app.include_router(health.router, prefix="/api/v1")
     app.include_router(auth.router, prefix="/api/v1")
