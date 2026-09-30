@@ -25,6 +25,7 @@ from datetime import date, datetime, time, timedelta
 from typing import Any
 
 import common
+import pulse_eventos
 from common import FileLock, SheetsClient, TZ, get_logger, normalizar_hora, now_local, parse_sheet_date
 
 log = get_logger("recalcular")
@@ -266,6 +267,18 @@ def _recalcular_sem_lock(sheets: SheetsClient, plan_only: bool) -> dict[str, int
     estado: dict[str, dict] = common._read_json(estado_path, {})
     snoozes = carregar_snoozes(agora)
     contagens: dict[str, int] = {}
+    pulse_path = common._state_file("pulse_agendados.json")
+    pulse_estado: dict[str, dict] = common._read_json(pulse_path, {})
+
+    def reconciliar(chave, alvo, titulo, corpo, acoes, estado_ntfy, agora_, plan, click=None, topico=None, emails=None):
+        """O motor do ntfy e, em paralelo e de melhor esforço, o mesmo aviso agendado no Pulse (FCM): o ntfy manda e nunca espera pelo Pulse."""
+        resultado = reconciliar_chave(chave, alvo, titulo, corpo, acoes, estado_ntfy, agora_, plan, click=click, topico=topico)
+        try:
+            pulse_eventos.reconciliar(chave, alvo, titulo, corpo, emails if emails is not None else pulse_eventos.emails_do_topico(config, topico),
+                                      pulse_estado, agora_, plan, tipo=f"tarefas.{chave.split(':')[0]}")
+        except Exception:     # noqa: BLE001 - nada do Pulse pode estragar os avisos do ntfy
+            log.exception("Pulse: falhou a reconciliação de %s", chave)
+        return resultado
 
     def contar(resultado: str) -> None:
         contagens[resultado] = contagens.get(resultado, 0) + 1
@@ -292,8 +305,9 @@ def _recalcular_sem_lock(sheets: SheetsClient, plan_only: bool) -> dict[str, int
         corpo = f"{inst.get('Pessoa')}: é a vez de \"{nome_tarefa}\" hoje."
         acoes = acoes_notificacao(instancia_id) if alvo is not None else None
 
-        resultado = reconciliar_chave(chave, alvo, titulo, corpo, acoes, estado, agora, plan_only, click=url_tab("hoje", instancia_id),
-                                      topico=common.topico_da_pessoa(config, str(inst.get('Pessoa', ''))))
+        resultado = reconciliar(chave, alvo, titulo, corpo, acoes, estado, agora, plan_only, click=url_tab("hoje", instancia_id),
+                                topico=common.topico_da_pessoa(config, str(inst.get('Pessoa', ''))),
+                                emails=pulse_eventos.emails_da_pessoa(config, str(inst.get('Pessoa', ''))))
         contar(resultado)
         if resultado in ("entregue", "presumivelmente_entregue") and not plan_only:
             sheets.update_cells("Instancias", inst["_rowIndex"], NotificacaoEnviada="TRUE")
@@ -311,18 +325,18 @@ def _recalcular_sem_lock(sheets: SheetsClient, plan_only: bool) -> dict[str, int
         for topico in topicos_piscina:
             chave = f"piscina:{linha.get('ID')}" + (f":{topico}" if topico else "")
             chaves_piscina.add(chave)
-            resultado = reconciliar_chave(chave, alvo, titulo, corpo, None, estado, agora, plan_only, click=url_tab("piscina", str(linha.get("ID"))), topico=topico)
+            resultado = reconciliar(chave, alvo, titulo, corpo, None, estado, agora, plan_only, click=url_tab("piscina", str(linha.get("ID"))), topico=topico)
             contar(resultado)
             entregue = entregue or resultado in ("entregue", "presumivelmente_entregue")
         if entregue and not plan_only:
             sheets.update_cells("Piscina", linha["_rowIndex"], NotificacaoEnviada="TRUE")
     for chave in [k for k in estado if k.startswith("piscina:") and k not in chaves_piscina]:
-        contar(reconciliar_chave(chave, None, "", "", None, estado, agora, plan_only))   # chave antiga (sem tópico) ou pessoa removida
+        contar(reconciliar(chave, None, "", "", None, estado, agora, plan_only))   # chave antiga (sem tópico) ou pessoa removida
 
     if sheets.tab_exists("Horario"):
         import horario
         try:
-            for resultado in horario.reconciliar(sheets, config, estado, agora, plan_only, reconciliar_chave, url_tab("horario")):
+            for resultado in horario.reconciliar(sheets, config, estado, agora, plan_only, reconciliar, url_tab("horario")):
                 contar(resultado)
         except Exception:   # o horário nunca pode impedir as notificações das tarefas (ex.: migração 005 por aplicar)
             log.exception("Horário escolar: falhou a reconciliação dos avisos")
@@ -330,6 +344,7 @@ def _recalcular_sem_lock(sheets: SheetsClient, plan_only: bool) -> dict[str, int
 
     if not plan_only:
         common._write_json_atomic(estado_path, estado)
+        common._write_json_atomic(pulse_path, pulse_estado)
         common._write_json_atomic(common._state_file("saude.json"), {
             "ultima_execucao": agora.isoformat(), "contagens": contagens,
         })

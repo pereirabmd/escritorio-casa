@@ -21,6 +21,6 @@ Legenda: **Feito** · **Pendente** · **Só Android** / **Só Web** (decidido).
 | Sessões e dispositivos | Feito | Feito | |
 | Administração (módulos) | Feito | Feito | |
 | Atualização da app | link para o APK | Feito (interna) | `version.json` (ADR-050) |
-| Notificações (FCM) | — | **Parcial** | FCM ligado no servidor e registo/canais/teste no APK (ADR-057); falta ligar cada módulo (Bilhetes CP, Tarefas, Finanças) |
+| Notificações (FCM) | — | **Feito** | FCM ligado; Bilhetes CP, Finanças e Tarefas avisam também pelo Pulse, em paralelo com o ntfy (ADR-057 a 060); faltam os botões de ação dentro da notificação |
 | Fila offline / cache | — | **Pendente** | fase 5 (Room, WorkManager) |
 | Puxar para atualizar | Pendente | Botão «Atualizar» | |

@@ -134,3 +134,11 @@ def receber(e: EventoIn, request: Request, u=Depends(servico), conn=Depends(get_
         estado = notifications.despachar(conn, id_, canais)
         notifications.repetir_pendentes(conn, canais)
     return {"id": id_, "novo": novo, "estado": estado}
+
+
+@internal.delete("/events/{chave}")
+def cancelar(chave: str, u=Depends(servico), conn=Depends(get_conn)):
+    """Cancela um aviso ainda **agendado** do dono (a tarefa foi feita ou adiada antes da hora). Um aviso já enviado não se toca; cancelar
+    um inexistente não é erro (`cancelado: false`), para quem chama poder repetir sem medo."""
+    n = conn.execute("DELETE FROM pulse_events WHERE chave = ? AND user_id = ? AND estado = 'agendado'", (chave, u["id"])).rowcount
+    return {"cancelado": n > 0}

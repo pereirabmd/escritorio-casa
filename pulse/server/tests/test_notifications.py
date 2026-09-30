@@ -1,4 +1,5 @@
 import json
+import time
 from datetime import datetime
 from urllib.parse import parse_qs
 from zoneinfo import ZoneInfo
@@ -320,3 +321,15 @@ def test_notificacao_de_teste(cliente, canal):
     r = cliente.post("/api/v1/notifications/test", headers={"X-Pulse-Client": "web"})
     assert r.status_code == 200 and r.json()["estado"] == "enviado" and r.json()["dispositivos"] == 1
     assert canal.enviados == [(TOKEN, "Notificação de teste")]
+
+
+def test_cancelar_aviso_agendado_so_enquanto_agendado(cliente, canal):
+    registar(cliente)
+    futuro = int(time.time()) + 3600
+    r = cliente.post("/api/v1/internal/events", json={**EVENTO, "chave": "tar-agendado-1", "entregarEm": futuro}, headers=SERVICO)
+    assert r.json()["estado"] == "agendado"
+    assert cliente.delete("/api/v1/internal/events/tar-agendado-1", headers=SERVICO).json() == {"cancelado": True}
+    assert cliente.delete("/api/v1/internal/events/tar-agendado-1", headers=SERVICO).json() == {"cancelado": False}      # repetir é inofensivo
+    cliente.post("/api/v1/internal/events", json={**EVENTO, "chave": "tar-enviado-01"}, headers=SERVICO)                  # este sai já
+    assert cliente.delete("/api/v1/internal/events/tar-enviado-01", headers=SERVICO).json() == {"cancelado": False}      # enviado: não se toca
+    assert cliente.delete("/api/v1/internal/events/tar-agendado-1").status_code == 401                                  # exige a chave de serviço

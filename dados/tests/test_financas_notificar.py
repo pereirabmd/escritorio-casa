@@ -36,6 +36,19 @@ class NotificarTest(unittest.TestCase):
         # segunda passagem no mesmo dia: nada
         self.assertEqual(fn.correr(self.conn, AGORA, enviar=lambda m: True), (0, 0))
 
+    def test_cada_aviso_vai_tambem_para_o_pulse_com_chave_estavel(self):
+        self.novo("Luz", "2031-05-10")
+        copias = []
+        fn.correr(self.conn, AGORA, enviar=lambda m: True, pulse=lambda m, chave: copias.append((m["title"], chave)))
+        self.assertEqual(copias, [("Vence hoje: Luz", "fin-l1-20310510")])
+
+    def test_pulse_desligado_ou_em_baixo_nao_afeta_o_ntfy(self):
+        self.assertEqual(fn.pulse_eventos({"title": "x", "message": "y"}, "c", env={}), 0)
+        env = {"PULSE_EVENTS_URL": "http://127.0.0.1:9/x", "PULSE_SERVICE_KEY": "k" * 40, "ACL_FINANCAS": "a@b.pt"}
+        self.assertEqual(fn.pulse_eventos({"title": "x", "message": "y"}, "c", env=env), 0)      # ligação recusada: não levanta
+        self.novo("Luz", "2031-05-10")
+        self.assertEqual(fn.correr(self.conn, AGORA, enviar=lambda m: True, pulse=lambda m, c: 0), (1, 0))
+
     def test_falha_do_ntfy_nao_marca_e_tenta_de_novo(self):
         self.novo("Luz", "2031-05-10")
         self.assertEqual(fn.correr(self.conn, AGORA, enviar=lambda m: False), (0, 1))

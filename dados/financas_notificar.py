@@ -4,7 +4,8 @@ mensais, financas_lembretes). Corre de meia em meia hora (financas-notificar.tim
 `notificado_em` garante um só aviso por lançamento, e um lançamento criado a meio do dia ainda avisa
 nesse dia. Sem insistência: se o dia passar, não há segundo aviso (a app mostra o que está vencido).
 
-Só biblioteca padrão. Config no .env: NTFY_SERVER_URL, NTFY_WRITE_USER, NTFY_WRITE_PASSWORD,
+Só biblioteca padrão. Cada aviso vai também para o Pulse (FCM): PULSE_EVENTS_URL, PULSE_SERVICE_KEY e, se preciso, PULSE_FINANCAS_USERS.
+Config no .env: NTFY_SERVER_URL, NTFY_WRITE_USER, NTFY_WRITE_PASSWORD,
 NTFY_FINANCAS_TOPIC (por omissão `financas`), FINANCAS_URL, NTFY_FINANCAS_ICON_URL (por omissão o ícone da app no GitHub Pages).
 Uso:  python3 financas_notificar.py [--simular]
 """
@@ -92,10 +93,33 @@ def publicar(msg: dict, env=os.environ) -> bool:
         return False
 
 
-def correr(conn, agora: datetime, enviar=publicar) -> tuple[int, int]:
-    """Devolve (enviados, falhados). Marca `notificado_em` só depois de o ntfy aceitar."""
+def pulse_eventos(msg: dict, chave: str, env=os.environ) -> int:
+    """Cópia do aviso para o Pulse (FCM, ADR-058/059): um evento por utilizador com acesso às Finanças (`PULSE_FINANCAS_USERS`, ou `ACL_FINANCAS`).
+    Desligada sem `PULSE_EVENTS_URL` e `PULSE_SERVICE_KEY`. Melhor esforço: nunca levanta exceção nem decide se o aviso conta como enviado;
+    a `chave` torna repetir o mesmo aviso inofensivo. Devolve quantos o Pulse aceitou."""
+    url, chave_servico = env.get("PULSE_EVENTS_URL", ""), env.get("PULSE_SERVICE_KEY", "")
+    destinatarios = [e.strip().lower() for e in (env.get("PULSE_FINANCAS_USERS") or env.get("ACL_FINANCAS", "")).split(",") if e.strip()]
+    if not (url and chave_servico and destinatarios):
+        return 0
+    aceites = 0
+    for email in destinatarios:
+        corpo = {"modulo": "financas", "tipo": "financas.aviso", "titulo": msg["title"][:200], "corpo": msg["message"][:1000],
+                 "dados": {"link": "pulse://financas"}, "chave": f"{chave}:{email.replace('@', '_')}"[:80]}
+        req = urllib.request.Request(url, data=json.dumps(corpo).encode(), method="POST",
+                                     headers={"Content-Type": "application/json", "X-Pulse-Key": chave_servico, "X-Pulse-User": email})
+        try:
+            with urllib.request.urlopen(req, timeout=5) as r:
+                aceites += 200 <= r.status < 300
+        except (urllib.error.URLError, OSError) as e:
+            LOG.warning("Pulse não recebeu o aviso para %s: %s", email, type(e).__name__)
+    return aceites
+
+
+def correr(conn, agora: datetime, enviar=publicar, pulse=pulse_eventos) -> tuple[int, int]:
+    """Devolve (enviados, falhados). Marca `notificado_em` só depois de o ntfy aceitar; o Pulse recebe uma cópia, sem decidir nada."""
     enviados = falhados = 0
     for l in pendentes_de_hoje(conn, agora.strftime("%Y-%m-%d")):
+        pulse(montar(l), f"fin-l{l['id']}-{agora:%Y%m%d}")
         if enviar(montar(l)):
             conn.execute("UPDATE financas_lancamentos SET notificado_em = ? WHERE id = ?",
                          (agora.strftime("%Y-%m-%d %H:%M:%S"), l["id"]))
@@ -103,6 +127,7 @@ def correr(conn, agora: datetime, enviar=publicar) -> tuple[int, int]:
         else:
             falhados += 1
     for l in lembretes_devidos(conn, agora):
+        pulse(montar_lembrete(l), f"fin-r{l['id']}-{agora:%Y%m%d}")
         if enviar(montar_lembrete(l)):
             conn.execute("UPDATE financas_lembretes SET ultimo_aviso = ? WHERE id = ?", (agora.strftime("%Y-%m-%d"), l["id"]))
             enviados += 1
