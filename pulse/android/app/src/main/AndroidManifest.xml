@@ -9,6 +9,7 @@
 
     <queries>
         <intent><action android:name="android.speech.RecognitionService" /></intent>
+        <intent><action android:name="android.intent.action.TTS_SERVICE" /></intent>   <!-- leitura por voz (ADR-080) -->
         <intent><action android:name="android.support.customtabs.action.CustomTabsService" /></intent>
     </queries>
 

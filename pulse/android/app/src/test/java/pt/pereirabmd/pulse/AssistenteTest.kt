@@ -4,6 +4,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Test
 import pt.pereirabmd.pulse.util.ComandoVoz
 import pt.pereirabmd.pulse.util.comandoVoz
+import pt.pereirabmd.pulse.util.paraLeitura
 
 class AssistenteTest {
     @Test fun confirmaECancelaPorVozSoComFrasesInteiras() {
@@ -18,5 +19,11 @@ class AssistenteTest {
 
     @Test fun semPropostasNaoHaNadaAConfirmar() {
         assertEquals(ComandoVoz.NENHUM, comandoVoz("confirma", false))
+    }
+
+    @Test fun textoParaLerEmVozAlta() {
+        assertEquals("Adicionar Pão à lista Casa. Confirmas?", paraLeitura("Adicionar «Pão» à lista «Casa».  Confirmas?"))
+        assertEquals("Aveiro para Lisboa Oriente, 06:45", paraLeitura("Aveiro → Lisboa Oriente · 06:45"))
+        assertEquals("Feito.", paraLeitura("**Feito.**"))
     }
 }

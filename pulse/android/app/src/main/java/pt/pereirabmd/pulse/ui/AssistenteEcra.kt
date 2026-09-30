@@ -7,6 +7,8 @@ import android.os.Bundle
 import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
+import android.speech.tts.TextToSpeech
+import android.speech.tts.UtteranceProgressListener
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
@@ -22,11 +24,14 @@ import org.json.JSONObject
 import pt.pereirabmd.pulse.data.*
 import pt.pereirabmd.pulse.util.ComandoVoz
 import pt.pereirabmd.pulse.util.comandoVoz
+import pt.pereirabmd.pulse.util.paraLeitura
 
 /**
  * Assistente (ADR-077): abre ao tocar no logotipo e começa logo a ouvir. O que se diz vai (como texto) ao servidor, que escolhe as ações; o que
  * escreve dados fica como **proposta** e só corre depois de confirmar — com um toque ou dizendo «confirma» (ou «cancela»).
  * A conversa é só texto e vive aqui; o servidor não guarda nada entre pedidos.
+ * **Leitura por voz (ADR-080):** o `TextToSpeech` do Android (motor do Google, pt-PT) lê a resposta quando o pedido foi falado e o interruptor «Responder por voz»
+ * está ligado; se há propostas, volta a ouvir logo a seguir para se poder dizer «confirma» ou «cancela» sem tocar no ecrã.
  */
 @Composable
 fun AssistenteFolha(aoFechar: () -> Unit, aoAlterado: () -> Unit) {
@@ -40,6 +45,37 @@ fun AssistenteFolha(aoFechar: () -> Unit, aoAlterado: () -> Unit) {
     var aPensar by remember { mutableStateOf(false) }
     var erro by remember { mutableStateOf<String?>(null) }
 
+    // --- leitura por voz ---------------------------------------------------------------------------------------------------------
+    val prefs = remember { ctx.getSharedPreferences("pulse_assistente", android.content.Context.MODE_PRIVATE) }
+    var responderVoz by remember { mutableStateOf(prefs.getBoolean("responder_voz", true)) }
+    var ultimoPorVoz by remember { mutableStateOf(false) }          // só se lê em voz alta quando o pedido foi falado (escrever = silêncio)
+    var leitor by remember { mutableStateOf<TextToSpeech?>(null) }
+    val depoisDeLer = remember { mutableStateOf<() -> Unit>({}) }   // ligado a `ouvir` mais abaixo
+    DisposableEffect(Unit) {
+        val ref = arrayOfNulls<TextToSpeech>(2)
+        val principal = android.os.Handler(android.os.Looper.getMainLooper())
+        fun preparar(t: TextToSpeech?) {
+            if (t == null) return
+            t.language = java.util.Locale("pt", "PT")
+            t.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
+                override fun onStart(id: String?) {}
+                override fun onError(id: String?) {}
+                override fun onDone(id: String?) { if (id == "ler-e-ouvir") principal.post { depoisDeLer.value() } }
+            })
+            leitor = t
+        }
+        // o motor do Google primeiro; se não existir neste telemóvel, o que estiver por omissão
+        ref[0] = TextToSpeech(ctx, { st -> if (st == TextToSpeech.SUCCESS) preparar(ref[0]) else ref[1] = TextToSpeech(ctx) { s2 -> if (s2 == TextToSpeech.SUCCESS) preparar(ref[1]) } }, "com.google.android.tts")
+        onDispose { ref.forEach { it?.stop(); it?.shutdown() } }
+    }
+    fun calar() { leitor?.stop() }
+    fun falar(t: String, ouvirDepois: Boolean = false) {
+        val l = leitor ?: return
+        if (!responderVoz || !ultimoPorVoz) return
+        val limpo = paraLeitura(t)
+        if (limpo.isNotEmpty()) l.speak(limpo, TextToSpeech.QUEUE_FLUSH, null, if (ouvirDepois) "ler-e-ouvir" else "ler")
+    }
+
     fun confirmar() {
         val lote = propostas; if (lote.isEmpty() || aPensar) return
         aPensar = true; erro = null
@@ -49,18 +85,19 @@ fun AssistenteFolha(aoFechar: () -> Unit, aoAlterado: () -> Unit) {
                 val rs = Api.post("/ai/confirm", corpo, 60_000).optJSONArray("resultados") ?: JSONArray()
                 val falhas = (0 until rs.length()).map { rs.getJSONObject(it) }.filter { !it.optBoolean("ok") }
                 propostas = emptyList()
-                conversa.add("assistente" to if (falhas.isEmpty()) "Feito." else "Nem tudo correu bem: " + falhas.joinToString("; ") { it.txtOu("erro") })
+                val resposta = if (falhas.isEmpty()) "Feito." else "Nem tudo correu bem: " + falhas.joinToString("; ") { it.txtOu("erro") }
+                conversa.add("assistente" to resposta); falar(resposta)
                 aoAlterado()
             } catch (e: Exception) { if (e is kotlinx.coroutines.CancellationException) throw e; erro = mensagemDeErro(e) } finally { aPensar = false }
         }
     }
 
-    fun enviar(frase: String) {
+    fun enviar(frase: String, porVoz: Boolean = false) {
         val f = frase.trim(); if (f.isEmpty() || aPensar) return
-        texto = ""
+        texto = ""; ultimoPorVoz = porVoz; calar()
         when (comandoVoz(f, propostas.isNotEmpty())) {
             ComandoVoz.CONFIRMAR -> { confirmar(); return }
-            ComandoVoz.CANCELAR -> { propostas = emptyList(); conversa.add("assistente" to "Cancelado. Não fiz nada."); return }
+            ComandoVoz.CANCELAR -> { propostas = emptyList(); conversa.add("assistente" to "Cancelado. Não fiz nada."); falar("Cancelado. Não fiz nada."); return }
             ComandoVoz.NENHUM -> {}
         }
         propostas = emptyList()            // um pedido novo substitui o que estava por confirmar
@@ -69,8 +106,11 @@ fun AssistenteFolha(aoFechar: () -> Unit, aoAlterado: () -> Unit) {
             try {
                 val msgs = JSONArray(conversa.map { jo("papel" to it.first, "texto" to it.second) })
                 val r = Api.post("/ai/command", jo("mensagens" to msgs), 60_000)
-                conversa.add("assistente" to r.txtOu("texto"))
+                val resposta = r.txtOu("texto")
+                conversa.add("assistente" to resposta)
                 propostas = r.objs("propostas")
+                // com propostas à espera, lê e volta a ouvir para «confirma» / «cancela» (a pergunta final é sempre dita)
+                falar(if (propostas.isNotEmpty() && !resposta.contains('?')) "$resposta Confirmas?" else resposta, ouvirDepois = propostas.isNotEmpty())
             } catch (e: Exception) { if (e is kotlinx.coroutines.CancellationException) throw e; erro = mensagemDeErro(e) } finally { aPensar = false }
         }
     }
@@ -78,12 +118,12 @@ fun AssistenteFolha(aoFechar: () -> Unit, aoAlterado: () -> Unit) {
     val disponivel = remember { SpeechRecognizer.isRecognitionAvailable(ctx) }
     val reconhecedor = remember { if (disponivel) SpeechRecognizer.createSpeechRecognizer(ctx) else null }
     DisposableEffect(Unit) { onDispose { reconhecedor?.destroy() } }
-    val enviarAtual by rememberUpdatedState(::enviar)
+    val enviarAtual by rememberUpdatedState<(String, Boolean) -> Unit> { f, v -> enviar(f, v) }
 
     fun ouvir() {
         val r = reconhecedor ?: return
         r.setRecognitionListener(object : RecognitionListener {
-            override fun onResults(res: Bundle?) { aOuvir = false; res?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull()?.let { enviarAtual(it) } }
+            override fun onResults(res: Bundle?) { aOuvir = false; res?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull()?.let { enviarAtual(it, true) } }
             override fun onPartialResults(p: Bundle?) { p?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull()?.let { texto = it } }
             override fun onError(codigo: Int) {
                 aOuvir = false
@@ -101,7 +141,9 @@ fun AssistenteFolha(aoFechar: () -> Unit, aoAlterado: () -> Unit) {
         aOuvir = true; erro = null
     }
     val pedirMicrofone = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { ok -> if (ok) ouvir() else erro = "Sem permissão do microfone. Podes escrever o pedido." }
+    SideEffect { depoisDeLer.value = ::ouvir }
     fun alternarMicrofone() {
+        calar()
         if (aOuvir) { reconhecedor?.stopListening(); return }
         if (ContextCompat.checkSelfPermission(ctx, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) ouvir() else pedirMicrofone.launch(Manifest.permission.RECORD_AUDIO)
     }
@@ -111,8 +153,10 @@ fun AssistenteFolha(aoFechar: () -> Unit, aoAlterado: () -> Unit) {
         if (ativo == true && disponivel) alternarMicrofone()         // abre a ouvir
     }
 
-    Folha("Assistente", { reconhecedor?.cancel(); aoFechar() }) {
+    Folha("Assistente", { calar(); reconhecedor?.cancel(); aoFechar() }) {
         if (ativo == false) { Texto2("O assistente ainda não está ligado neste servidor."); return@Folha }
+        if (leitor != null) Interruptor("Responder por voz", responderVoz, { responderVoz = it; prefs.edit().putBoolean("responder_voz", it).apply(); if (!it) calar() },
+            "Lê as respostas quando o pedido é falado.")
         if (conversa.isEmpty()) Texto2("Diz, por exemplo: «adiciona à lista de compras pão e cebolas» ou «o que tenho amanhã?».")
         conversa.forEach { (papel, t) ->
             Column(verticalArrangement = Arrangement.spacedBy(2.dp)) { Meta(if (papel == "utilizador") "Tu" else "Pulse"); if (papel == "utilizador") Texto2(t) else Texto(t) }

@@ -116,10 +116,10 @@
   <div class="chips">
     <span class="chip"><b>8</b> módulos</span>
     <span class="chip"><b>73</b> ações na camada oficial</span>
-    <span class="chip"><b>79</b> decisões (ADR)</span>
+    <span class="chip"><b>80</b> decisões (ADR)</span>
     <span class="chip"><b>486</b> testes do servidor</span>
     <span class="chip"><b>278</b> testes da Web</span>
-    <span class="chip">APK <b>0.4.1</b></span>
+    <span class="chip">APK <b>0.4.2</b></span>
     <span class="chip">Release <b>beta_20260930_34</b></span>
   </div>
   <div class="nota">Fonte de verdade: o código e <code>pulse/docs/DECISIONS.md</code>. Este ficheiro é um resumo organizado; em caso de dúvida, vale o ADR mais recente.</div>
@@ -236,6 +236,7 @@
     <li><b>Auditoria:</b> cada ação executada fica em <code>pulse_activity</code> com <code>origem = 'ia'</code>.</li>
     <li><b>Privacidade:</b> o texto dito e o que o modelo consulta vão para a Anthropic; a chave (<code>PULSE_AI_KEY</code>) fica só no Pi. Sem chave, o assistente mostra «ainda não está ligado».</li>
     <li>Modelo por omissão: Haiku 4.5 (<code>PULSE_AI_MODEL</code> muda-o).</li>
+    <li><b>Leitura por voz</b> (ADR-080): o <code>TextToSpeech</code> do Android (voz do Google, pt-PT) lê a resposta quando o pedido foi falado, com o interruptor «Responder por voz». Com propostas à espera, volta a ouvir para «confirma» ou «cancela». Sem custo nem servidor.</li>
   </ul>
   <div class="nota">Exceção à paridade com a Web: o assistente é só Android + Pi. <b>Por verificar:</b> o modelo real e a voz real no telemóvel (os testes usam um modelo falso).</div>
 </section>
@@ -349,7 +350,7 @@
   <h2>Android e Web</h2>
   <div class="tabela"><table>
     <tr><th>Tema</th><th>Android</th><th>Web</th></tr>
-    <tr><td>Estado</td><td>APK 0.4.1 (versionCode 20), todos os módulos nativos</td><td>Todos os módulos; servida pelo nginx do Pi</td></tr>
+    <tr><td>Estado</td><td>APK 0.4.2 (versionCode 21), todos os módulos nativos</td><td>Todos os módulos; servida pelo nginx do Pi</td></tr>
     <tr><td>Autenticação</td><td>Token cifrado + PIN + biometria</td><td>Cookie de sessão; sem PIN</td></tr>
     <tr><td>Notificações</td><td>FCM, canais por módulo, botões de ação, toque que abre o sítio certo</td><td>—</td></tr>
     <tr><td>Assistente de voz</td><td>Sim (toque no logo)</td><td>—</td></tr>
@@ -544,7 +545,7 @@ PULSE_ENV=development PULSE_DB_PATH=/tmp/teste-pulse.db .venv/bin/uvicorn pulse.
 <!-- ===================================================================== -->
 <section id="adrs">
   <h2>Decisões (ADR)</h2>
-  <p class="lead">79 decisões registadas em <code>pulse/docs/DECISIONS.md</code>. Resumo por tema:</p>
+  <p class="lead">80 decisões registadas em <code>pulse/docs/DECISIONS.md</code>. Resumo por tema:</p>
   <div class="tabela"><table>
     <tr><th>Tema</th><th>ADR</th></tr>
     <tr><td>Fundações: plataformas, base própria, escritas, offline, idioma, visual</td><td>001–030</td></tr>
@@ -560,6 +561,7 @@ PULSE_ENV=development PULSE_DB_PATH=/tmp/teste-pulse.db .venv/bin/uvicorn pulse.
     <tr><td>Assistente de voz (só Android + Pi)</td><td>077</td></tr>
     <tr><td>Bilhetes: favoritos e marcação por voz; propostas sem ids</td><td>078</td></tr>
     <tr><td>Custo do assistente (cache do prompt, menos ferramentas)</td><td>079</td></tr>
+    <tr><td>Assistente: leitura por voz (TextToSpeech do Google)</td><td>080</td></tr>
   </table></div>
 </section>
 

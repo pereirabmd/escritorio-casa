@@ -17,3 +17,7 @@ fun comandoVoz(texto: String, haPropostas: Boolean): ComandoVoz {
     val t = Normalizer.normalize(texto, Normalizer.Form.NFD).replace(Regex("\\p{Mn}+"), "").lowercase().replace(Regex("[^a-z ]"), " ").trim().replace(Regex("\\s+"), " ")
     return when (t) { in CONFIRMAR -> ComandoVoz.CONFIRMAR; in CANCELAR -> ComandoVoz.CANCELAR; else -> ComandoVoz.NENHUM }
 }
+
+/** O texto como se lê em voz alta: sem aspas angulares, «→» como «para», sem símbolos soltos nem espaços a mais. */
+fun paraLeitura(t: String): String =
+    t.replace("«", "").replace("»", "").replace("→", " para ").replace(Regex("[*_`#]"), "").replace(Regex("\\s*[·—]\\s*"), ", ").replace(Regex("\\s+"), " ").trim()
