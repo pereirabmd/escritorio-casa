@@ -56,7 +56,12 @@
     <h3>Passageiro e faturação</h3>
     <label>Nome do passageiro <input id="f-passageiro_nome" maxlength="100"></label>
     <div class="dois">
-      <label>Cartão de Cidadão <input id="f-passageiro_cc" maxlength="20"></label>
+      <label>Tipo de documento
+        <select id="f-passageiro_tipo_doc"><option value="CC">Cartão de Cidadão (CC)</option><option value="AR">Autorização de Residência (AR)</option></select>
+      </label>
+      <label>Número do documento <input id="f-passageiro_cc" maxlength="20"></label>
+    </div>
+    <div class="dois">
       <label>Telemóvel <input id="f-passageiro_telemovel" maxlength="25" placeholder="912345678"></label>
     </div>
     <label>NIF <input id="f-nif" inputmode="numeric" maxlength="15"></label>

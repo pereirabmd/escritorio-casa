@@ -29,7 +29,7 @@ def base_com_camila(completa=True, ativa=True, email="camila@exemplo.pt"):
     tmp = tempfile.TemporaryDirectory()
     caminho = Path(tmp.name) / "bilhetes.db"
     c = sqlite3.connect(caminho)
-    for f in ("001_bilhetes.sql", "002_tentativas.sql", "003_utilizadores.sql"):
+    for f in ("001_bilhetes.sql", "002_tentativas.sql", "003_utilizadores.sql", "004_tipo_documento.sql"):
         c.executescript((MIGRACOES / f).read_text())
     c.execute("INSERT INTO bilhetes_utilizadores (id, nome, email, ativo, cp_email, cp_password_enc, passageiro_nome, passageiro_cc, passageiro_telemovel, nif, passe_verde_numero) "
               "VALUES (2, 'Camila', ?, ?, ?, ?, ?, ?, ?, ?, ?)",
@@ -72,6 +72,19 @@ class CredenciaisTests(unittest.TestCase):
         with mock.patch.dict("os.environ", {"BILHETES_FERNET_KEY": Fernet.generate_key().decode()}), self.assertRaisesRegex(credenciais.CredenciaisIncompletas, "decifra"):
             credenciais.carregar(2, base=self.base)
 
+    def test_o_tipo_de_documento_vem_da_base_e_uma_base_antiga_sem_a_coluna_e_cc(self):
+        c = sqlite3.connect(self.base); c.execute("UPDATE bilhetes_utilizadores SET passageiro_tipo_doc = 'AR' WHERE id = 2"); c.commit(); c.close()
+        self.assertEqual(credenciais.carregar(2, base=self.base).passageiro_tipo_doc, "AR")
+        tmp = tempfile.TemporaryDirectory(); self.addCleanup(tmp.cleanup)           # base sem a migração 004: continua a funcionar, como CC
+        antiga = Path(tmp.name) / "b.db"
+        c = sqlite3.connect(antiga)
+        for f in ("001_bilhetes.sql", "002_tentativas.sql", "003_utilizadores.sql"):
+            c.executescript((MIGRACOES / f).read_text())
+        c.execute("INSERT INTO bilhetes_utilizadores (id, nome, ativo, cp_email, cp_password_enc, passageiro_nome, passageiro_cc, passageiro_telemovel, nif, passe_verde_numero) "
+                  "VALUES (2, 'Camila', 1, 'c@cp.pt', ?, 'Camila', '12345678', 'PT9', '1', '1')", (cifrar("s"),))
+        c.commit(); c.close()
+        self.assertEqual(credenciais.carregar(2, base=antiga).passageiro_tipo_doc, "CC")
+
     def test_email_pulse_e_nome(self):
         self.assertIsNone(credenciais.email_pulse(1, base=self.base))
         self.assertEqual(credenciais.email_pulse(2, base=self.base), "camila@exemplo.pt")
@@ -80,6 +93,7 @@ class CredenciaisTests(unittest.TestCase):
 
 class ClienteDaCpTests(unittest.TestCase):
     CAMILA = credenciais.Credenciais(2, "Camila", "camila.cp@exemplo.pt", "senha", "Camila Silva", "87654321", "PT933333333", "987654321", "7777777777")
+    CAMILA_AR = credenciais.Credenciais(2, "Camila", "camila.cp@exemplo.pt", "senha", "Camila Silva", "23K1M9850", "PT933333333", "987654321", "7777777777", "AR")
 
     def corpos(self, cliente):
         cliente._checked = mock.Mock()
@@ -95,6 +109,24 @@ class ClienteDaCpTests(unittest.TestCase):
         blob = str([pass_, cli, fisc, verde])
         for bruno in (_env.FAKE["CP_EMAIL"], _env.FAKE["CP_PASSENGER_CC"], _env.FAKE["CP_PASSENGER_NIF"], _env.FAKE["CP_GREEN_PASS_NUMBER"]):
             self.assertNotIn(bruno, blob)                                # nenhum dado do Bruno vai na compra dela
+
+    def test_tipo_de_documento_vai_no_passo_do_passageiro(self):
+        idtype = lambda cli: cli._checked.call_args_list[0].kwargs["body"]["salePassengers"][0]      # noqa: E731
+        cli = CPClient("tok", cred=self.CAMILA_AR)
+        cli._checked = mock.Mock(); cli.set_passengers(1)
+        p = idtype(cli)
+        self.assertEqual((p["idtype"], p["passengerID"]), ({"code": "AR", "designation": "Autorização de Residência"}, "23K1M9850"))
+        for cred in (self.CAMILA, None):                                       # CC (a de teste) e o Bruno (ambiente): Cartão de Cidadão, como sempre
+            cli = CPClient("tok", cred=cred)
+            cli._checked = mock.Mock(); cli.set_passengers(1)
+            self.assertEqual(idtype(cli)["idtype"], {"code": "CC", "designation": "Cartão de Cidadão"})
+        with self.assertRaises(ValueError):                                     # nunca se envia um tipo inventado
+            CPClient("tok", cred=credenciais.Credenciais(2, "X", "a@b.pt", "s", "N", "1", "1", "1", "1", "PP"))
+
+    def test_o_tipo_do_bruno_pode_vir_do_ambiente_mas_por_omissao_e_cc(self):
+        self.assertEqual(credenciais.do_ambiente().passageiro_tipo_doc, "CC")
+        with mock.patch.dict("os.environ", {"CP_PASSENGER_DOC_TYPE": "ar"}):
+            self.assertEqual(credenciais.do_ambiente().passageiro_tipo_doc, "AR")
 
     def test_sem_credenciais_continua_a_usar_o_ambiente(self):
         pass_, cli, fisc, verde = self.corpos(CPClient("tok"))

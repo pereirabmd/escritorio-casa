@@ -21,9 +21,11 @@ from pathlib import Path
 import db
 
 CAMPOS_TEXTO = ("cp_email", "passageiro_nome", "passageiro_cc", "passageiro_telemovel", "nif", "passe_verde_numero")
-CAMPOS = ("nome", "email", "admin", "ativo", *CAMPOS_TEXTO, "passe_data_ultima_compra", "passe_validade_dias")
+TIPOS_DOCUMENTO = {"CC": "Cartão de Cidadão", "AR": "Autorização de Residência"}      # o código que a CP espera no passo do passageiro
+CAMPOS = ("nome", "email", "admin", "ativo", *CAMPOS_TEXTO, "passageiro_tipo_doc", "passe_data_ultima_compra", "passe_validade_dias")
 _EMAIL = re.compile(r"^[^@\s]{1,64}@[^@\s]+\.[^@\s]{2,}$")
 _CC = re.compile(r"^[0-9A-Z]{8,12}$")
+_DOC = re.compile(r"^[0-9A-Z]{6,15}$")          # forma geral; o Cartão de Cidadão é conferido à parte (8 a 12)
 _TEL = re.compile(r"^(PT|\+\d{1,3})?\d{9,12}$")
 _PASSE = re.compile(r"^[0-9A-Za-z-]{4,30}$")
 _DATA = re.compile(r"^\d{4}-\d{2}-\d{2}$")
@@ -123,10 +125,15 @@ def validar_campo(campo: str, v):
         return e
     if campo == "passageiro_nome":
         return _texto(v, campo, 100)
-    if campo == "passageiro_cc":
+    if campo == "passageiro_tipo_doc":
+        t = _texto(v, campo, 4).upper()
+        if t not in TIPOS_DOCUMENTO:
+            raise UtilizadorErro(400, "tipo de documento inválido (CC ou AR)")
+        return t
+    if campo == "passageiro_cc":                        # o número do documento (CC ou AR, conforme `passageiro_tipo_doc`)
         c = re.sub(r"\s+", "", _texto(v, campo, 20)).upper()
-        if c and not _CC.match(c):
-            raise UtilizadorErro(400, "nº do Cartão de Cidadão inválido (8 a 12 letras/dígitos)")
+        if c and not _DOC.match(c):
+            raise UtilizadorErro(400, "número do documento inválido (6 a 15 letras ou dígitos)")
         return c
     if campo == "passageiro_telemovel":
         t = re.sub(r"[\s.-]+", "", _texto(v, campo, 25)).upper()
@@ -209,8 +216,15 @@ def _campos_validados(dados: dict, obrigatorio_nome: bool) -> tuple[dict, str | 
     return valores, _password(dados.get("password")), limpar
 
 
+def _coerencia_documento(tipo: str, numero: str) -> None:
+    """O número tem de ter a forma do documento escolhido: o Cartão de Cidadão tem 8 a 12 letras/dígitos; a Autorização de Residência, 6 a 15."""
+    if numero and tipo == "CC" and not _CC.match(numero):
+        raise UtilizadorErro(400, "nº do Cartão de Cidadão inválido (8 a 12 letras ou dígitos); se o documento é outro, escolhe o tipo certo")
+
+
 def criar(conn: sqlite3.Connection, dados: dict) -> dict:
     valores, pw, _ = _campos_validados(dados, obrigatorio_nome=True)
+    _coerencia_documento(valores.get("passageiro_tipo_doc", "CC"), valores.get("passageiro_cc", ""))
     if conn.execute("SELECT COUNT(*) FROM bilhetes_utilizadores").fetchone()[0] >= 20:
         raise UtilizadorErro(400, "limite de 20 utilizadores")
     if pw is not None:
@@ -230,6 +244,8 @@ def atualizar(conn: sqlite3.Connection, uid: int, dados: dict) -> tuple[dict, li
     if not obter(conn, uid):
         raise UtilizadorErro(404, "utilizador inexistente")
     _regras_admin(conn, uid, valores)
+    atual = obter(conn, uid)
+    _coerencia_documento(valores.get("passageiro_tipo_doc", atual["passageiro_tipo_doc"]), valores.get("passageiro_cc", atual["passageiro_cc"]))
     if pw is not None:
         valores["cp_password_enc"] = cifrar(pw)
     elif limpar:
@@ -265,7 +281,7 @@ def _conflito(e: Exception) -> str:
 
 # -- importação do .env do bilhetes_cp -------------------------------------
 
-ENV_PARA_CAMPO = {"CP_EMAIL": "cp_email", "CP_PASSENGER_NAME": "passageiro_nome", "CP_PASSENGER_CC": "passageiro_cc",
+ENV_PARA_CAMPO = {"CP_EMAIL": "cp_email", "CP_PASSENGER_NAME": "passageiro_nome", "CP_PASSENGER_CC": "passageiro_cc", "CP_PASSENGER_DOC_TYPE": "passageiro_tipo_doc",
                   "CP_PASSENGER_PHONE": "passageiro_telemovel", "CP_PASSENGER_NIF": "nif", "CP_GREEN_PASS_NUMBER": "passe_verde_numero"}
 
 

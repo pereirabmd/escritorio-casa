@@ -77,6 +77,22 @@ class BilhetesUtilizadoresTest(unittest.TestCase):
         self.assertEqual(bu.decifrar(self.conn.execute("SELECT cp_password_enc FROM bilhetes_utilizadores WHERE id=?", (u["id"],)).fetchone()[0]), "outra")
         self.assertFalse(bu.atualizar(self.conn, u["id"], {"limpar_password": True})[0]["cp_password_definida"])
 
+    def test_tipo_de_documento_cc_por_omissao_e_ar_para_a_camila(self):
+        self.assertEqual(bu.obter(self.conn, 1)["passageiro_tipo_doc"], "CC")                        # o Bruno (e quem já existia) fica CC
+        c = bu.criar(self.conn, {"nome": "Camila", "passageiro_tipo_doc": "ar", "passageiro_cc": "23k1m9850"})
+        self.assertEqual((c["passageiro_tipo_doc"], c["passageiro_cc"]), ("AR", "23K1M9850"))        # normaliza maiúsculas
+        self.assertEqual(bu.criar(self.conn, {"nome": "Davi"})["passageiro_tipo_doc"], "CC")
+        for mau in ("PP", "", "cartão"):
+            self.assertEqual(self.erro(bu.atualizar, self.conn, c["id"], {"passageiro_tipo_doc": mau}).status, 400, mau)
+
+    def test_o_numero_tem_de_ter_a_forma_do_documento_escolhido(self):
+        c = bu.criar(self.conn, {"nome": "Camila", "passageiro_tipo_doc": "AR", "passageiro_cc": "K12345"})      # 6 caracteres: serve para AR
+        self.assertEqual(c["passageiro_cc"], "K12345")
+        self.assertEqual(self.erro(bu.atualizar, self.conn, c["id"], {"passageiro_tipo_doc": "CC"}).status, 400)   # mas não para CC (8 a 12)
+        self.assertEqual(self.erro(bu.criar, self.conn, {"nome": "Ana", "passageiro_cc": "K12345"}).status, 400)   # CC por omissão
+        self.assertEqual(bu.atualizar(self.conn, c["id"], {"passageiro_cc": "23K1M9850", "passageiro_tipo_doc": "CC"})[0]["passageiro_tipo_doc"], "CC")
+        self.assertEqual(self.erro(bu.criar, self.conn, {"nome": "Bia", "passageiro_tipo_doc": "AR", "passageiro_cc": "abc"}).status, 400)   # curto demais em qualquer tipo
+
     def test_sem_chave_recusa_guardar_password(self):
         import os
         os.environ.pop("BILHETES_FERNET_KEY")

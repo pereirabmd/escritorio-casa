@@ -50,6 +50,9 @@ PASSENGER_CC = os.environ["CP_PASSENGER_CC"]          # nº Cartão de Cidadão
 PASSENGER_PHONE = os.environ["CP_PASSENGER_PHONE"]     # ex: PT9XXXXXXXX
 PASSENGER_NIF = os.environ["CP_PASSENGER_NIF"]
 GREEN_PASS_NUMBER = os.environ["CP_GREEN_PASS_NUMBER"]  # nº do Passe Ferroviário Verde
+# Tipos de documento do passageiro: código → designação que a CP espera (o perfil da CP mostra `AR` = «Autorização de Residência»).
+TIPOS_DOCUMENTO = {"CC": "Cartão de Cidadão", "AR": "Autorização de Residência"}
+PASSENGER_DOC_TYPE = (os.environ.get("CP_PASSENGER_DOC_TYPE", "") or "CC").strip().upper()      # o Bruno: CC, como sempre
 
 # Só para o uso manual (CLI). O sistema agendado lê as estações de app_config.
 STATION_CODES = {
@@ -376,6 +379,9 @@ class CPClient:
         self.telemovel = cred.passageiro_telemovel if cred else PASSENGER_PHONE
         self.nif = cred.nif if cred else PASSENGER_NIF
         self.passe = cred.passe_numero if cred else GREEN_PASS_NUMBER
+        self.tipo_doc = (cred.passageiro_tipo_doc if cred else PASSENGER_DOC_TYPE).upper()
+        if self.tipo_doc not in TIPOS_DOCUMENTO:
+            raise ValueError(f"tipo de documento desconhecido: {self.tipo_doc!r}")      # nunca se envia um tipo inventado
 
     def _headers(self, api_key: str, with_client_id: bool = False, with_token: bool = True) -> dict:
         h = {
@@ -528,7 +534,7 @@ class CPClient:
 
     def set_passengers(self, sale_id: int) -> CPResponse:
         body = {"salePassengers": [{
-            "idtype": {"code": "CC", "designation": "Cartão de Cidadão"},
+            "idtype": {"code": self.tipo_doc, "designation": TIPOS_DOCUMENTO[self.tipo_doc]},
             "passengerID": self.cc,
             "passengerName": self.nome,
         }]}

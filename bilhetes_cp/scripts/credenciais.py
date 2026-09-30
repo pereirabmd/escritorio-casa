@@ -36,6 +36,7 @@ class Credenciais:
     passageiro_telemovel: str
     nif: str
     passe_numero: str
+    passageiro_tipo_doc: str = "CC"        # CC (Cartão de Cidadão) ou AR (Autorização de Residência): o código que a CP espera no passo do passageiro
 
     def __repr__(self) -> str:                 # nunca deixa a password nem os documentos ir parar a um log por engano
         return f"Credenciais(utilizador_id={self.utilizador_id}, nome={self.nome!r})"
@@ -45,7 +46,8 @@ def do_ambiente() -> Credenciais:
     """O utilizador 1, a partir do `.env` (o mesmo que o `cp_ticket` sempre leu)."""
     e = os.environ.get
     return Credenciais(UTILIZADOR_PRINCIPAL, "Bruno", e("CP_EMAIL", ""), e("CP_PASSWORD", ""), e("CP_PASSENGER_NAME", ""), e("CP_PASSENGER_CC", ""),
-                       e("CP_PASSENGER_PHONE", ""), e("CP_PASSENGER_NIF", ""), e("CP_GREEN_PASS_NUMBER", ""))
+                       e("CP_PASSENGER_PHONE", ""), e("CP_PASSENGER_NIF", ""), e("CP_GREEN_PASS_NUMBER", ""),
+                       (e("CP_PASSENGER_DOC_TYPE", "") or "CC").strip().upper())
 
 
 _CAMPOS = (("cp_email", "e-mail da CP"), ("cp_password_enc", "password da CP"), ("passageiro_nome", "nome do passageiro"), ("passageiro_cc", "cartão de cidadão"),
@@ -84,7 +86,8 @@ def carregar(utilizador_id: int, base: Path | str | None = None) -> Credenciais:
     if em_falta:
         raise CredenciaisIncompletas(f"faltam dados de {u['nome']}: " + ", ".join(em_falta))
     return Credenciais(utilizador_id, u["nome"], u["cp_email"].strip(), _decifrar(u["cp_password_enc"]), u["passageiro_nome"].strip(), u["passageiro_cc"].strip(),
-                       u["passageiro_telemovel"].strip(), u["nif"].strip(), u["passe_verde_numero"].strip())
+                       u["passageiro_telemovel"].strip(), u["nif"].strip(), u["passe_verde_numero"].strip(),
+                       (u["passageiro_tipo_doc"] if "passageiro_tipo_doc" in u.keys() else "CC") or "CC")
 
 
 def email_pulse(utilizador_id: int, base: Path | str | None = None) -> str | None:

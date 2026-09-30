@@ -370,7 +370,7 @@ def admin_utilizadores(ctx):
         raise ApiError(403, "so_admin", "só para administradores")
     rows = ctx.db().execute(
         "SELECT id, nome, email, admin, ativo, cp_email <> '' AS cp_email, cp_password_enc <> '' AS cp_password, nif <> '' AS nif, "
-        "passe_verde_numero <> '' AS passe_verde, passageiro_cc <> '' AS cc, passe_data_ultima_compra, passe_validade_dias "
+        "passe_verde_numero <> '' AS passe_verde, passageiro_cc <> '' AS cc, passageiro_tipo_doc AS tipo_doc, passe_data_ultima_compra, passe_validade_dias "
         "FROM bilhetes_utilizadores ORDER BY id").fetchall()
     us = []
     for r in rows:

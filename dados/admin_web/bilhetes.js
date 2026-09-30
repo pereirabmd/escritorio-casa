@@ -40,7 +40,7 @@ async function carregar() {
         el('strong', {}, u.nome), u.admin ? el('span', { class: 'etiqueta' }, 'admin') : null, u.ativo ? null : el('span', { class: 'etiqueta' }, 'inativo'),
         el('span', { class: 'esp' }), el('button', { class: 'sec' }, 'Editar')),
       el('div', { class: 'mut' }, u.email ? 'Login: ' + u.email : 'Sem login próprio (marca-se por ele)'),
-      el('div', { class: 'marcas' }, marca(!!u.cp_email, 'e-mail CP'), marca(u.cp_password_definida, 'password CP'), marca(!!u.passageiro_cc, 'CC'),
+      el('div', { class: 'marcas' }, marca(!!u.cp_email, 'e-mail CP'), marca(u.cp_password_definida, 'password CP'), marca(!!u.passageiro_cc, u.passageiro_tipo_doc || 'CC'),
         marca(!!u.nif, 'NIF'), marca(!!u.passe_verde_numero, 'Passe Verde'),
         u.passe_data_ultima_compra ? el('span', { class: 'mut' }, 'passe carregado a ' + u.passe_data_ultima_compra) : null));
     cartao.querySelector('button').addEventListener('click', () => abrir(u));
@@ -48,12 +48,13 @@ async function carregar() {
   }));
 }
 
-const CAMPOS_TEXTO = ['nome', 'email', 'cp_email', 'passageiro_nome', 'passageiro_cc', 'passageiro_telemovel', 'nif', 'passe_verde_numero', 'passe_data_ultima_compra'];
+const CAMPOS_TEXTO = ['nome', 'email', 'cp_email', 'passageiro_nome', 'passageiro_tipo_doc', 'passageiro_cc', 'passageiro_telemovel', 'nif', 'passe_verde_numero', 'passe_data_ultima_compra'];
 
 function abrir(u) {
   editar = u ? u.id : 'novo';
   $('dlg-titulo').textContent = u ? 'Editar ' + u.nome : 'Novo utilizador';
   for (const c of CAMPOS_TEXTO) $('f-' + c).value = (u && u[c]) || '';
+  $('f-passageiro_tipo_doc').value = (u && u.passageiro_tipo_doc) || 'CC';
   $('f-admin').checked = !!(u && u.admin); $('f-ativo').checked = u ? !!u.ativo : true;
   $('f-passe_validade_dias').value = u ? u.passe_validade_dias : 29;
   $('f-password').value = ''; $('f-limpar').checked = false;
