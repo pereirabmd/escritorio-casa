@@ -77,11 +77,13 @@ a.list-item:hover, button.list-item:hover { background: var(--surface-2); }
 /* teclado virtual aberto: a barra de baixo sai da frente do formulário */
 @media (max-width: 899px) { :root[data-teclado] .nav { display: none; } :root[data-teclado] .main { padding-bottom: var(--s6); } }
 
-/* cartões do Hoje reordenáveis (ADR-054) */
-.cartao-ord { position: relative; display: grid; }
+/* cartões do Hoje pela ordem do utilizador (ADR-054) */
+.cartao-ord { display: grid; }
 .cartao-ord > .card { height: 100%; }
-.cartao-ord .card-head { padding-right: 36px; }
-.cartao-ord .pega { position: absolute; top: var(--s3); right: var(--s3); width: 32px; height: 32px; display: grid; place-items: center; border: 0; background: transparent; color: var(--text-2); border-radius: var(--r-s); cursor: grab; touch-action: none; }
-.cartao-ord .pega:hover, .cartao-ord .pega:focus-visible { background: var(--surface-2); color: var(--text); }
-.cartao-ord[data-a-arrastar='true'] { opacity: .85; box-shadow: 0 6px 18px rgba(0, 0, 0, .18); z-index: 2; }
-.cartao-ord[data-a-arrastar='true'] .pega { cursor: grabbing; }
+
+/* Definições › Ordem do Hoje */
+.ordem-lista { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--s2); }
+.ordem-lista li { display: flex; align-items: center; gap: var(--s3); padding: var(--s2) var(--s3); border: 1px solid var(--line); border-radius: var(--r-m); background: var(--surface); }
+.ordem-lista li[data-a-arrastar='true'] { box-shadow: 0 6px 18px rgba(0, 0, 0, .18); opacity: .9; }
+.ordem-lista .pega { width: 32px; height: 32px; display: grid; place-items: center; border: 0; background: transparent; color: var(--text-2); border-radius: var(--r-s); cursor: grab; touch-action: none; flex: none; }
+.ordem-lista .pega:hover, .ordem-lista .pega:focus-visible { background: var(--surface-2); color: var(--text); }

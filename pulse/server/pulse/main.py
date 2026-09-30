@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import time
 import asyncio
 import logging
 from contextlib import asynccontextmanager
@@ -105,6 +106,17 @@ def create_app(settings: config.Settings | None = None, dados: DadosClient | Non
     app.state.db = lambda: db.connect(settings.db_path)   # uma ligação por uso: os endpoints correm em threads
     app.state.agora = lambda: datetime.now(settings.tz)     # substituível nos testes
     app.state.limite_login = RateLimiter(10)   # tentativas de login por IP e minuto (o nginx limita antes)
+
+    @app.middleware("http")
+    async def pedidos_lentos(request, call_next):
+        """Regista os pedidos que demoram mais de meio segundo (diagnóstico de lentidão; o log de acesso do uvicorn não tem tempos)."""
+        t = time.monotonic()
+        resposta = await call_next(request)
+        dt = time.monotonic() - t
+        if dt > 0.5:
+            logging.getLogger("pulse.lento").warning("%s %s demorou %.2fs (%s)", request.method, request.url.path, dt, resposta.status_code)
+        return resposta
+
     app.include_router(health.router, prefix="/api/v1")
     app.include_router(auth.router, prefix="/api/v1")
     app.include_router(dashboard.router, prefix="/api/v1")

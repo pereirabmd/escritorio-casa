@@ -4,6 +4,7 @@ import { api, mensagemDeErro } from '../api/client'
 import type { ContaGoogle, ServicoGoogle, Sessao } from '../api/types'
 import { useAuth, useUtilizador } from '../auth/AuthContext'
 import { Icon } from '../components/Icon'
+import { OrdemHoje } from '../components/OrdemHoje'
 import { Botao, Esqueleto, Notice } from '../components/ui'
 import { irPara } from '../lib/navegacao'
 import { useModulos } from '../lib/modulos'
@@ -190,6 +191,7 @@ export function SettingsScreen() {
           <Link to="/definicoes/password" className="list-item"><Icon nome="chave" /><span className="row-main">Mudar palavra-passe</span><Icon nome="seta" tamanho={18} /></Link>
         </div>
       </section>
+      <OrdemHoje />
       <ContasGoogle />
       {u.admin && <AdministracaoModulos />}
       <Sessoes />

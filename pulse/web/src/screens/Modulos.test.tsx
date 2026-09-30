@@ -72,3 +72,15 @@ describe('Administração', () => {
     expect(within(adm).getByRole('switch', { name: 'RTO: ativo' })).toBeInTheDocument()
   })
 })
+
+describe('Ordem do Hoje (Definições)', () => {
+  test('as setas mudam a ordem e guardam-na', async () => {
+    const { pedidos } = abrir('/definicoes', { 'GET /dashboard/order': () => [200, { ordem: ['calendario', 'tarefas', 'peso'] }], 'PUT /dashboard/order': () => [200, { ordem: [] }] })
+    const pega = await screen.findByRole('button', { name: /Mover Tarefas/ })
+    pega.focus()
+    await userEvent.keyboard('{ArrowDown}')
+    const nomes = screen.getAllByRole('button', { name: /^Mover / }).map((b) => b.getAttribute('aria-label'))
+    expect(nomes[1]).toMatch(/Peso/); expect(nomes[2]).toMatch(/Tarefas/)
+    await waitFor(() => expect(pedidos.some((p) => p.metodo === 'PUT' && p.caminho.includes('/dashboard/order') && JSON.stringify(p.corpo).includes('"peso","tarefas"'))).toBe(true))
+  })
+})

@@ -73,7 +73,12 @@ as APIs dos módulos (ADR-031) e devolve:
 cada módulo: { estado: "ok" | "indisponivel" | "sem_acesso" | "erro", dados | erro{codigo,mensagem} }
 ```
 
-### `PUT /api/v1/dashboard/order` (implementado, ADR-054)
+### `GET /api/v1/dashboard/today?modulos=a,b` (ADR-055)
+Só os módulos indicados (ids de `calendario, tarefas, email, bilhetes, rto, peso, compras, financas`; desconhecidos ignorados); os restantes não são pedidos aos módulos. Calendário e Email têm cache de 60 s por utilizador.
+
+### `GET` e `PUT /api/v1/dashboard/order` (implementado, ADR-054)
+`GET` devolve `{ ordem }` (completa), para o ecrã Definições › Ordem do Hoje.
+
 Corpo `{ ordem: ["peso", "tarefas", …] }` (ids de `calendario, tarefas, email, bilhetes, rto, peso, compras, financas`, sem repetidos; pode ser parcial). Guarda a ordem do utilizador e devolve `{ ordem }` completa. Ids desconhecidos ou repetidos: `422 ordem_invalida`.
 
 Modo degradado: um módulo que falha aparece com o seu `estado` e os restantes continuam (o agregado passa a `degradado`);

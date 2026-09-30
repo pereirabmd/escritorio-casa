@@ -46,6 +46,15 @@ class ModelsTest {
         assertTrue(parseHoje(hoje).ordem.isEmpty())          // servidor antigo: vale a ordem de origem
     }
 
+    @Test fun atualizacaoParcialSoMudaOsModulosPedidos() {
+        val antes = parseHoje(hoje)
+        val novo = parseHoje(JSONObject("""{"estado":"ok","data":"2026-09-29","modulos":{"peso":{"estado":"ok","dados":{"registadoHoje":true,"sugestao":80.6,"ultimo":{"quando":"2026-09-29 07:30:00","peso":80.6}}}}}"""))
+        val depois = antes.fundir(novo, setOf("peso"))
+        assertEquals(80.6, depois.peso.dados!!.ultimoPeso!!, 0.001)
+        assertEquals(antes.tarefas, depois.tarefas); assertEquals(antes.financas, depois.financas)       // o resto fica como estava
+        assertFalse(depois.degradado)                                                                     // o peso que falhava passou a ok
+    }
+
     @Test fun moduloEmFaltaNaoRebenta() {
         val h = parseHoje(JSONObject("""{"estado":"ok","data":"2026-09-29","modulos":{}}"""))
         assertEquals("erro", h.tarefas.estado); assertNull(h.compras)

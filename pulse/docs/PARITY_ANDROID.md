@@ -1,6 +1,6 @@
 # Paridade Android ↔ Web
 
-O Pulse tem duas interfaces sobre o mesmo servidor (as regras vivem no servidor, ADR-050). A partir de 29/09/2026 **cada funcionalidade nova é entregue nas duas** e discutida antes de implementar. Estado a 29/09/2026 (Android `0.2.3`, ADR-051/052/053/054).
+O Pulse tem duas interfaces sobre o mesmo servidor (as regras vivem no servidor, ADR-050). A partir de 29/09/2026 **cada funcionalidade nova é entregue nas duas** e discutida antes de implementar. Estado a 29/09/2026 (Android `0.2.4`, ADR-051/052/053/054).
 Legenda: **Feito** · **Pendente** · **Só Android** / **Só Web** (decidido).
 
 | Funcionalidade | Web | Android | Notas |
@@ -8,8 +8,8 @@ Legenda: **Feito** · **Pendente** · **Só Android** / **Só Web** (decidido).
 | Início de sessão, mudança obrigatória e mudança da palavra-passe | Feito | Feito | Web: cookie; Android: token `Bearer` cifrado |
 | PIN e biometria | — | Feito | só Android (CLAUDE.md) |
 | Tema Sistema/Claro/Escuro | Feito | Feito | |
-| Hoje (cartões e ações: concluir/adiar, RTO, peso, pagar, comprar) | Feito | Feito | |
-| Hoje: ordenar os cartões por arrastar (ordem no servidor, por utilizador) | Feito | Feito | ADR-054 |
+| Hoje (cartões e ações: concluir/adiar, RTO, peso, pagar, comprar) | Feito | Feito | atualização parcial por módulo e alteração imediata em concluir/peso (ADR-055) |
+| Definições › Ordem do Hoje: ordenar os cartões por arrastar (ordem no servidor, por utilizador) | Feito | Feito | ADR-054 |
 | Tarefas (Hoje, Calendário, Tarefas, Horário, Piscina, Config, administração, CSV) | Feito | Feito | Google Calendar de uma tarefa: calendário do telemóvel |
 | Peso (Resumo, Gráfico, Registos, Configuração) | Feito | Feito | |
 | RTO (Calendário, Ano, Notas, modo administrador, validações) | Feito | Feito | |

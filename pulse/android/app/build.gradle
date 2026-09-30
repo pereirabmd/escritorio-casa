@@ -18,8 +18,8 @@ android {
         applicationId 'pt.pereirabmd.pulse'
         minSdk 29
         targetSdk 34
-        versionCode 5
-        versionName '0.2.3'
+        versionCode 6
+        versionName '0.2.4'
         // Endereço do servidor Pulse; mudar aqui para apontar a outro ambiente.
         buildConfigField 'String', 'SERVER', '"https://bmdpereira.duckdns.org/pulse"'
     }

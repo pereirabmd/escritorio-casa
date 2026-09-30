@@ -94,13 +94,13 @@ val LocalAvisos = staticCompositionLocalOf<Avisos> { error("sem Avisos") }
  * Executa ações do Pulse (`POST /actions/<nome>`) com «a executar» por chave e erro em pt-PT (espelho de `useAcao`).
  * `executar` devolve o `resultado` (um objeto, por isso verdadeiro) ou `null` se falhou; chama `depois` só quando correu bem.
  */
-class Acoes(private val scope: CoroutineScope, private val depois: () -> Unit) {
+class Acoes(private val scope: CoroutineScope, private val depois: (String) -> Unit) {
     var ocupado by mutableStateOf<String?>(null); private set
     var erro by mutableStateOf<String?>(null)
 
-    fun executar(chave: String, nome: String, params: JSONObject, confirmado: Boolean = false, aoConcluir: (JSONObject) -> Unit = {}) {
+    fun executar(chave: String, nome: String, params: JSONObject, confirmado: Boolean = false, aoFalhar: () -> Unit = {}, aoConcluir: (JSONObject) -> Unit = {}) {
         if (ocupado != null) return
-        scope.launch { val r = executarAgora(chave, nome, params, confirmado); if (r != null) aoConcluir(r) }
+        scope.launch { val r = executarAgora(chave, nome, params, confirmado); if (r != null) aoConcluir(r) else aoFalhar() }
     }
 
     suspend fun executarAgora(chave: String, nome: String, params: JSONObject, confirmado: Boolean = false): JSONObject? {
@@ -108,7 +108,7 @@ class Acoes(private val scope: CoroutineScope, private val depois: () -> Unit) {
         return try {
             val corpo = jo("params" to params).also { if (confirmado) it.put("confirmado", true) }
             val r = Api.post("/actions/$nome", corpo).optJSONObject("resultado") ?: JSONObject()
-            depois(); r
+            depois(nome); r
         } catch (e: Exception) {
             if (e is kotlinx.coroutines.CancellationException) throw e
             erro = mensagemDeErro(e); null
@@ -117,10 +117,11 @@ class Acoes(private val scope: CoroutineScope, private val depois: () -> Unit) {
 }
 
 @Composable
-fun rememberAcoes(depois: () -> Unit): Acoes {
+/** `depois` recebe o nome da ação executada (por exemplo `peso.registar`). */
+fun rememberAcoes(depois: (String) -> Unit): Acoes {
     val scope = rememberCoroutineScope()
     val atual by rememberUpdatedState(depois)
-    return remember { Acoes(scope) { atual() } }
+    return remember { Acoes(scope) { nome -> atual(nome) } }
 }
 
 @Composable

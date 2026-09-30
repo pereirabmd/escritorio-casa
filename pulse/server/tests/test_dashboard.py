@@ -249,9 +249,21 @@ def test_ordem_dos_cartoes_guarda_se_por_utilizador_e_completa_se(app_cliente):
     r = app_cliente.put("/api/v1/dashboard/order", json={"ordem": ["peso", "tarefas"]}, headers=H)
     assert r.status_code == 200 and r.json()["ordem"][:2] == ["peso", "tarefas"] and sorted(r.json()["ordem"]) == sorted(origem)
     assert app_cliente.get("/api/v1/dashboard/today").json()["ordem"] == r.json()["ordem"]
+    assert app_cliente.get("/api/v1/dashboard/order").json() == {"ordem": r.json()["ordem"]}
 
 
 @pytest.mark.parametrize("ordem", [["peso", "peso"], ["nao_existe"], []])
 def test_ordem_invalida_e_recusada(app_cliente, ordem):
     app_cliente.post("/api/v1/auth/login", json={"email": EMAIL, "password": "1234qweR"})
     assert app_cliente.put("/api/v1/dashboard/order", json={"ordem": ordem}, headers=H).status_code in (400, 422)
+
+
+def test_atualizacao_parcial_so_pede_os_modulos_indicados(app_cliente):
+    preparar()
+    app_cliente.post("/api/v1/auth/login", json={"email": EMAIL, "password": "1234qweR"})
+    FalsoDados.pedidos.clear()
+    r = app_cliente.get("/api/v1/dashboard/today?modulos=peso")
+    assert r.status_code == 200 and set(r.json()["modulos"]) == {"peso"} and r.json()["ordem"]
+    assert [p[0].split("?")[0] for p in FalsoDados.pedidos] == ["/peso/registos"]      # nada mais foi pedido (nem tarefas, nem Google)
+    assert set(app_cliente.get("/api/v1/dashboard/today?modulos=tarefas,rto,nao_existe").json()["modulos"]) == {"tarefas", "rto"}
+    assert len(app_cliente.get("/api/v1/dashboard/today").json()["modulos"]) >= 7

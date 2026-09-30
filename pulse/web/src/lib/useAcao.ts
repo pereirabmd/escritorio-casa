@@ -2,7 +2,7 @@ import { useCallback, useState } from 'react'
 import { api, mensagemDeErro } from '../api/client'
 
 /** Executa ações do Pulse (`POST /actions/<nome>`), com «a executar» por chave e erro em pt-PT. */
-export function useAcao(depois: () => void) {
+export function useAcao(depois: (nome: string) => void) {
   const [ocupado, setOcupado] = useState<string | null>(null)
   const [erro, setErro] = useState<string | null>(null)
 
@@ -12,7 +12,7 @@ export function useAcao(depois: () => void) {
     setErro(null)
     try {
       const r = await api.post<{ resultado?: Record<string, unknown> }>(`/actions/${nome}`, confirmado ? { params, confirmado: true } : { params })
-      depois()
+      depois(nome)
       return r.resultado ?? {}
     } catch (e) {
       setErro(mensagemDeErro(e))

@@ -50,6 +50,14 @@ data class Hoje(
     val ordem: List<String> = emptyList(),
 ) {
     /** Os módulos que falharam (não conta `sem_acesso`, `nao_ligado` nem `desativado`), pelo nome que o utilizador conhece. */
+    /** Junta a atualização parcial (`?modulos=`): só os módulos indicados mudam. */
+    fun fundir(n: Hoje, so: Set<String>): Hoje = copy(
+        tarefas = if ("tarefas" in so) n.tarefas else tarefas, bilhetes = if ("bilhetes" in so) n.bilhetes else bilhetes,
+        rto = if ("rto" in so) n.rto else rto, peso = if ("peso" in so) n.peso else peso, financas = if ("financas" in so) n.financas else financas,
+        compras = if ("compras" in so) n.compras else compras, calendario = if ("calendario" in so) n.calendario else calendario,
+        email = if ("email" in so) n.email else email, ordem = n.ordem.ifEmpty { ordem },
+    ).let { it.copy(degradado = it.falhados().isNotEmpty()) }
+
     fun falhados(): List<String> = buildList {
         fun ver(nome: String, m: Modulo<*>?) { if (m != null && (m.estado == "indisponivel" || m.estado == "erro")) add(nome) }
         ver("Calendário", calendario); ver("Tarefas", tarefas); ver("Email", email); ver("Bilhetes CP", bilhetes)

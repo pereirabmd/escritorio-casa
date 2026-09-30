@@ -247,16 +247,22 @@ describe('compras', () => {
   })
 })
 
+describe('rapidez das ações', () => {
+  test('concluir tira a tarefa logo e depois só volta a pedir o módulo das tarefas', async () => {
+    const { pedidos } = abrir({ 'POST /actions/tarefas.concluir': () => OK, 'GET /dashboard/today?modulos=tarefas': () => [200, { ...HOJE, modulos: { tarefas: { estado: 'ok', dados: { ...HOJE.modulos.tarefas.dados, hoje: HOJE.modulos.tarefas.dados.hoje.slice(1) } } } }] })
+    await userEvent.click(await screen.findByRole('button', { name: 'Concluir Limpar WC' }))
+    expect(screen.queryByRole('button', { name: 'Concluir Limpar WC' })).toBeNull()
+    await waitFor(() => expect(pedidos.some((p) => p.metodo === 'GET' && p.caminho.includes('/dashboard/today?modulos=tarefas'))).toBe(true))
+    expect(pedidos.filter((p) => p.metodo === 'GET' && p.caminho.endsWith('/dashboard/today'))).toHaveLength(1)    // o pedido completo só no arranque
+  })
+})
+
 describe('ordem dos cartões', () => {
-  test('mostra a ordem guardada e as setas da pega mudam-na e guardam-na', async () => {
-    const { pedidos } = abrir({ 'PUT /dashboard/order': () => [200, { ordem: [] }] }, { ...HOJE, ordem: ['peso', 'tarefas', 'rto', 'financas', 'calendario', 'email', 'bilhetes', 'compras'] })
-    const pega = await screen.findByRole('button', { name: /Mover o cartão Peso/ })
-    const antes = screen.getAllByRole('button', { name: /Mover o cartão/ }).map((b) => b.getAttribute('aria-label'))
-    expect(antes[0]).toMatch(/Peso/); expect(antes[1]).toMatch(/Tarefas/)
-    pega.focus()
-    await userEvent.keyboard('{ArrowDown}')
-    const depois = screen.getAllByRole('button', { name: /Mover o cartão/ }).map((b) => b.getAttribute('aria-label'))
-    expect(depois[0]).toMatch(/Tarefas/); expect(depois[1]).toMatch(/Peso/)
-    await waitFor(() => expect(pedidos.some((p) => p.metodo === 'PUT' && p.caminho.includes('/dashboard/order'))).toBe(true))
+  test('o Hoje segue a ordem guardada, sem pegas', async () => {
+    abrir({}, { ...HOJE, ordem: ['peso', 'tarefas', 'rto', 'financas', 'calendario', 'email', 'bilhetes', 'compras'] })
+    const peso = await screen.findByRole('region', { name: /Peso/ })
+    const tarefas = await screen.findByRole('region', { name: /Tarefas/ })
+    expect(peso.compareDocumentPosition(tarefas) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(screen.queryByRole('button', { name: /Mover/ })).toBeNull()
   })
 })

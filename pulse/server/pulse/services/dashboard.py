@@ -153,17 +153,19 @@ def _correr(nome: str, fn, c: DadosClient, email: str, hoje: date) -> tuple[str,
 
 
 def hoje(c: DadosClient, email: str, agora: datetime, desativados: frozenset[str] | set[str] = frozenset(),
-         locais: dict[str, Callable[[date], dict]] | None = None) -> dict:
+         locais: dict[str, Callable[[date], dict]] | None = None, so: set[str] | None = None) -> dict:
     """`locais`: módulos cujos dados não vêm do `dados-api` (Compras e Google, no `pulse.db`/na rede). Cada função recebe o dia,
     abre a sua própria ligação (as threads do agregado não partilham ligações SQLite) e corre em paralelo com os outros."""
     dia = agora.date()
     locais = locais or {}
     fontes = {**MODULOS, **{n: (lambda f: lambda _c, _e, d: f(d))(f) for n, f in locais.items()}}
+    if so is not None:                      # atualização parcial (depois de uma ação): só os módulos pedidos, sem tocar nos outros (nem na Google)
+        fontes = {n: f for n, f in fontes.items() if n in so}
     ativos = {n: fn for n, fn in fontes.items() if n not in desativados}
     with ThreadPoolExecutor(max_workers=max(len(ativos), 1)) as pool:
         resultados = dict(pool.map(lambda kv: _correr(kv[0], kv[1], c, email, dia), ativos.items()))
     modulos = {n: resultados.get(n, {"estado": "desativado", "dados": None}) for n in fontes}      # desativado pelo administrador: não se pede nada ao módulo
-    modulos.update({n: {"estado": "nao_ligado", "dados": None} for n in NAO_LIGADOS if n not in modulos})
+    modulos.update({n: {"estado": "nao_ligado", "dados": None} for n in NAO_LIGADOS if n not in modulos and (so is None or n in so)})
     # «sem_acesso» não é uma falha: o utilizador simplesmente não tem esse módulo
     degradado = any(m["estado"] in ("indisponivel", "erro") for m in modulos.values())
     return {"estado": "degradado" if degradado else "ok", "geradoEm": agora.isoformat(timespec="seconds"),

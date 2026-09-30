@@ -22,7 +22,7 @@ import pt.pereirabmd.pulse.data.Updater
 import androidx.compose.foundation.layout.Arrangement
 
 @Composable
-private fun Secao(titulo: String, conteudo: @Composable ColumnScope.() -> Unit) {
+fun Secao(titulo: String, conteudo: @Composable ColumnScope.() -> Unit) {
     val c = Pulse.cores
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Texto(titulo, Pulse.card, c.text2)
@@ -104,6 +104,7 @@ fun EcraDefinicoes(sessao: Sessao, utilizador: Utilizador, aoVoltar: () -> Unit,
                 }
             }
         }
+        OrdemHojeSecao()
         SessoesSecao()
         if (utilizador.admin) AdministracaoSecao()
         Secao("Aplicação") {
