@@ -13,4 +13,4 @@ router = APIRouter(prefix="/shopping", tags=["compras"], dependencies=[Depends(e
 def ver(request: Request, lista: int | None = Query(default=None, ge=1), s: Sessao = Depends(sessao_ativa), conn=Depends(get_conn)):
     """Compras: as listas visíveis (a «Casa» partilhada e as pessoais), a lista escolhida (por corredor, e os comprados) e o catálogo com o
     estado de cada produto nessa lista, as categorias escondidas por esta conta e as `sugestoes` (`acabar`, `frequentes`). Regras em `services/compras.py`. Ler nunca escreve."""
-    return compras.visao(conn, s.user["id"], lista, request.app.state.agora().date())
+    return compras.visao(conn, s.user["id"], lista, request.app.state.agora().date(), int(request.app.state.agora().timestamp()))

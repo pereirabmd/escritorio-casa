@@ -192,6 +192,7 @@ export interface ComprasModulo {
   listas: ListaCompras[]; lista: ListaCompras
   grupos: { categoria: { id: string; nome: string }; itens: ItemCompras[] }[]
   comprados: ItemCompras[]; pendentes: number
+  ultimaChamada: { por: string; mensagem: string; criado: number } | null     // só nas listas partilhadas; null = ainda ninguém avisou nesta ida às compras
   produtos: ProdutoCompras[]
 }
 

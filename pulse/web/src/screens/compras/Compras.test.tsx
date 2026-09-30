@@ -13,7 +13,7 @@ const I = (id: number, produto: number, nome: string, categoria: string, extra =
 const CASA = { id: 1, nome: 'Casa', tipo: 'partilhada', padrao: true, pendentes: 2, total: 3 }
 const MINHA = { id: 2, nome: 'Churrasco', tipo: 'pessoal', padrao: false, pendentes: 0, total: 0 }
 const DADOS = {
-  categorias: CATEGORIAS, listas: [CASA, MINHA], lista: CASA, pendentes: 2, sugestoes: { acabar: [], frequentes: [] },
+  categorias: CATEGORIAS, listas: [CASA, MINHA], lista: CASA, pendentes: 2, ultimaChamada: null, sugestoes: { acabar: [], frequentes: [] },
   grupos: [{ categoria: CATEGORIAS[0], itens: [I(10, 1, 'Maçã', 'frutas-legumes', { quantidade: 6 })] }, { categoria: CATEGORIAS[2], itens: [I(11, 3, 'Leite meio-gordo', 'laticinios', { nota: '1 L' })] }],
   comprados: [I(12, 4, 'Ovos', 'laticinios', { estado: 'comprado', compradoEm: 100 })],
   produtos: [P(1, 'Maçã', 'frutas-legumes', { item: 10, estado: 'pendente' }), P(2, 'Pera', 'frutas-legumes'), P(3, 'Leite meio-gordo', 'laticinios', { item: 11, estado: 'pendente' }),
@@ -170,6 +170,21 @@ describe('Lista', () => {
     await waitFor(() => expect(corpo(s.pedidos, '/actions/compras.limpar_comprados')).toEqual({ params: { lista: 1 }, confirmado: true }))
     await userEvent.click(await screen.findByRole('button', { name: 'Desfazer' }))
     await waitFor(() => expect(corpo(s.pedidos, '/actions/compras.restaurar')).toEqual({ params: { lista: 1, itens: [{ produto: 4, quantidade: null, nota: '', estado: 'comprado' }] } }))
+  })
+
+  test('«Última chamada»: pede confirmação, envia a mensagem e depois mostra quem avisou', async () => {
+    const s = abrir('lista', { 'POST /actions/compras.ultima_chamada': () => OK({ criado: 1, avisados: 1 }) })
+    await userEvent.click(await screen.findByRole('button', { name: 'Última chamada' }))
+    expect(screen.getByText(/Só se pode fazer uma vez/)).toBeInTheDocument()
+    await userEvent.type(screen.getByLabelText(/Mensagem/), 'Saio às 18h')
+    await userEvent.click(screen.getByRole('button', { name: 'Avisar toda a gente' }))
+    await waitFor(() => expect(corpo(s.pedidos, '/actions/compras.ultima_chamada')).toEqual({ params: { lista: 1, mensagem: 'Saio às 18h' }, confirmado: true }))
+  })
+
+  test('com uma «Última chamada» ativa não há botão: mostra a faixa', async () => {
+    abrir('lista', {}, { ...DADOS, ultimaChamada: { por: 'Camila', mensagem: 'Saio às 18h', criado: 1790000000 } })
+    expect(await screen.findByLabelText('Última chamada')).toHaveTextContent(/Camila avisou toda a gente.*Saio às 18h/)
+    expect(screen.queryByRole('button', { name: 'Última chamada' })).not.toBeInTheDocument()
   })
 
   test('lista vazia leva ao catálogo', async () => {

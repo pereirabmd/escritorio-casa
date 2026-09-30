@@ -20,6 +20,8 @@ from pulse import compras_catalogo as cat
 from pulse.accounts import ContaErro
 
 MAX_LISTAS_POR_TIPO = 10
+ULTIMA_CHAMADA_VALIDADE = 12 * 3600      # passado este tempo a «Última chamada» caduca e pode fazer-se outra
+ULTIMA_CHAMADA_MSG_MAX = 120
 NOTA_MAX = 80
 
 
@@ -322,6 +324,7 @@ def limpar_comprados(conn, uid: int, lista: int) -> dict:
         rows = conn.execute("SELECT i.*, p.nome, p.categoria, p.icone, NULL AS por_nome, NULL AS por_email FROM shop_items i JOIN shop_products p ON p.id = i.product_id "
                             "WHERE i.list_id = ? AND i.estado = 'comprado'", (lista,)).fetchall()
         conn.execute("DELETE FROM shop_items WHERE list_id = ? AND estado = 'comprado'", (lista,))
+        conn.execute("DELETE FROM shop_last_call WHERE list_id = ?", (lista,))        # fim da ida às compras: a «Última chamada» pode voltar a fazer-se
     return {"removidos": [_linha(r) for r in rows]}
 
 
@@ -404,9 +407,45 @@ def resumo_hoje(conn, uid: int, n: int = DASHBOARD_ITENS) -> dict:
                        "quantidade": r["quantidade"], "nota": r["nota"]} for r in rows[:n]]}
 
 
+# --- última chamada ------------------------------------------------------------------------------------------------------------
+
+def _ultima_chamada_ativa(conn, lista: int, agora: int) -> sqlite3.Row | None:
+    return conn.execute("SELECT c.*, u.nome AS por_nome, u.email AS por_email FROM shop_last_call c LEFT JOIN pulse_users u ON u.id = c.user_id "
+                        "WHERE c.list_id = ? AND c.criado > ?", (lista, agora - ULTIMA_CHAMADA_VALIDADE)).fetchone()
+
+
+def ultima_chamada_json(conn, lista: int, agora: int | None = None) -> dict | None:
+    r = _ultima_chamada_ativa(conn, lista, _agora(agora))
+    return None if r is None else {"por": r["por_nome"] or r["por_email"] or "", "mensagem": r["mensagem"], "criado": r["criado"]}
+
+
+def ultima_chamada(conn, uid: int, lista: int, mensagem: str = "", agora: int | None = None) -> dict:
+    """Regista a «Última chamada» da lista partilhada (a «Casa») e devolve a quem avisar. Só uma por ida às compras: se já há uma ativa,
+    recusa (409). Quem avisar: todas as contas ativas com acesso a Compras, menos quem a fez (a entrega é de `actions`)."""
+    t = _agora(agora)
+    mensagem = " ".join(mensagem.split())
+    if len(mensagem) > ULTIMA_CHAMADA_MSG_MAX:
+        raise ContaErro(400, "mensagem_grande", f"a mensagem tem no máximo {ULTIMA_CHAMADA_MSG_MAX} caracteres")
+    with _tx(conn):
+        l = _lista_visivel(conn, lista, uid)
+        if l["tipo"] != "partilhada":
+            raise ContaErro(400, "lista_pessoal", "a «Última chamada» só existe nas listas partilhadas")
+        ja = _ultima_chamada_ativa(conn, lista, t)
+        if ja is not None:
+            raise ContaErro(409, "ja_avisado", f"{ja['por_nome'] or ja['por_email'] or 'Alguém'} já fez a «Última chamada»")
+        conn.execute("INSERT INTO shop_last_call (list_id, user_id, mensagem, criado) VALUES (?,?,?,?) ON CONFLICT(list_id) DO UPDATE SET "
+                     "user_id = excluded.user_id, mensagem = excluded.mensagem, criado = excluded.criado", (lista, uid, mensagem, t))
+        destinatarios = [r["id"] for r in conn.execute(
+            "SELECT u.id FROM pulse_users u JOIN pulse_user_modulos m ON m.user_id = u.id AND m.modulo = 'compras' WHERE u.ativo = 1 AND u.id != ? ORDER BY u.id", (uid,))]
+        quem = conn.execute("SELECT nome, email FROM pulse_users WHERE id = ?", (uid,)).fetchone()
+        pendentes = conn.execute("SELECT COUNT(*) FROM shop_items WHERE list_id = ? AND estado = 'pendente'", (lista,)).fetchone()[0]
+    return {"lista": {"id": l["id"], "nome": l["nome"]}, "por": quem["nome"] or quem["email"], "mensagem": mensagem, "criado": t,
+            "pendentes": pendentes, "destinatarios": destinatarios}
+
+
 # --- leitura -------------------------------------------------------------------------------------------------------------------
 
-def visao(conn, uid: int, lista: int | None = None, hoje: date | None = None) -> dict:
+def visao(conn, uid: int, lista: int | None = None, hoje: date | None = None, agora: int | None = None) -> dict:
     """Tudo o que o ecrã precisa num só pedido: listas, itens da lista escolhida (por corredor, e os comprados) e o catálogo."""
     listas = _listas(conn, uid)
     escolhida = next((l for l in listas if l["id"] == lista), None) if lista else next((l for l in listas if l["padrao"]), listas[0])
@@ -433,5 +472,6 @@ def visao(conn, uid: int, lista: int | None = None, hoje: date | None = None) ->
                          "favorito": bool(m and m["favorito"]), "oculto": bool(m and m["oculto"]), "item": it["id"] if it else None, "estado": it["estado"] if it else None})
     ocultas = {r["categoria"] for r in conn.execute("SELECT categoria FROM shop_user_categories WHERE user_id = ?", (uid,))}
     return {"categorias": [{"id": i, "nome": n, "oculta": i in ocultas} for i, n in cat.CATEGORIAS], "listas": listas, "lista": escolhida,
+            "ultimaChamada": ultima_chamada_json(conn, escolhida["id"], agora) if escolhida["tipo"] == "partilhada" else None,
             "grupos": grupos, "comprados": comprados, "pendentes": len(pendentes), "produtos": produtos,
             "sugestoes": sugestoes(conn, uid, escolhida["id"], hoje or date.today())}

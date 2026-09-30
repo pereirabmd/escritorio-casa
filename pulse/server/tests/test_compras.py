@@ -506,3 +506,60 @@ def test_acoes_e_api_das_categorias_e_sugestoes(cliente):
     k = cliente.app.state.db()
     assert k.execute("SELECT dia FROM shop_history").fetchone()[0] == "2026-09-30"          # o dia vem do relógio do servidor
     k.close()
+
+
+# --- última chamada (ADR-076) --------------------------------------------------------------------------------------------------
+
+class _Canal:
+    nome = "falso"
+
+    def __init__(self):
+        self.enviados = []
+
+    def enviar(self, token, evento):
+        self.enviados.append((token, evento.titulo, evento.corpo))
+
+
+def _ultima(conn, email, mensagem="", agora=AGORA, canais=None):
+    ctx = actions.Contexto(None, email, agora, canais=canais)
+    return actions.executar(conn, ctx, "compras.ultima_chamada", {"lista": casa(conn), "mensagem": mensagem}, confirmado=True)
+
+
+def test_ultima_chamada_avisa_todos_menos_quem_a_fez_e_so_uma_vez(conn):
+    canal = _Canal()
+    for email in (BRUNO, CAMILA):
+        conn.execute("INSERT INTO pulse_devices (user_id, fcm_token, criado, ultimo_uso) VALUES (?,?,1,1)", (UID[email], f"token-{email.split('@')[0]}-0123456789"))
+    compras.adicionar(conn, UID[BRUNO], casa(conn), prod(conn, "Leite meio-gordo"))
+    r = _ultima(conn, BRUNO, "saio às 18h", canais=[canal])
+    assert r["avisados"] == 1
+    assert [(t, ti) for t, ti, _ in canal.enviados] == [("token-camila-0123456789", "Última chamada — Casa")]
+    assert "saio às 18h" in canal.enviados[0][2] and "1 por comprar" in canal.enviados[0][2]
+    with pytest.raises(ContaErro) as e:                                     # só uma por ida às compras
+        _ultima(conn, CAMILA)
+    assert e.value.codigo == "ja_avisado" and len(canal.enviados) == 1
+    v = compras.visao(conn, UID[CAMILA], agora=int(AGORA.timestamp()) + 60)
+    assert v["ultimaChamada"]["mensagem"] == "saio às 18h" and v["ultimaChamada"]["por"]
+
+
+def test_ultima_chamada_reabre_com_limpar_comprados_e_caduca_em_12_h(conn):
+    _ultima(conn, BRUNO)
+    t = int(AGORA.timestamp())
+    assert compras.visao(conn, UID[BRUNO], agora=t + 11 * 3600)["ultimaChamada"] is not None
+    assert compras.visao(conn, UID[BRUNO], agora=t + 12 * 3600 + 1)["ultimaChamada"] is None        # caducou
+    _ultima(conn, CAMILA, agora=AGORA + timedelta(hours=13))                                        # e já se pode fazer outra
+    compras.limpar_comprados(conn, UID[BRUNO], casa(conn))
+    assert compras.visao(conn, UID[BRUNO], agora=t + 13 * 3600 + 60)["ultimaChamada"] is None
+    _ultima(conn, BRUNO, agora=AGORA + timedelta(hours=14))
+
+
+def test_ultima_chamada_so_em_listas_partilhadas_e_a_acao_pede_confirmacao(conn):
+    pessoal = compras.lista_criar(conn, UID[BRUNO], "Minha", "pessoal")["id"]
+    with pytest.raises(ContaErro) as e:
+        compras.ultima_chamada(conn, UID[BRUNO], pessoal)
+    assert e.value.codigo == "lista_pessoal"
+    with pytest.raises(ContaErro) as e:
+        compras.ultima_chamada(conn, UID[BRUNO], casa(conn), "x" * 121)
+    assert e.value.codigo == "mensagem_grande"
+    with pytest.raises(ContaErro) as e:
+        actions.executar(conn, actions.Contexto(None, BRUNO, AGORA), "compras.ultima_chamada", {"lista": casa(conn)})
+    assert e.value.codigo == "confirmacao_necessaria"

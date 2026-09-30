@@ -64,6 +64,21 @@ private fun FolhaNovaLista(acoes: Acoes, aoFechar: () -> Unit, aoCriar: (Int) ->
 }
 
 @Composable
+private fun FolhaUltimaChamada(lista: Int, acoes: Acoes, avisos: Avisos, aoFechar: () -> Unit) {
+    var mensagem by remember { mutableStateOf("") }
+    Folha("Última chamada", aoFechar) {
+        Texto2("Avisa toda a gente de que vais fechar a lista e ir às compras. Só se pode fazer uma vez.")
+        Campo("Mensagem (opcional)", mensagem, { mensagem = it.take(120) })
+        ErroAcao(acoes)
+        Botao("Avisar toda a gente", {
+            acoes.executar("ultima-chamada", "compras.ultima_chamada", jo("lista" to lista, "mensagem" to mensagem.trim()), true) {
+                aoFechar(); avisos.mostrar("Última chamada enviada a toda a gente.")
+            }
+        }, grande = true, ativo = acoes.ocupado == null, carregando = acoes.ocupado == "ultima-chamada")
+    }
+}
+
+@Composable
 private fun ColumnScope.ListaTab(d: JSONObject, acoes: Acoes, avisos: Avisos, abrirCatalogo: () -> Unit, aoApagarLista: () -> Unit) {
     val atual = d.getJSONObject("lista")
     val partilhada = atual.txt("tipo") == "partilhada"
@@ -72,6 +87,17 @@ private fun ColumnScope.ListaTab(d: JSONObject, acoes: Acoes, avisos: Avisos, ab
     var limpar by remember { mutableStateOf(false) }
     var gerir by remember { mutableStateOf(false) }
     var detalhe by remember { mutableStateOf<JSONObject?>(null) }
+    var ultimaAberta by remember { mutableStateOf(false) }
+
+    if (atual.bool("padrao")) {
+        val u = d.optJSONObject("ultimaChamada")
+        if (u != null) Bloco(titulo = "Última chamada") {
+            val hora = java.text.SimpleDateFormat("HH:mm", java.util.Locale("pt", "PT")).format(java.util.Date(u.optLong("criado") * 1000))
+            val msg = u.txtOu("mensagem")
+            Texto2("${u.txtOu("por").ifEmpty { "Alguém" }} avisou toda a gente às $hora${if (msg.isEmpty()) "." else ": $msg"}")
+        } else Botao("Última chamada", { ultimaAberta = true }, Modifier, Variante.SECUNDARIO, pequeno = true)
+    }
+    if (ultimaAberta) FolhaUltimaChamada(atual.getInt("id"), acoes, avisos) { ultimaAberta = false }
 
     if (d.optInt("pendentes") == 0 && comprados.isEmpty()) Bloco {
         Texto2("A lista «${atual.txtOu("nome")}» está vazia. Escolhe produtos no catálogo com um toque.")

@@ -142,6 +142,41 @@ function GerirLista({ dados, f, aoApagarLista }: { dados: ComprasModulo; f: Ferr
   )
 }
 
+function UltimaChamada({ dados, f }: { dados: ComprasModulo; f: Ferramentas }) {
+  const { executar, ocupado, avisos } = f
+  const [aberto, setAberto] = useState(false)
+  const [mensagem, setMensagem] = useState('')
+  const u = dados.ultimaChamada
+  if (u) {
+    const hora = new Date(u.criado * 1000).toLocaleTimeString('pt-PT', { hour: '2-digit', minute: '2-digit' })
+    return (
+      <section className="card stack" aria-label="Última chamada">
+        <h2 className="t-card">Última chamada</h2>
+        <p className="t-body2">{u.por || 'Alguém'} avisou toda a gente às {hora}{u.mensagem ? `: ${u.mensagem}` : '.'}</p>
+      </section>
+    )
+  }
+  async function enviar(ev: FormEvent) {
+    ev.preventDefault()
+    if (await executar('ultima-chamada', 'compras.ultima_chamada', { lista: dados.lista.id, mensagem: mensagem.trim() }, true)) {
+      setAberto(false); setMensagem(''); avisos.mostrar('Última chamada enviada a toda a gente.')
+    }
+  }
+  if (!aberto) return <div><Botao pequeno variante="secondary" onClick={() => setAberto(true)}>Última chamada</Botao></div>
+  return (
+    <form className="card stack" aria-label="Confirmar última chamada" onSubmit={(ev) => void enviar(ev)}>
+      <h2 className="t-card">Última chamada</h2>
+      <p className="t-body2">Avisa toda a gente de que vais fechar a lista e ir às compras. Só se pode fazer uma vez.</p>
+      <label className="t-meta">Mensagem (opcional)
+        <input className="input" value={mensagem} maxLength={120} placeholder="Saio às 18h" onChange={(e) => setMensagem(e.target.value)} /></label>
+      <div className="quick">
+        <Botao type="submit" pequeno carregando={ocupado === 'ultima-chamada'} disabled={ocupado !== null}>Avisar toda a gente</Botao>
+        <Botao type="button" variante="secondary" pequeno onClick={() => setAberto(false)}>Cancelar</Botao>
+      </div>
+    </form>
+  )
+}
+
 export function ListaTab({ dados, f, abrirCatalogo, gerir, setGerir, aoApagarLista }: Props) {
   const { executar, ocupado, avisos } = f
   const [limpar, setLimpar] = useState(false)
@@ -162,6 +197,7 @@ export function ListaTab({ dados, f, abrirCatalogo, gerir, setGerir, aoApagarLis
 
   return (
     <div className="stack">
+      {dados.lista.padrao && <UltimaChamada dados={dados} f={f} />}
       {dados.pendentes === 0 && dados.comprados.length === 0 && (
         <section className="card stack" aria-label="Lista vazia">
           <p className="t-body2">A lista «{dados.lista.nome}» está vazia. Escolhe produtos no catálogo com um toque.</p>

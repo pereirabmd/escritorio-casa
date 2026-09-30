@@ -35,7 +35,7 @@ def test_catalogo_declara_modulo_e_nivel():
     assert set(c) == {"tarefas.concluir", "tarefas.reabrir", "tarefas.saltar", "tarefas.criar", "tarefas.editar", "tarefas.apagar", "tarefas.adiar", "tarefas.lembrar_mais_tarde", "tarefas.piscina_registar", "tarefas.piscina_repor", "tarefas.avisos_horario", "tarefas.preferencias", "tarefas.pessoa_adicionar", "tarefas.pessoa_editar", "tarefas.pessoa_remover", "tarefas.reatribuir", "tarefas.admin", "tarefas.gerar", "peso.registar", "peso.editar", "peso.eliminar",
                       "peso.configurar", "rto.marcar_dia", "rto.ferias_dia", "rto.nota_criar", "rto.nota_editar", "rto.nota_eliminar",
                       "rto.nota_restaurar", "rto.gerar_validacoes", "calendario.criar", "calendario.editar", "calendario.apagar", "email.lida", "email.arquivar", "email.estrela",
-                      "compras.adicionar", "compras.remover", "compras.comprado", "compras.detalhes", "compras.mover", "compras.limpar_comprados", "compras.restaurar", "compras.favorito", "compras.ocultar", "compras.sugestao_ignorar", "compras.categoria_ocultar", "compras.produto_criar", "compras.produto_editar", "compras.produto_apagar", "compras.lista_criar", "compras.lista_editar", "compras.lista_apagar",
+                      "compras.adicionar", "compras.remover", "compras.comprado", "compras.detalhes", "compras.mover", "compras.limpar_comprados", "compras.restaurar", "compras.ultima_chamada", "compras.favorito", "compras.ocultar", "compras.sugestao_ignorar", "compras.categoria_ocultar", "compras.produto_criar", "compras.produto_editar", "compras.produto_apagar", "compras.lista_criar", "compras.lista_editar", "compras.lista_apagar",
                       "bilhetes.semana", "bilhetes.passe", "bilhetes.cp_cancelar", "bilhetes.pedido_repetir", "bilhetes.pedido_forcar",
                       "financas.pagar", "financas.anular_pagamento", "financas.criar", "financas.editar", "financas.apagar", "financas.preparar_mes",
                       "financas.categoria_criar", "financas.categoria_editar", "financas.categoria_eliminar", "financas.lembrete_criar", "financas.lembrete_editar", "financas.lembrete_eliminar"}
@@ -344,7 +344,7 @@ def test_endpoint_traduz_erros(app_cliente):
 def test_endpoint_lista_o_catalogo(app_cliente):
     entrar(app_cliente)
     r = app_cliente.get("/api/v1/actions")
-    assert r.status_code == 200 and len(r.json()["acoes"]) == 69
+    assert r.status_code == 200 and len(r.json()["acoes"]) == 70
 
 
 def test_conta_por_configurar_nao_executa_acoes(app_cliente):

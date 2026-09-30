@@ -18,6 +18,7 @@ from typing import Annotated, Callable, Literal
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator, model_validator
 
 from pulse import google_api as g
+from pulse import notifications
 from pulse.accounts import ContaErro
 from pulse.google_api import GoogleApi
 from pulse.clients.dados import DadosClient, ErroDoModulo, ModuloIndisponivel
@@ -38,6 +39,7 @@ class Contexto:
     tarefas_api: TarefasApiClient | None = None          # servidor dos avisos ntfy (forçar a geração de ocorrências)
     avisos_tarefas: Callable[[], None] | None = None     # pede o recálculo dos avisos ntfy depois de mudar tarefas (melhor esforço)
     google: GoogleApi | None = None                     # Gmail/Calendar (ADR-049); None = não configurado
+    canais: list | None = None                          # canais de entrega das notificações (FCM); None/vazio = só fica na caixa
     conn: sqlite3.Connection | None = None              # o `pulse.db`: só as ações de módulos do próprio Pulse (Compras) o usam; `executar` preenche-o
 
     @property
@@ -499,6 +501,10 @@ class ProdutoEditarIn(ProdutoRefIn):
 class ListaCriarIn(_Params):
     nome: Annotated[str, Field(min_length=1, max_length=60)]
     tipo: Literal["partilhada", "pessoal"] = "pessoal"
+
+
+class UltimaChamadaIn(ListaRefIn):
+    mensagem: Annotated[str, Field(max_length=120)] = ""
 
 
 class ListaEditarIn(ListaRefIn):
@@ -1128,6 +1134,20 @@ def _c_limpar(c: Contexto, p: ListaRefIn):
     return r, f"lista {p.lista}: {len(r['removidos'])} comprados"
 
 
+def _c_ultima_chamada(c: Contexto, p: UltimaChamadaIn):
+    uid, _ = _quem(c)
+    agora = int(c.agora.timestamp())
+    r = compras.ultima_chamada(c.conn, uid, p.lista, p.mensagem, agora)
+    titulo = f"Última chamada — {r['lista']['nome']}"
+    corpo = f"{r['por']} vai fechar a lista e ir às compras" + (f": {r['mensagem']}" if r["mensagem"] else ".")
+    if r["pendentes"]:
+        corpo += f" ({r['pendentes']} por comprar)"
+    for dest in r["destinatarios"]:
+        id_, _ = notifications.guardar(c.conn, dest, "compras", "ultima_chamada", titulo, corpo, {"lista": str(p.lista)}, f"ultimachamada:{p.lista}:{agora}:{dest}", agora)
+        notifications.despachar(c.conn, id_, c.canais or [])
+    return {"criado": r["criado"], "avisados": len(r["destinatarios"])}, f"lista {p.lista}: {len(r['destinatarios'])} avisados"
+
+
 def _c_restaurar(c: Contexto, p: ComprasRestaurarIn):
     uid, _ = _quem(c)
     r = compras.restaurar(c.conn, uid, p.lista, [i.model_dump() for i in p.itens], int(c.agora.timestamp()))
@@ -1293,6 +1313,7 @@ ACOES: dict[str, Acao] = {a.nome: a for a in (
     Acao("compras.detalhes", "compras", "safe_action", "Define a quantidade (opcional) e a nota de um item.", ItemDetalhesIn, _c_detalhes),
     Acao("compras.mover", "compras", "safe_action", "Passa um item para outra lista.", ItemMoverIn, _c_mover),
     Acao("compras.limpar_comprados", "compras", "sensitive_action", "Apaga os itens já comprados de uma lista.", ListaRefIn, _c_limpar),
+    Acao("compras.ultima_chamada", "compras", "sensitive_action", "Avisa toda a gente de que vais fechar a lista Casa e ir às compras (só uma por ida).", UltimaChamadaIn, _c_ultima_chamada),
     Acao("compras.restaurar", "compras", "safe_action", "Repõe itens que se tinham tirado (o «Desfazer» de remover e de limpar).", ComprasRestaurarIn, _c_restaurar),
     Acao("compras.favorito", "compras", "safe_action", "Marca ou desmarca um produto como favorito (por conta).", ProdutoMarcaIn, _c_favorito),
     Acao("compras.ocultar", "compras", "safe_action", "Esconde ou mostra um produto no catálogo (por conta).", ProdutoMarcaIn, _c_ocultar),
