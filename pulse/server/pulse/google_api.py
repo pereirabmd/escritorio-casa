@@ -116,7 +116,7 @@ class GoogleApi:
     def url_autorizacao(self, servicos: list[str], state: str, desafio: str, login_hint: str = "") -> str:
         scopes = [*SCOPES_BASE, *(s for sv in servicos for s in SCOPES[sv])]
         q = {"client_id": self.cfg.client_id, "redirect_uri": self.cfg.redirect_uri, "response_type": "code", "scope": " ".join(scopes),
-             "access_type": "offline", "prompt": "consent", "include_granted_scopes": "false", "state": state,
+             "access_type": "offline", "prompt": "select_account consent", "include_granted_scopes": "false", "state": state,
              "code_challenge": desafio, "code_challenge_method": "S256"}
         if login_hint:
             q["login_hint"] = login_hint

@@ -40,7 +40,8 @@ class LigarIn(BaseModel):
 @router.post("/connect")
 def ligar(d: LigarIn, request: Request, s: Sessao = Depends(sessao_ativa), conn=Depends(get_conn)):
     """Devolve o endereço do ecrã de consentimento da Google. A interface abre-o; o Google regressa a `/google/callback`."""
-    return {"url": contas_google.iniciar(conn, _api(request), s.user["id"], d.servicos, s.user["email"], cliente=d.cliente)}
+    # sem `login_hint`: o e-mail do Pulse não é (necessariamente) a conta Google que se quer ligar, e pré-selecioná-la impedia ligar outra
+    return {"url": contas_google.iniciar(conn, _api(request), s.user["id"], d.servicos, cliente=d.cliente)}
 
 
 @router.get("/callback")

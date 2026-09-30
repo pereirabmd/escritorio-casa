@@ -92,10 +92,11 @@ def ligar(conn, api, uid, email, servicos="gmail,calendar", refresh=None, estado
 # --- OAuth ----------------------------------------------------------------------------------------------------------------------
 
 def test_url_de_autorizacao_tem_pkce_offline_state_e_so_os_scopes_pedidos(conn, api):
-    url = contas_google.iniciar(conn, api, UID[BRUNO], ["gmail"], BRUNO, 100)
+    url = contas_google.iniciar(conn, api, UID[BRUNO], ["gmail"], agora=100)
     q = parse_qs(urlparse(url).query)
     assert url.startswith(g.AUTH_URL) and q["client_id"] == [CFG.client_id] and q["redirect_uri"] == [CFG.redirect_uri]
-    assert q["access_type"] == ["offline"] and q["prompt"] == ["consent"] and q["code_challenge_method"] == ["S256"] and q["login_hint"] == [BRUNO]
+    assert q["access_type"] == ["offline"] and q["prompt"] == ["select_account consent"] and q["code_challenge_method"] == ["S256"]
+    assert "login_hint" not in q          # nada de pré-selecionar a conta do Pulse: senão não se consegue ligar outra conta Google
     assert set(q["scope"][0].split()) == {"openid", "email", "profile", "https://www.googleapis.com/auth/gmail.modify"}      # sem Calendar
     r = conn.execute("SELECT * FROM google_oauth_states").fetchone()
     assert q["state"] == [r["state"]] and r["user_id"] == UID[BRUNO] and len(r["code_verifier"]) >= 43
