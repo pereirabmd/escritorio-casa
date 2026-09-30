@@ -13,7 +13,7 @@ import { lerPeso, novoCid, useAcao } from '../lib/useAcao'
 import { useAsync } from '../lib/useAsync'
 
 type Executar = (chave: string, nome: string, params: Record<string, unknown>, confirmado?: boolean) => Promise<Record<string, unknown> | null>
-interface Acoes { executar: Executar; ocupado: string | null; hoje: string }
+interface Acoes { executar: Executar; ocupado: string | null; hoje: string; recarregar: () => void }
 
 /** Estados em que o cartão nem aparece: o utilizador não tem o módulo, ou o administrador desativou-o. */
 const SEM = new Set<string>(['sem_acesso', 'desativado'])
@@ -219,14 +219,29 @@ function Compras({ m, acoes }: { m: Modulo<ComprasHoje>; acoes: Acoes }) {
 
 function Rto({ m, acoes }: { m: Modulo<RtoDados>; acoes: Acoes }) {
   const avisos = useAvisos()
-  const { executar, ocupado, hoje } = acoes
+  const { hoje, recarregar } = acoes
+  // a marca aparece logo; o servidor confirma em segundo plano. Guarda-se com os dados a que se refere: quando chegam dados novos, deixa de valer.
+  const [estadoOtim, setOtim] = useState<{ base: unknown; marcas: Record<string, string> }>({ base: m, marcas: {} })
+  const otim = estadoOtim.base === m ? estadoOtim.marcas : {}
+  const pendentes = useRef(0)
   const dias = m.dados?.dias ?? []
   const descreve = (marca: string) => (marca === 'T' ? 'escritório' : marca === 'C' ? 'casa' : 'sem marca')
 
   /** Toque num dia: vazio → T → C → vazio. Fins de semana e dias passados só no modo administrador do ecrã do RTO. */
   async function alternar(d: RtoDados['dias'][number]) {
     if (diaBloqueado(d.data, hoje)) { avisos.mostrar('Fim de semana ou dia passado: para alterar, usa o modo administrador no ecrã do RTO.'); return }
-    await executar(`rto-${d.data}`, 'rto.marcar_dia', { data: d.data, marca: proximaMarca(d.marca) })
+    const nova = proximaMarca((otim[d.data] ?? d.marca) as 'T' | 'C' | '')
+    setOtim((o) => ({ base: m, marcas: { ...(o.base === m ? o.marcas : {}), [d.data]: nova } }))
+    pendentes.current++
+    try {
+      await api.post('/actions/rto.marcar_dia', { params: { data: d.data, marca: nova } })
+    } catch (e) {
+      setOtim((o) => { const marcas = { ...(o.base === m ? o.marcas : {}) }; delete marcas[d.data]; return { base: m, marcas } })
+      avisos.mostrar(mensagemDeErro(e))
+    } finally {
+      pendentes.current--
+      if (pendentes.current === 0) recarregar()
+    }
   }
 
   return (
@@ -234,12 +249,15 @@ function Rto({ m, acoes }: { m: Modulo<RtoDados>; acoes: Acoes }) {
       <Estado modulo={m}>{() => (
         <>
           <div className="week" role="group" aria-label="Dias da semana">
-            {dias.map((d) => (
-              <button type="button" className="day" key={d.data} data-hoje={d.hoje} disabled={ocupado !== null} onClick={() => void alternar(d)}
-                aria-label={`${DIA[d.diaSemana - 1]} ${fmtDiaMes(d.data)}: ${descreve(d.marca)}`}>
-                <span>{DIA[d.diaSemana - 1]}</span><b>{Number(d.data.slice(8))}</b><span className="mark" data-m={d.marca}>{d.marca || ''}</span>
-              </button>
-            ))}
+            {dias.map((d) => {
+              const marca = otim[d.data] ?? d.marca
+              return (
+                <button type="button" className="day" key={d.data} data-hoje={d.hoje} onClick={() => void alternar(d)}
+                  aria-label={`${DIA[d.diaSemana - 1]} ${fmtDiaMes(d.data)}: ${descreve(marca)}`}>
+                  <span>{DIA[d.diaSemana - 1]}</span><b>{Number(d.data.slice(8))}</b><span className="mark" data-m={marca}>{marca || ''}</span>
+                </button>
+              )
+            })}
           </div>
           <div className="legend t-meta"><span>Toca num dia: T · Escritório → C · Casa → vazio</span></div>
         </>
@@ -267,22 +285,21 @@ function Peso({ m, acoes }: { m: Modulo<PesoDados>; acoes: Acoes }) {
     <Cartao icone="peso" titulo="Peso" extra={<Link to="/peso" className="link-btn">Abrir</Link>}>
       <Estado modulo={m}>{() => {
         const d = m.dados!
-        return (
+        // uma só caixa: editável enquanto falta o registo de hoje; depois passa a mostrar o peso de hoje, sem editar
+        return d.registadoHoje && d.ultimo ? (
           <>
-            {d.ultimo ? (
-              <>
-                <div><span className="t-metric">{fmtPeso(d.ultimo.peso)}</span></div>
-                <p className="t-body2">{d.registadoHoje ? 'Registo de hoje feito.' : `Último registo a ${fmtDataIso(d.ultimo.quando)}. Ainda não registaste hoje.`}</p>
-              </>
-            ) : <p className="t-body2">Ainda sem registos de peso.</p>}
-            {!d.registadoHoje && (
-              <form className="quick" onSubmit={(e) => { e.preventDefault(); void registar() }}>
-                <label className="sr-only" htmlFor="peso-hoje">Peso de hoje em quilogramas</label>
-                <input id="peso-hoje" className="input input-sm peso-input" inputMode="decimal" autoComplete="off" value={texto} onChange={(e) => setTexto(e.target.value)} aria-invalid={texto !== '' && valor === null ? true : undefined} />
-                <span className="t-body2">kg</span>
-                <Botao type="submit" pequeno carregando={ocupado === 'peso'} disabled={valor === null || ocupado !== null}>Registar</Botao>
-              </form>
-            )}
+            <div><span className="t-metric">{fmtPeso(d.ultimo.peso)}</span></div>
+            <p className="t-body2">Registo de hoje feito.</p>
+          </>
+        ) : (
+          <>
+            <form className="quick" onSubmit={(e) => { e.preventDefault(); void registar() }}>
+              <label className="sr-only" htmlFor="peso-hoje">Peso de hoje em quilogramas</label>
+              <input id="peso-hoje" className="input input-sm peso-input" inputMode="decimal" autoComplete="off" value={texto} onChange={(e) => setTexto(e.target.value)} aria-invalid={texto !== '' && valor === null ? true : undefined} />
+              <span className="t-body2">kg</span>
+              <Botao type="submit" pequeno carregando={ocupado === 'peso'} disabled={valor === null || ocupado !== null}>Registar</Botao>
+            </form>
+            <p className="t-body2">{d.ultimo ? `Último registo: ${fmtPeso(d.ultimo.peso)} a ${fmtDataIso(d.ultimo.quando)}. Ainda não registaste hoje.` : 'Ainda sem registos de peso.'}</p>
           </>
         )
       }}</Estado>
@@ -371,13 +388,13 @@ export function TodayScreen() {
           )}
           <div className="grid">
             {!SEM.has(estado.dados.modulos.calendario.estado) && <Calendario m={estado.dados.modulos.calendario} />}
-            {!SEM.has(estado.dados.modulos.tarefas.estado) && <Tarefas m={estado.dados.modulos.tarefas} acoes={{ executar, ocupado, hoje: estado.dados.data }} />}
+            {!SEM.has(estado.dados.modulos.tarefas.estado) && <Tarefas m={estado.dados.modulos.tarefas} acoes={{ executar, ocupado, hoje: estado.dados.data, recarregar }} />}
             {!SEM.has(estado.dados.modulos.email.estado) && <Email m={estado.dados.modulos.email} />}
             {!SEM.has(estado.dados.modulos.bilhetes.estado) && <Bilhetes m={estado.dados.modulos.bilhetes} />}
-            {!SEM.has(estado.dados.modulos.rto.estado) && <Rto m={estado.dados.modulos.rto} acoes={{ executar, ocupado, hoje: estado.dados.data }} />}
-            {!SEM.has(estado.dados.modulos.peso.estado) && <Peso m={estado.dados.modulos.peso} acoes={{ executar, ocupado, hoje: estado.dados.data }} />}
-            {estado.dados.modulos.compras && !SEM.has(estado.dados.modulos.compras.estado) && <Compras m={estado.dados.modulos.compras} acoes={{ executar, ocupado, hoje: estado.dados.data }} />}
-            {!SEM.has(estado.dados.modulos.financas.estado) && <Financas m={estado.dados.modulos.financas} acoes={{ executar, ocupado, hoje: estado.dados.data }} />}
+            {!SEM.has(estado.dados.modulos.rto.estado) && <Rto m={estado.dados.modulos.rto} acoes={{ executar, ocupado, hoje: estado.dados.data, recarregar }} />}
+            {!SEM.has(estado.dados.modulos.peso.estado) && <Peso m={estado.dados.modulos.peso} acoes={{ executar, ocupado, hoje: estado.dados.data, recarregar }} />}
+            {estado.dados.modulos.compras && !SEM.has(estado.dados.modulos.compras.estado) && <Compras m={estado.dados.modulos.compras} acoes={{ executar, ocupado, hoje: estado.dados.data, recarregar }} />}
+            {!SEM.has(estado.dados.modulos.financas.estado) && <Financas m={estado.dados.modulos.financas} acoes={{ executar, ocupado, hoje: estado.dados.data, recarregar }} />}
           </div>
           <div><Botao variante="secondary" pequeno onClick={recarregar}>Atualizar</Botao></div>
         </>

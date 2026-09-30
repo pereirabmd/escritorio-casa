@@ -131,8 +131,8 @@ fun Campo(rotulo: String, valor: String, aoMudar: (String) -> Unit, modifier: Mo
 @Composable
 fun Cartao(icone: Icone, titulo: String, modifier: Modifier = Modifier, extra: @Composable RowScope.() -> Unit = {}, conteudo: @Composable ColumnScope.() -> Unit) {
     val c = Pulse.cores
-    Column(modifier.fillMaxWidth().clip(RoundedCornerShape(Pulse.rL)).background(c.surface).border(1.dp, c.line, RoundedCornerShape(Pulse.rL)).padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)) {
+    Column(modifier.fillMaxWidth().clip(RoundedCornerShape(Pulse.rL)).background(c.surface).border(1.dp, c.line, RoundedCornerShape(Pulse.rL)).padding(14.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             Icon(icone, c.primary, 22.dp)
             Text(titulo, style = Pulse.card, color = c.text, modifier = Modifier.weight(1f).semantics { contentDescription = titulo })

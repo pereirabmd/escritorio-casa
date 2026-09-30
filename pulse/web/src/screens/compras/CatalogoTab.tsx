@@ -2,7 +2,9 @@ import { useMemo, useState, type FormEvent } from 'react'
 import type { ComprasModulo, ItemCompras, ProdutoCompras } from '../../api/types'
 import { useUtilizador } from '../../auth/AuthContext'
 import { NOMES_ICONES, ShopIcon } from '../../components/ShopIcon'
+import { Icon } from '../../components/Icon'
 import { Botao } from '../../components/ui'
+import { useFechadas } from '../../lib/recolher'
 import type { Ferramentas } from './tipos'
 
 const semAcentos = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
@@ -98,6 +100,7 @@ export function CatalogoTab({ dados, f }: { dados: ComprasModulo; f: Ferramentas
   const [criar, setCriar] = useState(false)
   const [editar, setEditar] = useState<number | null>(null)
   const q = semAcentos(busca.trim())
+  const { fechadas, alternar, todas } = useFechadas('pulse.compras.fechadas.catalogo')
 
   const ocultas = useMemo(() => new Set(dados.categorias.filter((c) => c.oculta).map((c) => c.id)), [dados.categorias])
   const visiveis = useMemo(() => dados.produtos.filter((p) => {
@@ -166,13 +169,21 @@ export function CatalogoTab({ dados, f }: { dados: ComprasModulo; f: Ferramentas
         </section>
       )}
       {visiveis.length === 0 && <p className="t-body2">{filtro === 'favoritos' ? 'Ainda não marcaste favoritos. Toca na estrela de um produto.' : 'Nenhum produto encontrado.'}</p>}
-      {porCategoria.map((c) => (
-        <section key={c.id} aria-label={c.nome} className="stack">
-          <div className="split"><h2 className="t-card">{c.nome}</h2>
-            {gerir && !q && <button type="button" className="link-btn" disabled={ocupado !== null} aria-label={`Esconder a categoria ${c.nome}`} onClick={() => void esconderCategoria(c.id, c.nome, true)}>Esconder categoria</button>}</div>
-          <div className="tiles">{c.produtos.map((p) => <Tile key={p.id} p={p} />)}</div>
-        </section>
-      ))}
+      {porCategoria.length > 1 && !q && (() => {
+        const ids = porCategoria.map((c) => c.id), todasFechadas = ids.every((id) => fechadas.has(id))
+        return <div><button type="button" className="link-btn" onClick={() => todas(ids, !todasFechadas)}>{todasFechadas ? 'Expandir todas' : 'Encolher todas'}</button></div>
+      })()}
+      {porCategoria.map((c) => {
+        const aberto = !!q || !fechadas.has(c.id)          // a pesquisa mostra sempre os resultados
+        return (
+          <section key={c.id} aria-label={c.nome} className="stack">
+            <div className="split"><h2 className="t-card"><button type="button" className="sec-toggle" aria-expanded={aberto} disabled={!!q} onClick={() => alternar(c.id)}>
+              <Icon nome="seta" tamanho={16} />{c.nome} <span className="t-meta">{c.produtos.length}</span></button></h2>
+              {gerir && !q && <button type="button" className="link-btn" disabled={ocupado !== null} aria-label={`Esconder a categoria ${c.nome}`} onClick={() => void esconderCategoria(c.id, c.nome, true)}>Esconder categoria</button>}</div>
+            {aberto && <div className="tiles">{c.produtos.map((p) => <Tile key={p.id} p={p} />)}</div>}
+          </section>
+        )
+      })}
     </div>
   )
 }

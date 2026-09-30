@@ -55,10 +55,13 @@ private fun Principal(sessao: Sessao, f: Fase.Autenticado) {
             containerColor = c.bg,
             snackbarHost = { SnackbarHost(snackbar) { d -> Snackbar(d, containerColor = c.text, contentColor = c.bg, actionColor = c.accent) } },
             bottomBar = {
-                if (destino == Destino.Hoje || destino == Destino.Mais) NavigationBar(containerColor = c.surface, tonalElevation = 0.dp) {
+                // sempre visível (o «Hoje» está a um toque de qualquer ecrã), exceto nos formulários de ecrã inteiro
+                if (destino != Destino.Password && destino != Destino.Pin) NavigationBar(containerColor = c.surface, tonalElevation = 0.dp) {
                     val cor = NavigationBarItemDefaults.colors(selectedIconColor = c.primary, selectedTextColor = c.primary, indicatorColor = c.surface2, unselectedTextColor = c.text2, unselectedIconColor = c.text2)
-                    NavigationBarItem(destino == Destino.Hoje, { destino = Destino.Hoje }, { Icon(Icone.HOJE, if (destino == Destino.Hoje) c.primary else c.text2) }, label = { Text("Hoje") }, colors = cor)
-                    NavigationBarItem(destino == Destino.Mais, { destino = Destino.Mais }, { Icon(Icone.MAIS, if (destino == Destino.Mais) c.primary else c.text2) }, label = { Text("Mais") }, colors = cor)
+                    val emHoje = destino == Destino.Hoje
+                    NavigationBarItem(emHoje, { destino = Destino.Hoje }, { LogoPulse(26.dp, if (emHoje) 1f else 0.55f) }, label = { Text("Hoje") }, colors = cor)
+                    NavigationBarItem(!emHoje, { destino = Destino.Mais },
+                        { Icon(Icone.MAIS, if (!emHoje) c.primary else c.text2) }, label = { Text("Mais") }, colors = cor)
                 }
             },
         ) { pad ->

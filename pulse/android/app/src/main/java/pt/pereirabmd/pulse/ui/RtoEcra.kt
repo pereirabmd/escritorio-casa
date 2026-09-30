@@ -18,6 +18,7 @@ import org.json.JSONObject
 import pt.pereirabmd.pulse.data.*
 import pt.pereirabmd.pulse.util.*
 import java.time.LocalDate
+import kotlinx.coroutines.launch
 
 private val ABAS = listOf("Calendário", "Ano", "Notas")
 private val CATEGORIAS = listOf("Férias", "Astreinte", "RTO Suspensão", "Validação", "Validação Batica")
@@ -56,7 +57,7 @@ fun RtoEcra(aoVoltar: () -> Unit) {
                 }
                 ErroAcao(acoes)
                 when (aba) {
-                    0 -> CalendarioTab(d, acoes, mes, ano, { a, m -> ano = a; mes = m }, admin) { admin = it }
+                    0 -> CalendarioTab(d, acoes, c.recarregar, mes, ano, { a, m -> ano = a; mes = m }, admin) { admin = it }
                     1 -> AnoTab(d) { m -> mes = m; aba = 0 }
                     else -> NotasTab(d, acoes, admin)
                 }
@@ -66,13 +67,18 @@ fun RtoEcra(aoVoltar: () -> Unit) {
 }
 
 @Composable
-private fun ColumnScope.CalendarioTab(d: JSONObject, acoes: Acoes, mes: Int, ano: Int, irPara: (Int, Int) -> Unit, admin: Boolean, aoAdmin: (Boolean) -> Unit) {
+private fun ColumnScope.CalendarioTab(d: JSONObject, acoes: Acoes, atualizar: () -> Unit, mes: Int, ano: Int, irPara: (Int, Int) -> Unit, admin: Boolean, aoAdmin: (Boolean) -> Unit) {
     val avisos = LocalAvisos.current
     val hojeIso = LocalDate.now().toString()
     var escolhido by remember { mutableStateOf<String?>(null) }
     var confirmarAdmin by remember { mutableStateOf(false) }
     var modoFerias by remember { mutableStateOf(false) }
-    val dias = d.mapa("dias"); val feriados = d.mapa("feriados"); val marcasNotas = d.mapa("marcasNotas")
+    val scope = rememberCoroutineScope()
+    // A marca aparece logo ao tocar (o Pi demora alguns segundos a responder): o servidor confirma em segundo plano e, se falhar, a marca volta atrás.
+    var otim by remember(d) { mutableStateOf(emptyMap<String, String>()) }
+    var pendentes by remember { mutableIntStateOf(0) }
+    val dias = d.mapa("dias").toMutableMap().also { m -> otim.forEach { (k, v) -> if (v.isEmpty()) m.remove(k) else m[k] = v } }
+    val feriados = d.mapa("feriados"); val marcasNotas = d.mapa("marcasNotas")
     val ferias = d.strs("ferias").toSet()
     val notas = d.objs("notas")
     val prefixo = "%04d-%02d".format(ano, mes + 1)
@@ -91,9 +97,9 @@ private fun ColumnScope.CalendarioTab(d: JSONObject, acoes: Acoes, mes: Int, ano
 
     fun tocar(data: String) {
         escolhido = data
-        if (acoes.ocupado != null) return
         if (!admin && diaBloqueado(data, hojeIso)) { avisos.mostrar("Fim de semana ou dia já passado: ativa o modo administrador para o alterar."); return }
         if (modoFerias) {
+            if (acoes.ocupado != null) return
             val era = data in ferias
             acoes.executar("ferias-$data", "rto.ferias_dia", jo("data" to data, "admin" to admin)) {
                 avisos.mostrar(if (era) "Dia de férias removido." else "Dia marcado como férias.") { acoes.executar("ferias-$data", "rto.ferias_dia", jo("data" to data, "admin" to admin)) }
@@ -101,12 +107,19 @@ private fun ColumnScope.CalendarioTab(d: JSONObject, acoes: Acoes, mes: Int, ano
             return
         }
         if (data in ferias) { avisos.mostrar("Dia de férias: liga «Férias» para o remover."); return }
-        acoes.executar("dia-$data", "rto.marcar_dia", jo("data" to data, "marca" to proximaMarca(dias[data]), "admin" to admin))
+        val nova = proximaMarca(dias[data])
+        otim = otim + (data to nova); pendentes++
+        scope.launch {
+            try { Api.post("/actions/rto.marcar_dia", jo("params" to jo("data" to data, "marca" to nova, "admin" to admin))) }
+            catch (e: Exception) { if (e is kotlinx.coroutines.CancellationException) throw e; otim = otim - data; acoes.erro = mensagemDeErro(e) }
+            finally { pendentes--; if (pendentes == 0) atualizar() }
+        }
     }
 
     Bloco(titulo = "Hoje: ${textoHoje(hoje.txtOu("estado"))}${if (hoje.txt("estado") == "feriado" && !hoje.txt("nome").isNullOrEmpty()) " — ${hoje.txt("nome")}" else ""}") {
         val pm = d.obj("proximaMudanca")
-        Texto2(if (hoje.bool("astreinte") && hoje.txt("estado") != "astreinte") "Astreinte" else if (pm != null) textoProximaMudanca(pm.txtOu("tipo"), pm.inteiro("dias"), pm.txt("nome")) else " ")
+        val extra = if (hoje.bool("astreinte") && hoje.txt("estado") != "astreinte") "Astreinte" else if (pm != null) textoProximaMudanca(pm.txtOu("tipo"), pm.inteiro("dias"), pm.txt("nome")) else ""
+        if (extra.isNotEmpty()) Texto2(extra)
     }
     Bloco(titulo = "Calendário") {
         Escolha(listOf(false to "Normal", true to "Administrador"), admin || confirmarAdmin, { querAdmin -> if (!querAdmin) { aoAdmin(false); confirmarAdmin = false } else if (!admin) confirmarAdmin = true })
@@ -122,18 +135,20 @@ private fun ColumnScope.CalendarioTab(d: JSONObject, acoes: Acoes, mes: Int, ano
             Meta(if (modoFerias) "Toca num dia para marcar ou tirar férias (F)" else "Toca num dia: T → C → vazio")
         }
         Row(Modifier.fillMaxWidth()) { DIAS_SEMANA_LETRA.forEach { Meta(it, Modifier.weight(1f).wrapContentWidth(Alignment.CenterHorizontally)) } }
-        semanasDoMes(ano, mes).forEach { semana ->
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                semana.forEachIndexed { j, data ->
-                    if (data == null) { Spacer(Modifier.weight(1f).height(46.dp)); return@forEachIndexed }
-                    val (texto, classe) = marcaDaCelula(dias[data] ?: "", data in feriados, if (data in dias) "" else marcasNotas[data] ?: "")
-                    val (fundo, tinta) = corMarca(classe, Pulse.cores)
-                    val info = notas.any { n -> intervaloNota(n.txt("dataInicio"), n.txt("dataFim"))?.let { it.first <= data && data <= it.second } == true } || data in feriados
-                    Column(Modifier.weight(1f).height(46.dp).clip(RoundedCornerShape(8.dp)).background(fundo)
-                        .border(if (data == hojeIso) 2.dp else if (dia == data) 1.5.dp else 0.dp, if (data == hojeIso) Pulse.cores.primary else Pulse.cores.text2, RoundedCornerShape(8.dp))
-                        .clickable { tocar(data) }, horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-                        Text(data.takeLast(2).toInt().toString(), style = Pulse.meta, color = if (j >= 5) Pulse.cores.text2 else Pulse.cores.text)
-                        Text(texto.ifEmpty { if (info) "·" else " " }, style = Pulse.card, color = tinta)
+        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            semanasDoMes(ano, mes).forEach { semana ->
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    semana.forEachIndexed { j, data ->
+                        if (data == null) { Spacer(Modifier.weight(1f).height(46.dp)); return@forEachIndexed }
+                        val (texto, classe) = marcaDaCelula(dias[data] ?: "", data in feriados, if (data in dias) "" else marcasNotas[data] ?: "")
+                        val (fundo, tinta) = corMarca(classe, Pulse.cores)
+                        val info = notas.any { n -> intervaloNota(n.txt("dataInicio"), n.txt("dataFim"))?.let { it.first <= data && data <= it.second } == true } || data in feriados
+                        Column(Modifier.weight(1f).height(46.dp).clip(RoundedCornerShape(8.dp)).background(fundo)
+                            .border(if (data == hojeIso) 2.dp else if (dia == data) 1.5.dp else 0.dp, if (data == hojeIso) Pulse.cores.primary else Pulse.cores.text2, RoundedCornerShape(8.dp))
+                            .clickable { tocar(data) }, horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+                            Text(data.takeLast(2).toInt().toString(), style = Pulse.meta, color = if (j >= 5) Pulse.cores.text2 else Pulse.cores.text)
+                            Text(texto.ifEmpty { if (info) "·" else " " }, style = Pulse.card, color = tinta)
+                        }
                     }
                 }
             }
@@ -197,7 +212,7 @@ private fun ColumnScope.AnoTab(d: JSONObject, abrirMes: (Int) -> Unit) {
             par.forEach { m ->
                 val r = mensal.getOrNull(m)
                 Column(Modifier.weight(1f).clip(RoundedCornerShape(Pulse.rM)).background(Pulse.cores.surface).border(1.dp, Pulse.cores.line, RoundedCornerShape(Pulse.rM)).clickable { abrirMes(m) }.padding(10.dp),
-                    verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    verticalArrangement = Arrangement.spacedBy(3.dp)) {
                     Texto(MESES_NOME[m], Pulse.card)
                     semanasDoMes(ano, m).forEach { sem ->
                         Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {

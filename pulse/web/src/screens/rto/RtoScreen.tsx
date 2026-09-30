@@ -54,7 +54,7 @@ export function RtoScreen() {
           )}
           {erro && <Notice tipo="error">{erro} <button type="button" className="link-btn" onClick={limparErro}>Fechar</button></Notice>}
           <div role="tabpanel" id={`${base}-p`} aria-labelledby={`${base}-${aba}`} className="tabpanel">
-            {aba === 'calendario' && <CalendarioTab dados={estado.dados} executar={executar} ocupado={ocupado} avisos={avisos} mes={mes} ano={ano} irPara={irPara} admin={admin} setAdmin={setAdmin} />}
+            {aba === 'calendario' && <CalendarioTab atualizar={recarregar} dados={estado.dados} executar={executar} ocupado={ocupado} avisos={avisos} mes={mes} ano={ano} irPara={irPara} admin={admin} setAdmin={setAdmin} />}
             {aba === 'ano' && <AnoTab dados={estado.dados} abrirMes={(m) => { setMes(m); setAba('calendario') }} />}
             {aba === 'notas' && <NotasTab dados={estado.dados} executar={executar} ocupado={ocupado} avisos={avisos} admin={admin} />}
           </div>

@@ -10,6 +10,8 @@
   color: var(--text-2); font-size: 12px; line-height: 16px; font-weight: 500; transition: color var(--t-fast);
 }
 .nav a[aria-current='page'] { color: var(--primary); }
+.nav-logo { width: 24px; height: 24px; opacity: .6; transition: opacity var(--t-fast); }
+.nav a[aria-current='page'] .nav-logo { opacity: 1; }
 .nav a[aria-current='page'] svg { color: var(--accent); }
 .main { padding: var(--s6) var(--s5) calc(var(--s16) + var(--s8) + env(safe-area-inset-bottom)); max-width: 1080px; margin: 0 auto; display: grid; gap: var(--s6); }
 

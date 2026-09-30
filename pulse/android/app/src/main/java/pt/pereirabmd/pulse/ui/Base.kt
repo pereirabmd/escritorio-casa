@@ -14,6 +14,7 @@ import androidx.lifecycle.repeatOnLifecycle
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.semantics.contentDescription
@@ -147,7 +148,7 @@ fun EcraModulo(titulo: String, aoVoltar: () -> Unit, subtitulo: String? = null, 
 /** Conteúdo que rola, com o espaçamento do Design System. */
 @Composable
 fun ColumnScope.Rolar(modifier: Modifier = Modifier, conteudo: @Composable ColumnScope.() -> Unit) {
-    Column(modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp), content = conteudo)
+    Column(modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(10.dp), content = conteudo)
 }
 
 @Composable
@@ -178,14 +179,17 @@ fun <T> Escolha(opcoes: List<Pair<T, String>>, valor: T, aoMudar: (T) -> Unit, m
 }
 
 /** Filtros em linha (chips). */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun <T> Filtros(opcoes: List<Pair<T, String>>, valor: T, aoMudar: (T) -> Unit) {
+    CompositionLocalProvider(LocalMinimumInteractiveComponentEnforcement provides false) {
     Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         opcoes.forEach { (v, nome) ->
             FilterChip(selected = v == valor, onClick = { aoMudar(v) }, label = { Text(nome, style = Pulse.body2) },
                 colors = FilterChipDefaults.filterChipColors(selectedContainerColor = Pulse.cores.primary, selectedLabelColor = Pulse.cores.primaryInk, containerColor = Pulse.cores.surface, labelColor = Pulse.cores.text),
                 border = FilterChipDefaults.filterChipBorder(true, v == valor, borderColor = Pulse.cores.line, selectedBorderColor = Pulse.cores.primary))
         }
+    }
     }
 }
 
@@ -332,7 +336,7 @@ val LocalUtilizador = staticCompositionLocalOf<pt.pereirabmd.pulse.data.Utilizad
 @Composable
 fun Bloco(modifier: Modifier = Modifier, titulo: String? = null, extra: @Composable RowScope.() -> Unit = {}, conteudo: @Composable ColumnScope.() -> Unit) {
     val c = Pulse.cores
-    Column(modifier.fillMaxWidth().clip(RoundedCornerShape(Pulse.rL)).background(c.surface).border(1.dp, c.line, RoundedCornerShape(Pulse.rL)).padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+    Column(modifier.fillMaxWidth().clip(RoundedCornerShape(Pulse.rL)).background(c.surface).border(1.dp, c.line, RoundedCornerShape(Pulse.rL)).padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         if (titulo != null) Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Text(titulo, style = Pulse.card, color = c.text, modifier = Modifier.weight(1f)); extra()
         }
@@ -366,16 +370,18 @@ fun <T> ColumnScope.Ao(c: Carga<T>, texto: String = "A carregar…", conteudo: @
 val LocalAbrir = staticCompositionLocalOf<(String) -> Unit> { {} }
 
 /** Chips de escolha múltipla (dias da semana, rotação de pessoas…). */
-@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class, ExperimentalMaterial3Api::class)
 @Composable
 fun MultiChips(opcoes: List<Pair<String, String>>, selecionados: List<String>, aoAlternar: (String) -> Unit) {
     val c = Pulse.cores
+    CompositionLocalProvider(LocalMinimumInteractiveComponentEnforcement provides false) {
     androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
         opcoes.forEach { (v, nome) ->
             FilterChip(selected = v in selecionados, onClick = { aoAlternar(v) }, label = { Text(nome, style = Pulse.body2) },
                 colors = FilterChipDefaults.filterChipColors(selectedContainerColor = c.primary, selectedLabelColor = c.primaryInk, containerColor = c.surface, labelColor = c.text),
                 border = FilterChipDefaults.filterChipBorder(true, v in selecionados, borderColor = c.line, selectedBorderColor = c.primary))
         }
+    }
     }
 }
 
@@ -384,4 +390,32 @@ object UiPrefs {
     private fun p(ctx: android.content.Context) = ctx.getSharedPreferences("pulse_ui", android.content.Context.MODE_PRIVATE)
     fun ler(ctx: android.content.Context, k: String, por: String = ""): String = try { p(ctx).getString(k, por) ?: por } catch (_: Exception) { por }
     fun guardar(ctx: android.content.Context, k: String, v: String) { try { p(ctx).edit().putString(k, v).apply() } catch (_: Exception) { } }
+}
+
+/** O logo do Pulse (no lugar do ícone genérico do «Hoje»). */
+@Composable
+fun LogoPulse(tamanho: androidx.compose.ui.unit.Dp = 24.dp, alfa: Float = 1f, modifier: Modifier = Modifier) {
+    androidx.compose.foundation.Image(androidx.compose.ui.res.painterResource(pt.pereirabmd.pulse.R.drawable.pulse_icon), null, modifier.size(tamanho), alpha = alfa)
+}
+
+/** Cabeçalho de uma secção que se expande e encolhe (categorias das Compras). */
+@Composable
+fun CabecalhoRecolhivel(titulo: String, contagem: Int?, aberto: Boolean, aoAlternar: () -> Unit, modifier: Modifier = Modifier, extra: @Composable RowScope.() -> Unit = {}) {
+    val c = Pulse.cores
+    Row(modifier.fillMaxWidth().clip(RoundedCornerShape(Pulse.rS)).clickable(onClick = aoAlternar).padding(vertical = 4.dp).semantics { contentDescription = "$titulo, ${if (aberto) "expandida" else "encolhida"}" },
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Icon(Icone.SETA, c.text2, 16.dp, Modifier.rotate(if (aberto) 90f else 0f))
+        Text(titulo, style = Pulse.card, color = c.text, modifier = Modifier.weight(1f, fill = false))
+        if (contagem != null) Text("$contagem", style = Pulse.meta, color = c.text2)
+        Spacer(Modifier.weight(1f))
+        extra()
+    }
+}
+
+/** As secções encolhidas guardam-se no telemóvel (por ecrã), separadas por vírgulas. */
+@Composable
+fun rememberFechadas(chave: String): Pair<Set<String>, (Set<String>) -> Unit> {
+    val ctx = androidx.compose.ui.platform.LocalContext.current
+    var s by remember(chave) { mutableStateOf(UiPrefs.ler(ctx, chave).split(',').filter { it.isNotEmpty() }.toSet()) }
+    return s to { novo -> s = novo; UiPrefs.guardar(ctx, chave, novo.joinToString(",")) }
 }

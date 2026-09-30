@@ -9,7 +9,7 @@ export function Shell() {
     <div className="shell">
       <nav className="nav" aria-label="Principal">
         <div className="nav-brand"><img src={LOGO} alt="" width={32} height={32} />Pulse</div>
-        <NavLink to="/hoje"><Icon nome="hoje" />Hoje</NavLink>
+        <NavLink to="/hoje"><img className="nav-logo" src={LOGO} alt="" width={24} height={24} />Hoje</NavLink>
         <NavLink to="/mais"><Icon nome="mais" />Mais</NavLink>
         <NavLink to="/definicoes" className="nav-desktop-only"><Icon nome="definicoes" />Definições</NavLink>
       </nav>

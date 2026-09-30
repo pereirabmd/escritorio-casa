@@ -136,18 +136,20 @@ fun CalendarioGoogleEcra(aoVoltar: () -> Unit) {
                 Bloco(titulo = tituloMes(ancora), extra = { LinkBtn("‹", { mover(-1) }); LinkBtn("›", { mover(1) }) }) {
                     LinkBtn("Hoje", { ancora = hoje; escolhido = hoje })
                     Row(Modifier.fillMaxWidth()) { DIAS_CURTO.forEach { Meta(it, Modifier.weight(1f).wrapContentWidth(Alignment.CenterHorizontally)) } }
-                    listaDatas(de, ate).chunked(7).forEach { semana ->
-                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                            semana.forEach { dia ->
-                                val evs = dias[dia] ?: emptyList()
-                                val cores = evs.map { it.txt("cor") ?: "" }.distinct().take(3)
-                                val fora = !dia.startsWith(mesAtual)
-                                val fds = diaDaSemana(LocalDate.parse(dia)).let { it == 0 || it == 6 }
-                                Column(Modifier.weight(1f).height(48.dp).clip(RoundedCornerShape(8.dp)).background(if (dia == escolhido) Pulse.cores.surface2 else Color.Transparent)
-                                    .border(if (dia == hoje) 2.dp else if (dia == escolhido) 1.dp else 0.dp, if (dia == hoje) Pulse.cores.primary else Pulse.cores.text2, RoundedCornerShape(8.dp))
-                                    .clickable { escolhido = dia }, horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-                                    Text(dia.takeLast(2).toInt().toString(), style = Pulse.body2, color = if (fora) Pulse.cores.text2.copy(alpha = .5f) else if (fds) Pulse.cores.text2 else Pulse.cores.text)
-                                    Row(horizontalArrangement = Arrangement.spacedBy(2.dp), modifier = Modifier.height(6.dp)) { cores.forEach { Box(Modifier.size(5.dp).clip(CircleShape).background(corDe(it.ifEmpty { null }, Pulse.cores.accent))) } }
+                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        listaDatas(de, ate).chunked(7).forEach { semana ->
+                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                semana.forEach { dia ->
+                                    val evs = dias[dia] ?: emptyList()
+                                    val cores = evs.map { it.txt("cor") ?: "" }.distinct().take(3)
+                                    val fora = !dia.startsWith(mesAtual)
+                                    val fds = diaDaSemana(LocalDate.parse(dia)).let { it == 0 || it == 6 }
+                                    Column(Modifier.weight(1f).height(48.dp).clip(RoundedCornerShape(8.dp)).background(if (dia == escolhido) Pulse.cores.surface2 else Color.Transparent)
+                                        .border(if (dia == hoje) 2.dp else if (dia == escolhido) 1.dp else 0.dp, if (dia == hoje) Pulse.cores.primary else Pulse.cores.text2, RoundedCornerShape(8.dp))
+                                        .clickable { escolhido = dia }, horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+                                        Text(dia.takeLast(2).toInt().toString(), style = Pulse.body2, color = if (fora) Pulse.cores.text2.copy(alpha = .5f) else if (fds) Pulse.cores.text2 else Pulse.cores.text)
+                                        Row(horizontalArrangement = Arrangement.spacedBy(2.dp), modifier = Modifier.height(6.dp)) { cores.forEach { Box(Modifier.size(5.dp).clip(CircleShape).background(corDe(it.ifEmpty { null }, Pulse.cores.accent))) } }
+                                    }
                                 }
                             }
                         }

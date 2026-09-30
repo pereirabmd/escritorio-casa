@@ -77,9 +77,14 @@ private fun ColumnScope.ListaTab(d: JSONObject, acoes: Acoes, avisos: Avisos, ab
         Texto2("A lista «${atual.txtOu("nome")}» está vazia. Escolhe produtos no catálogo com um toque.")
         Botao("Abrir o catálogo", abrirCatalogo, pequeno = true)
     }
+    val (fechadas, guardarFechadas) = rememberFechadas("compras.fechadas.lista")
+    val ids = grupos.map { it.getJSONObject("categoria").txtOu("id") }
+    if (grupos.size > 1) LinkBtn(if (ids.all { it in fechadas }) "Expandir todas" else "Encolher todas", { guardarFechadas(if (ids.all { it in fechadas }) emptySet() else ids.toSet()) })
     grupos.forEach { g ->
-        Bloco(titulo = g.getJSONObject("categoria").txtOu("nome") + "  ${g.objs("itens").size}") {
-            g.objs("itens").forEach { LinhaItem(it, acoes, avisos, partilhada) { detalhe = it } }
+        val cat = g.getJSONObject("categoria"); val id = cat.txtOu("id"); val aberto = id !in fechadas
+        Bloco {
+            CabecalhoRecolhivel(cat.txtOu("nome"), g.objs("itens").size, aberto, { guardarFechadas(if (aberto) fechadas + id else fechadas - id) })
+            if (aberto) g.objs("itens").forEach { LinhaItem(it, acoes, avisos, partilhada) { detalhe = it } }
         }
     }
     if (d.optInt("pendentes") > 0 && comprados.isEmpty()) Meta("Toca no círculo de um item quando o comprares.")
@@ -261,12 +266,15 @@ private fun ColumnScope.CatalogoTab(d: JSONObject, acoes: Acoes, avisos: Avisos)
         }
     }
     if (visiveis.isEmpty()) Texto2(if (filtro == "favoritos") "Ainda não marcaste favoritos. Toca na estrela de um produto." else "Nenhum produto encontrado.")
+    val (fechadas, guardarFechadas) = rememberFechadas("compras.fechadas.catalogo")
+    val idsCat = porCategoria.map { it.first.txtOu("id") }
+    if (porCategoria.size > 1 && q.isEmpty()) LinkBtn(if (idsCat.all { it in fechadas }) "Expandir todas" else "Encolher todas", { guardarFechadas(if (idsCat.all { it in fechadas }) emptySet() else idsCat.toSet()) })
     porCategoria.forEach { (cat, ps) ->
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Texto(cat.txtOu("nome"), Pulse.card, modifier = Modifier.weight(1f))
-            if (gerir && q.isEmpty()) LinkBtn("Esconder categoria", { esconderCategoria(cat.txtOu("id"), cat.txtOu("nome"), true) })
+        val id = cat.txtOu("id"); val aberto = q.isNotEmpty() || id !in fechadas       // a pesquisa mostra sempre os resultados
+        CabecalhoRecolhivel(cat.txtOu("nome"), ps.size, aberto, { if (q.isEmpty()) guardarFechadas(if (aberto) fechadas + id else fechadas - id) }) {
+            if (gerir && q.isEmpty()) LinkBtn("Esconder", { esconderCategoria(id, cat.txtOu("nome"), true) })
         }
-        Grelha(ps, 3) { p -> Azulejo(p, gerir, acoes) { tocar(p) } }
+        if (aberto) Grelha(ps, 3) { p -> Azulejo(p, gerir, acoes) { tocar(p) } }
     }
 
     if (criar) FolhaCriarProduto(busca.trim(), d, acoes, avisos) { criar = false; busca = "" }

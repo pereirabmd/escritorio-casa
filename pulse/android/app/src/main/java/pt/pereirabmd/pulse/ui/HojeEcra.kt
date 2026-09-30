@@ -14,6 +14,7 @@ import androidx.compose.ui.unit.dp
 import pt.pereirabmd.pulse.data.*
 import pt.pereirabmd.pulse.util.*
 import java.util.Calendar
+import kotlinx.coroutines.launch
 
 private sealed interface EstadoHoje {
     data object ACarregar : EstadoHoje
@@ -138,19 +139,30 @@ private fun CartaoBilhetes(m: Modulo<BilhetesDados>) {
 }
 
 @Composable
-private fun CartaoRto(m: Modulo<RtoDados>, acoes: Acoes, hoje: String) {
-    val c = Pulse.cores; val avisos = LocalAvisos.current
+private fun CartaoRto(m: Modulo<RtoDados>, acoes: Acoes, hoje: String, atualizar: () -> Unit) {
+    val c = Pulse.cores; val avisos = LocalAvisos.current; val scope = rememberCoroutineScope()
+    var otim by remember(m) { mutableStateOf(emptyMap<String, String>()) }        // a marca aparece logo; o servidor confirma em segundo plano
+    var pendentes by remember { mutableIntStateOf(0) }
     Cartao(Icone.RTO, "RTO desta semana", extra = { m.dados?.let { Meta("${it.escritorio} escritório · ${it.casa} casa") }; Abrir("/rto") }) {
         Estado(m) { d ->
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 d.dias.forEach { dia ->
-                    Column(Modifier.clip(RoundedCornerShape(8.dp)).clickable(enabled = acoes.ocupado == null) {
+                    val marca = otim[dia.data] ?: dia.marca
+                    Column(Modifier.clip(RoundedCornerShape(8.dp)).clickable {
                         if (diaBloqueado(dia.data, hoje)) avisos.mostrar("Fim de semana ou dia passado: para alterar, usa o modo administrador no ecrã do RTO.")
-                        else acoes.executar("rto-${dia.data}", "rto.marcar_dia", jo("data" to dia.data, "marca" to proximaMarca(dia.marca)))
+                        else {
+                            val nova = proximaMarca(marca)
+                            otim = otim + (dia.data to nova); pendentes++
+                            scope.launch {
+                                try { Api.post("/actions/rto.marcar_dia", jo("params" to jo("data" to dia.data, "marca" to nova))) }
+                                catch (e: Exception) { if (e is kotlinx.coroutines.CancellationException) throw e; otim = otim - dia.data; acoes.erro = mensagemDeErro(e) }
+                                finally { pendentes--; if (pendentes == 0) atualizar() }
+                            }
+                        }
                     }.padding(horizontal = 6.dp, vertical = 4.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(2.dp)) {
                         Meta(DIA[(dia.diaSemana - 1).coerceIn(0, 6)])
                         Texto(dia.data.takeLast(2).toInt().toString(), Pulse.card, if (dia.hoje) c.primary else c.text)
-                        Texto(dia.marca.ifEmpty { "·" }, Pulse.meta, when (dia.marca) { "T" -> c.primary; "C" -> c.success; else -> c.text2 })
+                        Texto(marca.ifEmpty { "·" }, Pulse.meta, when (marca) { "T" -> c.primary; "C" -> c.success; else -> c.text2 })
                     }
                 }
             }
@@ -167,14 +179,17 @@ private fun CartaoPeso(m: Modulo<PesoDados>, acoes: Acoes, sugestao: Double?) {
     val valor = lerDecimal(texto)?.takeIf { it in 1.0..1000.0 }
     Cartao(Icone.PESO, "Peso", extra = { Abrir("/peso") }) {
         Estado(m) { d ->
-            if (d.ultimoPeso != null) {
+            // uma só caixa: editável enquanto falta o registo de hoje; depois passa a mostrar o peso de hoje, sem editar
+            if (d.registadoHoje && d.ultimoPeso != null) {
                 Texto(fmtPeso(d.ultimoPeso), Pulse.metric)
-                Texto2(if (d.registadoHoje) "Registo de hoje feito." else "Último registo a ${fmtDataIso(d.ultimoQuando.orEmpty())}. Ainda não registaste hoje.")
-            } else Texto2("Ainda sem registos de peso.")
-            if (!d.registadoHoje) Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.Bottom) {
-                Campo("Peso de hoje (kg)", texto, { texto = it }, Modifier.weight(1f), teclado = TecladoNumero, erro = if (texto.isNotEmpty() && valor == null) "Entre 1 e 1000." else null)
-                Botao("Registar", { acoes.executar("peso", "peso.registar", jo("peso" to valor, "cid" to cid)) { cid = novoCid(); avisos.mostrar("Peso registado.") } },
-                    pequeno = true, ativo = valor != null && acoes.ocupado == null, carregando = acoes.ocupado == "peso")
+                Texto2("Registo de hoje feito.")
+            } else {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.Bottom) {
+                    Campo("Peso de hoje (kg)", texto, { texto = it }, Modifier.weight(1f), teclado = TecladoNumero, erro = if (texto.isNotEmpty() && valor == null) "Entre 1 e 1000." else null)
+                    Botao("Registar", { acoes.executar("peso", "peso.registar", jo("peso" to valor, "cid" to cid)) { cid = novoCid(); avisos.mostrar("Peso registado.") } },
+                        pequeno = true, ativo = valor != null && acoes.ocupado == null, carregando = acoes.ocupado == "peso")
+                }
+                Meta(if (d.ultimoPeso != null) "Último registo: ${fmtPeso(d.ultimoPeso)} a ${fmtDataIso(d.ultimoQuando.orEmpty())}. Ainda não registaste hoje." else "Ainda sem registos de peso.")
             }
         }
     }
@@ -258,7 +273,7 @@ fun EcraHoje(sessao: Sessao, utilizador: Utilizador, cabecalho: @Composable () -
                 if (!h.tarefas.escondido) item { CartaoTarefas(h.tarefas, acoes, h.data) }
                 if (!h.email.escondido) item { CartaoEmail(h.email) }
                 if (!h.bilhetes.escondido) item { CartaoBilhetes(h.bilhetes) }
-                if (!h.rto.escondido) item { CartaoRto(h.rto, acoes, h.data) }
+                if (!h.rto.escondido) item { CartaoRto(h.rto, acoes, h.data) { versao++ } }
                 if (!h.peso.escondido) item { CartaoPeso(h.peso, acoes, h.peso.dados?.sugestao) }
                 h.compras?.let { if (!it.escondido) item { CartaoCompras(it, acoes) } }
                 if (!h.financas.escondido) item { CartaoFinancas(h.financas, acoes) }

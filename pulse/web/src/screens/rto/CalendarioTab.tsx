@@ -1,4 +1,5 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
+import { api, mensagemDeErro } from '../../api/client'
 import type { RtoModulo } from '../../api/types'
 import { Icon } from '../../components/Icon'
 import { Botao } from '../../components/ui'
@@ -6,7 +7,7 @@ import { fmtDataIso, fmtDataLonga, plural } from '../../lib/format'
 import { DIAS_SEMANA, diaBloqueado, hojeLocal, iso, marcaDaCelula, nomeMes, notasDoDia, proximaMarca, semanasDoMes, textoHoje, textoProximaMudanca } from '../../lib/rto'
 import type { Ferramentas } from './tipos'
 
-interface Props extends Ferramentas { mes: number; ano: number; irPara: (ano: number, mes: number) => void; admin: boolean; setAdmin: (v: boolean) => void }
+interface Props extends Ferramentas { atualizar: () => void; mes: number; ano: number; irPara: (ano: number, mes: number) => void; admin: boolean; setAdmin: (v: boolean) => void }
 
 const marcaTexto = (m: string) => (m === 'T' ? 'escritório' : m === 'C' ? 'casa' : m === 'F' ? 'férias' : m === 'A' ? 'astreinte' : m === 'f' ? 'feriado' : 'sem marca')
 
@@ -43,8 +44,17 @@ function Totais({ dados }: { dados: RtoModulo }) {
   )
 }
 
-export function CalendarioTab({ dados, executar, ocupado, avisos, mes, ano, irPara, admin, setAdmin }: Props) {
+export function CalendarioTab({ dados: dadosServidor, atualizar, executar, ocupado, avisos, mes, ano, irPara, admin, setAdmin }: Props) {
   const hojeIso = hojeLocal()
+  // a marca aparece logo; o servidor confirma em segundo plano. Guarda-se com os dados a que se refere: quando chegam dados novos, deixa de valer.
+  const [estadoOtim, setOtim] = useState<{ base: unknown; marcas: Record<string, string> }>({ base: dadosServidor, marcas: {} })
+  const pendentes = useRef(0)
+  const dados = useMemo<RtoModulo>(() => {
+    const dias: RtoModulo['dias'] = { ...dadosServidor.dias }
+    const otim = estadoOtim.base === dadosServidor ? estadoOtim.marcas : {}
+    for (const [k, v] of Object.entries(otim)) { if (v) dias[k] = v as 'T' | 'C'; else delete dias[k] }
+    return { ...dadosServidor, dias }
+  }, [dadosServidor, estadoOtim])
   const [escolhido, setEscolhido] = useState<string | null>(null)
   const [confirmarAdmin, setConfirmarAdmin] = useState(false)
   const [modoFerias, setModoFerias] = useState(false)          // com «Férias» ligado, tocar num dia marca/desmarca férias (F)
@@ -78,7 +88,18 @@ export function CalendarioTab({ dados, executar, ocupado, avisos, mes, ano, irPa
     if (!admin && diaBloqueado(data, hojeIso)) { avisos.mostrar('Fim de semana ou dia já passado: ativa o modo administrador para o alterar.'); return }
     if (modoFerias) { await alternarFerias(data); return }
     if (ferias.has(data)) { avisos.mostrar('Dia de férias: liga «Férias» para o remover.'); return }
-    await executar(`dia-${data}`, 'rto.marcar_dia', { data, marca: proximaMarca(dados.dias[data]), admin })
+    const nova = proximaMarca(dados.dias[data])
+    setOtim((o) => ({ base: dadosServidor, marcas: { ...(o.base === dadosServidor ? o.marcas : {}), [data]: nova } }))
+    pendentes.current++
+    try {
+      await api.post('/actions/rto.marcar_dia', { params: { data, marca: nova, admin } })
+    } catch (e) {
+      setOtim((o) => { const marcas = { ...(o.base === dadosServidor ? o.marcas : {}) }; delete marcas[data]; return { base: dadosServidor, marcas } })
+      avisos.mostrar(mensagemDeErro(e))
+    } finally {
+      pendentes.current--
+      if (pendentes.current === 0) atualizar()
+    }
   }
 
   return (

@@ -2,7 +2,6 @@ import type { ReactNode } from 'react'
 
 // Ícones lineares, traço 1,75, grelha 24. Sem emojis (CLAUDE.md).
 const P: Record<string, ReactNode> = {
-  hoje: (<><circle cx="12" cy="12" r="4" /><path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6 7 7M17 17l1.4 1.4M5.6 18.4 7 17M17 7l1.4-1.4" /></>),
   mais: (<><rect x="4" y="4" width="6.5" height="6.5" rx="1.5" /><rect x="13.5" y="4" width="6.5" height="6.5" rx="1.5" /><rect x="4" y="13.5" width="6.5" height="6.5" rx="1.5" /><rect x="13.5" y="13.5" width="6.5" height="6.5" rx="1.5" /></>),
   tarefas: (<><rect x="4" y="4" width="16" height="16" rx="3.5" /><path d="m8.5 12.2 2.6 2.6 4.6-5.2" /></>),
   calendario: (<><rect x="4" y="5.5" width="16" height="14.5" rx="3" /><path d="M4 10h16M8.5 3.5v4M15.5 3.5v4" /></>),

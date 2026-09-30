@@ -29,7 +29,7 @@ private fun ItemLista(icone: Icone, nome: String, nota: String? = null, aoClicar
     val c = Pulse.cores
     Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(Pulse.rM)).background(c.surface).border(1.dp, c.line, RoundedCornerShape(Pulse.rM)).clickable(onClick = aoClicar)
         .heightIn(min = 56.dp).padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-        Icon(icone, c.primary)
+        Box(Modifier.size(36.dp).clip(RoundedCornerShape(10.dp)).background(c.surface2), contentAlignment = Alignment.Center) { Icon(icone, c.primary, 22.dp) }
         Texto(nome, modifier = Modifier.weight(1f))
         if (nota != null) Pilula(nota)
         Icon(Icone.SETA, c.text2, 18.dp)

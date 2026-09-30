@@ -90,6 +90,13 @@ describe('peso', () => {
     expect(campo).toHaveAttribute('aria-invalid', 'true')
   })
 
+  test('uma só caixa: com o registo de hoje feito mostra o peso sem repetir o valor numa caixa', async () => {
+    abrir()
+    expect(await screen.findByText('Registo de hoje feito.')).toBeInTheDocument()
+    expect(screen.queryByLabelText('Peso de hoje em quilogramas')).not.toBeInTheDocument()
+    expect(screen.getAllByText(/104,8/)).toHaveLength(1)
+  })
+
   test('registo de hoje feito: sem formulário', async () => {
     abrir()
     await screen.findByText('Registo de hoje feito.')
@@ -121,6 +128,14 @@ describe('rto', () => {
     await userEvent.click(await screen.findByRole('button', { name: /1 de outubro: sem marca/ }))
     await waitFor(() => expect(marca(pedidos)).toHaveLength(1))
     expect(marca(pedidos)).toEqual([{ params: { data: '2026-10-01', marca: 'T' } }])
+  })
+
+  test('a marca aparece logo, antes de o servidor responder', async () => {
+    let responder: (v: [number, unknown]) => void = () => undefined
+    abrir({ 'POST /actions/rto.marcar_dia': () => new Promise<[number, unknown]>((r) => { responder = r }) })
+    await userEvent.click(await screen.findByRole('button', { name: /1 de outubro: sem marca/ }))
+    expect(await screen.findByRole('button', { name: /1 de outubro: escritório/ })).toBeInTheDocument()       // já com T, sem esperar
+    responder(OK)
   })
 
   test('a sequência completa é vazio → T → C → vazio', () => {

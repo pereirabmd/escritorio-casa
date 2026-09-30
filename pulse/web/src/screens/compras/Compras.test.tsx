@@ -90,6 +90,21 @@ describe('Listas', () => {
 })
 
 describe('Lista', () => {
+  test('as categorias encolhem e expandem, e lembram-se', async () => {
+    abrir()
+    const fruta = await screen.findByRole('region', { name: 'Frutas e legumes' })
+    await userEvent.click(within(fruta).getByRole('button', { name: /Frutas e legumes/ }))
+    expect(within(fruta).queryByText('Maçã')).not.toBeInTheDocument()
+    expect(localStorage.getItem('pulse.compras.fechadas.lista')).toBe('frutas-legumes')
+    await userEvent.click(within(fruta).getByRole('button', { name: /Frutas e legumes/ }))
+    expect(within(fruta).getByText('Maçã')).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: 'Encolher todas' }))
+    expect(screen.queryByText('Maçã')).not.toBeInTheDocument()
+    expect(screen.queryByText('Leite meio-gordo')).not.toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: 'Expandir todas' }))
+    expect(screen.getByText('Maçã')).toBeInTheDocument()
+  })
+
   test('agrupa por corredor, mostra a quantidade só quando existe, a nota e quem adicionou', async () => {
     abrir()
     const fruta = await screen.findByRole('region', { name: 'Frutas e legumes' })

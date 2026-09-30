@@ -3,6 +3,7 @@ import type { ComprasModulo, ItemCompras, SugestaoCompras } from '../../api/type
 import { Icon } from '../../components/Icon'
 import { ShopIcon } from '../../components/ShopIcon'
 import { Botao } from '../../components/ui'
+import { useFechadas } from '../../lib/recolher'
 import type { Ferramentas } from './tipos'
 
 const paraRestaurar = (i: ItemCompras) => ({ produto: i.produto, quantidade: i.quantidade, nota: i.nota, estado: i.estado })
@@ -144,6 +145,9 @@ function GerirLista({ dados, f, aoApagarLista }: { dados: ComprasModulo; f: Ferr
 export function ListaTab({ dados, f, abrirCatalogo, gerir, setGerir, aoApagarLista }: Props) {
   const { executar, ocupado, avisos } = f
   const [limpar, setLimpar] = useState(false)
+  const { fechadas, alternar, todas } = useFechadas('pulse.compras.fechadas.lista')
+  const ids = dados.grupos.map((g) => g.categoria.id)
+  const todasFechadas = ids.length > 0 && ids.every((id) => fechadas.has(id))
   const partilhada = dados.lista.tipo === 'partilhada'
 
   async function limparComprados() {
@@ -164,12 +168,17 @@ export function ListaTab({ dados, f, abrirCatalogo, gerir, setGerir, aoApagarLis
           <div><Botao pequeno onClick={abrirCatalogo}>Abrir o catálogo</Botao></div>
         </section>
       )}
-      {dados.grupos.map((g) => (
-        <section className="card" aria-label={g.categoria.nome} key={g.categoria.id}>
-          <h2 className="t-card">{g.categoria.nome} <span className="t-meta">{g.itens.length}</span></h2>
-          <ul className="rows">{g.itens.map((i) => <Linha key={i.id} i={i} dados={dados} f={f} partilhada={partilhada} />)}</ul>
-        </section>
-      ))}
+      {ids.length > 1 && <div><button type="button" className="link-btn" onClick={() => todas(ids, !todasFechadas)}>{todasFechadas ? 'Expandir todas' : 'Encolher todas'}</button></div>}
+      {dados.grupos.map((g) => {
+        const aberto = !fechadas.has(g.categoria.id)
+        return (
+          <section className="card" aria-label={g.categoria.nome} key={g.categoria.id}>
+            <h2 className="t-card"><button type="button" className="sec-toggle" aria-expanded={aberto} onClick={() => alternar(g.categoria.id)}>
+              <Icon nome="seta" tamanho={16} />{g.categoria.nome} <span className="t-meta">{g.itens.length}</span></button></h2>
+            {aberto && <ul className="rows">{g.itens.map((i) => <Linha key={i.id} i={i} dados={dados} f={f} partilhada={partilhada} />)}</ul>}
+          </section>
+        )
+      })}
       {dados.pendentes > 0 && dados.comprados.length === 0 && <p className="t-meta">Toca no círculo de um item quando o comprares.</p>}
       {dados.comprados.length > 0 && (
         <section className="card" aria-label="Comprados">

@@ -169,19 +169,21 @@ private fun ColumnScope.CalendarioTab(principal: JSONObject, atualizar: () -> Un
         }
         if (c.estado is Estado.Erro) Aviso(TipoAviso.ERRO) { Texto((c.estado as Estado.Erro).mensagem, Pulse.body2); LinkBtn("Tentar de novo", c.recarregar) }
         Row(Modifier.fillMaxWidth()) { DIAS_CURTO.forEach { Meta(it, Modifier.weight(1f).wrapContentWidth(Alignment.CenterHorizontally)) } }
-        listaDatas(de, ate).chunked(7).forEach { semana ->
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                semana.forEach { d ->
-                    val info = dias[d]; val itens = info?.objs("itens") ?: emptyList()
-                    val cores = itens.map { it.txtOu("categoria") }.distinct().take(3)
-                    val fora = vista == "mes" && !d.startsWith(mesAtual)
-                    val fds = diaDaSemana(LocalDate.parse(d)).let { it == 0 || it == 6 }
-                    Column(Modifier.weight(1f).height(48.dp).clip(RoundedCornerShape(8.dp))
-                        .background(if (info?.txt("feriado") != null) Pulse.cores.warningBg else if (d == escolhido) Pulse.cores.surface2 else Color.Transparent)
-                        .border(if (d == hoje) 2.dp else if (d == escolhido) 1.dp else 0.dp, if (d == hoje) Pulse.cores.primary else Pulse.cores.text2, RoundedCornerShape(8.dp))
-                        .clickable { escolhido = d }, horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-                        Text(d.takeLast(2).toInt().toString(), style = Pulse.body2, color = if (fora) Pulse.cores.text2.copy(alpha = .5f) else if (fds) Pulse.cores.text2 else Pulse.cores.text)
-                        Row(horizontalArrangement = Arrangement.spacedBy(2.dp), modifier = Modifier.height(6.dp)) { cores.forEach { Box(Modifier.size(5.dp).clip(CircleShape).background(Color(corCategoria(it)))) } }
+        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            listaDatas(de, ate).chunked(7).forEach { semana ->
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    semana.forEach { d ->
+                        val info = dias[d]; val itens = info?.objs("itens") ?: emptyList()
+                        val cores = itens.map { it.txtOu("categoria") }.distinct().take(3)
+                        val fora = vista == "mes" && !d.startsWith(mesAtual)
+                        val fds = diaDaSemana(LocalDate.parse(d)).let { it == 0 || it == 6 }
+                        Column(Modifier.weight(1f).height(48.dp).clip(RoundedCornerShape(8.dp))
+                            .background(if (info?.txt("feriado") != null) Pulse.cores.warningBg else if (d == escolhido) Pulse.cores.surface2 else Color.Transparent)
+                            .border(if (d == hoje) 2.dp else if (d == escolhido) 1.dp else 0.dp, if (d == hoje) Pulse.cores.primary else Pulse.cores.text2, RoundedCornerShape(8.dp))
+                            .clickable { escolhido = d }, horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+                            Text(d.takeLast(2).toInt().toString(), style = Pulse.body2, color = if (fora) Pulse.cores.text2.copy(alpha = .5f) else if (fds) Pulse.cores.text2 else Pulse.cores.text)
+                            Row(horizontalArrangement = Arrangement.spacedBy(2.dp), modifier = Modifier.height(6.dp)) { cores.forEach { Box(Modifier.size(5.dp).clip(CircleShape).background(Color(corCategoria(it)))) } }
+                        }
                     }
                 }
             }
