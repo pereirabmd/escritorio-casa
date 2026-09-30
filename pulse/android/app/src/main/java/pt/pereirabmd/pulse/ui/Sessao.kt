@@ -104,14 +104,21 @@ class Sessao(val store: SessionStore, private val scope: CoroutineScope, private
     fun desbloquearComBiometria() { store.falhas = 0; bloqueado = false }
 
     fun aoIrParaSegundoPlano() { saiuEm = agora() }
-    fun aoVoltar() { if (temPin && saiuEm > 0 && agora() - saiuEm > BLOQUEIO_MS) bloqueado = true }
+    fun aoVoltar() {
+        if (temPin && saiuEm > 0 && agora() - saiuEm > BLOQUEIO_MS) bloqueado = true
+        if (devoVerificarAtualizacao(ultimaVerificacao, agora())) verificarAtualizacao()       // voltar à app depois de um tempo: há versão nova?
+    }
 
     fun regressoGoogle(ok: Boolean, motivo: String) { resultadoGoogle = ok to motivo }
     fun limparResultadoGoogle() { resultadoGoogle = null }
 
     fun escolherTema(t: Tema) { store.tema = t; tema = t }
 
-    fun verificarAtualizacao() { scope.launch { verificarAtualizacaoAgora() } }
-    suspend fun verificarAtualizacaoAgora() { atualizacao = Updater.verificar() }
+    private var ultimaVerificacao = 0L
+    fun verificarAtualizacao() { scope.launch { ultimaVerificacao = agora(); atualizacao = Updater.verificar() ?: atualizacao } }      // sem ligação não esconde uma atualização já conhecida
+    suspend fun verificarAtualizacaoAgora() { ultimaVerificacao = agora(); atualizacao = Updater.verificar() }
     fun atualizacaoInstalada() { atualizacao = null }
 }
+
+/** Volta a perguntar ao servidor por uma versão nova se a última pergunta foi há mais de 10 minutos (não a cada vez que a app vem à frente). */
+fun devoVerificarAtualizacao(ultima: Long, agora: Long, intervaloMs: Long = 10 * 60_000L) = ultima == 0L || agora - ultima > intervaloMs

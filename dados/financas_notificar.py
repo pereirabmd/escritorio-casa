@@ -115,20 +115,28 @@ def pulse_eventos(msg: dict, chave: str, env=os.environ) -> int:
     return aceites
 
 
+def ntfy_pausado(env=os.environ) -> bool:
+    """`NTFY_PAUSADO=1` no .env: os avisos das Finanças saem só pelo Pulse (o ntfy fica de reserva, é tirar a linha para voltar)."""
+    return env.get("NTFY_PAUSADO", "") == "1"
+
+
 def correr(conn, agora: datetime, enviar=publicar, pulse=pulse_eventos) -> tuple[int, int]:
-    """Devolve (enviados, falhados). Marca `notificado_em` só depois de o ntfy aceitar; o Pulse recebe uma cópia, sem decidir nada."""
+    """Devolve (enviados, falhados). Marca `notificado_em` só depois de o ntfy aceitar (ou, com o ntfy pausado, de o Pulse aceitar)."""
     enviados = falhados = 0
+
+    def entregar(msg: dict, chave: str) -> bool:
+        aceites = pulse(msg, chave)
+        return (aceites or 0) > 0 if ntfy_pausado() else enviar(msg)
+
     for l in pendentes_de_hoje(conn, agora.strftime("%Y-%m-%d")):
-        pulse(montar(l), f"fin-l{l['id']}-{agora:%Y%m%d}")
-        if enviar(montar(l)):
+        if entregar(montar(l), f"fin-l{l['id']}-{agora:%Y%m%d}"):
             conn.execute("UPDATE financas_lancamentos SET notificado_em = ? WHERE id = ?",
                          (agora.strftime("%Y-%m-%d %H:%M:%S"), l["id"]))
             enviados += 1
         else:
             falhados += 1
     for l in lembretes_devidos(conn, agora):
-        pulse(montar_lembrete(l), f"fin-r{l['id']}-{agora:%Y%m%d}")
-        if enviar(montar_lembrete(l)):
+        if entregar(montar_lembrete(l), f"fin-r{l['id']}-{agora:%Y%m%d}"):
             conn.execute("UPDATE financas_lembretes SET ultimo_aviso = ? WHERE id = ?", (agora.strftime("%Y-%m-%d"), l["id"]))
             enviados += 1
         else:

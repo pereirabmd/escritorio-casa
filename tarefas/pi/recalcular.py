@@ -272,7 +272,9 @@ def _recalcular_sem_lock(sheets: SheetsClient, plan_only: bool) -> dict[str, int
 
     def reconciliar(chave, alvo, titulo, corpo, acoes, estado_ntfy, agora_, plan, click=None, topico=None, emails=None):
         """O motor do ntfy e, em paralelo e de melhor esforço, o mesmo aviso agendado no Pulse (FCM): o ntfy manda e nunca espera pelo Pulse."""
-        resultado = reconciliar_chave(chave, alvo, titulo, corpo, acoes, estado_ntfy, agora_, plan, click=click, topico=topico)
+        # ntfy pausado para este tópico (NTFY_PAUSADO_TOPICOS no .env, ex.: `tarefas_bruno`): cancela o que lá estiver e não agenda nada; o Pulse avisa sozinho
+        pausado = bool(topico) and topico in {t.strip() for t in common.env("NTFY_PAUSADO_TOPICOS").split(",") if t.strip()}
+        resultado = reconciliar_chave(chave, None if pausado else alvo, titulo, corpo, acoes, estado_ntfy, agora_, plan, click=click, topico=topico)
         try:
             pulse_eventos.reconciliar(chave, alvo, titulo, corpo, emails if emails is not None else pulse_eventos.emails_do_topico(config, topico),
                                       pulse_estado, agora_, plan, tipo=f"tarefas.{chave.split(':')[0]}")

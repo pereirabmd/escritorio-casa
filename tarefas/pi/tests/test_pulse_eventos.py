@@ -121,3 +121,18 @@ class DadosDoAviso(TarefasTestCase):
         http, estado = Falso(), {}
         pe.reconciliar("inst:I42", AGORA + timedelta(hours=1), "Lixo", "c", ["bruno@x.pt"], estado, AGORA, False, http=http)
         self.assertEqual(http.pedidos[0][2]["dados"], {"link": "pulse://tarefas/hoje", "instancia": "I42"})
+
+
+class NtfyPausado(TarefasTestCase):
+    def test_pausado_so_para_os_topicos_indicados(self):
+        from unittest import mock
+        from datetime import timedelta
+        import recalcular
+        publicados = []
+        with mock.patch.dict("os.environ", {"NTFY_PAUSADO_TOPICOS": "tarefas_bruno"}), \
+                mock.patch.object(common, "ntfy_publish", lambda **kw: publicados.append(kw["topic"]) or {"id": "m1"}):
+            for topico in ("tarefas_bruno", "tarefas_camila"):
+                # o mesmo que o wrapper de `_recalcular_sem_lock` faz: tópico pausado → alvo None (não agenda)
+                pausado = topico in {t.strip() for t in common.env("NTFY_PAUSADO_TOPICOS").split(",")}
+                recalcular.reconciliar_chave("inst:I1:" + topico, None if pausado else AGORA + timedelta(hours=1), "t", "c", None, {}, AGORA, False, topico=topico)
+        self.assertEqual(publicados, ["tarefas_camila"])

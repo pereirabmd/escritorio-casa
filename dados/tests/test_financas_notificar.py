@@ -49,6 +49,16 @@ class NotificarTest(unittest.TestCase):
         self.novo("Luz", "2031-05-10")
         self.assertEqual(fn.correr(self.conn, AGORA, enviar=lambda m: True, pulse=lambda m, c: 0), (1, 0))
 
+    def test_ntfy_pausado_so_marca_quando_o_pulse_aceita(self):
+        from unittest import mock
+        self.novo("Luz", "2031-05-10")
+        ntfy = []
+        with mock.patch.dict("os.environ", {"NTFY_PAUSADO": "1"}):
+            self.assertEqual(fn.correr(self.conn, AGORA, enviar=lambda m: ntfy.append(m) or True, pulse=lambda m, c: 0), (0, 1))      # Pulse em baixo: não marca
+            self.assertEqual(fn.correr(self.conn, AGORA, enviar=lambda m: ntfy.append(m) or True, pulse=lambda m, c: 1), (1, 0))      # Pulse aceitou: marca
+            self.assertEqual(fn.correr(self.conn, AGORA, enviar=lambda m: True, pulse=lambda m, c: 1), (0, 0))                        # e não repete
+        self.assertEqual(ntfy, [])                                                                                                   # o ntfy nunca foi usado
+
     def test_falha_do_ntfy_nao_marca_e_tenta_de_novo(self):
         self.novo("Luz", "2031-05-10")
         self.assertEqual(fn.correr(self.conn, AGORA, enviar=lambda m: False), (0, 1))
