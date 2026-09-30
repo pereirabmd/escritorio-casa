@@ -66,16 +66,15 @@ private fun Problemas(emails: List<String>) {
 
 @Composable
 private fun CartaoCalendario(m: Modulo<CalendarioDados>) {
-    if (m.estado == "nao_ligado") return LigarGoogle(Icone.CALENDARIO, "Calendário de hoje", "Liga uma conta Google para veres aqui os eventos de hoje.")
-    Cartao(Icone.CALENDARIO, "Calendário de hoje", extra = { Abrir("/calendario") }) {
+    if (m.estado == "nao_ligado") return LigarGoogle(Icone.CALENDARIO, "Próximos eventos", "Liga uma conta Google para veres aqui os próximos eventos.")
+    Cartao(Icone.CALENDARIO, "Próximos eventos", extra = { Abrir("/calendario") }) {
         Estado(m) { d ->
-            if (d.eventos.isEmpty()) Texto2("Sem eventos hoje.")
+            if (d.eventos.isEmpty()) Texto2("Sem eventos marcados.")
             else d.eventos.forEach { e ->
-                Linha(inicio = { Meta(if (e.diaInteiro) "Dia todo" else e.inicio, Modifier.widthIn(min = 52.dp)) }) {
+                Linha(inicio = { Column(Modifier.widthIn(min = 72.dp)) { Meta(diaCurto(e.data)); Meta(if (e.diaInteiro) "Dia todo" else e.inicio) } }) {
                     Texto(e.titulo); if (e.local.isNotEmpty()) Meta(e.local)
                 }
             }
-            if (d.total > d.eventos.size) Mais(d.total - d.eventos.size)
             Problemas(d.comProblemas)
         }
     }
@@ -130,11 +129,12 @@ private fun CartaoTarefas(m: Modulo<TarefasDados>, acoes: Acoes, hoje: String, o
 
 @Composable
 private fun CartaoEmail(m: Modulo<EmailDados>) {
+    val contexto = androidx.compose.ui.platform.LocalContext.current
     if (m.estado == "nao_ligado") return LigarGoogle(Icone.EMAIL, "Emails importantes", "Liga uma conta Google para veres aqui os emails importantes por ler.")
     Cartao(Icone.EMAIL, "Emails importantes", extra = { m.dados?.takeIf { it.porLer > 0 }?.let { Meta("${it.porLer} por ler") }; Abrir("/email") }) {
         Estado(m) { d ->
             if (d.mensagens.isEmpty()) Texto2("Nada importante por ler.")
-            else d.mensagens.forEach { x -> Linha { Texto(x.de, Pulse.body.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold)); Texto2(x.assunto) } }
+            else d.mensagens.forEach { x -> Linha(Modifier.clip(RoundedCornerShape(Pulse.rXs)).clickable(onClickLabel = "Abrir no Gmail") { abrirEndereco(contexto, x.link) }) { Texto(x.de, Pulse.body.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold)); Texto2(x.assunto) } }
             if (d.porLer > d.mensagens.size) Mais(d.porLer - d.mensagens.size)
             Problemas(d.comProblemas)
         }

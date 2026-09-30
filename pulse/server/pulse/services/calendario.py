@@ -137,11 +137,28 @@ def agenda(api: g.GoogleApi, contas: list[dict], de: date, ate: date, tz: ZoneIn
     return {"de": de.isoformat(), "ate": ate.isoformat(), "contas": estados, "calendarios": cals, "dias": [{"data": k, "eventos": v} for k, v in dias.items()]}
 
 
-def hoje(api: g.GoogleApi, contas: list[dict], dia: date, tz: ZoneInfo, limite: int = 5) -> dict:
-    """O cartão do Hoje: os eventos de hoje (todas as contas), os primeiros `limite`."""
-    a = agenda(api, contas, dia, dia, tz)
-    eventos = a["dias"][0]["eventos"]
-    return {"eventos": eventos[:limite], "total": len(eventos), "contas": len(contas), "comProblemas": [c for c in a["contas"] if c["estado"] != "ok"]}
+def hoje(api: g.GoogleApi, contas: list[dict], dia: date, tz: ZoneInfo, limite: int = 5, agora: datetime | None = None) -> dict:
+    """O cartão do Hoje: os próximos `limite` eventos, sejam de que dia forem (já com a data). Os de hoje que já acabaram não contam.
+    Procura primeiro nas próximas duas semanas e só alarga (até ao máximo da agenda) se faltarem eventos."""
+    agora = agora or datetime.now(tz)
+    hora = agora.strftime("%H:%M") if agora.date() == dia else "00:00"
+    proximos: list[dict] = []
+    vistos: set[tuple] = set()
+    com_problemas: list[dict] = []
+    for dias in (14, MAX_DIAS):
+        a = agenda(api, contas, dia, dia + timedelta(days=dias - 1), tz)
+        com_problemas = [c for c in a["contas"] if c["estado"] != "ok"]
+        proximos, vistos = [], set()
+        for d in a["dias"]:
+            for e in d["eventos"]:
+                chave = (e["conta"], e["calendario"], e["id"])
+                if chave in vistos or (d["data"] == dia.isoformat() and not e["diaInteiro"] and (e["fim"] or "") <= hora and e["dataFim"] == d["data"]):
+                    continue
+                vistos.add(chave)
+                proximos.append({**e, "data": max(d["data"], e["data"])})    # um evento de vários dias aparece na 1.ª data em que conta
+        if len(proximos) >= limite or com_problemas:
+            break
+    return {"eventos": proximos[:limite], "total": len(proximos), "contas": len(contas), "comProblemas": com_problemas}
 
 
 # --- escrever ----------------------------------------------------------------------------------------------------------------

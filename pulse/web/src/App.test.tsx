@@ -140,7 +140,7 @@ describe('Hoje', () => {
     expect(screen.getByText('Venceu há 3 dias')).toBeInTheDocument()
     expect(screen.getByText('2 escritório · 1 casa')).toBeInTheDocument()
     expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent(/Bruno$/)
-    expect(screen.getByText('Liga uma conta Google para veres aqui os eventos de hoje.')).toBeInTheDocument()       // sem contas Google ligadas
+    expect(screen.getByText('Liga uma conta Google para veres aqui os próximos eventos.')).toBeInTheDocument()       // sem contas Google ligadas
     expect(screen.getByText('Liga uma conta Google para veres aqui os emails importantes por ler.')).toBeInTheDocument()
   })
 

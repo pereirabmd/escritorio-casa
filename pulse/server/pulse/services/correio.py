@@ -46,7 +46,8 @@ def mensagem_json(m: dict, conta: dict, tz: ZoneInfo) -> dict:
     return {"id": m["id"], "conta": conta["id"], "contaEmail": conta["email"], "thread": m.get("threadId", ""),
             "de": nome or endereco, "deEmail": endereco, "assunto": _cab(headers, "Subject") or "(sem assunto)", "resumo": html.unescape(m.get("snippet", ""))[:200],
             "data": data, "lida": "UNREAD" not in etiquetas, "estrela": "STARRED" in etiquetas, "importante": "IMPORTANT" in etiquetas,
-            "entrada": "INBOX" in etiquetas}
+            "entrada": "INBOX" in etiquetas,
+            "link": f"https://mail.google.com/mail/u/{quote(conta['email'], safe='@')}/#all/{quote(m['id'], safe='')}"}   # abre esta mensagem, na conta certa
 
 
 def _mensagens_de_uma_conta(api: g.GoogleApi, conta: dict, filtro: str, tz: ZoneInfo, n: int) -> tuple[list[dict], int]:

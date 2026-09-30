@@ -109,7 +109,7 @@ def hoje(request: Request, modulos_: str | None = Query(None, alias="modulos"), 
         return local
     tz = app.settings.tz
     locais = {"compras": compras_hoje,
-              "calendario": google_hoje("calendar", lambda contas, dia: calendario.hoje(app.google, contas, dia, tz)),
+              "calendario": google_hoje("calendar", lambda contas, dia: calendario.hoje(app.google, contas, dia, tz, agora=app.agora())),
               "email": google_hoje("gmail", lambda contas, dia: correio.importantes_hoje(app.google, contas, tz))}
     r = dashboard.hoje(app.dados, s.user["email"], app.agora(), modulos.indisponiveis_para(conn, uid) | set(ocultos_guardados(conn, uid)), locais, so)
     return {**r, "ordem": ordem_guardada(conn, uid), "ocultos": ocultos_guardados(conn, uid)}

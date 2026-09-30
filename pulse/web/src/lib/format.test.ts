@@ -1,4 +1,4 @@
-import { fmtDias, fmtDataIso, fmtDiaMes, fmtEuro, fmtPeso, plural, saudacao } from './format'
+import { fmtDiaCurto, fmtDias, fmtDataIso, fmtDiaMes, fmtEuro, fmtPeso, plural, saudacao } from './format'
 
 test('moeda e peso no formato pt-PT do Design System', () => {
   expect(fmtEuro(1245.5).replace(/\s/g, ' ')).toBe('1 245,50 €')
@@ -22,4 +22,13 @@ test('plural e saudação', () => {
   expect(plural(3, 'dia', 'dias')).toBe('3 dias')
   const h = (n: number) => saudacao(new Date(2026, 8, 30, n))
   expect([h(2), h(9), h(15), h(22)]).toEqual(['Boa noite', 'Bom dia', 'Boa tarde', 'Boa noite'])
+})
+
+describe('fmtDiaCurto', () => {
+  const agora = new Date(2026, 8, 30, 10, 0)
+  test('hoje, amanhã e uma data mais à frente', () => {
+    expect(fmtDiaCurto('2026-09-30', agora)).toBe('Hoje')
+    expect(fmtDiaCurto('2026-10-01', agora)).toBe('Amanhã')
+    expect(fmtDiaCurto('2026-10-02', agora)).toBe('sex, 2 out')
+  })
 })

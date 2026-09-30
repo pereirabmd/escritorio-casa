@@ -183,7 +183,7 @@ describe('Calendário', () => {
 
 const msg = (id: string, assunto: string, extra = {}) => ({ id, conta: 1, contaEmail: 'ele@gmail.com', thread: 't', de: 'Ana', deEmail: 'ana@x.pt', assunto, resumo: 'resumo…', data: '2026-09-30T09:30:00',   // sem fuso: o teste não depende do fuso da máquina
  
-  lida: false, estrela: false, importante: true, entrada: true, ...extra })
+  lida: false, estrela: false, importante: true, entrada: true, link: `https://mail.google.com/mail/u/ele@gmail.com/#all/${id}`, ...extra })
 const CAIXA = (mensagens: unknown[], extra = {}) => ({ ligado: true, configurado: true, filtro: 'importantes', contas: [{ id: 1, email: 'ele@gmail.com', estado: 'ok', total: mensagens.length }], mensagens, ...extra })
 const mail = (mensagens: unknown[] = [msg('m1', 'Reunião amanhã'), msg('m2', 'Fatura', { lida: true })], extra = {}): Rotas => ({ 'GET /mail?filtro=importantes': () => [200, CAIXA(mensagens, extra)] })
 const DET = (m: unknown, corpo = 'Olá,\n\ncorpo da mensagem.') => ({ ...(m as object), para: 'ele@gmail.com', corpo, temAnexos: false })
@@ -281,18 +281,17 @@ describe('Hoje: calendário e email', () => {
   test('mostra os eventos de hoje e os emails importantes por ler, com ligação aos módulos', async () => {
     abrirHoje(hoje({ estado: 'ok', dados: { eventos: [ev('a', 'Reunião', { local: 'Sala 1' }), ev('b', 'Aniversário', { diaInteiro: true, inicio: null, fim: null })], total: 4, contas: 1, comProblemas: [] } },
       { estado: 'ok', dados: { porLer: 5, mensagens: [msg('m1', 'Urgente')], contas: 1, comProblemas: [] } }))
-    const c = (await screen.findByRole('heading', { name: 'Calendário de hoje' })).closest('section')!
+    const c = (await screen.findByRole('heading', { name: 'Próximos eventos' })).closest('section')!
     expect(within(c).getByText('Reunião')).toBeInTheDocument(); expect(within(c).getByText('09:00')).toBeInTheDocument(); expect(within(c).getByText('Dia todo')).toBeInTheDocument()
-    expect(within(c).getByText('e mais 2')).toBeInTheDocument()
     expect(within(c).getByRole('link', { name: 'Abrir' })).toHaveAttribute('href', `${BASE}/calendario`)
     const e = screen.getByRole('heading', { name: 'Emails importantes' }).closest('section')!
-    expect(within(e).getByText('Urgente')).toBeInTheDocument(); expect(within(e).getByText('5 por ler')).toBeInTheDocument(); expect(within(e).getByText('e mais 4')).toBeInTheDocument()
+    expect(within(e).getByRole('link', { name: /Urgente/ })).toHaveAttribute('href', 'https://mail.google.com/mail/u/ele@gmail.com/#all/m1'); expect(within(e).getByText('Urgente')).toBeInTheDocument(); expect(within(e).getByText('5 por ler')).toBeInTheDocument(); expect(within(e).getByText('e mais 4')).toBeInTheDocument()
     expect(within(e).getByRole('link', { name: 'Abrir' })).toHaveAttribute('href', `${BASE}/email`)
   })
 
   test('sem eventos nem emails', async () => {
     abrirHoje(hoje({ estado: 'ok', dados: { eventos: [], total: 0, contas: 1, comProblemas: [] } }, { estado: 'ok', dados: { porLer: 0, mensagens: [], contas: 1, comProblemas: [] } }))
-    expect(await screen.findByText('Sem eventos hoje.')).toBeInTheDocument()
+    expect(await screen.findByText('Sem eventos marcados.')).toBeInTheDocument()
     expect(screen.getByText('Nada importante por ler.')).toBeInTheDocument()
   })
 
@@ -309,7 +308,7 @@ describe('Hoje: calendário e email', () => {
   test('desativado pelo administrador não aparece', async () => {
     abrirHoje(hoje({ estado: 'desativado', dados: null }, { estado: 'desativado', dados: null }))
     await screen.findByText('Próximo comboio')
-    expect(screen.queryByRole('heading', { name: 'Calendário de hoje' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: 'Próximos eventos' })).not.toBeInTheDocument()
     expect(screen.queryByRole('heading', { name: 'Emails importantes' })).not.toBeInTheDocument()
   })
 })

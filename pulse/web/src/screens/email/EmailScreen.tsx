@@ -56,6 +56,7 @@ function Detalhe({ m, executar, ocupado, avisos, aoMudar }: { m: MensagemGoogle;
       <div className="quick" role="group" aria-label="Ações da mensagem">
         <Botao variante="secondary" pequeno disabled={ocupado !== null} onClick={() => void lida(!m.lida)}>{m.lida ? 'Marcar como por ler' : 'Marcar como lida'}</Botao>
         <Botao variante="secondary" pequeno disabled={ocupado !== null} onClick={() => void arquivar()}>Arquivar</Botao>
+        <a className="btn btn-secondary btn-sm" href={m.link} target="_blank" rel="noopener noreferrer">Abrir no Gmail</a>
         <Botao variante="secondary" pequeno aria-pressed={m.estrela} disabled={ocupado !== null} onClick={() => void estrela()}>{m.estrela ? 'Tirar estrela' : 'Pôr estrela'}</Botao>
       </div>
     </div>

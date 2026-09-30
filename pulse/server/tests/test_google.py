@@ -281,9 +281,20 @@ def test_hoje_limita_e_conta(conn, api, fake):
     ligar(conn, api, UID[BRUNO], "ele@gmail.com")
     cal_lista(fake, [PRINCIPAL])
     eventos(fake, "ele@gmail.com", [{"id": str(i), "summary": f"E{i}", "start": {"dateTime": f"2026-09-30T{8 + i:02d}:00:00+01:00"}, "end": {"dateTime": f"2026-09-30T{9 + i:02d}:00:00+01:00"}} for i in range(7)])
-    h = calendario.hoje(api, contas_google.com_servico(conn, UID[BRUNO], "calendar"), date(2026, 9, 30), TZ)
+    h = calendario.hoje(api, contas_google.com_servico(conn, UID[BRUNO], "calendar"), date(2026, 9, 30), TZ, agora=datetime(2026, 9, 30, 0, 0, tzinfo=TZ))
     assert h["total"] == 7 and len(h["eventos"]) == 5 and h["eventos"][0]["titulo"] == "E0" and h["comProblemas"] == []
-    assert fake.chamadas_a("GET", "/events")[0][2]["timeMin"] == "2026-09-30T00:00:00+01:00" and fake.chamadas_a("GET", "/events")[0][2]["timeMax"] == "2026-10-01T00:00:00+01:00"
+    assert fake.chamadas_a("GET", "/events")[0][2]["timeMin"] == "2026-09-30T00:00:00+01:00" and fake.chamadas_a("GET", "/events")[0][2]["timeMax"] == "2026-10-14T00:00:00+01:00"
+
+
+def test_hoje_proximos_sem_os_que_ja_acabaram_e_com_a_data(conn, api, fake):
+    ligar(conn, api, UID[BRUNO], "ele@gmail.com")
+    cal_lista(fake, [PRINCIPAL])
+    eventos(fake, "ele@gmail.com", [
+        {"id": "a", "summary": "Já acabou", "start": {"dateTime": "2026-09-30T08:00:00+01:00"}, "end": {"dateTime": "2026-09-30T09:00:00+01:00"}},
+        {"id": "b", "summary": "Em curso", "start": {"dateTime": "2026-09-30T09:30:00+01:00"}, "end": {"dateTime": "2026-09-30T11:00:00+01:00"}},
+        {"id": "c", "summary": "Viagem", "start": {"date": "2026-10-02"}, "end": {"date": "2026-10-05"}}])
+    h = calendario.hoje(api, contas_google.com_servico(conn, UID[BRUNO], "calendar"), date(2026, 9, 30), TZ, agora=datetime(2026, 9, 30, 10, 0, tzinfo=TZ))
+    assert [(e["titulo"], e["data"]) for e in h["eventos"]] == [("Em curso", "2026-09-30"), ("Viagem", "2026-10-02")]     # sem repetir a viagem nos dias seguintes
 
 
 def test_criar_editar_apagar_evento(conn, api, fake):
@@ -354,6 +365,7 @@ def test_caixa_junta_contas_e_falhas_de_mensagens_soltas_nao_estragam(conn, api,
     fake.rotas[("GET", f"{g.GMAIL}/messages")] = lambda q, b: (200, {"messages": [{"id": "m1"}, {"id": "desaparecida"}], "resultSizeEstimate": 2})
     r = correio.caixa(api, contas_google.com_servico(conn, UID[BRUNO], "gmail"), "entrada", TZ)
     assert [m["id"] for m in r["mensagens"]] == ["m1"]
+    assert r["mensagens"][0]["link"] == "https://mail.google.com/mail/u/ele@gmail.com/#all/m1"         # abre a mensagem certa, na conta certa
     assert {c["email"]: c["estado"] for c in r["contas"]} == {"ele@gmail.com": "ok", "morta@gmail.com": "reautorizar"}
 
 
@@ -573,7 +585,7 @@ def test_hoje_calendario_e_email(app, fake):
     assert d["calendario"] == {"estado": "nao_ligado", "dados": None} and d["email"] == {"estado": "nao_ligado", "dados": None}
     ligar_via_api(app, BRUNO)
     cal_lista(fake, [PRINCIPAL])
-    eventos(fake, "ele@gmail.com", [{"id": "a", "summary": "Reunião", "start": {"dateTime": "2026-09-30T09:00:00+01:00"}, "end": {"dateTime": "2026-09-30T10:00:00+01:00"}}])
+    eventos(fake, "ele@gmail.com", [{"id": "a", "summary": "Reunião", "start": {"dateTime": "2026-09-30T22:00:00+01:00"}, "end": {"dateTime": "2026-09-30T23:30:00+01:00"}}])
     caixa_falsa(fake, [msg("m1", "Urgente", labels=("INBOX", "IMPORTANT", "UNREAD"))])
     d = b.get("/api/v1/dashboard/today").json()["modulos"]
     assert d["calendario"]["estado"] == "ok" and d["calendario"]["dados"]["eventos"][0]["titulo"] == "Reunião" and d["calendario"]["dados"]["total"] == 1

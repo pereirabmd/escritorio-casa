@@ -6,7 +6,7 @@ import { useUtilizador } from '../auth/AuthContext'
 import { Icon, type IconName } from '../components/Icon'
 import { ShopIcon } from '../components/ShopIcon'
 import { BrandLoading, Botao, Esqueleto, Notice, Spinner } from '../components/ui'
-import { fmtDataIso, fmtDataLonga, fmtDias, fmtDiaMes, fmtEuro, fmtPeso, plural, saudacao } from '../lib/format'
+import { fmtDataIso, fmtDataLonga, fmtDiaCurto, fmtDias, fmtDiaMes, fmtEuro, fmtPeso, plural, saudacao } from '../lib/format'
 import { useAvisos } from '../components/Avisos'
 import { diaBloqueado, proximaMarca } from '../lib/rto'
 import { lerPeso, novoCid, useAcao } from '../lib/useAcao'
@@ -159,24 +159,23 @@ const Problemas = ({ contas }: { contas: { id: number; email: string }[] }) => (
 )
 
 function Calendario({ m }: { m: Modulo<CalendarioHoje> }) {
-  if (m.estado === 'nao_ligado') return <LigarGoogle icone="calendario" titulo="Calendário de hoje" texto="Liga uma conta Google para veres aqui os eventos de hoje." />
+  if (m.estado === 'nao_ligado') return <LigarGoogle icone="calendario" titulo="Próximos eventos" texto="Liga uma conta Google para veres aqui os próximos eventos." />
   return (
-    <Cartao icone="calendario" titulo="Calendário de hoje" extra={<Link to="/calendario" className="link-btn">Abrir</Link>}>
+    <Cartao icone="calendario" titulo="Próximos eventos" extra={<Link to="/calendario" className="link-btn">Abrir</Link>}>
       <Estado modulo={m}>{() => {
         const d = m.dados!
         return (
           <>
-            {d.eventos.length === 0 ? <p className="t-body2">Sem eventos hoje.</p> : (
+            {d.eventos.length === 0 ? <p className="t-body2">Sem eventos marcados.</p> : (
               <ul className="rows">
                 {d.eventos.map((e) => (
                   <li key={`${e.conta}-${e.calendario}-${e.id}`}>
-                    <span className="t-meta agenda-hora">{e.diaInteiro ? 'Dia todo' : e.inicio}</span>
+                    <span className="t-meta agenda-hora"><span>{fmtDiaCurto(e.data)}</span><span>{e.diaInteiro ? 'Dia todo' : e.inicio}</span></span>
                     <div className="row-main"><div className="t-body">{e.titulo}</div>{e.local && <div className="t-meta">{e.local}</div>}</div>
                   </li>
                 ))}
               </ul>
             )}
-            {d.total > d.eventos.length && <p className="t-meta">e mais {d.total - d.eventos.length}</p>}
             <Problemas contas={d.comProblemas} />
           </>
         )
@@ -196,7 +195,11 @@ function Email({ m }: { m: Modulo<EmailHoje> }) {
             {d.mensagens.length === 0 ? <p className="t-body2">Nada importante por ler.</p> : (
               <ul className="rows">
                 {d.mensagens.map((x) => (
-                  <li key={`${x.conta}-${x.id}`}><div className="row-main"><div className="t-body mail-nova">{x.de}</div><div className="t-body2">{x.assunto}</div></div></li>
+                  <li key={`${x.conta}-${x.id}`}>
+                    <a className="row-main mail-link" href={x.link} target="_blank" rel="noopener noreferrer" aria-label={`Abrir no Gmail: ${x.assunto}, de ${x.de}`}>
+                      <div className="t-body mail-nova">{x.de}</div><div className="t-body2">{x.assunto}</div>
+                    </a>
+                  </li>
                 ))}
               </ul>
             )}

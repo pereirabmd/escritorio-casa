@@ -22,3 +22,19 @@ fun adicionarAoCalendario(ctx: Context, titulo: String, dataIso: String, hora: S
         .putExtra(android.provider.CalendarContract.EXTRA_EVENT_BEGIN_TIME, ini).putExtra(android.provider.CalendarContract.EXTRA_EVENT_END_TIME, ini + 30 * 60_000)
         .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
 }
+
+/** Abre um endereço http(s) fora da app (o Gmail abre as ligações mail.google.com na própria aplicação, na conta certa). */
+fun abrirEndereco(ctx: Context, url: String) {
+    if (!url.startsWith("https://")) return
+    runCatching { ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
+}
+
+/** «2026-10-02» → «Hoje» / «Amanhã» / «sex, 2 out» (o Hoje mostra os próximos eventos, de qualquer dia). */
+fun diaCurto(iso: String, hoje: java.time.LocalDate = java.time.LocalDate.now()): String {
+    val d = runCatching { java.time.LocalDate.parse(iso.take(10)) }.getOrNull() ?: return ""
+    return when (java.time.temporal.ChronoUnit.DAYS.between(hoje, d)) {
+        0L -> "Hoje"
+        1L -> "Amanhã"
+        else -> "${listOf("seg", "ter", "qua", "qui", "sex", "sáb", "dom")[d.dayOfWeek.value - 1]}, ${d.dayOfMonth} ${listOf("jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez")[d.monthValue - 1]}"
+    }
+}

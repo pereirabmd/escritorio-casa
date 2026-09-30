@@ -4,8 +4,11 @@ import org.junit.Assert.*
 import org.junit.Test
 import pt.pereirabmd.pulse.util.*
 import java.util.Calendar
+import java.time.LocalDate
+import pt.pereirabmd.pulse.ui.diaCurto
 
 class FormatTest {
+    @Test fun diaCurtoDosEventos() { val h = LocalDate.of(2026, 9, 30); assertEquals("Hoje", diaCurto("2026-09-30", h)); assertEquals("Amanhã", diaCurto("2026-10-01", h)); assertEquals("sex, 2 out", diaCurto("2026-10-02", h)) }
     @Test fun euro() { assertEquals("1 245,50 €", fmtEuro(1245.5)); assertEquals("0,00 €", fmtEuro(0.0)); assertEquals("12,00 €", fmtEuro(12.0)) }
     @Test fun peso() = assertEquals("104,8 kg", fmtPeso(104.8))
     @Test fun datas() { assertEquals("28/09/2026", fmtDataIso("2026-09-28")); assertEquals("28 de setembro", fmtDiaMes("2026-09-28")); assertEquals("1 de janeiro", fmtDiaMes("2026-01-01")) }

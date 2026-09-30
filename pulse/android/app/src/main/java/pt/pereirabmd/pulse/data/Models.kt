@@ -37,9 +37,9 @@ data class ContaFin(val id: Int, val descricao: String, val valor: Double, val c
 data class FinancasDados(val proximas: List<ContaFin>, val vencidas: Int, val total: Int, val valorTotal: Double)
 data class ItemCompras(val item: Int, val nome: String, val quantidade: Int?, val nota: String)
 data class ComprasDados(val pendentes: Int, val itens: List<ItemCompras>)
-data class Evento(val titulo: String, val diaInteiro: Boolean, val inicio: String, val local: String)
+data class Evento(val titulo: String, val diaInteiro: Boolean, val inicio: String, val local: String, val data: String = "")
 data class CalendarioDados(val eventos: List<Evento>, val total: Int, val comProblemas: List<String>)
-data class Mensagem(val de: String, val assunto: String)
+data class Mensagem(val de: String, val assunto: String, val link: String = "")
 data class EmailDados(val porLer: Int, val mensagens: List<Mensagem>, val comProblemas: List<String>)
 
 data class Hoje(
@@ -108,10 +108,10 @@ fun parseHoje(j: JSONObject): Hoje {
             modulo(c) { d -> ComprasDados(d.inteiro("pendentes"), d.lista("itens") { ItemCompras(it.inteiro("item"), it.txtOu("nome"), if (it.isNull("quantidade")) null else it.optInt("quantidade"), it.txtOu("nota")) }) }
         },
         calendario = modulo(m.obj("calendario")) { d ->
-            CalendarioDados(d.lista("eventos") { Evento(it.txtOu("titulo"), it.bool("diaInteiro"), it.txtOu("inicio"), it.txtOu("local")) }, d.inteiro("total"), problemas(d))
+            CalendarioDados(d.lista("eventos") { Evento(it.txtOu("titulo"), it.bool("diaInteiro"), it.txtOu("inicio"), it.txtOu("local"), it.txtOu("data")) }, d.inteiro("total"), problemas(d))
         },
         email = modulo(m.obj("email")) { d ->
-            EmailDados(d.inteiro("porLer"), d.lista("mensagens") { Mensagem(it.txtOu("de"), it.txtOu("assunto")) }, problemas(d))
+            EmailDados(d.inteiro("porLer"), d.lista("mensagens") { Mensagem(it.txtOu("de"), it.txtOu("assunto"), it.txtOu("link")) }, problemas(d))
         },
     )
 }

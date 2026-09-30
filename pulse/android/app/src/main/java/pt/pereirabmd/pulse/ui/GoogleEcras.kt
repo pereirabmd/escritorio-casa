@@ -281,6 +281,8 @@ private fun FolhaMensagem(m: JSONObject, acoes: Acoes, atualizar: () -> Unit, ao
             }
         }
         ErroAcao(acoes)
+        val contexto = androidx.compose.ui.platform.LocalContext.current
+        if (m.txtOu("link").isNotEmpty()) Botao("Abrir no Gmail", { abrirEndereco(contexto, m.txtOu("link")) }, variante = Variante.SECUNDARIO, pequeno = true)
         Botao(if (m.bool("lida")) "Marcar como por ler" else "Marcar como lida", { acoes.executar("l", "email.lida", com("lida" to !m.bool("lida"))) { atualizar(); aoFechar() } }, variante = Variante.SECUNDARIO, pequeno = true, ativo = acoes.ocupado == null)
         Botao("Arquivar", {
             acoes.executar("a", "email.arquivar", com("arquivado" to true)) {

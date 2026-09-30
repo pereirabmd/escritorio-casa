@@ -278,7 +278,9 @@ fieldset { border: 0; padding: 0; margin: 0; min-width: 0; }
 .mail-linha .t-meta:first-child { overflow: hidden; text-overflow: ellipsis; }
 .mail-nova { font-weight: 700; }
 .mail-corpo { white-space: pre-wrap; overflow-wrap: anywhere; font: inherit; font-size: 14px; line-height: 20px; margin: 0; padding: var(--s3); background: var(--surface-2); border-radius: var(--r-m); max-height: 60vh; overflow: auto; }
-.agenda-hora { min-width: 56px; }
+.agenda-hora { min-width: 72px; display: flex; flex-direction: column; }
+.mail-link { color: inherit; text-decoration: none; display: block; }
+.mail-link:hover .t-body2 { text-decoration: underline; }
 
 /* --- secções que se expandem e encolhem (categorias das Compras) --- */
 .sec-toggle { display: inline-flex; align-items: center; gap: var(--s2); border: 0; background: transparent; padding: var(--s1) 0; font: inherit; color: inherit; cursor: pointer; text-align: left; }

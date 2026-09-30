@@ -206,6 +206,6 @@ export interface AgendaGoogle {
   calendarios: { conta: number; id: string; nome: string; cor: string | null; principal: boolean; podeEditar: boolean }[]
   dias: { data: string; eventos: EventoGoogle[] }[]
 }
-export interface MensagemGoogle { id: string; conta: number; contaEmail: string; thread: string; de: string; deEmail: string; assunto: string; resumo: string; data: string; lida: boolean; estrela: boolean; importante: boolean; entrada: boolean }
+export interface MensagemGoogle { id: string; conta: number; contaEmail: string; thread: string; de: string; deEmail: string; assunto: string; resumo: string; data: string; lida: boolean; estrela: boolean; importante: boolean; entrada: boolean; link: string }
 export interface MensagemDetalhe extends MensagemGoogle { para: string; corpo: string; temAnexos: boolean }
 export interface CaixaGoogle { ligado: boolean; configurado: boolean; filtro: string; contas: EstadoContaGoogle[]; mensagens: MensagemGoogle[] }
