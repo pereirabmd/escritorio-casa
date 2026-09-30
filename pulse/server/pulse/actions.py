@@ -23,6 +23,7 @@ from pulse.accounts import ContaErro
 from pulse.google_api import GoogleApi
 from pulse.clients.dados import DadosClient, ErroDoModulo, ModuloIndisponivel
 from pulse.clients.tarefas_api import TarefasApiClient
+from pulse.services import bilhetes_favoritos as favoritos_bilhetes
 from pulse.services import calendario, compras, contas_google, correio, modulos
 from pulse.services import piscina as piscina_regras
 from pulse.services import rto as rto_regras
@@ -388,6 +389,24 @@ class SemanaIn(_Params):
                 raise ValueError("há viagens repetidas")
             chaves.add(k)
         return self
+
+
+class FavoritoGuardarIn(_Params):
+    comboio: int = Field(ge=1, le=99999)
+    hora: str = Field(pattern=r"^([01]\d|2[0-3]):[0-5]\d$")
+    origem: ESTACAO
+    destino: ESTACAO
+    apelido: Annotated[str, Field(max_length=40)] = ""
+
+
+class FavoritoRefIn(_Params):
+    favorito: ID
+
+
+class MarcarFavoritoIn(FavoritoRefIn):
+    """Marca a viagem de um favorito em vários dias de uma vez (mantém as outras viagens das semanas)."""
+    datas: list[date] = Field(min_length=1, max_length=14)
+    utilizador: int | None = Field(default=None, ge=1)       # marcar para outra pessoa (só o administrador)
 
 
 class PasseIn(_Params):
@@ -1069,6 +1088,40 @@ def _semana(c: Contexto, p: SemanaIn):
     return {**(r or {}), "anteriores": antes}, f"semana {p.inicio.isoformat()}: {len(p.viagens)} viagens" + (f" (pessoa {p.utilizador})" if p.utilizador else "")
 
 
+def _favorito_guardar(c: Contexto, p: FavoritoGuardarIn):
+    uid, _ = _quem(c)
+    r = favoritos_bilhetes.guardar(c.conn, uid, p.comboio, p.hora, p.origem, p.destino, p.apelido, int(c.agora.timestamp()))
+    return r, f"favorito {r['id']}: comboio {p.comboio} às {p.hora}"
+
+
+def _favorito_apagar(c: Contexto, p: FavoritoRefIn):
+    uid, _ = _quem(c)
+    r = favoritos_bilhetes.apagar(c.conn, uid, p.favorito)
+    return r, f"favorito {p.favorito}"
+
+
+def _marcar_favorito(c: Contexto, p: MarcarFavoritoIn):
+    """Junta a viagem do favorito aos dias pedidos, semana a semana, sem mexer nas outras viagens (o `bilhetes.semana` substitui a semana toda)."""
+    uid, _ = _quem(c)
+    f = favoritos_bilhetes.obter(c.conn, uid, p.favorito)
+    semanas: dict[date, list[date]] = {}
+    for d in sorted(set(p.datas)):
+        semanas.setdefault(d - timedelta(days=d.weekday()), []).append(d)
+    marcadas = repetidas = 0
+    for segunda, dias in semanas.items():
+        _, dados = c.client.pedir("GET", "/bilhetes/dados", c.email, {"utilizador": p.utilizador} if p.utilizador else None)
+        fim = segunda + timedelta(days=6)
+        existentes = [ViagemIn(data=date.fromisoformat(v["data"]), origem=v["origem"], destino=v["destino"], comboio=v["comboio"], hora=v["hora"], ativo=v["ativo"] == "SIM")
+                      for v in (dados or {}).get("viagens", []) if segunda.isoformat() <= v["data"] <= fim.isoformat()]
+        tem = {(v.data, v.comboio, v.hora) for v in existentes}
+        novas = [ViagemIn(data=d, origem=f["origem"], destino=f["destino"], comboio=f["comboio"], hora=f["hora"]) for d in dias if (d, f["comboio"], f["hora"]) not in tem]
+        repetidas += len(dias) - len(novas)
+        if novas:
+            _semana(c, SemanaIn(inicio=segunda, viagens=existentes + novas, utilizador=p.utilizador))
+            marcadas += len(novas)
+    return {"marcadas": marcadas, "jaExistiam": repetidas, "favorito": f}, f"favorito {p.favorito}: {marcadas} marcadas, {repetidas} já existiam"
+
+
 def _passe(c: Contexto, p: PasseIn):
     corpo = {"dataUltimaCompra": p.dataUltimaCompra.isoformat(), **({"validadeDias": p.validadeDias} if p.validadeDias else {}), **({"utilizadorId": p.utilizador} if p.utilizador else {})}
     _, r = c.client.pedir("PUT", "/bilhetes/passe", c.email, corpo=corpo)
@@ -1297,6 +1350,9 @@ ACOES: dict[str, Acao] = {a.nome: a for a in (
     Acao("rto.nota_restaurar", "rto", "safe_action", "Repõe uma nota apagada, com o mesmo id (desfaz «eliminar»).", NotaEditarIn, _nota_restaurar),
     Acao("rto.gerar_validacoes", "rto", "safe_action", "Gera validações de 14 em 14 dias, alternando os dois tipos.", ValidacoesIn, _validacoes),
     Acao("bilhetes.semana", "bilhetes", "safe_action", "Guarda as viagens de uma semana (substitui as da semana; o Pi lê a nova configuração).", SemanaIn, _semana),
+    Acao("bilhetes.favorito_guardar", "bilhetes", "safe_action", "Guarda um comboio (comboio, hora, origem e destino) nos favoritos, com um apelido opcional.", FavoritoGuardarIn, _favorito_guardar),
+    Acao("bilhetes.favorito_apagar", "bilhetes", "safe_action", "Tira um comboio dos favoritos.", FavoritoRefIn, _favorito_apagar),
+    Acao("bilhetes.marcar_favorito", "bilhetes", "safe_action", "Marca a viagem de um favorito em um ou mais dias (mantém as outras viagens da semana).", MarcarFavoritoIn, _marcar_favorito),
     Acao("bilhetes.passe", "bilhetes", "safe_action", "Regista a data do último carregamento do passe.", PasseIn, _passe),
     Acao("bilhetes.cp_cancelar", "bilhetes", "sensitive_action", "Devolve (cancela) um bilhete futuro na CP, na conta de quem viaja.", CpCancelarIn, _cp_cancelar),
     Acao("bilhetes.pedido_repetir", "bilhetes", "safe_action", "Liga ou desliga a repetição automática de um pedido avulso.", PedidoRepetirIn, _pedido_repetir),

@@ -167,6 +167,7 @@ export interface PedidoCp {
 export interface RegistoCp { ts: string; tipo: string; data: string | null; perna: string | null; comboio: number | null; status: number | null; resultado: string | null; referencia: string | null; erro: string | null }
 export interface BilheteNaCp { venda: number; referencia: string; estado: string; origem: string; destino: string; data: string; hora: string; chegada: string; comboio: number | null; servico: string; carruagem: number | null; lugar: number | null; valor: number; podeCancelar: boolean }
 export interface PasseNaCp { cartao: string; designacao: string; origem: string; destino: string; inicio: string; validade: string; renovavel: boolean; diasRestantes: number | null }
+export interface FavoritoBilhetes { id: number; apelido: string; comboio: number; hora: string; origem: string; destino: string }
 export interface BilhetesModulo {
   hoje: string
   passe: { dataUltimaCompra: string | null; validadeDias: number; dataExpira: string | null; diasRestantes: number | null; estado: 'sem_data' | 'expirado' | 'hoje' | 'a_expirar' | 'ok'; percentagem: number | null }
@@ -176,6 +177,8 @@ export interface BilhetesModulo {
   bilhetes: { proximos: BilheteCp[]; anteriores: BilheteCp[] }
   pedidos: PedidoCp[]; registo: RegistoCp[]
   estacoes: string[]; historico: { comboio: number; origem: string; destino: string; hora: string }[]
+  /** Os comboios favoritos desta conta (ADR-078): preenchem o seletor «Favoritos» do editor e dão nome curto às ações por voz. */
+  favoritos: FavoritoBilhetes[]
   /** Quem se está a ver (o Bruno, administrador, pode ver e marcar por outras pessoas) e as pessoas por quem se pode marcar (vazio = só a própria conta). */
   utilizador?: { id: number; nome: string; eu: boolean } | null
   pessoas?: { id: number; nome: string; eu: boolean }[]

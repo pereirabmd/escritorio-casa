@@ -17,9 +17,3 @@ fun comandoVoz(texto: String, haPropostas: Boolean): ComandoVoz {
     val t = Normalizer.normalize(texto, Normalizer.Form.NFD).replace(Regex("\\p{Mn}+"), "").lowercase().replace(Regex("[^a-z ]"), " ").trim().replace(Regex("\\s+"), " ")
     return when (t) { in CONFIRMAR -> ComandoVoz.CONFIRMAR; in CANCELAR -> ComandoVoz.CANCELAR; else -> ComandoVoz.NENHUM }
 }
-
-/** O texto de uma proposta para o cartão de confirmação: «Põe um produto… — lista: 1, nome: Pão». */
-fun descreverProposta(descricao: String, params: org.json.JSONObject): String {
-    val partes = params.keys().asSequence().map { k -> "$k: ${params.opt(k)}" }.toList()
-    return if (partes.isEmpty()) descricao else "$descricao\n${partes.joinToString(" · ")}"
-}

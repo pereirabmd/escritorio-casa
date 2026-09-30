@@ -127,7 +127,8 @@ private fun Passe(d: JSONObject, acoes: Acoes) {
 private fun FolhaSemana(d: JSONObject, acoes: Acoes, aoFechar: () -> Unit) {
     val avisos = LocalAvisos.current
     val semana = d.getJSONObject("semana"); val estacoes = d.strs("estacoes"); val hoje = d.getString("hoje")
-    val historico = d.objs("historico")
+    val favoritos = d.objs("favoritos")          // ADR-078: os comboios favoritos desta conta
+    fun rotuloFavorito(h: JSONObject) = (h.txtOu("apelido").takeIf { it.isNotEmpty() }?.let { "$it · " } ?: "") + "${h.inteiro("comboio")} — ${h.txtOu("origem")} → ${h.txtOu("destino")} (${h.txtOu("hora")})"
     var dias by remember { mutableStateOf(diasParaEditor(semana.strs("dias"), semana.objs("viagens"), hoje)) }
     var erros by remember { mutableStateOf<List<List<String>>>(emptyList()) }
     fun mudar(i: Int, f: (DiaEd) -> DiaEd) { dias = dias.mapIndexed { k, x -> if (k == i) f(x) else x } }
@@ -146,8 +147,8 @@ private fun FolhaSemana(d: JSONObject, acoes: Acoes, aoFechar: () -> Unit) {
                     fun opcoes(sel: String) = (if (sel.isNotEmpty() && sel !in estacoes) estacoes + sel else estacoes).map { it to it }
                     if (dia.passado) Meta("${v.origem} → ${v.destino} · comboio ${v.comboio} · ${v.hora}")
                     else Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        if (historico.isNotEmpty()) Seletor("Comboios que já usei (viagem ${k + 1})", historico.mapIndexed { n, h -> n to "${h.inteiro("comboio")} — ${h.txtOu("origem")} → ${h.txtOu("destino")} (${h.txtOu("hora")})" }, null, { n ->
-                            val h = historico[n]; atual { LinhaEd(h.txtOu("origem"), h.txtOu("destino"), h.inteiro("comboio").toString(), h.txtOu("hora")) }
+                        if (favoritos.isNotEmpty()) Seletor("Favoritos (viagem ${k + 1})", favoritos.mapIndexed { n, h -> n to rotuloFavorito(h) }, null, { n ->
+                            val h = favoritos[n]; atual { LinhaEd(h.txtOu("origem"), h.txtOu("destino"), h.inteiro("comboio").toString(), h.txtOu("hora")) }
                         }, vazio = "Escolher…")
                         Seletor("Origem", opcoes(v.origem), v.origem.ifEmpty { null }, { s -> atual { it.copy(origem = s) } }, vazio = "Origem…")
                         Seletor("Destino", opcoes(v.destino), v.destino.ifEmpty { null }, { s -> atual { it.copy(destino = s) } }, vazio = "Destino…")
@@ -156,11 +157,32 @@ private fun FolhaSemana(d: JSONObject, acoes: Acoes, aoFechar: () -> Unit) {
                             CampoHora("Hora de partida", v.hora, { h -> atual { it.copy(hora = h) } }, Modifier.weight(1f), opcional = false)
                         }
                         VerificacaoCp(dia.data, v.origem, v.destino, v.comboio, v.hora) { h -> atual { it.copy(hora = h) } }
+                        val guardavel = v.origem.isNotEmpty() && v.destino.isNotEmpty() && !v.origem.equals(v.destino, true) && v.comboio.toIntOrNull()?.let { it > 0 } == true && Regex("^([01]\\d|2[0-3]):[0-5]\\d$").matches(v.hora)
+                        val jaFavorito = favoritos.any { it.inteiro("comboio").toString() == v.comboio && it.txtOu("hora") == v.hora && it.txtOu("origem") == v.origem && it.txtOu("destino") == v.destino }
+                        if (guardavel && !jaFavorito) LinkBtn("Guardar nos favoritos", {
+                            acoes.executar("favorito", "bilhetes.favorito_guardar", jo("comboio" to v.comboio.toInt(), "hora" to v.hora, "origem" to v.origem, "destino" to v.destino)) { r ->
+                                avisos.mostrar("Comboio ${v.comboio} guardado nos favoritos.") { acoes.executar("desfazer", "bilhetes.favorito_apagar", jo("favorito" to r.optInt("id"))) }
+                            }
+                        })
                         LinkBtn("Remover viagem ${k + 1}", { mudar(i) { x -> x.copy(viagens = x.viagens.filterIndexed { j, _ -> j != k }) } })
                     }
                 }
                 if (!dia.passado) LinkBtn("Adicionar viagem a ${diaCurto(dia.data)}", { mudar(i) { x -> x.copy(viagens = x.viagens + LinhaEd(origemPadrao, destinoPadrao)) } })
                 erros.getOrNull(i)?.takeIf { it.isNotEmpty() }?.let { e -> Aviso(TipoAviso.ERRO) { e.forEach { Texto(it, Pulse.body2) } } }
+            }
+        }
+        if (favoritos.isNotEmpty()) Bloco(titulo = "Favoritos") {
+            favoritos.forEach { h ->
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Texto2(rotuloFavorito(h), Modifier.weight(1f))
+                    LinkBtn("Remover", {
+                        acoes.executar("fav-${h.getInt("id")}", "bilhetes.favorito_apagar", jo("favorito" to h.getInt("id"))) {
+                            avisos.mostrar("Favorito removido.") {
+                                acoes.executar("desfazer", "bilhetes.favorito_guardar", jo("comboio" to h.inteiro("comboio"), "hora" to h.txtOu("hora"), "origem" to h.txtOu("origem"), "destino" to h.txtOu("destino"), "apelido" to h.txtOu("apelido")))
+                            }
+                        }
+                    })
+                }
             }
         }
         ErroAcao(acoes)

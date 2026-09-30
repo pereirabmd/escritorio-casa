@@ -91,11 +91,18 @@ function VerificacaoCp({ data, origem, destino, comboio, hora, aoUsarHora }: { d
 interface EditorProps { dados: BilhetesModulo; f: Ferramentas; fechar: () => void }
 
 function Editor({ dados, f, fechar }: EditorProps) {
-  const { semana, estacoes, historico, hoje } = dados
+  const { semana, estacoes, favoritos, hoje } = dados
   const [dias, setDias] = useState<DiaEditor[]>(() => diasParaEditor(semana.dias, semana.viagens, hoje))
   const [erros, setErros] = useState<string[][]>([])
   const mudar = (i: number, alterar: (d: DiaEditor) => DiaEditor) => setDias((atual) => atual.map((d, k) => (k === i ? alterar(d) : d)))
   const [origemPadrao, destinoPadrao] = [estacoes[0] ?? '', estacoes[1] ?? '']
+
+  const guardavel = (v: { origem: string; destino: string; comboio: string; hora: string }) =>
+    !!v.origem && !!v.destino && v.origem !== v.destino && /^\d{1,5}$/.test(v.comboio) && Number(v.comboio) > 0 && /^([01]\d|2[0-3]):[0-5]\d$/.test(v.hora)
+  async function guardarFavorito(v: { origem: string; destino: string; comboio: string; hora: string }) {
+    const r = await f.executar('favorito', 'bilhetes.favorito_guardar', { comboio: Number(v.comboio), hora: v.hora, origem: v.origem, destino: v.destino })
+    if (r) f.avisos.mostrar(`Comboio ${v.comboio} guardado nos favoritos.`, () => void f.executar('desfazer', 'bilhetes.favorito_apagar', { favorito: r.id }))
+  }
 
   async function guardar() {
     const e = validarDias(dias)
@@ -125,11 +132,11 @@ function Editor({ dados, f, fechar }: EditorProps) {
             const opcoes = (sel: string) => (sel && !estacoes.includes(sel) ? [...estacoes, sel] : estacoes)
             return (
               <div className="stack" key={k} role="group" aria-label={`${diaCurto(d.data)}, viagem ${k + 1}`}>
-                {historico.length > 0 && !d.passado && (
-                  <select className="input input-sm" aria-label={`Comboios que já usei (viagem ${k + 1} de ${diaCurto(d.data)})`} value=""
-                    onChange={(e) => { const h = historico[Number(e.target.value)]; if (h) atual({ origem: h.origem, destino: h.destino, comboio: String(h.comboio), hora: h.hora }) }}>
-                    <option value="">Comboios que já usei…</option>
-                    {historico.map((h, n) => <option key={n} value={n}>{h.comboio} — {h.origem} → {h.destino} ({h.hora})</option>)}
+                {favoritos.length > 0 && !d.passado && (
+                  <select className="input input-sm" aria-label={`Favoritos (viagem ${k + 1} de ${diaCurto(d.data)})`} value=""
+                    onChange={(e) => { const h = favoritos[Number(e.target.value)]; if (h) atual({ origem: h.origem, destino: h.destino, comboio: String(h.comboio), hora: h.hora }) }}>
+                    <option value="">Favoritos…</option>
+                    {favoritos.map((h, n) => <option key={h.id} value={n}>{h.apelido ? `${h.apelido} · ` : ''}{h.comboio} — {h.origem} → {h.destino} ({h.hora})</option>)}
                   </select>
                 )}
                 <div className="quick">
@@ -143,6 +150,10 @@ function Editor({ dados, f, fechar }: EditorProps) {
                   <input id={campo('c')} className="input input-sm peso-input" inputMode="numeric" placeholder="Comboio" value={v.comboio} onChange={(e) => atual({ comboio: e.target.value })} />
                   <label className="sr-only" htmlFor={campo('h')}>Hora de partida</label>
                   <input id={campo('h')} type="time" className="input input-sm" value={v.hora} onChange={(e) => atual({ hora: e.target.value })} />
+                  {!d.passado && guardavel(v) && !favoritos.some((h) => h.comboio === Number(v.comboio) && h.hora === v.hora && h.origem === v.origem && h.destino === v.destino) && (
+                    <button type="button" className="link-btn" aria-label={`Guardar a viagem ${k + 1} de ${diaCurto(d.data)} nos favoritos`} disabled={f.ocupado !== null}
+                      onClick={() => void guardarFavorito(v)}>Guardar nos favoritos</button>
+                  )}
                   <button type="button" className="link-btn link-danger" aria-label={`Remover viagem ${k + 1} de ${diaCurto(d.data)}`} onClick={() => mudar(i, (x) => ({ ...x, viagens: x.viagens.filter((_, j) => j !== k) }))}>Remover</button>
                 </div>
                 {!d.passado && <VerificacaoCp data={d.data} origem={v.origem} destino={v.destino} comboio={v.comboio} hora={v.hora} aoUsarHora={(h) => atual({ hora: h })} />}
@@ -153,6 +164,20 @@ function Editor({ dados, f, fechar }: EditorProps) {
           {erros[i]?.length > 0 && <Notice tipo="error">{erros[i].map((e) => <div key={e}>{e}</div>)}</Notice>}
         </fieldset>
       ))}
+      {favoritos.length > 0 && (
+        <div className="stack" role="group" aria-label="Gerir favoritos">
+          <h3 className="t-body">Favoritos</h3>
+          <ul className="rows">
+            {favoritos.map((h) => (
+              <li key={h.id} className="split">
+                <span className="t-body2">{h.apelido ? `${h.apelido} · ` : ''}{h.comboio} — {h.origem} → {h.destino} ({h.hora})</span>
+                <button type="button" className="link-btn link-danger" aria-label={`Remover o favorito ${h.comboio} das ${h.hora}`} disabled={f.ocupado !== null}
+                  onClick={() => void f.executar(`fav-${h.id}`, 'bilhetes.favorito_apagar', { favorito: h.id }).then((r) => { if (r) f.avisos.mostrar('Favorito removido.', () => void f.executar('desfazer', 'bilhetes.favorito_guardar', { comboio: h.comboio, hora: h.hora, origem: h.origem, destino: h.destino, apelido: h.apelido })) })}>Remover</button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
       <div className="quick">
         <Botao pequeno carregando={f.ocupado === 'semana'} disabled={f.ocupado !== null} onClick={() => void guardar()}>Guardar semana</Botao>
         <Botao variante="secondary" pequeno onClick={fechar}>Cancelar</Botao>

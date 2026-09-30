@@ -22,7 +22,6 @@ import org.json.JSONObject
 import pt.pereirabmd.pulse.data.*
 import pt.pereirabmd.pulse.util.ComandoVoz
 import pt.pereirabmd.pulse.util.comandoVoz
-import pt.pereirabmd.pulse.util.descreverProposta
 
 /**
  * Assistente (ADR-077): abre ao tocar no logotipo e começa logo a ouvir. O que se diz vai (como texto) ao servidor, que escolhe as ações; o que
@@ -119,7 +118,7 @@ fun AssistenteFolha(aoFechar: () -> Unit, aoAlterado: () -> Unit) {
             Column(verticalArrangement = Arrangement.spacedBy(2.dp)) { Meta(if (papel == "utilizador") "Tu" else "Pulse"); if (papel == "utilizador") Texto2(t) else Texto(t) }
         }
         if (propostas.isNotEmpty()) Bloco(titulo = "Para confirmar") {
-            propostas.forEach { Texto2(descreverProposta(it.txtOu("descricao"), it.optJSONObject("params") ?: JSONObject())) }
+            propostas.forEach { Texto2(it.txtOu("resumo").ifEmpty { it.txtOu("descricao") }) }       // o servidor já traduz ids para nomes
             Meta("Toca em «Confirmar» ou diz «confirma»; «cancela» desiste.")
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Botao("Confirmar", ::confirmar, carregando = aPensar, ativo = !aPensar)

@@ -13,6 +13,8 @@ O objetivo é concentrar num único produto, com aparência profissional e coere
 - Finanças;
 - Lista de Compras.
 
+**Estado (30/09/2026)**: Compras tem «Última chamada», os Bilhetes têm comboios favoritos e o APK (0.4.0) tem um **assistente de voz** (toque no logotipo; só propõe, tu confirmas; ADR-077 a 079). Documentação completa em `docs/pulse-documentacao.html`.
+
 **Estado (29/09/2026)**: na Web estão completos Tarefas, Peso, RTO, Finanças, Bilhetes CP e Compras (paridade em `docs/PARITY_*.md`); Gmail e Google Calendar já existem na Web (ADR-049); a app Android `0.2.0` tem todos os módulos nativos (ADR-050/051, `android/`, `docs/PARITY_ANDROID.md`) e o APK está em `https://bmdpereira.duckdns.org/pulse/apk/pulse.apk`. Os módulos podem ser desativados pelo administrador (Definições → Administração).
 
 O dashboard **Hoje** apresenta apenas as funcionalidades essenciais e imediatas de cada módulo. As funcionalidades completas ficam em **Mais**.

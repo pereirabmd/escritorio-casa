@@ -6,15 +6,15 @@ from fastapi import APIRouter, Depends, Query, Request
 
 from pulse.accounts import ContaErro
 from pulse.api.v1.modules import exigir_modulo
-from pulse.api.v1.auth import Sessao, sessao_ativa
-from pulse.services import bilhetes, cp_horarios
+from pulse.api.v1.auth import Sessao, get_conn, sessao_ativa
+from pulse.services import bilhetes, bilhetes_favoritos, cp_horarios
 
 router = APIRouter(prefix="/tickets", tags=["bilhetes"], dependencies=[Depends(exigir_modulo("bilhetes"))])
 
 
 @router.get("")
 def ver(request: Request, semana: str | None = Query(default=None, pattern=r"^\d{4}-\d{2}-\d{2}$"), utilizador: int | None = Query(default=None, ge=1),
-        s: Sessao = Depends(sessao_ativa)):
+        s: Sessao = Depends(sessao_ativa), conn=Depends(get_conn)):
     """Bilhetes CP: próxima viagem, semana em edição, bilhetes, passe, pedidos e registo (regras em `services/bilhetes.py`).
     `semana` = uma data qualquer da semana pretendida (usa-se a sua segunda-feira). `utilizador` = ver e marcar por outra pessoa (só o administrador,
     decidido no `dados-api`); por omissão, os da própria conta."""
@@ -24,7 +24,9 @@ def ver(request: Request, semana: str | None = Query(default=None, pattern=r"^\d
     except ValueError:
         raise ContaErro(400, "semana_invalida", "data inválida") from None
     _, d = app.dados.pedir("GET", "/bilhetes/dados", s.user["email"], {"utilizador": utilizador} if utilizador else None)
-    return bilhetes.visao(d or {}, app.agora(), alvo)
+    r = bilhetes.visao(d or {}, app.agora(), alvo)
+    bilhetes_favoritos.semear(conn, s.user["id"], r["historico"])        # 1.ª vez: os comboios que já usou
+    return {**r, "favoritos": bilhetes_favoritos.listar(conn, s.user["id"])}
 
 
 CP_TIMEOUT_S = 100        # a CP pode pedir um início de sessão (o `dados-api` espera até 90 s)

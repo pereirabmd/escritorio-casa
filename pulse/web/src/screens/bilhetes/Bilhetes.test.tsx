@@ -26,6 +26,7 @@ const DADOS = {
     { ts: '2026-09-30 06:00:00', tipo: 'ERRO', data: '2026-09-30', perna: 'v1', comboio: 520, status: 500, resultado: 'FALHA', referencia: null, erro: 'a CP não respondeu' },
     { ts: '2026-09-29 06:00:00', tipo: 'COMPRA', data: '2026-09-29', perna: 'v1', comboio: 520, status: 200, resultado: 'CONFIRMED', referencia: 'R1', erro: null }],
   estacoes: ['Aveiro', 'Lisboa Oriente'], historico: [{ comboio: 525, origem: 'Aveiro', destino: 'Lisboa Oriente', hora: '07:27' }],
+  favoritos: [{ id: 7, apelido: 'Manhã', comboio: 525, origem: 'Aveiro', destino: 'Lisboa Oriente', hora: '07:27' }],
 }
 
 function abrir(aba: string, extra: Rotas = {}, dados: unknown = DADOS) {
@@ -134,13 +135,28 @@ describe('Semana', () => {
     expect(corpo(s.pedidos, '/actions/bilhetes.semana')).toBeUndefined()
   })
 
-  test('o interruptor «Ativo» é por dia e a viagem do histórico preenche a linha', async () => {
+  test('favoritos: guardar a viagem de uma linha e remover um favorito (com «Desfazer»)', async () => {
+    const s = abrir('semana', { 'POST /actions/bilhetes.favorito_guardar': () => OK, 'POST /actions/bilhetes.favorito_apagar': () => OK })
+    await userEvent.click(await screen.findByRole('button', { name: 'Configurar semana' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Adicionar viagem a sex 09/10' }))
+    const dia = screen.getByRole('group', { name: 'sex 09/10, viagem 1' })
+    await userEvent.selectOptions(within(dia).getByLabelText('Origem'), 'Lisboa Oriente')
+    await userEvent.selectOptions(within(dia).getByLabelText('Destino'), 'Aveiro')
+    await userEvent.type(within(dia).getByLabelText('Comboio'), '731')
+    await userEvent.type(within(dia).getByLabelText('Hora de partida'), '17:30')
+    await userEvent.click(within(dia).getByRole('button', { name: /Guardar a viagem 1 de sex 09\/10 nos favoritos/ }))
+    await waitFor(() => expect(corpo(s.pedidos, '/actions/bilhetes.favorito_guardar')).toEqual({ params: { comboio: 731, hora: '17:30', origem: 'Lisboa Oriente', destino: 'Aveiro' } }))
+    await userEvent.click(screen.getByRole('button', { name: /Remover o favorito 525 das 07:27/ }))
+    await waitFor(() => expect(corpo(s.pedidos, '/actions/bilhetes.favorito_apagar')).toEqual({ params: { favorito: 7 } }))
+  })
+
+  test('o interruptor «Ativo» é por dia e a viagem dos favoritos preenche a linha', async () => {
     const s = abrir('semana', { 'POST /actions/bilhetes.semana': () => OK })
     await userEvent.click(await screen.findByRole('button', { name: 'Configurar semana' }))
     const dia = screen.getByRole('group', { name: 'seg 05/10' })
     await userEvent.click(within(dia).getByLabelText('Ativo'))
     await userEvent.click(screen.getByRole('button', { name: 'Adicionar viagem a sex 09/10' }))
-    await userEvent.selectOptions(screen.getByLabelText(/Comboios que já usei \(viagem 1 de sex 09\/10\)/), '0')
+    await userEvent.selectOptions(screen.getByLabelText(/Favoritos \(viagem 1 de sex 09\/10\)/), '0')
     await userEvent.click(screen.getByRole('button', { name: 'Guardar semana' }))
     await waitFor(() => expect(corpo(s.pedidos, '/actions/bilhetes.semana')).toBeTruthy())
     const v = (corpo(s.pedidos, '/actions/bilhetes.semana') as { params: { viagens: { data: string; ativo: boolean; comboio: number }[] } }).params.viagens

@@ -12,6 +12,8 @@ O canal é a API de mensagens da Anthropic com ferramentas (HTTPS, chave só no 
 from __future__ import annotations
 
 import json
+import logging
+import re
 import time
 import urllib.error
 import urllib.request
@@ -19,17 +21,26 @@ from datetime import datetime
 
 from pulse import actions
 from pulse.accounts import ContaErro
-from pulse.services import compras, dashboard, modulos
+from pulse.services import bilhetes_favoritos, compras, dashboard, modulos
 
+LOG = logging.getLogger("pulse.ia")
 URL = "https://api.anthropic.com/v1/messages"
 MODELO_OMISSAO = "claude-haiku-4-5-20251001"
 MAX_VOLTAS = 6                      # idas e voltas ao modelo por comando
 MAX_MENSAGENS = 20                  # mensagens de conversa aceites do cliente
 MAX_TEXTO = 600
 LIMITE_POR_MINUTO = 12
+# Ações de administração, manutenção e «desfazer» técnico: o agente não as vê (menos ferramentas = menos tokens a cada volta, e menos risco).
+NAO_PARA_IA = {"tarefas.admin", "tarefas.gerar", "tarefas.pessoa_adicionar", "tarefas.pessoa_editar", "tarefas.pessoa_remover", "tarefas.reatribuir",
+               "tarefas.avisos_horario", "tarefas.preferencias", "tarefas.piscina_repor", "compras.restaurar", "compras.categoria_ocultar", "compras.ocultar",
+               "compras.sugestao_ignorar", "rto.nota_restaurar", "rto.gerar_validacoes", "peso.configurar", "bilhetes.pedido_forcar", "bilhetes.pedido_repetir",
+               "bilhetes.semana", "bilhetes.cp_cancelar"}
+IDS_SEM_NOME = {"conta", "tarefa", "lancamento", "evento", "registo", "pedido", "venda", "lembrete", "categoria_id", "instancia"}
 LEITURAS = {
     "consultar_hoje": "Consulta o que a conta tem hoje e a seguir: tarefas, próximo bilhete, RTO, peso, contas a pagar, compras por comprar, próximos eventos do "
                       "calendário e emails importantes. `modulos` limita a consulta (por omissão, todos).",
+    "bilhetes_favoritos": "Lista os comboios favoritos da conta (id, apelido, comboio, hora, origem, destino). Usa antes de marcar uma viagem por favorito "
+                          "(`bilhetes.marcar_favorito`): escolhe pelo apelido, hora ou percurso que o utilizador disser.",
     "compras_procurar": "Procura produtos no catálogo de Compras (sem distinguir acentos nem maiúsculas) e diz se já estão na lista; devolve também as listas "
                         "(ids). Usa SEMPRE antes de adicionar um produto, para reutilizar o do catálogo em vez de criar um duplicado.",
 }
@@ -47,6 +58,15 @@ def _acao(ferramenta: str) -> str:
     return ferramenta.replace("__", ".")
 
 
+def _compacto(esquema):
+    """Tira do esquema o que só gasta tokens (títulos e valores por omissão): o modelo não precisa deles."""
+    if isinstance(esquema, dict):
+        return {k: _compacto(v) for k, v in esquema.items() if k not in ("title", "default")}
+    if isinstance(esquema, list):
+        return [_compacto(x) for x in esquema]
+    return esquema
+
+
 def ferramentas(conn, uid: int) -> list[dict]:
     """As ferramentas do modelo: as leituras e as ações dos módulos a que a conta tem acesso (o esquema vem dos modelos das ações)."""
     bloqueados = modulos.indisponiveis_para(conn, uid)
@@ -55,11 +75,14 @@ def ferramentas(conn, uid: int) -> list[dict]:
          "input_schema": {"type": "object", "properties": {"modulos": {"type": "array", "items": {"type": "string", "enum": ["tarefas", "bilhetes", "rto", "peso", "financas", "compras", "calendario", "email"]}}}}},
         {"name": "compras_procurar", "description": LEITURAS["compras_procurar"],
          "input_schema": {"type": "object", "properties": {"texto": {"type": "string", "maxLength": 80}}, "required": ["texto"]}},
+        {"name": "bilhetes_favoritos", "description": LEITURAS["bilhetes_favoritos"], "input_schema": {"type": "object", "properties": {}}},
     ]
+    if "bilhetes" in bloqueados:
+        out = [t for t in out if t["name"] != "bilhetes_favoritos"]
     for a in actions.ACOES.values():
-        if a.modulo in bloqueados:
+        if a.modulo in bloqueados or a.nome in NAO_PARA_IA:
             continue
-        esquema = a.params.model_json_schema()
+        esquema = _compacto(a.params.model_json_schema())
         out.append({"name": nome_ferramenta(a.nome), "input_schema": esquema,
                     "description": f"{a.descricao} [{'pede confirmação do utilizador' if a.nivel == 'sensitive_action' else 'o utilizador confirma antes de correr'}]"})
     return out
@@ -79,14 +102,68 @@ def _procurar(conn, uid: int, texto: str) -> dict:
             "dica": "se não houver o produto, `compras.adicionar` aceita `nome` e `categoria` e cria-o"}
 
 
+def _nome_de(conn, sql: str, valor) -> str | None:
+    r = conn.execute(sql, (valor,)).fetchone()
+    return r[0] if r else None
+
+
+def _dia_curto(d: str) -> str:
+    try:
+        x = datetime.fromisoformat(d)
+        return f"{['seg', 'ter', 'qua', 'qui', 'sex', 'sáb', 'dom'][x.weekday()]} {x:%d/%m}"
+    except ValueError:
+        return d
+
+
+def resumo(conn, acao: "actions.Acao", params: dict) -> str:
+    """O que a proposta faz, em português e **sem ids** (o utilizador nunca vê «lista 1» nem «produto 37»): os ids resolvem-se para nomes."""
+    lista = _nome_de(conn, "SELECT nome FROM shop_lists WHERE id = ?", params["lista"]) if isinstance(params.get("lista"), int) else None
+    if acao.nome == "compras.adicionar":
+        nome = params.get("nome") or (_nome_de(conn, "SELECT nome FROM shop_products WHERE id = ?", params["produto"]) if isinstance(params.get("produto"), int) else None)
+        return f"Adicionar «{nome or 'um produto'}» à lista «{lista or 'Casa'}»"
+    if acao.nome == "bilhetes.marcar_favorito":
+        f = conn.execute("SELECT comboio, hora, origem, destino FROM bilhetes_favoritos WHERE id = ?", (params.get("favorito"),)).fetchone()
+        dias = ", ".join(_dia_curto(str(d)) for d in params.get("datas", []))
+        return f"Marcar o comboio {f['comboio']} ({f['origem']} → {f['destino']}, {f['hora']}) em {dias}" if f else f"Marcar um favorito em {dias}"
+    partes = []
+    for k, v in params.items():
+        if v is None or v == "" or k in ("cid", "utilizador"):
+            continue
+        if k == "lista":
+            partes.append(f"lista «{lista}»" if lista else "")
+        elif k == "destino" and isinstance(v, int):
+            n = _nome_de(conn, "SELECT nome FROM shop_lists WHERE id = ?", v)
+            partes.append(f"para a lista «{n}»" if n else "")
+        elif k == "produto":
+            n = _nome_de(conn, "SELECT nome FROM shop_products WHERE id = ?", v) if isinstance(v, int) else None
+            partes.append(f"«{n}»" if n else "")
+        elif k == "item":
+            n = _nome_de(conn, "SELECT p.nome FROM shop_items i JOIN shop_products p ON p.id = i.product_id WHERE i.id = ?", v) if isinstance(v, int) else None
+            partes.append(f"«{n}»" if n else "")
+        elif k == "favorito":
+            f = conn.execute("SELECT comboio, hora FROM bilhetes_favoritos WHERE id = ?", (v,)).fetchone() if isinstance(v, int) else None
+            partes.append(f"comboio {f['comboio']} às {f['hora']}" if f else "")
+        elif (isinstance(v, int) and not isinstance(v, bool) and k in IDS_SEM_NOME) or (isinstance(v, str) and re.fullmatch(r"I\d{1,20}", v)):
+            continue                                                  # ids que não se conseguem traduzir: melhor não mostrar
+        elif isinstance(v, list):
+            partes.append(f"{k}: {', '.join(_dia_curto(str(x)) for x in v)}")
+        else:
+            partes.append(f"{k}: {_dia_curto(v) if isinstance(v, str) and len(v) == 10 and v[4] == '-' else v}")
+    partes = [p for p in partes if p]
+    base = acao.descricao.rstrip(".")
+    return f"{base} — {'; '.join(partes)}" if partes else base
+
+
 def _sistema(nome: str, agora: datetime) -> str:
     dias = ["segunda-feira", "terça-feira", "quarta-feira", "quinta-feira", "sexta-feira", "sábado", "domingo"]
-    return (f"És o assistente do Pulse, a aplicação doméstica de {nome or 'um utilizador'}. Agora: {dias[agora.weekday()]}, {agora:%d/%m/%Y %H:%M} (Europe/Lisbon).\n"
+    return (f"És o assistente do Pulse, a aplicação doméstica de {nome or 'um utilizador'}. Hoje é {dias[agora.weekday()]}, {agora:%d/%m/%Y} (Europe/Lisbon).\n"
             "Responde sempre em português de Portugal, curto e direto. Usa as ferramentas para consultar e para propor ações; nunca inventes ids nem dados.\n"
             "Escrever não é contigo: as ações ficam como proposta e o utilizador confirma. Propõe tudo o que foi pedido de uma vez e resume em uma frase "
             "o que vais fazer («Vou adicionar pão e cebolas à lista Casa. Confirmas?»).\n"
             "Se faltar informação que não consegues deduzir, pergunta. Compras: a lista por omissão é a «Casa» (partilhada); procura o produto antes de o adicionar. "
-            "Datas relativas («amanhã», «sexta») resolvem-se a partir de agora. Nunca apagues nada que não tenha sido pedido expressamente.")
+            "Datas relativas («amanhã», «sexta») resolvem-se a partir de agora. Nunca apagues nada que não tenha sido pedido expressamente.\n"
+            "NUNCA escrevas ids nem números internos (de listas, produtos, itens, favoritos…) na resposta: usa só nomes («lista Casa», «Pão»). "
+            "Bilhetes: para marcar um comboio favorito usa `bilhetes_favoritos` e depois `bilhetes.marcar_favorito` (podes marcar vários dias numa só ação).")
 
 
 def _http(url: str, cabecalhos: dict, corpo: bytes) -> tuple[int, bytes]:
@@ -117,11 +194,17 @@ class Agente:
         self._pedidos[uid] = recentes + [agora]
 
     def _modelo(self, sistema: str, mensagens: list, tools: list) -> dict:
-        corpo = json.dumps({"model": self.modelo, "max_tokens": 1024, "system": sistema, "tools": tools, "messages": mensagens}).encode()
+        # cache do prompt (ferramentas + sistema, ~15 mil tokens): as voltas seguintes e os pedidos nos 5 minutos seguintes leem-no a 10 % do preço
+        tools = [*tools[:-1], {**tools[-1], "cache_control": {"type": "ephemeral"}}]
+        corpo = json.dumps({"model": self.modelo, "max_tokens": 1024, "tools": tools, "messages": mensagens,
+                            "system": [{"type": "text", "text": sistema, "cache_control": {"type": "ephemeral"}}]}).encode()
         status, raw = self.transporte(URL, {"x-api-key": self.chave, "anthropic-version": "2023-06-01", "content-type": "application/json"}, corpo)
         if status != 200:
             raise IaErro(502, "ia_erro", f"o assistente respondeu com erro (HTTP {status})")
-        return json.loads(raw.decode())
+        r = json.loads(raw.decode())
+        u = r.get("usage") or {}
+        LOG.info("ia: entrada=%s cache_lida=%s cache_escrita=%s saida=%s", u.get("input_tokens"), u.get("cache_read_input_tokens"), u.get("cache_creation_input_tokens"), u.get("output_tokens"))
+        return r
 
     def conversar(self, conn, app, user: dict, mensagens: list[dict], agora: datetime) -> dict:
         """Uma volta da conversa. `mensagens`: [{papel: 'utilizador'|'assistente', texto}] (o cliente guarda-as). Devolve o texto e as propostas."""
@@ -135,8 +218,11 @@ class Agente:
             hist.pop(0)
         tools = ferramentas(conn, user["id"])
         permitidas = {t["name"] for t in tools}
+        permitidas_escrita = permitidas - set(LEITURAS)
         propostas: list[dict] = []
         texto = ""
+        if hist and hist[-1]["role"] == "user":                       # a hora vai aqui (e não no sistema) para não invalidar a cache
+            hist[-1] = {**hist[-1], "content": f"{hist[-1]['content']}\n(agora são {agora:%H:%M})"}
         for _ in range(MAX_VOLTAS):
             r = self._modelo(_sistema(user["nome"] or "", agora), hist, tools)
             blocos = r.get("content", [])
@@ -149,6 +235,8 @@ class Agente:
             for u in usos:
                 resultados.append({"type": "tool_result", "tool_use_id": u["id"], **self._ferramenta(conn, app, user, u, permitidas, propostas)})
             hist.append({"role": "user", "content": resultados})
+            if all(u["name"] in permitidas_escrita for u in usos) and texto:
+                break                                                     # só propostas e o modelo já explicou: poupa a volta final
         return {"texto": texto or "Não percebi o que queres; podes dizer de outra forma?", "propostas": propostas}
 
     def _ferramenta(self, conn, app, user: dict, uso: dict, permitidas: set, propostas: list) -> dict:
@@ -158,6 +246,8 @@ class Agente:
         try:
             if nome == "compras_procurar":
                 return {"content": json.dumps(_procurar(conn, user["id"], str(entrada.get("texto", ""))), ensure_ascii=False)}
+            if nome == "bilhetes_favoritos":
+                return {"content": json.dumps({"favoritos": bilhetes_favoritos.listar(conn, user["id"])}, ensure_ascii=False)}
             if nome == "consultar_hoje":
                 from pulse.api.v1.dashboard import construir_locais
                 so = {m for m in entrada.get("modulos", []) if isinstance(m, str)} or None
@@ -169,7 +259,7 @@ class Agente:
             return {"content": e.mensagem if hasattr(e, "mensagem") else str(e), "is_error": True}
         except Exception as e:                                             # parâmetros inválidos e falhas de módulos: o modelo vê e reage
             return {"content": f"erro: {str(e)[:300]}", "is_error": True}
-        propostas.append({"acao": acao.nome, "nivel": acao.nivel, "descricao": acao.descricao, "params": entrada})
+        propostas.append({"acao": acao.nome, "nivel": acao.nivel, "descricao": acao.descricao, "resumo": resumo(conn, acao, entrada), "params": entrada})
         return {"content": "Proposta registada; o utilizador vai confirmar. Não voltes a propor a mesma ação."}
 
 

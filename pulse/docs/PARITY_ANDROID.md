@@ -1,6 +1,6 @@
 # Paridade Android ↔ Web
 
-O Pulse tem duas interfaces sobre o mesmo servidor (as regras vivem no servidor, ADR-050). A partir de 29/09/2026 **cada funcionalidade nova é entregue nas duas** e discutida antes de implementar. Estado a 29/09/2026 (Android `0.3.6`, ADR-051/052/053/054/074/075).
+O Pulse tem duas interfaces sobre o mesmo servidor (as regras vivem no servidor, ADR-050). A partir de 29/09/2026 **cada funcionalidade nova é entregue nas duas** e discutida antes de implementar. Estado a 30/09/2026 (Android `0.4.0`; `0.4.1` por publicar; ADR-051/052/053/054/074/075/076/077/078).
 Legenda: **Feito** · **Pendente** · **Só Android** / **Só Web** (decidido).
 
 | Funcionalidade | Web | Android | Notas |
@@ -24,5 +24,8 @@ Legenda: **Feito** · **Pendente** · **Só Android** / **Só Web** (decidido).
 | Administração (módulos) | Feito | Feito | |
 | Atualização da app | link para o APK | Feito (interna) | `version.json` (ADR-050) |
 | Notificações (FCM) | — | **Feito** | FCM ligado; Bilhetes CP, Finanças e Tarefas avisam também pelo Pulse, em paralelo com o ntfy (ADR-057 a 060); botões «Marcar feita» e «Daqui a 1 h» e toque para o sítio certo (ADR-061; os botões precisam de `PULSE_FCM_SO_DADOS=1` depois de instalar a 0.2.7) |
+| Compras › Última chamada (aviso a todos antes de ir às compras; uma por ida) | Feito | Feito | ADR-076 |
+| Bilhetes CP › Favoritos (seletor, guardar, remover; marcar por voz) | Feito | Feito | ADR-078; Android 0.4.1 |
+| Assistente de voz (toque no logotipo; propostas com confirmação) | — | **Só Android** | ADR-077/079; exceção à paridade, decidida com o utilizador |
 | Fila offline / cache | — | **Pendente** | fase 5 (Room, WorkManager) |
 | Puxar para atualizar | Pendente | Botão «Atualizar» | |

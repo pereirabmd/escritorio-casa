@@ -95,3 +95,15 @@ def test_confirmar_uma_acao_que_falha_nao_impede_as_outras_e_modelo_em_erro_da_5
     r = c.post("/api/v1/ai/confirm", json={"propostas": [{"acao": "compras.adicionar", "params": {"lista": 999, "nome": "X", "categoria": "outros"}},
                                                           {"acao": "compras.adicionar", "params": {"lista": 1, "nome": "Sal", "categoria": "mercearia"}}]}).json()["resultados"]
     assert [x["ok"] for x in r] == [False, True]
+
+
+def test_propostas_trazem_resumo_sem_ids(montar):
+    modelo = ModeloFalso({"content": [uso("t1", "compras__adicionar", lista=1, produto=1), uso("t2", "compras__adicionar", lista=1, nome="Cebola", categoria="frutas-legumes")]},
+                         texto("Vou adicionar pão e cebolas à lista Casa. Confirmas?"))
+    c = montar(modelo)
+    r = pedir(c, "adiciona pão e cebolas").json()
+    resumos = [p["resumo"] for p in r["propostas"]]
+    assert resumos[1] == "Adicionar «Cebola» à lista «Casa»"
+    assert resumos[0].startswith("Adicionar «") and resumos[0].endswith("à lista «Casa»")
+    assert not any(ch.isdigit() for ch in " ".join(resumos))                         # nenhum id à vista
+    assert "NUNCA escrevas ids" in modelo.pedidos[0]["system"][0]["text"]
