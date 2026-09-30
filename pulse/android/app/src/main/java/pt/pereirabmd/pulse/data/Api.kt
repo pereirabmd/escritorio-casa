@@ -20,18 +20,21 @@ object Api {
     @Volatile var aoPerderSessao: (() -> Unit)? = null
 
     private const val BASE_PATH = "/api/v1"
+    private const val LEITURA_MS = 20_000
+    /** As consultas à CP (Bilhetes › Na CP) podem pedir um início de sessão na CP: dão-se-lhes mais tempo. */
+    const val LEITURA_CP_MS = 100_000
 
-    suspend fun get(caminho: String) = pedir("GET", caminho, null)
-    suspend fun post(caminho: String, corpo: JSONObject = JSONObject()) = pedir("POST", caminho, corpo)
+    suspend fun get(caminho: String, leituraMs: Int = LEITURA_MS) = pedir("GET", caminho, null, leituraMs)
+    suspend fun post(caminho: String, corpo: JSONObject = JSONObject(), leituraMs: Int = LEITURA_MS) = pedir("POST", caminho, corpo, leituraMs)
     suspend fun put(caminho: String, corpo: JSONObject = JSONObject()) = pedir("PUT", caminho, corpo)
     suspend fun delete(caminho: String) = pedir("DELETE", caminho, null)
 
-    private suspend fun pedir(metodo: String, caminho: String, corpo: JSONObject?): JSONObject = withContext(Dispatchers.IO) {
+    private suspend fun pedir(metodo: String, caminho: String, corpo: JSONObject?, leituraMs: Int = LEITURA_MS): JSONObject = withContext(Dispatchers.IO) {
         val ligacao = try {
             (URL(BuildConfig.SERVER + BASE_PATH + caminho).openConnection() as HttpURLConnection).apply {
                 requestMethod = metodo
                 connectTimeout = 10_000
-                readTimeout = 20_000
+                readTimeout = leituraMs
                 setRequestProperty("Accept", "application/json")
                 setRequestProperty("X-Pulse-Client", "android")
                 token?.let { setRequestProperty("Authorization", "Bearer $it") }

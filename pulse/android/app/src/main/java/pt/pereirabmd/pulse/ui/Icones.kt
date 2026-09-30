@@ -29,6 +29,7 @@ private fun p(d: String) = Caminho(d)
 /** Os mesmos ícones lineares da Web (`web/src/components/Icon.tsx`): grelha 24, traço 1,75. Sem emojis (CLAUDE.md). */
 enum class Icone(internal val formas: List<Forma>) {
     MAIS(listOf(r(4f, 4f, 6.5f, 6.5f, 1.5f), r(13.5f, 4f, 6.5f, 6.5f, 1.5f), r(4f, 13.5f, 6.5f, 6.5f, 1.5f), r(13.5f, 13.5f, 6.5f, 6.5f, 1.5f))),
+    HOJE(listOf(c(12f, 12f, 4f), p("M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6 7 7M17 17l1.4 1.4M5.6 18.4 7 17M17 7l1.4-1.4"))),
     TAREFAS(listOf(r(4f, 4f, 16f, 16f, 3.5f), p("m8.5 12.2 2.6 2.6 4.6-5.2"))),
     CALENDARIO(listOf(r(4f, 5.5f, 16f, 14.5f, 3f), p("M4 10h16M8.5 3.5v4M15.5 3.5v4"))),
     EMAIL(listOf(r(3.5f, 5.5f, 17f, 13f, 3f), p("m4.5 8 7.5 5.5L19.5 8"))),

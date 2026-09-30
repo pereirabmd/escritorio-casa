@@ -51,3 +51,18 @@ def test_atividade_valida_origem_e_resultado(tmp_path):
 def test_base_nova_so_o_dono_le(tmp_path):
     db.connect(tmp_path / "teste-perm.db").close()
     assert ((tmp_path / "teste-perm.db").stat().st_mode & 0o777) == 0o600
+
+
+def test_ligacao_pode_fechar_noutra_thread(tmp_path):
+    """O FastAPI abre a ligação de um pedido numa thread do pool e fecha-a noutra: não pode dar 500 (ProgrammingError)."""
+    import threading
+    conn = db.connect(tmp_path / "teste-t.db")
+    erros = []
+
+    def fechar():
+        try:
+            conn.execute("SELECT 1").fetchone(); conn.close()
+        except Exception as e:  # noqa: BLE001
+            erros.append(e)
+    t = threading.Thread(target=fechar); t.start(); t.join()
+    assert erros == []

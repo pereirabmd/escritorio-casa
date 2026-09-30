@@ -28,7 +28,7 @@ class DadosClient:
     def __init__(self, base_url: str, service_key: str, timeout: float = 5.0):
         self.base_url, self.service_key, self.timeout = base_url.rstrip("/"), service_key, timeout
 
-    def pedir(self, metodo: str, caminho: str, utilizador: str, query: dict | None = None, corpo: dict | None = None):
+    def pedir(self, metodo: str, caminho: str, utilizador: str, query: dict | None = None, corpo: dict | None = None, timeout: float | None = None):
         if not self.service_key:
             raise ModuloIndisponivel("PULSE_SERVICE_KEY não configurada")
         url = self.base_url + caminho + ("?" + urllib.parse.urlencode(query) if query else "")
@@ -38,7 +38,7 @@ class DadosClient:
             headers["Content-Type"] = "application/json"
         req = urllib.request.Request(url, data=dados, method=metodo, headers=headers)
         try:
-            with urllib.request.urlopen(req, timeout=self.timeout) as r:
+            with urllib.request.urlopen(req, timeout=timeout or self.timeout) as r:
                 return r.status, _json(r.read())
         except urllib.error.HTTPError as e:
             corpo_erro = _json(e.read())

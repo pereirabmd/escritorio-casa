@@ -1,6 +1,6 @@
 # Paridade Android ↔ Web
 
-O Pulse tem duas interfaces sobre o mesmo servidor (as regras vivem no servidor, ADR-050). A partir de 29/09/2026 **cada funcionalidade nova é entregue nas duas** e discutida antes de implementar. Estado a 29/09/2026 (Android `0.3.5`, ADR-051/052/053/054/074).
+O Pulse tem duas interfaces sobre o mesmo servidor (as regras vivem no servidor, ADR-050). A partir de 29/09/2026 **cada funcionalidade nova é entregue nas duas** e discutida antes de implementar. Estado a 29/09/2026 (Android `0.3.6`, ADR-051/052/053/054/074/075).
 Legenda: **Feito** · **Pendente** · **Só Android** / **Só Web** (decidido).
 
 | Funcionalidade | Web | Android | Notas |
@@ -17,6 +17,7 @@ Legenda: **Feito** · **Pendente** · **Só Android** / **Só Web** (decidido).
 | Finanças (Resumo, Lançamentos, Relatórios, Categorias, Lembretes) | Feito | Feito | |
 | Bilhetes CP (Semana e editor, Bilhetes, Pedidos, Registo) | Feito | Feito | |
 | Compras (listas, catálogo, favoritos, sugestões, gestão) | Feito | Feito | |
+| Bilhetes CP › Na CP (passe e bilhetes futuros, cancelar) | Feito | Feito | ADR-075 |
 | Calendário e Email (Google) | Feito | Feito | Hoje: próximos 5 eventos com data; emails abrem no Gmail (ADR-074) |
 | Ligar e remover contas Google | Feito | Feito | Custom Tab + `pulse://google` (ADR-051); **integração por configurar no Pi** (`GOOGLE_SETUP.md`) |
 | Sessões e dispositivos | Feito | Feito | |

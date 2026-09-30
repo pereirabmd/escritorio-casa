@@ -8,11 +8,12 @@ import { BrandLoading, Botao, Notice } from '../../components/ui'
 import { useAcao } from '../../lib/useAcao'
 import { useAsync } from '../../lib/useAsync'
 import { BilhetesTab } from './BilhetesTab'
+import { CpTab } from './CpTab'
 import { PedidosTab } from './PedidosTab'
 import { RegistoTab } from './RegistoTab'
 import { SemanaTab } from './SemanaTab'
 
-const ABAS = [{ id: 'semana', nome: 'Semana' }, { id: 'bilhetes', nome: 'Bilhetes' }, { id: 'pedidos', nome: 'Pedidos' }, { id: 'registo', nome: 'Registo' }] as const
+const ABAS = [{ id: 'semana', nome: 'Semana' }, { id: 'bilhetes', nome: 'Bilhetes' }, { id: 'pedidos', nome: 'Pedidos' }, { id: 'cp', nome: 'Na CP' }, { id: 'registo', nome: 'Registo' }] as const
 type Aba = (typeof ABAS)[number]['id']
 
 export function BilhetesScreen() {
@@ -67,6 +68,7 @@ export function BilhetesScreen() {
             {aba === 'semana' && <SemanaTab dados={estado.dados} irParaSemana={setSemana} f={f} />}
             {aba === 'bilhetes' && <BilhetesTab dados={estado.dados} />}
             {aba === 'pedidos' && <PedidosTab dados={estado.dados} f={f} />}
+            {aba === 'cp' && <CpTab utilizador={utilizador} nome={estado.dados.utilizador?.nome ?? ''} />}
             {aba === 'registo' && <RegistoTab dados={estado.dados} />}
           </div>
         </>

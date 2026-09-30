@@ -27,6 +27,23 @@ def ver(request: Request, semana: str | None = Query(default=None, pattern=r"^\d
     return bilhetes.visao(d or {}, app.agora(), alvo)
 
 
+CP_TIMEOUT_S = 100        # a CP pode pedir um início de sessão (o `dados-api` espera até 90 s)
+
+
+@router.get("/cp/futuros")
+def cp_futuros(request: Request, utilizador: int | None = Query(default=None, ge=1), s: Sessao = Depends(sessao_ativa)):
+    """Os bilhetes futuros da conta da CP de quem viaja (consulta ao vivo à CP, pelo `dados-api`; ADR-075)."""
+    _, d = request.app.state.dados.pedir("GET", "/bilhetes/cp/futuros", s.user["email"], {"utilizador": utilizador} if utilizador else None, timeout=CP_TIMEOUT_S)
+    return d or {"bilhetes": []}
+
+
+@router.get("/cp/passe")
+def cp_passe(request: Request, utilizador: int | None = Query(default=None, ge=1), s: Sessao = Depends(sessao_ativa)):
+    """A validade do Passe Verde, lida da CP (ADR-075)."""
+    _, d = request.app.state.dados.pedir("GET", "/bilhetes/cp/passe", s.user["email"], {"utilizador": utilizador} if utilizador else None, timeout=CP_TIMEOUT_S)
+    return d or {"passes": []}
+
+
 @router.get("/timetable")
 def horario(request: Request, comboio: int = Query(ge=1, le=99999), data: str = Query(pattern=r"^\d{4}-\d{2}-\d{2}$"),
             origem: str = Query(min_length=1, max_length=60), destino: str = Query(min_length=1, max_length=60),

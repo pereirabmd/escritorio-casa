@@ -248,3 +248,34 @@ describe('marcar para outras pessoas (administrador)', () => {
     await waitFor(() => expect(s.pedidos.some((p) => p.metodo === 'POST' && p.caminho === '/actions/bilhetes.semana' && (p.corpo as { params: { utilizador?: number } }).params.utilizador === 2)).toBe(true))
   })
 })
+
+describe('Na CP (ADR-075)', () => {
+  const PASSE = { passes: [{ cartao: 'Cartão CP', designacao: 'Passe Ferroviário Verde Digital 30', origem: 'Aveiro', destino: 'Lisboa Oriente', inicio: '2026-09-21', validade: '2026-10-20', renovavel: false, diasRestantes: 20 }] }
+  const FUTUROS = { bilhetes: [{ venda: 77, referencia: 'CP-X', estado: 'CONFIRMED', origem: 'Lisboa Oriente', destino: 'Aveiro', data: '2026-10-01', hora: '19:39', chegada: '22:02', comboio: 723, servico: 'IC', carruagem: 22, lugar: 77, valor: 0, podeCancelar: true }] }
+
+  test('mostra a validade do Passe Verde e os bilhetes futuros da CP', async () => {
+    abrir('cp', { 'GET /tickets/cp/passe': () => [200, PASSE], 'GET /tickets/cp/futuros': () => [200, FUTUROS] })
+    expect(await screen.findByText('Passe Ferroviário Verde Digital 30')).toBeInTheDocument()
+    expect(screen.getByText(/Válido até 20\/10\/2026 · 20 dias/)).toBeInTheDocument()
+    expect(await screen.findByText(/Carruagem 22 · Lugar 77/)).toBeInTheDocument()
+  })
+
+  test('cancelar pede confirmação e só então envia a ação sensível', async () => {
+    let restam = [...FUTUROS.bilhetes]
+    const s = abrir('cp', {
+      'GET /tickets/cp/passe': () => [200, PASSE], 'GET /tickets/cp/futuros': () => [200, { bilhetes: restam }],
+      'POST /actions/bilhetes.cp_cancelar': () => { restam = []; return [200, { resultado: { estado: 'CONFIRMED' } }] },
+    })
+    await userEvent.click(await screen.findByRole('button', { name: 'Cancelar bilhete' }))
+    expect(s.pedidos.some((p) => p.caminho === '/actions/bilhetes.cp_cancelar')).toBe(false)         // ainda não cancelou nada
+    await userEvent.click(within(await screen.findByRole('group', { name: /Cancelar o bilhete/ })).getByRole('button', { name: 'Cancelar bilhete' }))
+    await waitFor(() => expect(corpo(s.pedidos, '/actions/bilhetes.cp_cancelar')).toEqual({ params: { venda: 77 }, confirmado: true }))
+    expect(await screen.findByText('Sem bilhetes futuros na CP.')).toBeInTheDocument()
+  })
+
+  test('um erro da CP aparece com a mensagem e deixa tentar de novo', async () => {
+    abrir('cp', { 'GET /tickets/cp/passe': () => [409, { erro: { codigo: 'cp_credenciais', mensagem: 'faltam dados de Davi: NIF' } }], 'GET /tickets/cp/futuros': () => [200, { bilhetes: [] }] })
+    expect(await screen.findByText(/faltam dados de Davi/)).toBeInTheDocument()
+    expect(screen.getAllByRole('button', { name: 'Tentar de novo' }).length).toBeGreaterThan(0)
+  })
+})

@@ -30,7 +30,7 @@ fun abrirEndereco(ctx: Context, url: String) {
 }
 
 /** «2026-10-02» → «Hoje» / «Amanhã» / «sex, 2 out» (o Hoje mostra os próximos eventos, de qualquer dia). */
-fun diaCurto(iso: String, hoje: java.time.LocalDate = java.time.LocalDate.now()): String {
+fun quandoEvento(iso: String, hoje: java.time.LocalDate = java.time.LocalDate.now()): String {
     val d = runCatching { java.time.LocalDate.parse(iso.take(10)) }.getOrNull() ?: return ""
     return when (java.time.temporal.ChronoUnit.DAYS.between(hoje, d)) {
         0L -> "Hoje"

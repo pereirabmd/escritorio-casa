@@ -394,6 +394,11 @@ class PasseIn(_Params):
     utilizador: int | None = Field(default=None, ge=1)       # o passe de outra pessoa (só o administrador)
 
 
+class CpCancelarIn(_Params):
+    venda: int = Field(ge=1)
+    utilizador: int | None = Field(default=None, ge=1)       # a conta CP de outra pessoa (só o administrador)
+
+
 class PedidoRepetirIn(_Params):
     pedido: int = Field(ge=1)
     retry: bool
@@ -1064,6 +1069,11 @@ def _passe(c: Contexto, p: PasseIn):
     return r, f"passe {p.dataUltimaCompra.isoformat()}"
 
 
+def _cp_cancelar(c: Contexto, p: CpCancelarIn):
+    _, r = c.client.pedir("POST", "/bilhetes/cp/cancelar", c.email, corpo={"venda": p.venda, **({"utilizadorId": p.utilizador} if p.utilizador else {})}, timeout=100)
+    return r, f"venda {p.venda}"
+
+
 def _pedido_repetir(c: Contexto, p: PedidoRepetirIn):
     _, r = c.client.pedir("PUT", f"/bilhetes/pedidos/{p.pedido}", c.email, corpo={"retry": p.retry, "intervaloMinutos": p.intervaloMinutos})
     return r, f"pedido {p.pedido}"
@@ -1268,6 +1278,7 @@ ACOES: dict[str, Acao] = {a.nome: a for a in (
     Acao("rto.gerar_validacoes", "rto", "safe_action", "Gera validações de 14 em 14 dias, alternando os dois tipos.", ValidacoesIn, _validacoes),
     Acao("bilhetes.semana", "bilhetes", "safe_action", "Guarda as viagens de uma semana (substitui as da semana; o Pi lê a nova configuração).", SemanaIn, _semana),
     Acao("bilhetes.passe", "bilhetes", "safe_action", "Regista a data do último carregamento do passe.", PasseIn, _passe),
+    Acao("bilhetes.cp_cancelar", "bilhetes", "sensitive_action", "Devolve (cancela) um bilhete futuro na CP, na conta de quem viaja.", CpCancelarIn, _cp_cancelar),
     Acao("bilhetes.pedido_repetir", "bilhetes", "safe_action", "Liga ou desliga a repetição automática de um pedido avulso.", PedidoRepetirIn, _pedido_repetir),
     Acao("bilhetes.pedido_forcar", "bilhetes", "safe_action", "Pede ao Pi uma tentativa imediata de um pedido avulso.", PedidoRefIn, _pedido_forcar),
     Acao("calendario.criar", "calendario", "safe_action", "Cria um evento no Google Calendar (sem horas = dia inteiro).", CalendarioCriarIn, _cal_criar),

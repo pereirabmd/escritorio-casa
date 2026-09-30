@@ -71,7 +71,7 @@ private fun CartaoCalendario(m: Modulo<CalendarioDados>) {
         Estado(m) { d ->
             if (d.eventos.isEmpty()) Texto2("Sem eventos marcados.")
             else d.eventos.forEach { e ->
-                Linha(inicio = { Column(Modifier.widthIn(min = 72.dp)) { Meta(diaCurto(e.data)); Meta(if (e.diaInteiro) "Dia todo" else e.inicio) } }) {
+                Linha(inicio = { Column(Modifier.widthIn(min = 72.dp)) { Meta(quandoEvento(e.data)); Meta(if (e.diaInteiro) "Dia todo" else e.inicio) } }) {
                     Texto(e.titulo); if (e.local.isNotEmpty()) Meta(e.local)
                 }
             }

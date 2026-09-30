@@ -19,7 +19,7 @@ _NOME = re.compile(r"^(\d{3})_[a-z0-9_]+\.sql$")
 def connect(path: Path) -> sqlite3.Connection:
     path.parent.mkdir(parents=True, exist_ok=True)
     novo = not path.exists()
-    conn = sqlite3.connect(path, timeout=10, isolation_level=None)   # autocommit: as transações são explícitas
+    conn = sqlite3.connect(path, timeout=10, isolation_level=None, check_same_thread=False)   # autocommit: as transações são explícitas
     if novo:
         os.chmod(path, 0o600)   # só o dono lê a base (o WAL/SHM herdam estas permissões)
     conn.row_factory = sqlite3.Row

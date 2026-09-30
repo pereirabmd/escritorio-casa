@@ -12,10 +12,15 @@ passa por aqui. Consequências que este módulo respeita:
 from __future__ import annotations
 
 import ipaddress
+import json
 import os
 import re
 import socket
+import subprocess
+import sys
+import threading
 import time
+from pathlib import Path
 from datetime import date, datetime, timedelta
 
 from api import ApiError
@@ -382,7 +387,72 @@ def admin_utilizadores(ctx):
                       "naLan": na_lan(ctx.ip)}
 
 
+# --- a conta da CP (ADR-075): bilhetes futuros, cancelar e validade do Passe Verde ------------------------------------
+
+_cp_trinco = threading.Lock()            # um pedido à CP de cada vez: duas sessões/logins em simultâneo só dão erros
+_cp_cache: dict[tuple, tuple[float, dict]] = {}
+CP_CACHE_PASSE_S = 1800
+
+
+def _cp_python_e_script() -> tuple[str, str]:
+    casa = Path(os.environ.get("BILHETES_CP_HOME") or Path.home() / "bilhetes_cp")
+    py = casa / ".venv" / "bin" / "python"
+    return (str(py) if py.exists() else sys.executable), str(casa / "scripts" / "consulta_cp.py")
+
+
+def _cp(uid: int, comando: str, venda: int | None = None) -> dict:
+    """Corre `bilhetes_cp/scripts/consulta_cp.py` (o código que já sabe falar com a CP, com a sessão e as credenciais da pessoa)."""
+    py, script = _cp_python_e_script()
+    args = [py, script, "--utilizador", str(uid), comando] + (["--venda", str(venda)] if venda else [])
+    with _cp_trinco:
+        try:
+            r = subprocess.run(args, capture_output=True, text=True, timeout=90, cwd=str(Path(script).parent.parent))
+            saida = json.loads(r.stdout.strip().splitlines()[-1]) if r.stdout.strip() else {}
+        except subprocess.TimeoutExpired:
+            raise ApiError(409, "cp_lenta", "A CP demorou demasiado a responder. Tenta de novo daqui a pouco.") from None
+        except (OSError, ValueError):
+            raise ApiError(409, "cp_indisponivel", "Não consegui falar com a CP.") from None
+    if saida.get("ok"):
+        return saida
+    codigo = saida.get("erro", "interno")
+    # 4xx de propósito: o Pulse só mostra a mensagem de um 4xx (um 5xx vira «módulo indisponível»)
+    raise ApiError(404 if codigo == "nao_encontrado" else 409, f"cp_{codigo}", saida.get("mensagem") or "A CP não respondeu como esperado.")
+
+
+def cp_futuros(ctx):
+    uid = _alvo(ctx, ctx.query.get("utilizador"))
+    return 200, {"utilizadorId": uid, "bilhetes": _cp(uid, "futuros")["bilhetes"]}
+
+
+def cp_passe(ctx):
+    uid = _alvo(ctx, ctx.query.get("utilizador"))
+    agora = time.monotonic()
+    em_cache = _cp_cache.get(("passe", uid))
+    if em_cache and agora - em_cache[0] < CP_CACHE_PASSE_S:
+        passes = em_cache[1]
+    else:
+        passes = _cp(uid, "passe")["passes"]
+        _cp_cache[("passe", uid)] = (agora, passes)
+    hoje = datetime.now(ctx.tz).date()
+    for p in passes:
+        p["diasRestantes"] = (date.fromisoformat(p["validade"]) - hoje).days if p.get("validade") else None
+    return 200, {"utilizadorId": uid, "passes": passes}
+
+
+def cp_cancelar(ctx):
+    """Devolução de um bilhete futuro (a própria pessoa, ou o administrador por ela). Só a venda indicada e só se for futura e da conta dessa pessoa."""
+    _so_campos(ctx.body, {"venda", "utilizadorId"})
+    uid = _alvo(ctx, ctx.body.get("utilizadorId"))
+    venda = ctx.body.get("venda")
+    if isinstance(venda, bool) or not isinstance(venda, int) or venda <= 0:
+        raise ApiError(400, "venda_invalida", "venda inválida")
+    return 200, {"utilizadorId": uid, **_cp(uid, "cancelar", venda)}
+
+
 ROUTES = [
+    ("GET", r"^/bilhetes/cp/futuros$", cp_futuros),
+    ("GET", r"^/bilhetes/cp/passe$", cp_passe),
+    ("POST", r"^/bilhetes/cp/cancelar$", cp_cancelar),
     ("GET", r"^/bilhetes/eu$", eu),
     ("GET", r"^/bilhetes/admin/utilizadores$", admin_utilizadores),
     ("GET", r"^/bilhetes/dados$", dados),

@@ -107,7 +107,7 @@ class Acoes(private val scope: CoroutineScope, private val depois: (String) -> U
         ocupado = chave; erro = null
         return try {
             val corpo = jo("params" to params).also { if (confirmado) it.put("confirmado", true) }
-            val r = Api.post("/actions/$nome", corpo).optJSONObject("resultado") ?: JSONObject()
+            val r = Api.post("/actions/$nome", corpo, if (nome.startsWith("bilhetes.cp_")) Api.LEITURA_CP_MS else 20_000).optJSONObject("resultado") ?: JSONObject()
             depois(nome); r
         } catch (e: Exception) {
             if (e is kotlinx.coroutines.CancellationException) throw e

@@ -175,12 +175,15 @@ NTFY_CLICK_URL = "https://pereirabmd.github.io/escritorio-casa/bilhetes_cp/"
 
 def notify(title: str, message: str, *, tags: Iterable[str] = (), at: datetime | None = None,
            logger: logging.Logger | None = None, tipo: str = "bilhetes.aviso", utilizador_id: int | Iterable[int] = 1) -> bool:
-    """Avisa por ntfy (o canal em uso) e copia o aviso para o Pulse (a caminho do FCM). Devolve se o ntfy entregou.
+    """Avisa por ntfy (o canal em uso; com `NTFY_DESLIGADO=1` só pelo Pulse) e copia o aviso para o Pulse (a caminho do FCM). Devolve se o ntfy entregou.
 
     A cópia para o Pulse é um canal independente e de melhor esforço: nunca muda o resultado nem atrasa o ntfy. Numa viagem de outra pessoa
     (`utilizador_id` ≠ 1) o ntfy continua a ser só do Bruno (não há ntfy por pessoa), e o Pulse avisa o Bruno **e** a própria pessoa, se tiver conta.
     """
     tags = list(tags)
+    if env("NTFY_DESLIGADO") in ("1", "true", "sim"):
+        # ntfy desligado: o Pulse (FCM) passa a ser o único canal, e é ele que decide se o aviso "entregou" (notify_once só marca se sim)
+        return pulse_event(title, message, tipo=tipo, tags=tags, at=at, logger=logger, utilizador_id=utilizador_id)
     ok = _notify_ntfy(title, message, tags=tags, at=at, logger=logger)
     pulse_event(title, message, tipo=tipo, tags=tags, at=at, logger=logger, utilizador_id=utilizador_id)
     return ok

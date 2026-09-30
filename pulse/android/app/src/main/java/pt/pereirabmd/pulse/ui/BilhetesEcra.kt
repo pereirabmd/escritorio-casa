@@ -13,7 +13,7 @@ import org.json.JSONObject
 import pt.pereirabmd.pulse.data.*
 import pt.pereirabmd.pulse.util.*
 
-private val ABAS = listOf("Semana", "Bilhetes", "Pedidos", "Registo")
+private val ABAS = listOf("Semana", "Bilhetes", "Pedidos", "Na CP", "Registo")
 
 /** Bilhetes CP (ADR-046): Semana (próximo comboio, passe, editor), Bilhetes, Pedidos e Registo. As regras vivem no servidor e no Pi. */
 @Composable
@@ -43,6 +43,7 @@ fun BilhetesEcra(aoVoltar: () -> Unit) {
                     0 -> SemanaTab(d, { semana = it }, acoes)
                     1 -> BilhetesTab(d)
                     2 -> PedidosTab(d, acoes)
+                    3 -> CpTab(utilizador, d.obj("utilizador")?.txtOu("nome").orEmpty())
                     else -> RegistoTab(d)
                 }
             }
@@ -292,4 +293,70 @@ private fun VerificacaoCp(data: String, origem: String, destino: String, comboio
 private fun JSONObject.paraOutraPessoa(d: JSONObject): JSONObject {
     d.obj("utilizador")?.takeIf { !it.bool("eu") }?.let { put("utilizador", it.getInt("id")) }
     return this
+}
+
+
+/** O que a CP diz, ao vivo (demora alguns segundos): a validade do Passe Verde e os bilhetes futuros, com «Cancelar» (ADR-075). */
+@Composable
+private fun ColumnScope.CpTab(utilizador: Int?, nome: String) {
+    val avisos = LocalAvisos.current
+    val q = utilizador?.let { "?utilizador=$it" } ?: ""
+    val passe = carga("passe$q") { Api.get("/tickets/cp/passe$q", Api.LEITURA_CP_MS) }
+    val futuros = carga("futuros$q") { Api.get("/tickets/cp/futuros$q", Api.LEITURA_CP_MS) }
+    val acoes = rememberAcoes { futuros.recarregar() }
+    var aCancelar by remember { mutableStateOf<Int?>(null) }
+    Texto("Passe Verde" + if (utilizador != null) " de $nome" else "", Pulse.card)
+    when (val e = passe.estado) {
+        Estado.ACarregar -> BrandLoading("A consultar a CP…")
+        is Estado.Erro -> { Aviso(TipoAviso.ERRO, e.mensagem); Botao("Tentar de novo", passe.recarregar, variante = Variante.SECUNDARIO, pequeno = true) }
+        is Estado.Pronto -> {
+            val passes = e.dados.objs("passes")
+            if (passes.isEmpty()) Texto2("A CP não mostra nenhum passe nesta conta.")
+            passes.forEach { p ->
+                val dias = p.inteiroOuNull("diasRestantes")
+                Bloco {
+                    Texto(p.txtOu("designacao").ifEmpty { p.txtOu("cartao") })
+                    Meta("${p.txtOu("origem")} → ${p.txtOu("destino")}")
+                    if (p.txtOu("inicio").isNotEmpty()) Meta("Desde ${fmtDataIso(p.txtOu("inicio"))}")
+                    val validade = if (p.txtOu("validade").isEmpty()) "Sem validade" else "Válido até ${fmtDataIso(p.txtOu("validade"))}" +
+                        when { dias == null -> ""; dias < 0 -> " · expirado"; dias == 0 -> " · expira hoje"; else -> " · ${if (dias == 1) "1 dia" else "$dias dias"}" }
+                    val c = Pulse.cores
+                    Pilula(validade, if (dias != null && dias <= 3) c.warning else c.success, if (dias != null && dias <= 3) c.warningBg else c.surface2)
+                }
+            }
+        }
+    }
+    Texto("Bilhetes futuros na CP", Pulse.card)
+    ErroAcao(acoes)
+    when (val e = futuros.estado) {
+        Estado.ACarregar -> BrandLoading("A consultar a CP…")
+        is Estado.Erro -> { Aviso(TipoAviso.ERRO, e.mensagem); Botao("Tentar de novo", futuros.recarregar, variante = Variante.SECUNDARIO, pequeno = true) }
+        is Estado.Pronto -> {
+            val bilhetes = e.dados.objs("bilhetes")
+            if (bilhetes.isEmpty()) Texto2("Sem bilhetes futuros na CP.")
+            bilhetes.forEach { b ->
+                val venda = b.getInt("venda")
+                Bloco {
+                    Meta(diaCurto(b.txtOu("data")))
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Texto(b.txtOu("hora"), Pulse.section); Texto(b.txtOu("origem")); Icon(Icone.SETA, Pulse.cores.text2, 16.dp); Texto(b.txtOu("destino"))
+                    }
+                    if (b.inteiroOuNull("comboio") != null) Texto2("Comboio ${b.inteiro("comboio")}")
+                    if (b.inteiroOuNull("lugar") != null) Pilula("Carruagem ${b.inteiroOuNull("carruagem") ?: "—"} · Lugar ${b.inteiro("lugar")}", Pulse.cores.success)
+                    if (b.txtOu("referencia").isNotEmpty()) Meta("ref. ${b.txtOu("referencia")}")
+                    if (b.bool("podeCancelar")) {
+                        if (aCancelar == venda) {
+                            Texto2("Cancelar este bilhete na CP? O lugar fica livre e não dá para desfazer.")
+                            Botao("Cancelar bilhete", {
+                                acoes.executar("cp-$venda", "bilhetes.cp_cancelar", jo("venda" to venda).also { if (utilizador != null) it.put("utilizador", utilizador) }, confirmado = true, aoFalhar = { aCancelar = null }) {
+                                    aCancelar = null; avisos.mostrar("Bilhete cancelado na CP.")
+                                }
+                            }, variante = Variante.PERIGO, pequeno = true, ativo = acoes.ocupado == null, carregando = acoes.ocupado == "cp-$venda")
+                            Botao("Manter", { aCancelar = null }, variante = Variante.SECUNDARIO, pequeno = true, ativo = acoes.ocupado == null)
+                        } else LinkBtn("Cancelar bilhete", { aCancelar = venda })
+                    }
+                }
+            }
+        }
+    }
 }

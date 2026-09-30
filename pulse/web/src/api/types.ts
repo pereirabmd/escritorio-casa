@@ -165,6 +165,8 @@ export interface PedidoCp {
   forcar: boolean; estado: string; ultimaTentativa: string | null; referencia: string | null; mensagem: string | null
 }
 export interface RegistoCp { ts: string; tipo: string; data: string | null; perna: string | null; comboio: number | null; status: number | null; resultado: string | null; referencia: string | null; erro: string | null }
+export interface BilheteNaCp { venda: number; referencia: string; estado: string; origem: string; destino: string; data: string; hora: string; chegada: string; comboio: number | null; servico: string; carruagem: number | null; lugar: number | null; valor: number; podeCancelar: boolean }
+export interface PasseNaCp { cartao: string; designacao: string; origem: string; destino: string; inicio: string; validade: string; renovavel: boolean; diasRestantes: number | null }
 export interface BilhetesModulo {
   hoje: string
   passe: { dataUltimaCompra: string | null; validadeDias: number; dataExpira: string | null; diasRestantes: number | null; estado: 'sem_data' | 'expirado' | 'hoje' | 'a_expirar' | 'ok'; percentagem: number | null }

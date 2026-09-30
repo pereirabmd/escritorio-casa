@@ -189,3 +189,28 @@ def test_api_passa_o_utilizador_pedido(cliente):
     assert cliente.get("/api/v1/tickets?utilizador=2").status_code == 200
     assert any(p[0] == "/bilhetes/dados?utilizador=2" for p in FalsoDados.pedidos)
     assert cliente.get("/api/v1/tickets?utilizador=0").status_code in (400, 422)
+
+
+def test_cancelar_bilhete_na_cp_e_sensivel_e_leva_a_venda_e_a_pessoa(conn, dados_falso):
+    FalsoDados.respostas["POST /bilhetes/cp/cancelar"] = (200, {"venda": 77, "estado": "CONFIRMED"})
+    FalsoDados.escritas.clear()
+    with pytest.raises(ContaErro) as e:
+        correr(conn, dados_falso, "bilhetes.cp_cancelar", {"venda": 77})
+    assert e.value.codigo == "confirmacao_necessaria" and FalsoDados.escritas == []                   # nunca cancela sem confirmação
+    correr(conn, dados_falso, "bilhetes.cp_cancelar", {"venda": 77, "utilizador": 2}, confirmado=True)
+    assert FalsoDados.escritas == [("POST", "/bilhetes/cp/cancelar", {"venda": 77, "utilizadorId": 2}, EMAIL)]
+
+
+
+def test_api_cp_futuros_e_passe_passam_pelo_dados_api(cliente):
+    FalsoDados.respostas["/bilhetes/cp/futuros"] = (200, {"utilizadorId": 1, "bilhetes": [{"venda": 77, "origem": "Aveiro"}]})
+    FalsoDados.respostas["/bilhetes/cp/passe"] = (200, {"utilizadorId": 1, "passes": [{"validade": "2026-10-20", "diasRestantes": 20}]})
+    FalsoDados.pedidos.clear()
+    assert cliente.get("/api/v1/tickets/cp/futuros?utilizador=2").json()["bilhetes"][0]["venda"] == 77
+    assert cliente.get("/api/v1/tickets/cp/passe").json()["passes"][0]["validade"] == "2026-10-20"
+    assert [p[0] for p in FalsoDados.pedidos] == ["/bilhetes/cp/futuros?utilizador=2", "/bilhetes/cp/passe"]
+    FalsoDados.respostas["/bilhetes/cp/futuros"] = (409, {"erro": {"codigo": "cp_credenciais", "mensagem": "faltam dados de Davi: NIF"}})
+    r = cliente.get("/api/v1/tickets/cp/futuros")
+    assert r.status_code == 409 and "faltam dados" in r.text                                          # a mensagem da CP chega à interface
+    cliente.cookies.clear()
+    assert cliente.get("/api/v1/tickets/cp/passe").status_code == 401

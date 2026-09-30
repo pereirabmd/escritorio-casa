@@ -36,11 +36,11 @@ def test_catalogo_declara_modulo_e_nivel():
                       "peso.configurar", "rto.marcar_dia", "rto.ferias_dia", "rto.nota_criar", "rto.nota_editar", "rto.nota_eliminar",
                       "rto.nota_restaurar", "rto.gerar_validacoes", "calendario.criar", "calendario.editar", "calendario.apagar", "email.lida", "email.arquivar", "email.estrela",
                       "compras.adicionar", "compras.remover", "compras.comprado", "compras.detalhes", "compras.mover", "compras.limpar_comprados", "compras.restaurar", "compras.favorito", "compras.ocultar", "compras.sugestao_ignorar", "compras.categoria_ocultar", "compras.produto_criar", "compras.produto_editar", "compras.produto_apagar", "compras.lista_criar", "compras.lista_editar", "compras.lista_apagar",
-                      "bilhetes.semana", "bilhetes.passe", "bilhetes.pedido_repetir", "bilhetes.pedido_forcar",
+                      "bilhetes.semana", "bilhetes.passe", "bilhetes.cp_cancelar", "bilhetes.pedido_repetir", "bilhetes.pedido_forcar",
                       "financas.pagar", "financas.anular_pagamento", "financas.criar", "financas.editar", "financas.apagar", "financas.preparar_mes",
                       "financas.categoria_criar", "financas.categoria_editar", "financas.categoria_eliminar", "financas.lembrete_criar", "financas.lembrete_editar", "financas.lembrete_eliminar"}
     assert all(c[n]["nivel"] == "sensitive_action" for n in ("peso.eliminar", "rto.nota_eliminar", "tarefas.apagar", "tarefas.pessoa_remover", "tarefas.reatribuir", "tarefas.admin", "financas.apagar", "financas.categoria_eliminar", "financas.lembrete_eliminar",
-                                                            "compras.limpar_comprados", "compras.produto_apagar", "compras.lista_apagar", "calendario.apagar"))
+                                                            "compras.limpar_comprados", "compras.produto_apagar", "compras.lista_apagar", "calendario.apagar", "bilhetes.cp_cancelar"))
     assert all(a["nivel"] in ("read", "safe_action", "sensitive_action") and a["descricao"] for a in c.values())
 
 
@@ -344,7 +344,7 @@ def test_endpoint_traduz_erros(app_cliente):
 def test_endpoint_lista_o_catalogo(app_cliente):
     entrar(app_cliente)
     r = app_cliente.get("/api/v1/actions")
-    assert r.status_code == 200 and len(r.json()["acoes"]) == 68
+    assert r.status_code == 200 and len(r.json()["acoes"]) == 69
 
 
 def test_conta_por_configurar_nao_executa_acoes(app_cliente):

@@ -1,6 +1,7 @@
 """Validação da Config (3.10.3), sanitização de logs (3.10.8), avisos sem
 repetição, lock/estado da compra e helpers de pre-flight/scheduler."""
 
+import os
 import json
 import unittest
 from datetime import date, datetime, timedelta
@@ -195,6 +196,15 @@ class PulseEventTests(unittest.TestCase):
             enviados.append((url, json, headers, timeout))
             return mock.Mock(status_code=pulse_status if "internal/events" in url else ntfy_status)
         return enviados, fake_post
+
+    def test_ntfy_desligado_so_avisa_pelo_pulse_e_o_resultado_e_o_do_pulse(self):
+        enviados, fake = self._posts(ntfy_status=500)
+        with mock.patch.dict(os.environ, {**self.ENV, "NTFY_DESLIGADO": "1"}), mock.patch("requests.post", fake):
+            self.assertTrue(common.notify("Título", "corpo"))
+        self.assertEqual([u for u, *_ in enviados], [self.ENV["PULSE_EVENTS_URL"]])        # nada foi para o ntfy
+        enviados, fake = self._posts(pulse_status=500)
+        with mock.patch.dict(os.environ, {**self.ENV, "NTFY_DESLIGADO": "1"}), mock.patch("requests.post", fake):
+            self.assertFalse(common.notify("Título", "corpo"))                              # o Pulse não aceitou: não conta como entregue
 
     def test_desligado_por_omissao_e_nao_toca_no_ntfy(self):
         enviados, fake = self._posts()

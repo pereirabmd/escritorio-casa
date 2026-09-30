@@ -344,6 +344,51 @@ class BilhetesPorPessoaTest(ApiBase):
         self.assertEqual(self.dela("GET", "/bilhetes/proximo")[1]["proximo"]["comboio"], 520)
         self.assertIsNone(self.pedir("GET", "/bilhetes/proximo")[1]["proximo"])
 
+    # --- a conta da CP (ADR-075) ---------------------------------------------------------------------------------------
+
+    def _cp_falsa(self, saida, guardar=None):
+        from unittest import mock
+        def run(args, **kw):
+            if guardar is not None:
+                guardar.append(args)
+            return mock.Mock(stdout=json.dumps(saida) + "\n", returncode=0)
+        return mock.patch("apps.bilhetes.subprocess.run", run)
+
+    def test_cp_futuros_da_propria_conta_e_do_administrador_por_outra_pessoa(self):
+        chamadas = []
+        with self._cp_falsa({"ok": True, "bilhetes": [{"venda": 5}]}, chamadas):
+            self.assertEqual(self.dela("GET", "/bilhetes/cp/futuros")[1]["bilhetes"], [{"venda": 5}])
+            self.assertEqual(self.pedir("GET", "/bilhetes/cp/futuros?utilizador=2")[0], 200)
+            self.assertEqual(self.dela("GET", "/bilhetes/cp/futuros?utilizador=1")[0], 403)      # só o administrador vê a conta de outra pessoa
+        self.assertEqual([a[a.index("--utilizador") + 1] for a in chamadas], ["2", "2"])
+
+    def test_cp_cancelar_valida_e_passa_so_a_venda(self):
+        chamadas = []
+        with self._cp_falsa({"ok": True, "venda": 77, "estado": "CONFIRMED", "reembolso": "€ 0,00"}, chamadas):
+            s, b, _ = self.dela("POST", "/bilhetes/cp/cancelar", {"venda": 77})
+            self.assertEqual((s, b["estado"]), (200, "CONFIRMED"))
+            self.assertEqual(self.dela("POST", "/bilhetes/cp/cancelar", {"venda": "77"})[0], 400)
+            self.assertEqual(self.dela("POST", "/bilhetes/cp/cancelar", {"venda": 77, "comando": "x"})[0], 400)
+            self.assertEqual(self.dela("POST", "/bilhetes/cp/cancelar", {"venda": 77, "utilizadorId": 1})[0], 403)
+        self.assertEqual(len(chamadas), 1)
+        self.assertEqual(chamadas[0][-3:], ["cancelar", "--venda", "77"])
+
+    def test_cp_erros_da_consulta_chegam_como_erros_da_api(self):
+        with self._cp_falsa({"ok": False, "erro": "nao_cancelavel", "mensagem": "A CP já não permite devolver este bilhete."}):
+            s, b, _ = self.dela("POST", "/bilhetes/cp/cancelar", {"venda": 1})
+        self.assertEqual((s, b["erro"]["codigo"] if "erro" in b and isinstance(b["erro"], dict) else b.get("codigo")), (409, "cp_nao_cancelavel"))
+        with self._cp_falsa({"ok": False, "erro": "credenciais", "mensagem": "faltam dados de Davi: NIF"}):
+            self.assertEqual(self.pedir("GET", "/bilhetes/cp/passe?utilizador=3")[0], 409)
+
+    def test_cp_passe_calcula_os_dias_que_faltam(self):
+        hoje = datetime.now().date()
+        validade = (hoje + timedelta(days=12)).isoformat()
+        from apps import bilhetes
+        bilhetes._cp_cache.clear()
+        with self._cp_falsa({"ok": True, "passes": [{"designacao": "Passe", "validade": validade, "inicio": "2026-09-21"}]}):
+            p = self.dela("GET", "/bilhetes/cp/passe")[1]["passes"][0]
+        self.assertEqual((p["validade"], p["diasRestantes"]), (validade, 12))
+
 
 if __name__ == "__main__":
     unittest.main()

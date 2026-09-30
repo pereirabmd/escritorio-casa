@@ -374,6 +374,7 @@ class CPClient:
         self.session = session or make_session()
         # `cred`: as credenciais de quem viaja (`credenciais.Credenciais`); sem ele usa-se o `.env` (o Bruno), exatamente como sempre
         self.cp_email = cred.cp_email if cred else CP_EMAIL
+        self.data_registo: str | None = None
         self.nome = cred.passageiro_nome if cred else PASSENGER_NAME
         self.cc = cred.passageiro_cc if cred else PASSENGER_CC
         self.telemovel = cred.passageiro_telemovel if cred else PASSENGER_PHONE
@@ -396,6 +397,8 @@ class CPClient:
             h["x-access-token"] = self.access_token
         if with_client_id:
             h["x-cp-client-id"] = self.cp_email
+            if self.data_registo:                  # só as consultas de viagens o pedem (qualquer data bem formada serve); a compra não o usa
+                h["x-cp-client-registration-date"] = self.data_registo
         return h
 
     def request(self, method: str, path: str, *, api_key: str, body: Any = None,
