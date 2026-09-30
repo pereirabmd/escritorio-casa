@@ -31,6 +31,21 @@ def ligado() -> bool:
     return bool(common.env("PULSE_EVENTS_URL") and len(common.env("PULSE_SERVICE_KEY")) >= 32)
 
 
+def dispositivos_ativos(email: str, http: Callable[[str, str], int | None] | None = None) -> int | None:
+    """Quantos telemóveis ativos tem esta pessoa no Pulse (`None` se não se conseguiu saber: nessa dúvida nada se pausa)."""
+    if http is not None:
+        return http("GET", email)
+    if not ligado():
+        return None
+    url = common.env("PULSE_EVENTS_URL").rstrip("/").rsplit("/events", 1)[0] + "/devices/count"
+    req = urllib.request.Request(url, method="GET", headers={"X-Pulse-Key": common.env("PULSE_SERVICE_KEY"), "X-Pulse-User": email})
+    try:
+        with urllib.request.urlopen(req, timeout=TIMEOUT_S) as r:
+            return int(json.loads(r.read().decode()).get("ativos", 0))
+    except (urllib.error.URLError, OSError, ValueError, TypeError):
+        return None
+
+
 # --- quem recebe -------------------------------------------------------------------------------------------------------------------
 
 def _pessoas(config: dict[str, Any]) -> dict[str, dict[str, str]]:

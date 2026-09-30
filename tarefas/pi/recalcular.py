@@ -270,10 +270,24 @@ def _recalcular_sem_lock(sheets: SheetsClient, plan_only: bool) -> dict[str, int
     pulse_path = common._state_file("pulse_agendados.json")
     pulse_estado: dict[str, dict] = common._read_json(pulse_path, {})
 
+    _dispositivos: dict[str, int | None] = {}
+
+    def ntfy_pausa_automatica(topico: str) -> bool:
+        """`NTFY_PAUSA_AUTOMATICA=1`: o ntfy de uma pessoa pausa-se sozinho quando ela já tem um telemóvel registado no Pulse (e volta se o perder).
+        Só para tópicos de uma pessoa; na dúvida (Pulse não respondeu) nada se pausa."""
+        if common.env("NTFY_PAUSA_AUTOMATICA") != "1":
+            return False
+        dono = pulse_eventos.emails_do_topico(config, topico)
+        if len(dono) != 1:
+            return False
+        if dono[0] not in _dispositivos:
+            _dispositivos[dono[0]] = pulse_eventos.dispositivos_ativos(dono[0])
+        return bool(_dispositivos[dono[0]])
+
     def reconciliar(chave, alvo, titulo, corpo, acoes, estado_ntfy, agora_, plan, click=None, topico=None, emails=None):
         """O motor do ntfy e, em paralelo e de melhor esforço, o mesmo aviso agendado no Pulse (FCM): o ntfy manda e nunca espera pelo Pulse."""
         # ntfy pausado para este tópico (NTFY_PAUSADO_TOPICOS no .env, ex.: `tarefas_bruno`): cancela o que lá estiver e não agenda nada; o Pulse avisa sozinho
-        pausado = bool(topico) and topico in {t.strip() for t in common.env("NTFY_PAUSADO_TOPICOS").split(",") if t.strip()}
+        pausado = bool(topico) and (topico in {t.strip() for t in common.env("NTFY_PAUSADO_TOPICOS").split(",") if t.strip()} or ntfy_pausa_automatica(topico))
         resultado = reconciliar_chave(chave, None if pausado else alvo, titulo, corpo, acoes, estado_ntfy, agora_, plan, click=click, topico=topico)
         try:
             pulse_eventos.reconciliar(chave, alvo, titulo, corpo, emails if emails is not None else pulse_eventos.emails_do_topico(config, topico),

@@ -136,3 +136,26 @@ class NtfyPausado(TarefasTestCase):
                 pausado = topico in {t.strip() for t in common.env("NTFY_PAUSADO_TOPICOS").split(",")}
                 recalcular.reconciliar_chave("inst:I1:" + topico, None if pausado else AGORA + timedelta(hours=1), "t", "c", None, {}, AGORA, False, topico=topico)
         self.assertEqual(publicados, ["tarefas_camila"])
+
+
+class DispositivosAtivos(TarefasTestCase):
+    def test_sem_resposta_nao_se_sabe(self):
+        self.assertIsNone(pe.dispositivos_ativos("a@b.pt"))                                  # desligado
+        self.assertEqual(pe.dispositivos_ativos("a@b.pt", http=lambda m, e: 2), 2)
+
+    def test_pedido_real(self):
+        from unittest import mock
+        visto = []
+
+        class R:
+            def __enter__(self): return self
+            def __exit__(self, *a): return False
+            def read(self): return b'{"ativos": 1}'
+
+        def urlopen(req, timeout=0):
+            visto.append((req.full_url, req.get_header("X-pulse-user")))
+            return R()
+        with mock.patch.dict("os.environ", {"PULSE_EVENTS_URL": "http://127.0.0.1:8897/api/v1/internal/events", "PULSE_SERVICE_KEY": "k" * 40}), \
+                mock.patch("urllib.request.urlopen", urlopen):
+            self.assertEqual(pe.dispositivos_ativos("camila@x.pt"), 1)
+        self.assertEqual(visto, [("http://127.0.0.1:8897/api/v1/internal/devices/count", "camila@x.pt")])

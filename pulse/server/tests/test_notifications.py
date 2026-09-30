@@ -342,3 +342,10 @@ def test_cancelar_aviso_agendado_so_enquanto_agendado(cliente, canal):
     cliente.post("/api/v1/internal/events", json={**EVENTO, "chave": "tar-enviado-01"}, headers=SERVICO)                  # este sai já
     assert cliente.delete("/api/v1/internal/events/tar-enviado-01", headers=SERVICO).json() == {"cancelado": False}      # enviado: não se toca
     assert cliente.delete("/api/v1/internal/events/tar-agendado-1").status_code == 401                                  # exige a chave de serviço
+
+
+def test_contar_dispositivos_ativos_para_a_pausa_do_ntfy(cliente):
+    assert cliente.get("/api/v1/internal/devices/count", headers=SERVICO).json() == {"ativos": 0}
+    registar(cliente)
+    assert cliente.get("/api/v1/internal/devices/count", headers=SERVICO).json() == {"ativos": 1}
+    assert cliente.get("/api/v1/internal/devices/count").status_code == 401                       # exige a chave de serviço

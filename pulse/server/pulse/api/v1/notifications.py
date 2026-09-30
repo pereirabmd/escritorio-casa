@@ -142,3 +142,9 @@ def cancelar(chave: str, u=Depends(servico), conn=Depends(get_conn)):
     um inexistente não é erro (`cancelado: false`), para quem chama poder repetir sem medo."""
     n = conn.execute("DELETE FROM pulse_events WHERE chave = ? AND user_id = ? AND estado = 'agendado'", (chave, u["id"])).rowcount
     return {"cancelado": n > 0}
+
+
+@internal.get("/devices/count")
+def contar_dispositivos(u=Depends(servico), conn=Depends(get_conn)):
+    """Quantos telemóveis ativos esta pessoa tem (as Tarefas só pausam o ntfy de quem já recebe pelo Pulse)."""
+    return {"ativos": conn.execute("SELECT COUNT(*) FROM pulse_devices WHERE user_id = ? AND ativo = 1", (u["id"],)).fetchone()[0]}
