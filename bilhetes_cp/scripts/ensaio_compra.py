@@ -17,6 +17,7 @@ import sys
 from datetime import datetime, timedelta
 
 import common
+import credenciais
 import hot_buy
 import timetable
 from common import Leg, PurchaseLock
@@ -57,12 +58,15 @@ def main() -> int:
     ap.add_argument("--t-em", type=float, default=None, metavar="MIN",
                     help="inventa um T daqui a MIN minutos (a data/hora da viagem só vão à CP): ensaia a retenção num comboio com lugares "
                          "sem esperar pelo T real; o desconto da CP já está aberto se o T real passou")
+    ap.add_argument("--utilizador", type=int, default=1, metavar="ID",
+                    help="ensaia com as credenciais de outra pessoa (bilhetes_utilizadores.id): valida o login, a retenção e o desconto "
+                         "com os dados dela, sem comprar (o bilhete é cancelado como sempre). Por omissão, o Bruno (.env)")
     ap.add_argument("--sem-ancora", action="store_true",
                     help="usa --hhmm como hora de T-base tal como está (sem a 1.ª estação do horário): serve para ensaiar a retenção "
                          "com um T inventado daqui a uns minutos; o desconto da CP já está aberto se o T real passou")
     a = ap.parse_args()
     d = datetime.strptime(a.date, "%Y-%m-%d").date()
-    leg = Leg(d, "ens", a.origin, a.dest, a.train, a.hhmm, 0)
+    leg = Leg(d, "ens", a.origin, a.dest, a.train, a.hhmm, 0, utilizador_id=a.utilizador)
     if a.t_em is not None:
         t = common.now_local() + timedelta(minutes=a.t_em)
         anchor_dt = t + timedelta(hours=24)                   # T = partida na 1.ª estação − 24 h
@@ -79,7 +83,13 @@ def main() -> int:
         return common.notify(f"[ENSAIO] {title}", message, tags=kw.get("tags") or (), logger=kw.get("logger"))
 
     hot_buy.Buyer.do_preflight = lambda self: None            # o pré-voo não é o que se ensaia (e falha para pernas fora da Config)
-    buyer = hot_buy.Buyer(leg, lock, sheets=SheetsMudas(), cp_factory=CPEnsaio, notify_fn=notify_fn)
+    try:
+        buyer = hot_buy.Buyer(leg, lock, sheets=SheetsMudas(), cp_factory=CPEnsaio, notify_fn=notify_fn)
+    except credenciais.CredenciaisIncompletas as e:
+        print(f"ensaio recusado: {e}", flush=True)                # nunca se ensaia com os dados de outra pessoa
+        return 3
+    if buyer.cred:
+        print(f"ensaio com as credenciais de {buyer.cred.nome} (utilizador {buyer.cred.utilizador_id})", flush=True)
     code = buyer.run()
     st = common.peek_state(leg.lock_key)
     print("resultado:", code, st.get("state"), "|", st.get("final_message", "")[:200], "|", st.get("timing", "")[:300],

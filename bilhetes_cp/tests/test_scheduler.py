@@ -139,6 +139,15 @@ class LateArrivalTests(Base):
         self.assertEqual(len(items), 2)
         self.assertFalse(any(k.startswith("late-start-") for k in self.keys()))
 
+    def test_processo_quente_a_correr_nao_e_uma_compra_atrasada(self):
+        """30/09/2026: o processo disparou à hora certa e insistia porque a CP dizia «esgotado»; o aviso «Compra atrasada — a iniciar já» era falso."""
+        with mock.patch.object(scheduler, "is_running", return_value=True):
+            self.ev(now=self.LATE)
+        self.assertFalse(any(k.startswith("late-start-") for k in self.keys()))
+        with mock.patch.object(scheduler, "is_running", return_value=False):       # sem processo: continua a avisar
+            self.ev(now=self.LATE)
+        self.assertTrue(any(k.startswith("late-start-") for k in self.keys()))
+
     def test_muito_tarde_mas_antes_da_partida_continua_a_ser_lancado(self):
         quase_partida = datetime(2026, 9, 22, 6, 40, tzinfo=common.TZ).timestamp()   # a 5 min de partir
         items = self.ev(now=quase_partida)

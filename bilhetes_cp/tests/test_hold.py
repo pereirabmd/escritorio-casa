@@ -117,6 +117,28 @@ class HoldTests(HoldBase):
         self.assertIn("warm", cp.calls)                         # manteve a ligação viva enquanto esperava
         self.assertNotIn("cancel", cp.calls)
 
+    def test_avisa_quando_o_lugar_fica_retido(self):
+        cp = FakeCP(steps={"items": [RECUSA()]})
+        self.run_early(cp)
+        retidos = [n for n in self.notes if n[0].startswith("Lugar reservado")]
+        self.assertEqual(len(retidos), 1)
+        self.assertIn("A compra fecha às", retidos[0][1])                       # diz quando fecha (o desconto abre a T)
+        self.assertFalse(any(n[0].startswith("Sem lugar retido") for n in self.notes))
+
+    def test_a_T_menos_1_minuto_sem_lugar_avisa_uma_so_vez_com_o_motivo(self):
+        cp = FakeCP(sale_script=[ESGOTADO()] * 200 + [resp(200, {"saleID": 777})])
+        self.run_early(cp)
+        faltas = [n for n in self.notes if n[0].startswith("Sem lugar retido")]
+        self.assertEqual(len(faltas), 1)                                          # uma só vez, não de 15 em 15 s
+        self.assertIn("não há lugares", faltas[0][1]); self.assertIn("alternativas", faltas[0][1])
+        self.assertIn("warning", faltas[0][2]["tags"])
+
+    def test_o_aviso_de_falta_nao_sai_antes_do_ultimo_minuto(self):
+        cp = FakeCP(sale_script=[ESGOTADO()] * 3 + [resp(200, {"saleID": 777})])      # recupera cedo: nunca chega a T-1 min sem lugar
+        self.run_early(cp)
+        self.assertFalse(any(n[0].startswith("Sem lugar retido") for n in self.notes))
+        self.assertEqual(len([n for n in self.notes if n[0].startswith("Lugar reservado")]), 1)
+
     def test_o_desconto_tenta_com_intervalos_curtos_no_inicio(self):
         cp = FakeCP(steps={"items": [RECUSA()] * 5})
         self.run_early(cp)

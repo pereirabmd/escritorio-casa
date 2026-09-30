@@ -255,3 +255,21 @@ class VigilanciaEPreFlightTests(unittest.TestCase):
         self.assertFalse(c.ok); self.assertIn("NIF", c.detail)
         with mock.patch.object(credenciais, "carregar", return_value=ClienteDaCpTests.CAMILA):
             self.assertTrue(pre_flight.check_credenciais_da_pessoa(leg).ok)
+
+
+class EnsaioComOutraPessoaTests(unittest.TestCase):
+    def test_o_cliente_do_ensaio_tambem_leva_as_credenciais_dela(self):
+        import ensaio_compra
+        leg = common.Leg(date(2026, 10, 1), "ens", "aveiro", "lisboa_oriente", 520, "07:27", 0, utilizador_id=2)
+        with mock.patch.object(credenciais, "carregar", return_value=ClienteDaCpTests.CAMILA):
+            b = hot_buy.Buyer(leg, mock.Mock(), sheets=mock.Mock(), cp_factory=ensaio_compra.CPEnsaio)
+        cliente = b.cp_factory("tok")
+        self.assertIsInstance(cliente, ensaio_compra.CPEnsaio)                   # continua a ser o cliente que cancela em vez de confirmar
+        self.assertEqual((cliente.cp_email, cliente.nif), ("camila.cp@exemplo.pt", "987654321"))      # e nunca os dados do Bruno
+
+    def test_ensaio_recusa_pessoa_sem_dados(self):
+        import ensaio_compra
+        with mock.patch.object(credenciais, "carregar", side_effect=credenciais.CredenciaisIncompletas("faltam dados de Camila: NIF")), \
+                mock.patch.object(ensaio_compra.timetable, "apply_anchor", side_effect=lambda l: l), \
+                mock.patch("sys.argv", ["ensaio", "--date", "2031-01-01", "--train", "520", "--hhmm", "07:27", "--sem-ancora", "--utilizador", "2"]):
+            self.assertEqual(ensaio_compra.main(), 3)

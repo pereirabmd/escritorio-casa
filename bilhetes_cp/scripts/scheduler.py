@@ -170,7 +170,9 @@ def evaluate(snap: dict, from_cache: bool, now_ts: float, plan_only: bool = Fals
                           f"A venda do comboio {leg.train} (criada {leg.fire:%d/%m %H:%M}) já passou o prazo de "
                           f"{SALE_DEADLINE_S // 60:.0f} min para se concluir. Não a retomo: confirma na App CP.")
                     continue
-            elif now_ts - fire_ts > 120:
+            elif now_ts - fire_ts > 120 and not is_running(leg):
+                # (Com o processo quente ainda a correr — p.ex. a insistir porque a CP diz «esgotado» — a compra NÃO chegou tarde:
+                # disparou à hora certa e continua a tentar; avisar «atrasada» seria falso e lançava um segundo processo à toa.)
                 # Chegou tarde (config tardia, reboot, daemon parado) — a partida ainda é futura, por
                 # isso inicia-se JÁ, em vez de esperar por um T-24h que já passou (decisão de Bruno).
                 _warn(plan_only, f"late-start-{leg.lock_key}", f"Compra atrasada — a iniciar já — {leg.key}",

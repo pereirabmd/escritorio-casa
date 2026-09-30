@@ -187,8 +187,9 @@ class DonoMixin:
         self.cred = credenciais.carregar(leg.utilizador_id)          # CredenciaisIncompletas: o main() avisa e não tenta
         if login_fn is login:
             login_fn = lambda: login(self.cred)                      # noqa: E731
-        if cp_factory is CPClient:
-            cp_factory = lambda token: CPClient(token, cred=self.cred)   # noqa: E731
+        if isinstance(cp_factory, type) and issubclass(cp_factory, CPClient):      # o cliente real, ou o do ensaio (subclasse): com os dados dela
+            classe = cp_factory
+            cp_factory = lambda token: classe(token, cred=self.cred)        # noqa: E731
         if notify_fn is notify:
             notify_fn = functools.partial(notify, utilizador_id=leg.utilizador_id)    # o Pulse avisa o Bruno e a própria pessoa
         return login_fn, cp_factory, notify_fn
@@ -705,6 +706,8 @@ class Buyer(DonoMixin, SeatMixin):
         self.wait_until(self.fire_ts - lead, keepalive=True)
         interval = float(cfg("hold_retry_interval_s", 15))
         attempt = 0
+        avisou_falta = False
+        ultimo = ""                                   # o motivo mais recente da CP, para o aviso de T-1 min
         while True:
             attempt += 1
             if self.clock() - self.login_at > 240:
@@ -721,12 +724,35 @@ class Buyer(DonoMixin, SeatMixin):
                 if kind == "ok":
                     self._sale_created(resp, f"RETIDA antes de T ({(self.fire_ts - resp.sent_at):.0f} s) | {timing}")
                     log.info("Lugar retido antes de T (tentativa %d): %s", attempt, timing)
+                    self._avisar_lugar_retido()
                     return True
+                ultimo = f"{kind}: {detail[:100]}"
                 log.info("Retenção #%d sem venda [%s]: %s | %s", attempt, kind, detail[:120], timing)
+            if not avisou_falta and self.clock() >= self.fire_ts - 60:
+                avisou_falta = self._avisar_sem_lugar(ultimo)
             if self.clock() + interval >= deadline:
                 log.warning("Não consegui reter o lugar antes de T; sigo para o disparo normal a T.")
+                if not avisou_falta:
+                    self._avisar_sem_lugar(ultimo)
                 return False
             self.sleep(interval)
+
+    def _avisar_lugar_retido(self) -> None:
+        """Aviso: o lugar ficou retido (ainda por confirmar; o desconto do passe só abre a T)."""
+        seat = self.lock.state.get("seat"); carriage = self.lock.state.get("carriage")
+        onde = f" Carruagem {carriage}, lugar {seat}." if carriage or seat else ""
+        self.notify(f"Lugar reservado — {self.label}",
+                    f"Retive o lugar antes da abertura.{onde} A compra fecha às {hms(self.fire_ts)}, quando o desconto do passe abrir.",
+                    tags=["seat"], logger=log)
+
+    def _avisar_sem_lugar(self, motivo: str) -> bool:
+        """Aviso a T-1 min: ainda não há lugar retido. Dá tempo para ver alternativas; a app continua a tentar a T. Devolve `True` (avisado)."""
+        causa = "a CP diz que não há lugares" if "sold_out" in motivo else f"a CP respondeu: {motivo or 'sem resposta'}"
+        self.notify(f"Sem lugar retido — {self.label}",
+                    f"A 1 minuto da abertura ({hms(self.fire_ts)}) ainda não consegui reter lugar: {causa}. "
+                    "Continuo a tentar a T, mas vê alternativas na App CP (outro comboio ou classe).",
+                    tags=["warning"], logger=log)
+        return True
 
     def cancel_sale(self, sale_id: Any, why: str) -> None:
         """Liberta o lugar de uma venda que sabemos que não vai ser confirmada (nunca em estados incertos)."""
