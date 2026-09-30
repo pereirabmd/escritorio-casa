@@ -63,7 +63,7 @@ as APIs dos módulos (ADR-031) e devolve:
 ```text
 { estado: "ok" | "degradado", geradoEm, data, resumo: null,   # `resumo` reservado ao insight do Pulse (IA, mais tarde)
   modulos: {
-    tarefas:   { hoje[], atrasadas, feitasHoje, totalHoje, pessoa },   # só as do utilizador (Pessoa<N>_Email) e as sem responsável
+    tarefas:   { hoje[], atrasadas, feitasHoje, totalHoje, pessoa, piscina[], horario|null },   # só as do utilizador (Pessoa<N>_Email) e as sem responsável
     bilhetes:  { proximo{..., compra|null}, passe{diasRestantes,...} },
     rto:       { semana{inicio,fim}, dias[7]{data,diaSemana,marca:"T"|"C"|"",hoje}, contagem{T,C} },
     peso:      { ultimo{quando,peso}|null, registadoHoje, sugestao },   # `sugestao` pré-preenche o registo de hoje

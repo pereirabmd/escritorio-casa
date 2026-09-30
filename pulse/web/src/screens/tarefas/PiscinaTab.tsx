@@ -8,6 +8,8 @@ import { useAsync } from '../../lib/useAsync'
 
 interface Anterior { ultimaData: string | null; proximaData: string | null; usarIntervaloLongo: boolean; notificacaoEnviada: boolean }
 
+/** Sugerida para hoje ou já passada da data: sobe para o topo e ganha destaque. */
+const emDestaque = (c: PiscinaCartao) => c.estado === 'atrasada' || c.destacar === true
 const dias = (n: number) => `${n} dia${n === 1 ? '' : 's'}`
 
 function Estado({ c }: { c: PiscinaCartao }) {
@@ -39,7 +41,7 @@ export function PiscinaTab({ atualizar }: { atualizar: () => void }) {
   }
 
   const Cartao = ({ c }: { c: PiscinaCartao }) => (
-    <li className="piscina-item" data-destaque={c.estado === 'atrasada' || c.destacar === true}>
+    <li className="piscina-item" data-destaque={emDestaque(c)}>
       <div className="row-main">
         <div className="t-body">{c.nome}{c.nota && <span className="t-meta"> ({c.nota})</span>}</div>
         <div className="t-meta"><Estado c={c} /></div>
@@ -56,7 +58,7 @@ export function PiscinaTab({ atualizar }: { atualizar: () => void }) {
       {erro && <Notice tipo="error">{erro} <button type="button" className="link-btn" onClick={limparErro}>Fechar</button></Notice>}
       <section className="card" aria-label="Manutenção periódica">
         <h2 className="t-card">Manutenção <span className="t-meta">{d.estacao === 'quente' ? 'meses quentes' : 'meses frios'}</span></h2>
-        <ul className="rows">{d.periodicas.map((c) => <Cartao key={c.id} c={c} />)}</ul>
+        <ul className="rows">{[...d.periodicas].sort((a, b) => Number(emDestaque(b)) - Number(emDestaque(a))).map((c) => <Cartao key={c.id} c={c} />)}</ul>
       </section>
       <section className="card" aria-label="Outras ações">
         <h2 className="t-card">Outras ações</h2>

@@ -102,6 +102,32 @@ def test_tarefas_do_utilizador_ordenadas_e_sem_as_de_outros(dados_falso):
     assert (d["atrasadas"], d["feitasHoje"], d["totalHoje"]) == (1, 1, 3)
 
 
+def test_tarefas_incluem_a_piscina_do_dia_ou_atrasada_e_a_saida_do_bruno(dados_falso):
+    from pulse.services import piscina as regras
+    ids = [i["id"] for i in regras.CATALOGO if i.get("tipo") != "log"]
+    piscina = [{"id": ids[0], "ultimaData": "2026-09-27", "proximaData": "2026-09-30"},          # sugerida para hoje
+               {"id": ids[1], "ultimaData": "2026-09-27", "proximaData": "2026-10-05"},          # ainda não é a vez
+               {"id": ids[2], "ultimaData": "2026-05-01", "proximaData": "2026-05-04"}]          # já passou há muito
+    aulas = [{"aluno": "Bruno", "anoLetivo": "2026/2027", "diaSemana": 3, "horaInicio": "08:30", "horaFim": "09:15", "disciplina": "Matemática", "sala": "A1"},
+             {"aluno": "Bruno", "anoLetivo": "2026/2027", "diaSemana": 3, "horaInicio": "15:30", "horaFim": "16:15", "disciplina": "Inglês", "sala": "B2"},
+             {"aluno": "Bruno", "anoLetivo": "2026/2027", "diaSemana": 4, "horaInicio": "08:30", "horaFim": "12:00", "disciplina": "Português", "sala": "A1"},
+             {"aluno": "Outra", "anoLetivo": "2026/2027", "diaSemana": 3, "horaInicio": "08:30", "horaFim": "17:00", "disciplina": "Arte", "sala": "C3"}]
+    preparar({"/tarefas/dados": (200, {**TAREFAS, "piscina": piscina}), "/tarefas/horario": (200, {"aulas": aulas})})
+    d = dashboard.hoje(cliente(dados_falso), EMAIL, AGORA)["modulos"]["tarefas"]["dados"]
+    assert {k["id"] for k in d["piscina"]} == {ids[0], ids[2]}                                   # a que só é daqui a 5 dias fica de fora
+    assert {"estado", "nome", "diasDesde", "proxima"} <= set(d["piscina"][0])
+    assert d["horario"] == {"aluno": "Bruno", "entra": "08:30", "sai": "16:15", "aviso": "15:45"}    # quarta-feira; a 4.ª de outro dia e a «Outra» não contam
+
+
+def test_sem_horario_do_bruno_ou_sem_aulas_hoje_nao_ha_saida(dados_falso):
+    preparar()                                                                 # o dados-api não responde ao horário
+    d = dashboard.hoje(cliente(dados_falso), EMAIL, AGORA)["modulos"]["tarefas"]["dados"]
+    assert d["horario"] is None and d["piscina"] == []
+    aulas = [{"aluno": "Bruno", "anoLetivo": "2026/2027", "diaSemana": 4, "horaInicio": "08:30", "horaFim": "12:00", "disciplina": "Português", "sala": "A1"}]
+    preparar({"/tarefas/horario": (200, {"aulas": aulas})})
+    assert dashboard.hoje(cliente(dados_falso), EMAIL, AGORA)["modulos"]["tarefas"]["dados"]["horario"] is None
+
+
 def test_tarefas_sem_pessoa_associada_mostra_todas(dados_falso):
     preparar()
     d = dashboard.hoje(cliente(dados_falso), "outro@exemplo.pt", AGORA)["modulos"]["tarefas"]["dados"]

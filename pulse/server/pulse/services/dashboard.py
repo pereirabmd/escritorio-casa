@@ -13,6 +13,9 @@ from datetime import date, datetime, timedelta
 from typing import Callable
 
 from pulse.clients.dados import DadosClient, ErroDoModulo, ModuloIndisponivel
+from pulse.services import horario as horario_regras
+from pulse.services import piscina as piscina_regras
+from pulse.services import tarefas as tarefas_regras
 
 class NaoLigado(Exception):
     """O módulo existe mas o utilizador ainda não o ligou (ex.: sem conta Google): o cartão convida a ligar."""
@@ -93,8 +96,34 @@ def tarefas_hoje(c: DadosClient, email: str, hoje: date) -> dict:
             elif i["data"] < iso:
                 atrasadas += 1
     hoje_l.sort(key=lambda x: (x["hora"] or "99:99", _PRIORIDADE.get(x["prioridade"], 9), x["nome"]))
+    cfg = tarefas_regras.config_de(corpo.get("config", []))
     return {"hoje": hoje_l, "atrasadas": atrasadas, "feitasHoje": feitas, "totalHoje": len(hoje_l) + feitas,
-            "pessoa": pessoa}
+            "pessoa": pessoa, "piscina": piscina_do_dia(corpo.get("piscina", []), cfg, hoje), "horario": saida_do_aluno(c, email, cfg, hoje)}
+
+
+def piscina_do_dia(linhas: list[dict], cfg: dict[str, str], hoje: date) -> list[dict]:
+    """A manutenção da piscina sugerida para hoje ou já passada da data (as atrasadas primeiro): entra no cartão das Tarefas."""
+    cartoes = piscina_regras.visao(linhas, cfg, hoje)["periodicas"]
+    dela = [k for k in cartoes if k.get("destacar") or k["estado"] == "atrasada"]
+    dela.sort(key=lambda k: (k["estado"] != "atrasada", k["proxima"] or "9999", k["nome"]))
+    return [{"id": k["id"], "nome": k["nome"], "nota": k["nota"], "estado": k["estado"], "ultima": k["ultima"], "proxima": k["proxima"], "diasDesde": k["diasDesde"]} for k in dela]
+
+
+ALUNO_DO_CARTAO = "bruno"          # o aluno do horário escolar cuja saída de hoje aparece no cartão das Tarefas (comparação sem maiúsculas)
+
+
+def saida_do_aluno(c: DadosClient, email: str, cfg: dict[str, str], hoje: date) -> dict | None:
+    """A hora de saída de hoje (e o aviso) do aluno do cartão, do Horário das Tarefas. `None` sem aulas hoje, sem esse aluno ou se o módulo não responder."""
+    try:
+        _, r = c.pedir("GET", "/tarefas/horario", email)
+    except (ModuloIndisponivel, ErroDoModulo):
+        return None
+    v = horario_regras.visao((r or {}).get("aulas", []), cfg, hoje)
+    aluno = next((a for a in v["alunos"] if ALUNO_DO_CARTAO in a["nome"].lower()), None)
+    dia = next((d for d in (aluno or {}).get("dias", []) if d["dia"] == hoje.isoweekday()), None)
+    if aluno is None or dia is None or not dia["sai"]:
+        return None
+    return {"aluno": aluno["nome"], "entra": dia["entra"], "sai": dia["sai"], "aviso": dia["aviso"]}
 
 
 def proximo_bilhete(c: DadosClient, email: str, hoje: date) -> dict:

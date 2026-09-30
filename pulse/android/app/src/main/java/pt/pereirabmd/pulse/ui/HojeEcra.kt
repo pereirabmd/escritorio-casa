@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.runtime.*
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.draw.clip
@@ -99,6 +100,25 @@ private fun CartaoTarefas(m: Modulo<TarefasDados>, acoes: Acoes, hoje: String) {
             }
             if (d.hoje.size > 5) Mais(d.hoje.size - 5)
             if (d.atrasadas > 0) Meta(plural(d.atrasadas, "tarefa por concluir de dias anteriores", "tarefas por concluir de dias anteriores"))
+            if (d.piscina.isNotEmpty()) {
+                Texto("Piscina", Pulse.body.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold))
+                d.piscina.forEach { p ->
+                    Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).background(Pulse.cores.warningBg).padding(horizontal = 8.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Visto(false, {
+                            acoes.executar("pisc-${p.id}", "tarefas.piscina_registar", jo("item" to p.id)) { r ->
+                                val a = r.obj("anterior")
+                                avisos.mostrar("${p.nome} registada.", a?.let { x -> { acoes.executar("pisc-${p.id}", "tarefas.piscina_repor", jo("item" to p.id, "ultimaData" to x.txt("ultimaData"), "proximaData" to x.txt("proximaData"),
+                                    "usarIntervaloLongo" to x.bool("usarIntervaloLongo"), "notificacaoEnviada" to x.bool("notificacaoEnviada"))) } })
+                            }
+                        }, "Marcar feita hoje: ${p.nome}", acoes.ocupado == "pisc-${p.id}", acoes.ocupado == null)
+                        Column(Modifier.weight(1f)) {
+                            Texto(p.nome + if (p.nota.isNotEmpty()) " (${p.nota})" else "")
+                            Meta(if (p.estado == "atrasada") "Atrasada${p.diasDesde?.let { " · há ${plural(it, "dia", "dias")}" } ?: ""}" else if (p.ultima.isNotEmpty()) "Para hoje" else "Ainda não registada · sugerida para hoje")
+                        }
+                    }
+                }
+            }
+            d.horario?.let { Texto2("${it.aluno} sai às ${it.sai} · aviso às ${it.aviso}") }
         }
     }
     adiar?.let { t -> FolhaAdiar(jo("id" to t.id, "nome" to t.nome), hoje, acoes, avisos) { adiar = null } }

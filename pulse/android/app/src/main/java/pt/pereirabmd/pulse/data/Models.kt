@@ -23,7 +23,9 @@ data class Modulo<T>(val estado: String, val dados: T?) {
 }
 
 data class Tarefa(val id: String, val nome: String, val categoria: String, val hora: String)
-data class TarefasDados(val hoje: List<Tarefa>, val atrasadas: Int, val feitasHoje: Int, val totalHoje: Int)
+data class PiscinaHoje(val id: String, val nome: String, val nota: String, val estado: String, val ultima: String, val diasDesde: Int?)
+data class SaidaAluno(val aluno: String, val entra: String, val sai: String, val aviso: String)
+data class TarefasDados(val hoje: List<Tarefa>, val atrasadas: Int, val feitasHoje: Int, val totalHoje: Int, val piscina: List<PiscinaHoje> = emptyList(), val horario: SaidaAluno? = null)
 data class Compra(val carruagem: String, val lugar: String)
 data class Viagem(val data: String, val hora: String, val origem: String, val destino: String, val comboio: Int, val emCurso: Boolean, val fimEstimado: String?, val compra: Compra?)
 data class Passe(val dataExpira: String?, val diasRestantes: Int?)
@@ -72,7 +74,9 @@ fun parseHoje(j: JSONObject): Hoje {
         degradado = j.txt("estado") == "degradado", data = j.txtOu("data"),
         tarefas = modulo(m.obj("tarefas")) { d ->
             TarefasDados(d.lista("hoje") { Tarefa(it.txtOu("id"), it.txtOu("nome"), it.txtOu("categoria"), it.txtOu("hora")) },
-                d.inteiro("atrasadas"), d.inteiro("feitasHoje"), d.inteiro("totalHoje"))
+                d.inteiro("atrasadas"), d.inteiro("feitasHoje"), d.inteiro("totalHoje"),
+                d.lista("piscina") { PiscinaHoje(it.txtOu("id"), it.txtOu("nome"), it.txtOu("nota"), it.txtOu("estado"), it.txtOu("ultima"), it.inteiroOuNull("diasDesde")) },
+                d.obj("horario")?.let { SaidaAluno(it.txtOu("aluno"), it.txtOu("entra"), it.txtOu("sai"), it.txtOu("aviso")) })
         },
         bilhetes = modulo(m.obj("bilhetes")) { d ->
             BilhetesDados(

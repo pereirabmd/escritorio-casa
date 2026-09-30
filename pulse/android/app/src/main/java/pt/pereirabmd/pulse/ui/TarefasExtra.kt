@@ -130,9 +130,10 @@ fun ColumnScope.PiscinaTab(atualizar: () -> Unit) {
                     estado == "atrasada" -> "Última vez: ${fmtDataIso(ultima)} (há ${dias(desde)}) · por fazer há ${dias(desde)}"
                     else -> "Última vez: ${fmtDataIso(ultima)} (há ${dias(desde)})" + if (sugerido.isNotEmpty()) " · $sugerido" else ""
                 }
-                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                val destaque = estado == "atrasada" || destacar
+                Row(Modifier.fillMaxWidth().then(if (destaque) Modifier.clip(RoundedCornerShape(8.dp)).background(Pulse.cores.warningBg).padding(8.dp) else Modifier), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Column(Modifier.weight(1f)) {
-                        Texto(k.txtOu("nome") + k.txtOu("nota").let { if (it.isNotEmpty()) " ($it)" else "" }, Pulse.body, if (estado == "atrasada" || destacar) Pulse.cores.warning else Pulse.cores.text)
+                        Texto(k.txtOu("nome") + k.txtOu("nota").let { if (it.isNotEmpty()) " ($it)" else "" }, Pulse.body.copy(fontWeight = if (estado == "atrasada" || destacar) androidx.compose.ui.text.font.FontWeight.SemiBold else null), Pulse.cores.text)
                         Meta(linha)
                         if (k.txtOu("notaLonga").isNotEmpty()) Meta(k.txtOu("notaLonga"))
                     }
@@ -147,7 +148,10 @@ fun ColumnScope.PiscinaTab(atualizar: () -> Unit) {
                     }, variante = Variante.SECUNDARIO, pequeno = true, ativo = acoes.ocupado == null, carregando = acoes.ocupado == k.txtOu("id"))
                 }
             }
-            Bloco(titulo = "Manutenção  ·  ${if (d.txt("estacao") == "quente") "meses quentes" else "meses frios"}") { d.objs("periodicas").forEach { cartao(it) } }
+            // sugeridas para hoje ou já passadas da data: sobem para o topo e ficam destacadas
+            Bloco(titulo = "Manutenção  ·  ${if (d.txt("estacao") == "quente") "meses quentes" else "meses frios"}") {
+                d.objs("periodicas").sortedByDescending { it.bool("destacar") || it.txt("estado") == "atrasada" }.forEach { cartao(it) }
+            }
             Bloco(titulo = "Outras ações") { Meta("Quando for preciso; só se regista a última vez."); d.objs("outras").forEach { cartao(it) } }
         }
     }

@@ -6,7 +6,9 @@ export interface ModuloInfo { id: string; nome: string; disponivel: boolean; ati
 export interface Modulo<T> { estado: EstadoModulo; dados?: T | null; erro?: { codigo: string; mensagem: string } }
 
 export interface TarefaHoje { id: string; tarefaId: string; nome: string; categoria: string; icone: string; prioridade: 'Alta' | 'Media' | 'Baixa'; hora: string; pessoa: string; estado: string }
-export interface TarefasDados { hoje: TarefaHoje[]; atrasadas: number; feitasHoje: number; totalHoje: number; pessoa: string | null }
+export interface PiscinaHoje { id: string; nome: string; nota: string; estado: 'nunca' | 'ok' | 'hoje' | 'atrasada'; ultima: string; proxima: string; diasDesde: number | null }
+export interface SaidaAluno { aluno: string; entra: string; sai: string; aviso: string }
+export interface TarefasDados { hoje: TarefaHoje[]; atrasadas: number; feitasHoje: number; totalHoje: number; pessoa: string | null; piscina?: PiscinaHoje[]; horario?: SaidaAluno | null }
 export interface Viagem { id: number; data: string; origem: string; destino: string; comboio: number; hora: string; fimEstimado?: string; emCurso?: boolean; compra: { carruagem: string; lugar: string; referencia: string } | null }
 export interface BilhetesDados { proximo: Viagem | null; passe: { dataExpira: string | null; diasRestantes: number | null } | null }
 export interface DiaRto { data: string; diaSemana: number; marca: 'T' | 'C' | ''; hoje: boolean }

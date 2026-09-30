@@ -246,7 +246,8 @@ a.link-btn { text-decoration: none; }
 .hor-semana td[data-dividida='true'] { font-style: italic; }
 .hor-semana .h { display: table-cell; white-space: nowrap; font-variant-numeric: tabular-nums; }
 .hor-semana .h span { display: block; color: var(--text-2); font-size: 12px; }
-.piscina-item[data-destaque='true'] { background: var(--warning-bg); border-radius: var(--r-s); padding-inline: var(--s2); }
+.piscina-item[data-destaque='true'] { background: var(--warning-bg); border-radius: var(--r-s); padding-inline: var(--s2); box-shadow: inset 3px 0 0 var(--warning); }
+.piscina-item[data-destaque='true'] .t-body { font-weight: 600; }
 .nota-longa { margin: var(--s1) 0 0; }
 fieldset { border: 0; padding: 0; margin: 0; min-width: 0; }
 

@@ -32,6 +32,15 @@ class ModelsTest {
         assertEquals(listOf("Peso"), h.falhados())          // nao_ligado e desativado não contam como falha
     }
 
+    @Test fun tarefasComPiscinaESaidaDoAluno() {
+        val j = JSONObject("""{"estado":"ok","data":"2026-09-30","modulos":{"tarefas":{"estado":"ok","dados":{"hoje":[],"atrasadas":0,"feitasHoje":0,"totalHoje":0,
+          "piscina":[{"id":"P02","nome":"Testar pH e cloro","nota":"","estado":"atrasada","ultima":"2026-09-20","proxima":"2026-09-23","diasDesde":10}],
+          "horario":{"aluno":"Bruno","entra":"08:30","sai":"16:15","aviso":"15:45"}}}}}""")
+        val t = parseHoje(j).tarefas.dados!!
+        assertEquals("P02", t.piscina[0].id); assertEquals(10, t.piscina[0].diasDesde); assertEquals("16:15", t.horario!!.sai)
+        assertTrue(parseHoje(hoje).tarefas.dados!!.piscina.isEmpty()); assertNull(parseHoje(hoje).tarefas.dados!!.horario)     // servidor antigo: sem os campos novos
+    }
+
     @Test fun moduloEmFaltaNaoRebenta() {
         val h = parseHoje(JSONObject("""{"estado":"ok","data":"2026-09-29","modulos":{}}"""))
         assertEquals("erro", h.tarefas.estado); assertNull(h.compras)

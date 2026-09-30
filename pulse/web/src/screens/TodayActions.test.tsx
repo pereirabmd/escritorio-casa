@@ -65,6 +65,31 @@ describe('tarefas', () => {
   })
 })
 
+describe('piscina e saída do Bruno no cartão das tarefas', () => {
+  const comExtras = () => ({ ...HOJE, modulos: { ...HOJE.modulos, tarefas: { estado: 'ok', dados: { ...HOJE.modulos.tarefas.dados,
+    piscina: [{ id: 'P02', nome: 'Testar pH e cloro', nota: '', estado: 'atrasada', ultima: '2026-09-20', proxima: '2026-09-23', diasDesde: 10 }],
+    horario: { aluno: 'Bruno', entra: '08:30', sai: '16:15', aviso: '15:45' } } } } })
+
+  test('mostra a piscina atrasada e a hora de saída; marcar feita regista e oferece desfazer', async () => {
+    const anterior = { ultimaData: '2026-09-20', proximaData: '2026-09-23', usarIntervaloLongo: false, notificacaoEnviada: false }
+    const { pedidos } = abrir({ 'POST /actions/tarefas.piscina_registar': () => [200, { resultado: { anterior } }], 'POST /actions/tarefas.piscina_repor': () => OK }, comExtras())
+    expect(await screen.findByText(/sai às/)).toHaveTextContent('Bruno sai às 16:15 · aviso às 15:45')
+    const grupo = screen.getByRole('group', { name: 'Piscina' })
+    expect(within(grupo).getByText(/Atrasada · há 10 dias/)).toBeInTheDocument()
+    await userEvent.click(within(grupo).getByRole('button', { name: 'Marcar feita hoje: Testar pH e cloro' }))
+    await waitFor(() => expect(pedidos.find((p) => p.caminho === '/actions/tarefas.piscina_registar')?.corpo).toEqual({ params: { item: 'P02' } }))
+    await userEvent.click(await screen.findByRole('button', { name: 'Desfazer' }))
+    await waitFor(() => expect(pedidos.find((p) => p.caminho === '/actions/tarefas.piscina_repor')?.corpo).toEqual({ params: { item: 'P02', ...anterior } }))
+  })
+
+  test('sem piscina para hoje nem aulas, nada disto aparece', async () => {
+    abrir()
+    await screen.findByText('Limpar WC')
+    expect(screen.queryByRole('group', { name: 'Piscina' })).not.toBeInTheDocument()
+    expect(screen.queryByText(/sai às/)).not.toBeInTheDocument()
+  })
+})
+
 describe('peso', () => {
   test('o campo vem pré-preenchido com o último peso e regista com cid', async () => {
     const hoje = { ...HOJE, modulos: { ...HOJE.modulos, peso: { estado: 'ok', dados: { ultimo: { quando: '2026-09-29 07:30:00', peso: 104.8 }, registadoHoje: false, sugestao: 104.8 } } } }

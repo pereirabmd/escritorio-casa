@@ -1,7 +1,7 @@
 import { useRef, useState, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import { api, mensagemDeErro } from '../api/client'
-import type { BilhetesDados, CalendarioHoje, ComprasHoje, EmailHoje, Conta, EstadoModulo, FinancasDados, Hoje, Modulo, PesoDados, RtoDados, TarefaHoje, TarefasDados } from '../api/types'
+import type { PiscinaHoje, BilhetesDados, CalendarioHoje, ComprasHoje, EmailHoje, Conta, EstadoModulo, FinancasDados, Hoje, Modulo, PesoDados, RtoDados, TarefaHoje, TarefasDados } from '../api/types'
 import { useUtilizador } from '../auth/AuthContext'
 import { Icon, type IconName } from '../components/Icon'
 import { ShopIcon } from '../components/ShopIcon'
@@ -56,6 +56,11 @@ function Tarefas({ m, acoes }: { m: Modulo<TarefasDados>; acoes: Acoes }) {
     }
   }
 
+  async function piscinaFeita(p: PiscinaHoje) {
+    const r = await executar(`pisc-${p.id}`, 'tarefas.piscina_registar', { item: p.id }) as { anterior?: Record<string, unknown> } | null
+    if (r) avisos.mostrar(`${p.nome} registada.`, r.anterior ? () => void executar(`pisc-${p.id}`, 'tarefas.piscina_repor', { item: p.id, ...r.anterior }) : undefined)
+  }
+
   return (
     <Cartao icone="tarefas" titulo="Tarefas de hoje" extra={<>{m.dados && m.dados.totalHoje > 0 && <span className="t-meta">{m.dados.feitasHoje} de {m.dados.totalHoje}</span>}<Link to="/tarefas" className="link-btn">Abrir</Link></>}>
       <Estado modulo={m}>{() => {
@@ -82,6 +87,21 @@ function Tarefas({ m, acoes }: { m: Modulo<TarefasDados>; acoes: Acoes }) {
               ))}</ul>}
             {d.hoje.length > 5 && <p className="t-meta">e mais {d.hoje.length - 5}</p>}
             {d.atrasadas > 0 && <p className="t-meta">{plural(d.atrasadas, 'tarefa por concluir de dias anteriores', 'tarefas por concluir de dias anteriores')}</p>}
+            {(d.piscina?.length ?? 0) > 0 && (
+              <div className="stack" role="group" aria-label="Piscina">
+                <h3 className="t-body">Piscina</h3>
+                <ul className="rows">{d.piscina!.map((p) => (
+                  <li key={p.id} className="piscina-item" data-destaque="true">
+                    <button type="button" className="check" aria-label={`Marcar feita hoje: ${p.nome}`} disabled={ocupado !== null} onClick={() => void piscinaFeita(p)}>
+                      {ocupado === `pisc-${p.id}` ? <Spinner /> : <Icon nome="certo" tamanho={16} />}
+                    </button>
+                    <div className="row-main"><div className="t-body">{p.nome}{p.nota && <span className="t-meta"> ({p.nota})</span>}</div>
+                      <div className="t-meta">{p.estado === 'atrasada' ? `Atrasada${p.diasDesde !== null ? ` · há ${plural(p.diasDesde, 'dia', 'dias')}` : ''}` : p.ultima ? 'Para hoje' : 'Ainda não registada · sugerida para hoje'}</div></div>
+                  </li>
+                ))}</ul>
+              </div>
+            )}
+            {d.horario && <p className="t-body2">{d.horario.aluno} sai às <b>{d.horario.sai}</b> · aviso às {d.horario.aviso}</p>}
           </>
         )
       }}</Estado>
