@@ -88,3 +88,12 @@ a.list-item:hover, button.list-item:hover { background: var(--surface-2); }
 .ordem-lista .pega { width: 32px; height: 32px; display: grid; place-items: center; border: 0; background: transparent; color: var(--text-2); border-radius: var(--r-s); cursor: grab; touch-action: none; flex: none; }
 .ordem-lista .pega:hover, .ordem-lista .pega:focus-visible { background: var(--surface-2); color: var(--text); }
 .ordem-lista .row-main[data-escondido='true'] { color: var(--text-2); text-decoration: line-through; }
+
+/* telemóvel: «Hoje» (logo e nome) ao centro, «Mais» discreto à direita (ADR-067) */
+@media (max-width: 899px) {
+  .nav { justify-content: center; }
+  .nav a[href$='/hoje'] { flex: 0 1 auto; padding: 0 var(--s8); }
+  .nav a[href$='/mais'] { position: absolute; right: var(--s2); top: 0; height: 60px; flex: none; min-width: 52px; gap: 0; opacity: .65; font-size: 11px; }
+  .nav a[href$='/mais'] svg { width: 16px; height: 16px; }
+  .nav a[href$='/mais'][aria-current='page'] { opacity: 1; }
+}

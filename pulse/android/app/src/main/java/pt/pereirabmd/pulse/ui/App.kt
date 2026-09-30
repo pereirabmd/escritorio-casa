@@ -14,6 +14,14 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.draw.clip
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontWeight
 
 
 /** Decide o que se mostra: arranque, início de sessão, mudança obrigatória de palavra-passe, bloqueio, oferta de PIN ou a aplicação. */
@@ -84,12 +92,25 @@ private fun Principal(sessao: Sessao, f: Fase.Autenticado) {
             snackbarHost = { SnackbarHost(snackbar) { d -> Snackbar(d, containerColor = c.text, contentColor = c.bg, actionColor = c.accent) } },
             bottomBar = {
                 // sempre visível (o «Hoje» está a um toque de qualquer ecrã), exceto nos formulários de ecrã inteiro
-                if (destino != Destino.Password && destino != Destino.Pin && !tecladoAberto) NavigationBar(containerColor = c.surface, tonalElevation = 0.dp) {
-                    val cor = NavigationBarItemDefaults.colors(selectedIconColor = c.primary, selectedTextColor = c.primary, indicatorColor = c.surface2, unselectedTextColor = c.text2, unselectedIconColor = c.text2)
+                if (destino != Destino.Password && destino != Destino.Pin && !tecladoAberto) {
+                    // o «Hoje» (logo e nome) ao centro; o «Mais» discreto, pequeno e mais apagado, à direita (ADR-067)
                     val emHoje = destino == Destino.Hoje
-                    NavigationBarItem(emHoje, { destino = Destino.Hoje }, { LogoPulse(26.dp, if (emHoje) 1f else 0.55f) }, label = { Text("Hoje") }, colors = cor)
-                    NavigationBarItem(!emHoje, { destino = Destino.Mais },
-                        { Icon(Icone.MAIS, if (!emHoje) c.primary else c.text2) }, label = { Text("Mais") }, colors = cor)
+                    Column(Modifier.fillMaxWidth().background(c.surface)) {
+                        HorizontalDivider(color = c.line)
+                        Box(Modifier.fillMaxWidth().navigationBarsPadding().height(60.dp)) {
+                            Column(Modifier.align(Alignment.Center).clip(RoundedCornerShape(12.dp)).clickable(role = Role.Tab) { destino = Destino.Hoje }
+                                .semantics { selected = emHoje }.padding(horizontal = 28.dp, vertical = 6.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                                LogoPulse(28.dp, if (emHoje) 1f else 0.55f)
+                                Text("Hoje", style = Pulse.meta.copy(fontWeight = FontWeight.Medium), color = if (emHoje) c.primary else c.text2)
+                            }
+                            Row(Modifier.align(Alignment.CenterEnd).padding(end = 8.dp).clip(RoundedCornerShape(10.dp)).clickable(role = Role.Tab) { destino = Destino.Mais }
+                                .semantics { selected = !emHoje }.padding(horizontal = 10.dp, vertical = 10.dp),
+                                verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                Icon(Icone.MAIS, if (!emHoje) c.primary else c.text2.copy(alpha = 0.65f), tamanho = 16.dp)
+                                Text("Mais", style = Pulse.meta, color = if (!emHoje) c.primary else c.text2.copy(alpha = 0.65f))
+                            }
+                        }
+                    }
                 }
             },
         ) { pad ->

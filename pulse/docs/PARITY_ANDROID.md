@@ -1,6 +1,6 @@
 # Paridade Android ↔ Web
 
-O Pulse tem duas interfaces sobre o mesmo servidor (as regras vivem no servidor, ADR-050). A partir de 29/09/2026 **cada funcionalidade nova é entregue nas duas** e discutida antes de implementar. Estado a 29/09/2026 (Android `0.3.1`, ADR-051/052/053/054).
+O Pulse tem duas interfaces sobre o mesmo servidor (as regras vivem no servidor, ADR-050). A partir de 29/09/2026 **cada funcionalidade nova é entregue nas duas** e discutida antes de implementar. Estado a 29/09/2026 (Android `0.3.2`, ADR-051/052/053/054).
 Legenda: **Feito** · **Pendente** · **Só Android** / **Só Web** (decidido).
 
 | Funcionalidade | Web | Android | Notas |
