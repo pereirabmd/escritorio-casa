@@ -130,10 +130,6 @@ private fun ColumnScope.CalendarioTab(d: JSONObject, acoes: Acoes, atualizar: ()
             LinkBtn("Hoje", { val h = LocalDate.now(); irPara(h.year, h.monthValue - 1); escolhido = h.toString() })
             LinkBtn("›", { irPara(seguinte.first, seguinte.second) })
         }
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            Filtros(listOf(true to "Férias"), if (modoFerias) true else false) { modoFerias = !modoFerias }
-            Meta(if (modoFerias) "Toca num dia para marcar ou tirar férias (F)" else "Toca num dia: T → C → vazio")
-        }
         Row(Modifier.fillMaxWidth()) { DIAS_SEMANA_LETRA.forEach { Meta(it, Modifier.weight(1f).wrapContentWidth(Alignment.CenterHorizontally)) } }
         Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
             semanasDoMes(ano, mes).forEach { semana ->
@@ -152,6 +148,10 @@ private fun ColumnScope.CalendarioTab(d: JSONObject, acoes: Acoes, atualizar: ()
                     }
                 }
             }
+        }
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            Filtros(listOf(true to "Férias"), if (modoFerias) true else false) { modoFerias = !modoFerias }
+            Meta(if (modoFerias) "Toca num dia para marcar ou tirar férias (F)" else "Toca num dia: T → C → vazio")
         }
         Meta("T · Escritório   C · Casa   F · Férias   A · Astreinte   f · Feriado")
         if (dia != null) {

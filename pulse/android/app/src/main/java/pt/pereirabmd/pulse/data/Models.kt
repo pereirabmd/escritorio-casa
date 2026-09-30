@@ -46,6 +46,8 @@ data class Hoje(
     val degradado: Boolean, val data: String,
     val tarefas: Modulo<TarefasDados>, val bilhetes: Modulo<BilhetesDados>, val rto: Modulo<RtoDados>, val peso: Modulo<PesoDados>,
     val financas: Modulo<FinancasDados>, val compras: Modulo<ComprasDados>?, val calendario: Modulo<CalendarioDados>, val email: Modulo<EmailDados>,
+    /** Ordem dos cartões escolhida pelo utilizador (ADR-054); vazia se o servidor for antigo (vale a ordem de origem). */
+    val ordem: List<String> = emptyList(),
 ) {
     /** Os módulos que falharam (não conta `sem_acesso`, `nao_ligado` nem `desativado`), pelo nome que o utilizador conhece. */
     fun falhados(): List<String> = buildList {
@@ -72,6 +74,7 @@ fun parseHoje(j: JSONObject): Hoje {
     val m = j.optJSONObject("modulos") ?: JSONObject()
     return Hoje(
         degradado = j.txt("estado") == "degradado", data = j.txtOu("data"),
+        ordem = j.optJSONArray("ordem")?.let { a -> (0 until a.length()).map { a.getString(it) } } ?: emptyList(),
         tarefas = modulo(m.obj("tarefas")) { d ->
             TarefasDados(d.lista("hoje") { Tarefa(it.txtOu("id"), it.txtOu("nome"), it.txtOu("categoria"), it.txtOu("hora")) },
                 d.inteiro("atrasadas"), d.inteiro("feitasHoje"), d.inteiro("totalHoje"),

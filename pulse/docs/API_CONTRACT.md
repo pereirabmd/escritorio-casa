@@ -61,7 +61,7 @@ Um só pedido para o «Hoje». Exige sessão com a palavra-passe já mudada. O b
 as APIs dos módulos (ADR-031) e devolve:
 
 ```text
-{ estado: "ok" | "degradado", geradoEm, data, resumo: null,   # `resumo` reservado ao insight do Pulse (IA, mais tarde)
+{ estado: "ok" | "degradado", geradoEm, data, resumo: null, ordem[8],   # `ordem`: ids dos cartões pela ordem do utilizador (ADR-054)   # `resumo` reservado ao insight do Pulse (IA, mais tarde)
   modulos: {
     tarefas:   { hoje[], atrasadas, feitasHoje, totalHoje, pessoa, piscina[], horario|null },   # só as do utilizador (Pessoa<N>_Email) e as sem responsável
     bilhetes:  { proximo{..., compra|null}, passe{diasRestantes,...} },
@@ -72,6 +72,9 @@ as APIs dos módulos (ADR-031) e devolve:
   } }
 cada módulo: { estado: "ok" | "indisponivel" | "sem_acesso" | "erro", dados | erro{codigo,mensagem} }
 ```
+
+### `PUT /api/v1/dashboard/order` (implementado, ADR-054)
+Corpo `{ ordem: ["peso", "tarefas", …] }` (ids de `calendario, tarefas, email, bilhetes, rto, peso, compras, financas`, sem repetidos; pode ser parcial). Guarda a ordem do utilizador e devolve `{ ordem }` completa. Ids desconhecidos ou repetidos: `422 ordem_invalida`.
 
 Modo degradado: um módulo que falha aparece com o seu `estado` e os restantes continuam (o agregado passa a `degradado`);
 `sem_acesso` (o utilizador não está na ACL desse módulo) e `nao_ligado` não contam como falha. As ações do cartão (concluir/

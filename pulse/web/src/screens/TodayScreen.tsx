@@ -1,4 +1,4 @@
-import { useRef, useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import { api, mensagemDeErro } from '../api/client'
 import type { PiscinaHoje, BilhetesDados, CalendarioHoje, ComprasHoje, EmailHoje, Conta, EstadoModulo, FinancasDados, Hoje, Modulo, PesoDados, RtoDados, TarefaHoje, TarefasDados } from '../api/types'
@@ -366,6 +366,81 @@ function resumo(h: Hoje): string {
   return partes.join(' · ')
 }
 
+const ORDEM_DE_ORIGEM = ['calendario', 'tarefas', 'email', 'bilhetes', 'rto', 'peso', 'compras', 'financas']
+const PEGA = <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">{[7, 12, 17].flatMap((y) => [9, 15].map((x) => <circle key={`${x}${y}`} cx={x} cy={y} r="1.6" />))}</svg>
+
+/** Os cartões do Hoje, pela ordem do utilizador; a pega de cada cartão arrasta (rato, dedo) ou move com as setas ↑ ↓. */
+function CartoesOrdenaveis({ dados, acoes }: { dados: Hoje; acoes: Acoes }) {
+  const m = dados.modulos
+  const [ordem, setOrdem] = useState(dados.ordem ?? ORDEM_DE_ORIGEM)
+  const [arrastar, setArrastar] = useState<string | null>(null)
+  const atual = useRef(ordem)
+  useEffect(() => { atual.current = ordem }, [ordem])
+  const avisos = useAvisos()
+
+  const cartoes: Record<string, ReactNode | null> = {
+    calendario: !SEM.has(m.calendario.estado) && <Calendario m={m.calendario} />,
+    tarefas: !SEM.has(m.tarefas.estado) && <Tarefas m={m.tarefas} acoes={acoes} />,
+    email: !SEM.has(m.email.estado) && <Email m={m.email} />,
+    bilhetes: !SEM.has(m.bilhetes.estado) && <Bilhetes m={m.bilhetes} />,
+    rto: !SEM.has(m.rto.estado) && <Rto m={m.rto} acoes={acoes} />,
+    peso: !SEM.has(m.peso.estado) && <Peso m={m.peso} acoes={acoes} />,
+    compras: !!m.compras && !SEM.has(m.compras.estado) && <Compras m={m.compras} acoes={acoes} />,
+    financas: !SEM.has(m.financas.estado) && <Financas m={m.financas} acoes={acoes} />,
+  }
+
+  function guardar(nova: string[]) {
+    api.put('/dashboard/order', { ordem: nova }).catch((e) => avisos.mostrar(`Não foi possível guardar a ordem: ${mensagemDeErro(e)}`))
+  }
+  function mover(id: string, para: number) {
+    const visiveis = atual.current.filter((x) => cartoes[x])
+    const de = visiveis.indexOf(id)
+    if (de < 0 || para < 0 || para >= visiveis.length || para === de) return
+    const alvo = visiveis[para]
+    const nova = atual.current.filter((x) => x !== id)
+    nova.splice(nova.indexOf(alvo) + (para > de ? 1 : 0), 0, id)
+    atual.current = nova
+    setOrdem(nova)
+  }
+  function iniciar(e: React.PointerEvent, id: string) {
+    e.preventDefault()
+    setArrastar(id)
+    const pega = e.currentTarget as HTMLElement
+    pega.setPointerCapture(e.pointerId)
+    const aoMover = (ev: PointerEvent) => {
+      const sobre = document.elementFromPoint(ev.clientX, ev.clientY)?.closest<HTMLElement>('[data-cartao]')
+      const alvo = sobre?.dataset.cartao
+      if (alvo && alvo !== id) mover(id, atual.current.filter((x) => cartoes[x]).indexOf(alvo))
+    }
+    const fim = () => {
+      pega.removeEventListener('pointermove', aoMover); pega.removeEventListener('pointerup', fim); pega.removeEventListener('pointercancel', fim)
+      setArrastar(null)
+      guardar(atual.current)
+    }
+    pega.addEventListener('pointermove', aoMover); pega.addEventListener('pointerup', fim); pega.addEventListener('pointercancel', fim)
+  }
+  function teclas(e: React.KeyboardEvent, id: string) {
+    const d = e.key === 'ArrowUp' || e.key === 'ArrowLeft' ? -1 : e.key === 'ArrowDown' || e.key === 'ArrowRight' ? 1 : 0
+    if (!d) return
+    e.preventDefault()
+    mover(id, atual.current.filter((x) => cartoes[x]).indexOf(id) + d)
+    guardar(atual.current)
+    requestAnimationFrame(() => document.querySelector<HTMLElement>(`[data-cartao="${id}"] .pega`)?.focus())
+  }
+
+  return (
+    <div className="grid">
+      {ordem.filter((id) => cartoes[id]).map((id) => (
+        <div key={id} className="cartao-ord" data-cartao={id} data-a-arrastar={arrastar === id}>
+          {cartoes[id]}
+          <button type="button" className="pega" aria-label={`Mover o cartão ${NOMES[id] ?? id} (arrastar, ou setas para cima e para baixo)`}
+            onPointerDown={(e) => iniciar(e, id)} onKeyDown={(e) => teclas(e, id)}>{PEGA}</button>
+        </div>
+      ))}
+    </div>
+  )
+}
+
 export function TodayScreen() {
   const utilizador = useUtilizador()
   const [estado, recarregar] = useAsync(() => api.get<Hoje>('/dashboard/today'))
@@ -406,16 +481,7 @@ export function TodayScreen() {
           {erro && (
             <Notice tipo="error">{erro} <button type="button" className="link-btn" onClick={limparErro}>Fechar</button></Notice>
           )}
-          <div className="grid">
-            {!SEM.has(estado.dados.modulos.calendario.estado) && <Calendario m={estado.dados.modulos.calendario} />}
-            {!SEM.has(estado.dados.modulos.tarefas.estado) && <Tarefas m={estado.dados.modulos.tarefas} acoes={{ executar, ocupado, hoje: estado.dados.data, recarregar }} />}
-            {!SEM.has(estado.dados.modulos.email.estado) && <Email m={estado.dados.modulos.email} />}
-            {!SEM.has(estado.dados.modulos.bilhetes.estado) && <Bilhetes m={estado.dados.modulos.bilhetes} />}
-            {!SEM.has(estado.dados.modulos.rto.estado) && <Rto m={estado.dados.modulos.rto} acoes={{ executar, ocupado, hoje: estado.dados.data, recarregar }} />}
-            {!SEM.has(estado.dados.modulos.peso.estado) && <Peso m={estado.dados.modulos.peso} acoes={{ executar, ocupado, hoje: estado.dados.data, recarregar }} />}
-            {estado.dados.modulos.compras && !SEM.has(estado.dados.modulos.compras.estado) && <Compras m={estado.dados.modulos.compras} acoes={{ executar, ocupado, hoje: estado.dados.data, recarregar }} />}
-            {!SEM.has(estado.dados.modulos.financas.estado) && <Financas m={estado.dados.modulos.financas} acoes={{ executar, ocupado, hoje: estado.dados.data, recarregar }} />}
-          </div>
+          <CartoesOrdenaveis dados={estado.dados} acoes={{ executar, ocupado, hoje: estado.dados.data, recarregar }} />
           <div><Botao variante="secondary" pequeno onClick={recarregar}>Atualizar</Botao></div>
         </>
       )}

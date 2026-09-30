@@ -246,3 +246,17 @@ describe('compras', () => {
     expect(screen.queryByRole('heading', { name: 'Lista de compras' })).not.toBeInTheDocument()
   })
 })
+
+describe('ordem dos cartões', () => {
+  test('mostra a ordem guardada e as setas da pega mudam-na e guardam-na', async () => {
+    const { pedidos } = abrir({ 'PUT /dashboard/order': () => [200, { ordem: [] }] }, { ...HOJE, ordem: ['peso', 'tarefas', 'rto', 'financas', 'calendario', 'email', 'bilhetes', 'compras'] })
+    const pega = await screen.findByRole('button', { name: /Mover o cartão Peso/ })
+    const antes = screen.getAllByRole('button', { name: /Mover o cartão/ }).map((b) => b.getAttribute('aria-label'))
+    expect(antes[0]).toMatch(/Peso/); expect(antes[1]).toMatch(/Tarefas/)
+    pega.focus()
+    await userEvent.keyboard('{ArrowDown}')
+    const depois = screen.getAllByRole('button', { name: /Mover o cartão/ }).map((b) => b.getAttribute('aria-label'))
+    expect(depois[0]).toMatch(/Tarefas/); expect(depois[1]).toMatch(/Peso/)
+    await waitFor(() => expect(pedidos.some((p) => p.metodo === 'PUT' && p.caminho.includes('/dashboard/order'))).toBe(true))
+  })
+})

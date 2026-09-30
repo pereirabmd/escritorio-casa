@@ -73,3 +73,15 @@ a.list-item:hover, button.list-item:hover { background: var(--surface-2); }
 
 .nav a.nav-desktop-only { display: none; }
 @media (min-width: 900px) { .nav a.nav-desktop-only { display: flex; } }
+
+/* teclado virtual aberto: a barra de baixo sai da frente do formulário */
+@media (max-width: 899px) { :root[data-teclado] .nav { display: none; } :root[data-teclado] .main { padding-bottom: var(--s6); } }
+
+/* cartões do Hoje reordenáveis (ADR-054) */
+.cartao-ord { position: relative; display: grid; }
+.cartao-ord > .card { height: 100%; }
+.cartao-ord .card-head { padding-right: 36px; }
+.cartao-ord .pega { position: absolute; top: var(--s3); right: var(--s3); width: 32px; height: 32px; display: grid; place-items: center; border: 0; background: transparent; color: var(--text-2); border-radius: var(--r-s); cursor: grab; touch-action: none; }
+.cartao-ord .pega:hover, .cartao-ord .pega:focus-visible { background: var(--surface-2); color: var(--text); }
+.cartao-ord[data-a-arrastar='true'] { opacity: .85; box-shadow: 0 6px 18px rgba(0, 0, 0, .18); z-index: 2; }
+.cartao-ord[data-a-arrastar='true'] .pega { cursor: grabbing; }

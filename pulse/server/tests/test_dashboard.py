@@ -10,6 +10,7 @@ from pulse.main import create_app
 from pulse.services import dashboard
 from tests.conftest import FalsoDados
 
+H = {"X-Pulse-Client": "web"}
 EMAIL = "pereirabmd@gmail.com"
 AGORA = datetime(2026, 9, 30, 10, 0, tzinfo=ZoneInfo("Europe/Lisbon"))   # quarta-feira; a semana vai de 28/09 a 04/10
 
@@ -238,3 +239,19 @@ def test_um_erro_nas_compras_nao_derruba_o_resto_do_hoje(app_cliente, monkeypatc
     app_cliente.post("/api/v1/auth/login", json={"email": EMAIL, "password": "1234qweR"})
     j = app_cliente.get("/api/v1/dashboard/today").json()
     assert j["modulos"]["compras"]["estado"] == "erro" and j["modulos"]["peso"]["estado"] == "ok" and j["estado"] == "degradado"
+
+
+def test_ordem_dos_cartoes_guarda_se_por_utilizador_e_completa_se(app_cliente):
+    preparar()
+    app_cliente.post("/api/v1/auth/login", json={"email": EMAIL, "password": "1234qweR"})
+    origem = ["calendario", "tarefas", "email", "bilhetes", "rto", "peso", "compras", "financas"]
+    assert app_cliente.get("/api/v1/dashboard/today").json()["ordem"] == origem
+    r = app_cliente.put("/api/v1/dashboard/order", json={"ordem": ["peso", "tarefas"]}, headers=H)
+    assert r.status_code == 200 and r.json()["ordem"][:2] == ["peso", "tarefas"] and sorted(r.json()["ordem"]) == sorted(origem)
+    assert app_cliente.get("/api/v1/dashboard/today").json()["ordem"] == r.json()["ordem"]
+
+
+@pytest.mark.parametrize("ordem", [["peso", "peso"], ["nao_existe"], []])
+def test_ordem_invalida_e_recusada(app_cliente, ordem):
+    app_cliente.post("/api/v1/auth/login", json={"email": EMAIL, "password": "1234qweR"})
+    assert app_cliente.put("/api/v1/dashboard/order", json={"ordem": ordem}, headers=H).status_code in (400, 422)

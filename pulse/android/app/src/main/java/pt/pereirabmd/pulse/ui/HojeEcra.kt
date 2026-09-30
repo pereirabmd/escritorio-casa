@@ -2,7 +2,22 @@ package pt.pereirabmd.pulse.ui
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.gestures.scrollBy
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.semantics.CustomAccessibilityAction
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.customActions
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.zIndex
+import org.json.JSONArray
+import org.json.JSONObject
 import androidx.compose.runtime.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -262,18 +277,68 @@ private fun resumo(h: Hoje): String = buildList {
     if (h.bilhetes.ok && v != null) add("próximo comboio ${fmtDiaMes(v.data)} às ${v.hora}")
 }.joinToString(" · ")
 
+private val CARTOES_ORIGEM = listOf("calendario", "tarefas", "email", "bilhetes", "rto", "peso", "compras", "financas")
+private val NOMES_CARTAO = mapOf("calendario" to "Calendário", "tarefas" to "Tarefas", "email" to "Email", "bilhetes" to "Bilhetes CP", "rto" to "RTO", "peso" to "Peso", "compras" to "Compras", "financas" to "Finanças")
+
+/** Pega de arrastar (seis pontos); também se move por ações de acessibilidade. */
+@Composable
+private fun Pega(nome: String, modifier: Modifier, aoMover: (Int) -> Unit) {
+    val cor = Pulse.cores.text2
+    Canvas(modifier.size(28.dp).semantics {
+        contentDescription = "Mover o cartão $nome"
+        customActions = listOf(CustomAccessibilityAction("Mover para cima") { aoMover(-1); true }, CustomAccessibilityAction("Mover para baixo") { aoMover(1); true })
+    }) {
+        for (x in listOf(10.dp, 18.dp)) for (y in listOf(7.dp, 14.dp, 21.dp)) drawCircle(cor, radius = 1.8.dp.toPx(), center = Offset(x.toPx(), y.toPx()))
+    }
+}
+
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun EcraHoje(sessao: Sessao, utilizador: Utilizador, cabecalho: @Composable () -> Unit) {
     var estado by remember { mutableStateOf<EstadoHoje>(EstadoHoje.ACarregar) }
     var versao by remember { mutableIntStateOf(0) }
     val acoes = rememberAcoes { versao++ }
+    val avisos = LocalAvisos.current
+    val scope = rememberCoroutineScope()
+    val lista = rememberLazyListState()
+    val ordem = remember { mutableStateListOf<String>() }
+    var arrastando by remember { mutableStateOf<String?>(null) }
+    var delta by remember { mutableFloatStateOf(0f) }
     LaunchedEffect(versao) {
         if (estado is EstadoHoje.Erro) estado = EstadoHoje.ACarregar
         estado = try { EstadoHoje.Pronto(parseHoje(Api.get("/dashboard/today"))) } catch (e: Exception) { EstadoHoje.Erro(mensagemDeErro(e)) }
     }
+    LaunchedEffect(estado) {
+        val h = (estado as? EstadoHoje.Pronto)?.hoje ?: return@LaunchedEffect
+        if (arrastando == null) { ordem.clear(); ordem.addAll(h.ordem.filter { it in CARTOES_ORIGEM } + CARTOES_ORIGEM.filter { it !in h.ordem }) }
+    }
+    fun guardar() {
+        scope.launch {
+            try { Api.put("/dashboard/order", JSONObject().put("ordem", JSONArray(ordem.toList()))) }
+            catch (e: Exception) { avisos.mostrar("Não foi possível guardar a ordem: ${mensagemDeErro(e)}") }
+        }
+    }
+    fun mover(de: String, para: String) {
+        val i = ordem.indexOf(de); val j = ordem.indexOf(para)
+        if (i >= 0 && j >= 0 && i != j) ordem.add(j, ordem.removeAt(i))
+    }
+    fun arrastar(id: String, dy: Float) {
+        delta += dy
+        val itens = lista.layoutInfo.visibleItemsInfo
+        val atual = itens.firstOrNull { it.key == id } ?: return
+        val centro = atual.offset + atual.size / 2f + delta
+        val alvo = itens.firstOrNull { it.key != id && it.key is String && centro >= it.offset && centro <= it.offset + it.size }
+        if (alvo != null) {
+            val novo = if (alvo.offset > atual.offset) alvo.offset + alvo.size - atual.size else alvo.offset
+            mover(id, alvo.key as String)
+            delta -= (novo - atual.offset)
+        }
+        val fimDaJanela = lista.layoutInfo.viewportEndOffset
+        if (centro > fimDaJanela - 80) scope.launch { lista.scrollBy(24f) } else if (centro < 80) scope.launch { lista.scrollBy(-24f) }
+    }
     val agora = Calendar.getInstance()
     val nome = utilizador.nome.trim().substringBefore(' ')
-    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+    LazyColumn(Modifier.fillMaxSize(), state = lista, contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         item {
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Texto2(fmtDataLonga(agora))
@@ -289,14 +354,35 @@ fun EcraHoje(sessao: Sessao, utilizador: Utilizador, cabecalho: @Composable () -
                 val h = e.hoje
                 item { ErroAcao(acoes) }
                 if (h.degradado) item { Aviso(TipoAviso.AVISO, "Alguns módulos não responderam (${h.falhados().joinToString(", ")}). O resto está atualizado.") }
-                if (!h.calendario.escondido) item { CartaoCalendario(h.calendario) }
-                if (!h.tarefas.escondido) item { CartaoTarefas(h.tarefas, acoes, h.data) }
-                if (!h.email.escondido) item { CartaoEmail(h.email) }
-                if (!h.bilhetes.escondido) item { CartaoBilhetes(h.bilhetes) }
-                if (!h.rto.escondido) item { CartaoRto(h.rto, acoes, h.data) { versao++ } }
-                if (!h.peso.escondido) item { CartaoPeso(h.peso, acoes, h.peso.dados?.sugestao) }
-                h.compras?.let { if (!it.escondido) item { CartaoCompras(it, acoes) } }
-                if (!h.financas.escondido) item { CartaoFinancas(h.financas, acoes) }
+                val cartoes = mutableMapOf<String, @Composable () -> Unit>()
+                if (!h.calendario.escondido) cartoes["calendario"] = { CartaoCalendario(h.calendario) }
+                if (!h.tarefas.escondido) cartoes["tarefas"] = { CartaoTarefas(h.tarefas, acoes, h.data) }
+                if (!h.email.escondido) cartoes["email"] = { CartaoEmail(h.email) }
+                if (!h.bilhetes.escondido) cartoes["bilhetes"] = { CartaoBilhetes(h.bilhetes) }
+                if (!h.rto.escondido) cartoes["rto"] = { CartaoRto(h.rto, acoes, h.data) { versao++ } }
+                if (!h.peso.escondido) cartoes["peso"] = { CartaoPeso(h.peso, acoes, h.peso.dados?.sugestao) }
+                h.compras?.let { c -> if (!c.escondido) cartoes["compras"] = { CartaoCompras(c, acoes) } }
+                if (!h.financas.escondido) cartoes["financas"] = { CartaoFinancas(h.financas, acoes) }
+                val visiveis = ordem.filter { it in cartoes }
+                items(visiveis, key = { it }) { id ->
+                    val arrasta = arrastando == id
+                    Row(
+                        (if (arrasta) Modifier.zIndex(1f).graphicsLayer { translationY = delta } else Modifier.animateItemPlacement()).fillMaxWidth(),
+                        verticalAlignment = Alignment.Top,
+                    ) {
+                        Box(Modifier.weight(1f)) { cartoes[id]?.invoke() }
+                        Pega(NOMES_CARTAO[id] ?: id, Modifier.pointerInput(id) {
+                            detectDragGestures(
+                                onDragStart = { arrastando = id; delta = 0f },
+                                onDragEnd = { arrastando = null; delta = 0f; guardar() },
+                                onDragCancel = { arrastando = null; delta = 0f; guardar() },
+                            ) { change, quanto -> change.consume(); arrastar(id, quanto.y) }
+                        }) { passo ->
+                            val i = visiveis.indexOf(id) + passo
+                            if (i in visiveis.indices) { mover(id, visiveis[i]); guardar() }
+                        }
+                    }
+                }
                 item { Botao("Atualizar", { versao++ }, variante = Variante.SECUNDARIO, pequeno = true) }
             }
         }

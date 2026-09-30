@@ -23,6 +23,8 @@ export interface ComprasHoje { lista: { id: number; nome: string }; pendentes: n
 
 export interface Hoje {
   estado: 'ok' | 'degradado'
+  /** Ordem dos cartões escolhida pelo utilizador (ADR-054), já completa. */
+  ordem?: string[]
   geradoEm: string
   data: string
   resumo: string | null

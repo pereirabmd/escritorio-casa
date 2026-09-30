@@ -133,10 +133,6 @@ export function CalendarioTab({ dados: dadosServidor, atualizar, executar, ocupa
           <button type="button" className="link-btn" onClick={() => { const h = new Date(); irPara(h.getFullYear(), h.getMonth()); setEscolhido(iso(h.getFullYear(), h.getMonth(), h.getDate())) }}>Hoje</button>
           <button type="button" className="icon-round" aria-label="Mês seguinte" onClick={() => irPara(seguinte.a, seguinte.m)}><Icon nome="seta" tamanho={20} /></button>
         </div>
-        <div className="quick">
-          <button type="button" className="chip" aria-pressed={modoFerias} onClick={() => setModoFerias((v) => !v)}>Férias</button>
-          <span className="t-meta">{modoFerias ? 'Toca num dia para marcar ou tirar férias (F)' : 'Toca num dia: T → C → vazio'}</span>
-        </div>
         <div className="cal" role="grid" aria-label={`${nomeMes(mes)} ${ano}`}>
           <div className="cal-row" role="row">{DIAS_SEMANA.map((d, i) => <div key={i} className="cal-dow" role="columnheader">{d}</div>)}</div>
           {semanas.map((s, i) => (
@@ -155,6 +151,10 @@ export function CalendarioTab({ dados: dadosServidor, atualizar, executar, ocupa
               })}
             </div>
           ))}
+        </div>
+        <div className="quick">
+          <button type="button" className="chip" aria-pressed={modoFerias} onClick={() => setModoFerias((v) => !v)}>Férias</button>
+          <span className="t-meta">{modoFerias ? 'Toca num dia para marcar ou tirar férias (F)' : 'Toca num dia: T → C → vazio'}</span>
         </div>
         <div className="legend t-meta"><span>T · Escritório</span><span>C · Casa</span><span>F · Férias</span><span>A · Astreinte</span><span>f · Feriado</span></div>
 

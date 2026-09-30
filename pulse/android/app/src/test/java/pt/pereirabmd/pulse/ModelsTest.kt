@@ -41,6 +41,11 @@ class ModelsTest {
         assertTrue(parseHoje(hoje).tarefas.dados!!.piscina.isEmpty()); assertNull(parseHoje(hoje).tarefas.dados!!.horario)     // servidor antigo: sem os campos novos
     }
 
+    @Test fun ordemDosCartoes() {
+        assertEquals(listOf("peso", "tarefas"), parseHoje(JSONObject("""{"estado":"ok","data":"2026-09-30","ordem":["peso","tarefas"],"modulos":{}}""")).ordem)
+        assertTrue(parseHoje(hoje).ordem.isEmpty())          // servidor antigo: vale a ordem de origem
+    }
+
     @Test fun moduloEmFaltaNaoRebenta() {
         val h = parseHoje(JSONObject("""{"estado":"ok","data":"2026-09-29","modulos":{}}"""))
         assertEquals("erro", h.tarefas.estado); assertNull(h.compras)
