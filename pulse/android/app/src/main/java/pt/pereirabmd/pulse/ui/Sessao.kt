@@ -33,6 +33,10 @@ class Sessao(val store: SessionStore, private val scope: CoroutineScope, private
     var atualizacao: Atualizacao? by mutableStateOf(null); private set
     /** O que a Google disse ao regressar ao `pulse://google` («ok» ou o motivo do erro); o ecrã de contas mostra-o e limpa-o. */
     var resultadoGoogle: Pair<Boolean, String>? by mutableStateOf(null)
+    /** O destino pedido pelo toque numa notificação (`pulse://<módulo>[/<aba>]`); o ecrã principal abre-o e limpa-o. */
+    var pedidoAbrir: String? by mutableStateOf(null)
+    var abaPedida: String? by mutableStateOf(null)
+    fun abrirLink(link: String) { pedidoAbrir = link }
     private var saiuEm = 0L
     /** Chamado antes de terminar a sessão (ainda com token): tira este telemóvel das notificações da conta. */
     var aoSair: suspend () -> Unit = {}

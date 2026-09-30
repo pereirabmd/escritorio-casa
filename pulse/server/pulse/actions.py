@@ -91,6 +91,10 @@ class TarefaApagarIn(_Params):
     tarefa: str = Field(pattern=r"^T\d{1,8}$")
 
 
+class LembrarIn(InstanciaIn):
+    minutos: int = Field(default=60, ge=5, le=720)
+
+
 class AdiarIn(InstanciaIn):
     data: date | None = None            # por omissão, amanhã
 
@@ -747,6 +751,14 @@ def _admin(c: Contexto, p: AdminIn):
     return r or {}, ", ".join(sorted(corpo))
 
 
+def _lembrar_mais_tarde(c: Contexto, p: LembrarIn):
+    """«Daqui a 1 h» da notificação: o aviso desta tarefa passa para mais tarde (a tarefa continua por fazer, só o lembrete se adia)."""
+    r = c.tarefas_api.lembrar_mais_tarde(c.email, p.instancia, p.minutos) if c.tarefas_api else None
+    if not r or not r.get("ok"):
+        raise ModuloIndisponivel("o servidor das tarefas não respondeu")
+    return {"ate": r.get("ate", "")}, f"{p.instancia} +{p.minutos} min"
+
+
 def _gerar(c: Contexto, p: VazioIn):
     r = c.tarefas_api.gerar(c.email) if c.tarefas_api else None
     if not r or not r.get("ok"):
@@ -1228,6 +1240,7 @@ ACOES: dict[str, Acao] = {a.nome: a for a in (
     Acao("tarefas.criar", "tarefas", "safe_action", "Cria uma tarefa no catálogo.", TarefaIn, _tarefa_criar),
     Acao("tarefas.editar", "tarefas", "safe_action", "Altera uma tarefa do catálogo.", TarefaEditarIn, _tarefa_editar),
     Acao("tarefas.apagar", "tarefas", "sensitive_action", "Apaga uma tarefa (desativa-a e salta as ocorrências por fazer).", TarefaApagarIn, _tarefa_apagar),
+    Acao("tarefas.lembrar_mais_tarde", "tarefas", "safe_action", "Adia só o lembrete de uma tarefa (por omissão 1 hora); a tarefa continua por fazer.", LembrarIn, _lembrar_mais_tarde),
     Acao("tarefas.adiar", "tarefas", "safe_action", "Passa uma tarefa para outra data (por omissão, amanhã).", AdiarIn, _adiar),
     Acao("tarefas.piscina_registar", "tarefas", "safe_action", "Regista uma tarefa da piscina como feita hoje (calcula a próxima data).", PiscinaRegistarIn, _piscina_registar),
     Acao("tarefas.piscina_repor", "tarefas", "safe_action", "Repõe o estado anterior de uma tarefa da piscina (desfaz «feita hoje»).", PiscinaReporIn, _piscina_repor),

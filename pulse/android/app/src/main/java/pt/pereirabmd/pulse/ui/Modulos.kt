@@ -11,7 +11,7 @@ fun EcraDoModulo(id: String, sessao: Sessao, aoVoltar: () -> Unit) {
         "peso" -> PesoEcra(aoVoltar)
         "rto" -> RtoEcra(aoVoltar)
         "bilhetes" -> BilhetesEcra(aoVoltar)
-        "tarefas" -> TarefasEcra(aoVoltar)
+        "tarefas" -> TarefasEcra(aoVoltar, sessao.abaPedida) { sessao.abaPedida = null }
         "calendario" -> CalendarioGoogleEcra(aoVoltar)
         "email" -> EmailEcra(aoVoltar)
         "google" -> GoogleContasEcra(sessao, aoVoltar)

@@ -45,6 +45,8 @@ private sealed interface Destino {
     data class Modulo(val id: String) : Destino
 }
 
+private val MODULOS_ABRIVEIS = setOf("tarefas", "bilhetes", "financas", "peso", "rto", "compras", "calendario", "email")
+
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun Principal(sessao: Sessao, f: Fase.Autenticado) {
@@ -62,6 +64,13 @@ private fun Principal(sessao: Sessao, f: Fase.Autenticado) {
     val avisos = remember { Avisos(snackbar, scope) }
     // o regresso da Google leva ao ecrã das contas (mesmo depois de a app ter sido bloqueada enquanto se dava a permissão)
     LaunchedEffect(sessao.resultadoGoogle) { if (sessao.resultadoGoogle != null) destino = Destino.Modulo("google") }
+    // o toque numa notificação leva ao módulo (e à aba) certos
+    LaunchedEffect(sessao.pedidoAbrir) {
+        val link = sessao.pedidoAbrir ?: return@LaunchedEffect
+        val caminho = link.removePrefix("pulse://").split('/')
+        if (caminho[0] in MODULOS_ABRIVEIS) { sessao.abaPedida = caminho.getOrNull(1); destino = Destino.Modulo(caminho[0]) }
+        sessao.pedidoAbrir = null
+    }
     BackHandler(destino != Destino.Hoje) {
         destino = when (destino) { Destino.Password, Destino.Pin -> Destino.Definicoes; Destino.Mais -> Destino.Hoje; else -> Destino.Mais }
     }

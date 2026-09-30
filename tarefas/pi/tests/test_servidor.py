@@ -58,6 +58,16 @@ class SnoozeTests(TarefasTestCase):
             "Config": [], "Tarefas": [], "Piscina": [],
         })
 
+    def test_snooze_de_servico_nao_exige_assinatura_e_limita_os_minutos(self) -> None:
+        sheets = self._sheets()
+        r = servidor.handle_snooze_servico(sheets, {"instanciaId": "I1", "minutos": 99999})
+        self.assertTrue(r["ok"])
+        ate = recalcular.carregar_snoozes(common.now_local())["I1"]
+        self.assertLessEqual((ate - common.now_local()).total_seconds(), 720 * 60 + 5)           # no máximo 12 h
+        self.assertEqual(sheets.read_objects("Instancias")[0]["NotificacaoEnviada"], "FALSE")
+        self.assertFalse(servidor.handle_snooze_servico(sheets, {})["ok"])
+        self.assertIn("/snoozeServico", servidor.ENDPOINTS_PWA)          # o que exige autenticação (chave de serviço ou token Google)
+
     def test_reabre_a_instancia_e_regista_o_snooze(self) -> None:
         sheets = self._sheets()
         resultado = servidor.handle_snooze(sheets, {"instanciaId": "I1", "minutos": "30"})

@@ -25,8 +25,10 @@ private val ABAS = listOf("Hoje", "Calendário", "Tarefas", "Horário", "Piscina
 
 /** Tarefas (ADR-042/043): Hoje, Calendário, Tarefas, Horário, Piscina e Config. Ocorrências, atrasos e rotações vêm do servidor. */
 @Composable
-fun TarefasEcra(aoVoltar: () -> Unit) {
-    var aba by remember { mutableIntStateOf(0) }
+fun TarefasEcra(aoVoltar: () -> Unit, abaPedida: String? = null, aoUsarAba: () -> Unit = {}) {
+    // o toque numa notificação pode pedir uma aba («hoje», «piscina», «horario»)
+    var aba by remember { mutableIntStateOf(when (abaPedida) { "piscina" -> 4; "horario" -> 3; else -> 0 }) }
+    LaunchedEffect(Unit) { aoUsarAba() }
     val c = carga { Api.get("/tasks") }
     val acoes = rememberAcoes { c.recarregar() }
     EcraModulo("Tarefas", aoVoltar) {

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import time
 import asyncio
 import logging
@@ -59,7 +60,7 @@ def _canais(settings: config.Settings) -> list:
     if settings.fcm_credentials is None:
         return []
     try:
-        canal = FcmCanal.de_ficheiro(settings.fcm_credentials, settings.fcm_project)
+        canal = FcmCanal.de_ficheiro(settings.fcm_credentials, settings.fcm_project, so_dados=os.environ.get("PULSE_FCM_SO_DADOS", "") == "1")
     except (OSError, ValueError) as e:
         LOG.error("FCM desligado: credenciais inválidas (%s)", type(e).__name__)
         return []

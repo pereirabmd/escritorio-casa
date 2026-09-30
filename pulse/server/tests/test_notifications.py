@@ -221,7 +221,16 @@ def test_fcm_troca_o_jwt_e_envia_com_prioridade_alta(fcm):
     assert envio[1] == "https://fcm.googleapis.com/v1/projects/proj/messages:send" and envio[2]["Authorization"] == "Bearer AT"
     m = json.loads(envio[3])["message"]
     assert m["token"] == TOKEN and m["android"]["priority"] == "HIGH" and m["notification"] == {"title": "Título", "body": "Corpo"}
-    assert m["data"] == {"link": "pulse://bilhetes", "evento": "7", "modulo": "bilhetes", "tipo": "bilhetes.comprado"}
+    assert m["data"] == {"link": "pulse://bilhetes", "evento": "7", "modulo": "bilhetes", "tipo": "bilhetes.comprado", "titulo": "Título", "corpo": "Corpo"}
+
+
+def test_fcm_so_dados_para_a_app_desenhar_o_aviso(fcm):
+    canal, g = fcm
+    canal.so_dados = True
+    canal.enviar(TOKEN, Evento(8, "tarefas", "tarefas.inst", "Lixo", "Bruno: é a vez", {"instancia": "I1", "link": "pulse://tarefas/hoje"}))
+    m = json.loads([p for p in g.pedidos if "fcm.googleapis" in p[1]][-1][3])["message"]
+    assert "notification" not in m and m["android"]["priority"] == "HIGH"
+    assert m["data"]["instancia"] == "I1" and m["data"]["titulo"] == "Lixo" and m["data"]["corpo"] == "Bruno: é a vez"
 
 
 def test_fcm_classifica_os_erros(fcm):

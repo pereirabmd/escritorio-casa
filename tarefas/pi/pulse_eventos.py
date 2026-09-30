@@ -63,6 +63,14 @@ def emails_do_topico(config: dict[str, Any], topico: str | None) -> list[str]:
     return sorted({x["email"] for x in _pessoas(config).values() if x["email"]})
 
 
+def dados_do_aviso(chave: str) -> dict[str, str]:
+    """O que a app Android precisa para o toque abrir o sítio certo e para os botões da notificação: `pulse://tarefas/<aba>` e, nas tarefas, a instância."""
+    tipo, _, resto = chave.partition(":")
+    if tipo == "inst":
+        return {"link": "pulse://tarefas/hoje", "instancia": resto.split(":")[0]}
+    return {"link": f"pulse://tarefas/{'piscina' if tipo == 'piscina' else 'horario' if tipo == 'horario' else 'hoje'}"}
+
+
 # --- reconciliação -----------------------------------------------------------------------------------------------------------------
 
 def _chave_evento(chave: str, alvo_iso: str, email: str) -> str:
@@ -109,7 +117,7 @@ def reconciliar(chave: str, alvo: datetime | None, titulo: str, corpo: str, emai
     falhou = False
     for email in emails:
         ev = _chave_evento(chave, iso, email)
-        corpo_json = {"modulo": "tarefas", "tipo": tipo, "titulo": titulo[:200] or "Tarefas", "corpo": corpo[:1000], "dados": dados or {"link": "pulse://tarefas"}, "chave": ev}
+        corpo_json = {"modulo": "tarefas", "tipo": tipo, "titulo": titulo[:200] or "Tarefas", "corpo": corpo[:1000], "dados": dados or dados_do_aviso(chave), "chave": ev}
         if alvo > agora:
             corpo_json["entregarEm"] = int(alvo.timestamp())      # no passado ou agora: sai já
         codigo = chamar("POST", url, email, corpo_json)

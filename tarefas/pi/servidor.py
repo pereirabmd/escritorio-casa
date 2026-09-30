@@ -110,17 +110,12 @@ def handle_marcar_feita(sheets: SheetsClient, params: dict[str, Any]) -> dict[st
     return {"ok": True}
 
 
-def handle_snooze(sheets: SheetsClient, params: dict[str, Any]) -> dict[str, Any]:
-    instancia_id = str(params.get("instanciaId") or params.get("id") or "").strip()
-    if not instancia_id:
-        return {"ok": False, "erro": "instanciaId é obrigatório"}
-    if not _assinatura_valida(instancia_id, params):
-        return {"ok": False, "erro": "assinatura inválida"}
+def _adiar_aviso(sheets: SheetsClient, instancia_id: str, params: dict[str, Any]) -> dict[str, Any]:
     inst = _instancia_por_id(sheets, instancia_id)
     if inst is None:
         return {"ok": False, "erro": "instância não encontrada"}
     try:
-        minutos = int(params.get("minutos") or 60)
+        minutos = max(5, min(int(params.get("minutos") or 60), 720))
     except (TypeError, ValueError):
         minutos = 60
     # Reabre a possibilidade de notificar (o alvo_instancia ignora quem já
@@ -130,6 +125,23 @@ def handle_snooze(sheets: SheetsClient, params: dict[str, Any]) -> dict[str, Any
     ate = recalcular.registar_snooze(instancia_id, minutos)
     _recalcular_em_fundo(sheets)
     return {"ok": True, "ate": ate.isoformat()}
+
+
+def handle_snooze(sheets: SheetsClient, params: dict[str, Any]) -> dict[str, Any]:
+    instancia_id = str(params.get("instanciaId") or params.get("id") or "").strip()
+    if not instancia_id:
+        return {"ok": False, "erro": "instanciaId é obrigatório"}
+    if not _assinatura_valida(instancia_id, params):
+        return {"ok": False, "erro": "assinatura inválida"}
+    return _adiar_aviso(sheets, instancia_id, params)
+
+
+def handle_snooze_servico(sheets: SheetsClient, params: dict[str, Any]) -> dict[str, Any]:
+    """«Lembrar daqui a 1 h» pedido pelo Pulse (notificação do Android): a autenticação já foi feita (chave de serviço ou token Google), não há assinatura."""
+    instancia_id = str(params.get("instanciaId") or params.get("id") or "").strip()
+    if not instancia_id:
+        return {"ok": False, "erro": "instanciaId é obrigatório"}
+    return _adiar_aviso(sheets, instancia_id, params)
 
 
 def _numero_pessoa(config_rows: list[dict[str, Any]], pessoa: str) -> str | None:
@@ -190,7 +202,7 @@ def handle_testar(sheets: SheetsClient, params: dict[str, Any]) -> dict[str, Any
 # Autenticação dos endpoints da PWA (token Google, via dados/auth.py — só biblioteca padrão)
 # ---------------------------------------------------------------------------
 
-ENDPOINTS_PWA = {"/gerar", "/recalcularAgora", "/configurarNtfy", "/testar"}
+ENDPOINTS_PWA = {"/gerar", "/recalcularAgora", "/configurarNtfy", "/testar", "/snoozeServico"}
 MAX_CORPO = 16 * 1024
 _VERIFICADOR: Any = None
 
@@ -255,6 +267,7 @@ _ROTAS = {
     "/recalcularAgora": lambda sheets, params: handle_recalcular_agora(sheets),
     "/marcarFeita": handle_marcar_feita,
     "/snooze": handle_snooze,
+    "/snoozeServico": handle_snooze_servico,
     "/configurarNtfy": handle_configurar_ntfy,
     "/testar": handle_testar,
 }

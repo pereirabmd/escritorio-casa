@@ -36,6 +36,19 @@ class TarefasApiClient:
         """`POST /gerar` (cria já as ocorrências dos próximos dias e marca as atrasadas). None se o servidor não respondeu."""
         return self._chamar("POST", "/gerar", utilizador)
 
+    def lembrar_mais_tarde(self, utilizador: str, instancia: str, minutos: int) -> dict | None:
+        """`POST /snoozeServico`: o aviso desta tarefa passa para daqui a `minutos` (ntfy e Pulse, o motor de avisos trata dos dois). None se não respondeu."""
+        if not (self.base_url and self.service_key):
+            return None
+        req = urllib.request.Request(self.base_url + "/snoozeServico", data=json.dumps({"instanciaId": instancia, "minutos": minutos}).encode(), method="POST",
+                                     headers={"X-Pulse-Key": self.service_key, "X-Pulse-User": utilizador, "Content-Type": "application/json"})
+        try:
+            with urllib.request.urlopen(req, timeout=min(self.timeout, 15.0)) as r:
+                return json.loads(r.read().decode("utf-8"))
+        except (urllib.error.URLError, TimeoutError, OSError, ValueError) as e:
+            LOG.warning("tarefas-api snoozeServico falhou: %s", e)
+            return None
+
     def saude(self) -> dict | None:
         """`GET /saude` (público): última reconciliação dos avisos no Pi. None se não respondeu."""
         return self._chamar("GET", "/saude", None)

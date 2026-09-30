@@ -30,6 +30,7 @@ class MainActivity : FragmentActivity() {
 
     /** O regresso da Google (`pulse://google?resultado=ok|erro&motivo=…`) chega por aqui. */
     private fun tratar(intent: Intent?) {
+        intent?.getStringExtra(Notificacoes.EXTRA_LINK)?.takeIf { it.isNotEmpty() }?.let { sessao?.abrirLink(it); intent.removeExtra(Notificacoes.EXTRA_LINK) }
         val uri = intent?.data ?: return
         if (uri.scheme == "pulse" && uri.host == "google") sessao?.regressoGoogle(uri.getQueryParameter("resultado") == "ok", uri.getQueryParameter("motivo").orEmpty())
     }

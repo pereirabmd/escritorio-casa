@@ -64,11 +64,11 @@ class FcmCanal:
     """
     nome = "fcm"
 
-    def __init__(self, credenciais: dict, transporte=None, agora=time.time):
+    def __init__(self, credenciais: dict, transporte=None, agora=time.time, so_dados: bool = False):
         for campo in ("client_email", "private_key", "project_id"):
             if not credenciais.get(campo):
                 raise ValueError(f"credenciais FCM sem {campo}")
-        self.cred, self.agora = credenciais, agora
+        self.cred, self.agora, self.so_dados = credenciais, agora, so_dados
         self.transporte = transporte or self._http
         self._token: tuple[str, float] | None = None
 
@@ -116,9 +116,15 @@ class FcmCanal:
         return self._token[0]
 
     def enviar(self, token: str, evento: Evento) -> None:
-        msg = {"message": {"token": token, "notification": {"title": evento.titulo, "body": evento.corpo},
-                           "data": {**{k: str(v) for k, v in evento.dados.items()}, "evento": str(evento.id), "modulo": evento.modulo, "tipo": evento.tipo},
-                           "android": {"priority": "HIGH", "notification": {"channel_id": f"pulse_{evento.modulo}"}}}}
+        dados = {**{k: str(v) for k, v in evento.dados.items()}, "evento": str(evento.id), "modulo": evento.modulo, "tipo": evento.tipo,
+                 "titulo": evento.titulo, "corpo": evento.corpo}
+        if self.so_dados:
+            # só `data`, sem bloco `notification`: a app recebe SEMPRE a mensagem (aberta ou não) e desenha ela o aviso, com os botões de ação
+            # (Marcar feita, Daqui a 1 h) e o destino do toque. Só se liga (PULSE_FCM_SO_DADOS=1) quando as apps instaladas já sabem fazê-lo (0.2.7+).
+            msg = {"message": {"token": token, "data": dados, "android": {"priority": "HIGH", "ttl": "86400s"}}}
+        else:
+            msg = {"message": {"token": token, "notification": {"title": evento.titulo, "body": evento.corpo}, "data": dados,
+                               "android": {"priority": "HIGH", "notification": {"channel_id": f"pulse_{evento.modulo}"}}}}
         url = f"https://fcm.googleapis.com/v1/projects/{self.cred['project_id']}/messages:send"
         status, raw = self.transporte("POST", url, {"Authorization": f"Bearer {self._access_token()}", "Content-Type": "application/json"},
                                       json.dumps(msg).encode())

@@ -1,6 +1,6 @@
 # Paridade Android ↔ Web
 
-O Pulse tem duas interfaces sobre o mesmo servidor (as regras vivem no servidor, ADR-050). A partir de 29/09/2026 **cada funcionalidade nova é entregue nas duas** e discutida antes de implementar. Estado a 29/09/2026 (Android `0.2.6`, ADR-051/052/053/054).
+O Pulse tem duas interfaces sobre o mesmo servidor (as regras vivem no servidor, ADR-050). A partir de 29/09/2026 **cada funcionalidade nova é entregue nas duas** e discutida antes de implementar. Estado a 29/09/2026 (Android `0.2.7`, ADR-051/052/053/054).
 Legenda: **Feito** · **Pendente** · **Só Android** / **Só Web** (decidido).
 
 | Funcionalidade | Web | Android | Notas |
@@ -21,6 +21,6 @@ Legenda: **Feito** · **Pendente** · **Só Android** / **Só Web** (decidido).
 | Sessões e dispositivos | Feito | Feito | |
 | Administração (módulos) | Feito | Feito | |
 | Atualização da app | link para o APK | Feito (interna) | `version.json` (ADR-050) |
-| Notificações (FCM) | — | **Feito** | FCM ligado; Bilhetes CP, Finanças e Tarefas avisam também pelo Pulse, em paralelo com o ntfy (ADR-057 a 060); faltam os botões de ação dentro da notificação |
+| Notificações (FCM) | — | **Feito** | FCM ligado; Bilhetes CP, Finanças e Tarefas avisam também pelo Pulse, em paralelo com o ntfy (ADR-057 a 060); botões «Marcar feita» e «Daqui a 1 h» e toque para o sítio certo (ADR-061; os botões precisam de `PULSE_FCM_SO_DADOS=1` depois de instalar a 0.2.7) |
 | Fila offline / cache | — | **Pendente** | fase 5 (Room, WorkManager) |
 | Puxar para atualizar | Pendente | Botão «Atualizar» | |

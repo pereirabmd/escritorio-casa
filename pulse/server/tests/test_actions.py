@@ -32,7 +32,7 @@ def atividade(conn):
 
 def test_catalogo_declara_modulo_e_nivel():
     c = {a["nome"]: a for a in actions.catalogo()}
-    assert set(c) == {"tarefas.concluir", "tarefas.reabrir", "tarefas.saltar", "tarefas.criar", "tarefas.editar", "tarefas.apagar", "tarefas.adiar", "tarefas.piscina_registar", "tarefas.piscina_repor", "tarefas.avisos_horario", "tarefas.preferencias", "tarefas.pessoa_adicionar", "tarefas.pessoa_editar", "tarefas.pessoa_remover", "tarefas.reatribuir", "tarefas.admin", "tarefas.gerar", "peso.registar", "peso.editar", "peso.eliminar",
+    assert set(c) == {"tarefas.concluir", "tarefas.reabrir", "tarefas.saltar", "tarefas.criar", "tarefas.editar", "tarefas.apagar", "tarefas.adiar", "tarefas.lembrar_mais_tarde", "tarefas.piscina_registar", "tarefas.piscina_repor", "tarefas.avisos_horario", "tarefas.preferencias", "tarefas.pessoa_adicionar", "tarefas.pessoa_editar", "tarefas.pessoa_remover", "tarefas.reatribuir", "tarefas.admin", "tarefas.gerar", "peso.registar", "peso.editar", "peso.eliminar",
                       "peso.configurar", "rto.marcar_dia", "rto.ferias_dia", "rto.nota_criar", "rto.nota_editar", "rto.nota_eliminar",
                       "rto.nota_restaurar", "rto.gerar_validacoes", "calendario.criar", "calendario.editar", "calendario.apagar", "email.lida", "email.arquivar", "email.estrela",
                       "compras.adicionar", "compras.remover", "compras.comprado", "compras.detalhes", "compras.mover", "compras.limpar_comprados", "compras.restaurar", "compras.favorito", "compras.ocultar", "compras.sugestao_ignorar", "compras.categoria_ocultar", "compras.produto_criar", "compras.produto_editar", "compras.produto_apagar", "compras.lista_criar", "compras.lista_editar", "compras.lista_apagar",
@@ -344,7 +344,7 @@ def test_endpoint_traduz_erros(app_cliente):
 def test_endpoint_lista_o_catalogo(app_cliente):
     entrar(app_cliente)
     r = app_cliente.get("/api/v1/actions")
-    assert r.status_code == 200 and len(r.json()["acoes"]) == 67
+    assert r.status_code == 200 and len(r.json()["acoes"]) == 68
 
 
 def test_conta_por_configurar_nao_executa_acoes(app_cliente):
@@ -352,3 +352,16 @@ def test_conta_por_configurar_nao_executa_acoes(app_cliente):
     entrar(app_cliente)
     r = app_cliente.post("/api/v1/actions/rto.marcar_dia", json={"params": {"data": "2026-10-01", "marca": "T"}}, headers=H)
     assert r.status_code == 403 and r.json()["erro"]["codigo"] == "mudar_password" and FalsoDados.escritas == []
+
+
+def test_lembrar_mais_tarde_chama_o_servidor_das_tarefas(conn, dados_falso):
+    class Falso:
+        chamadas = []
+        def lembrar_mais_tarde(self, u, i, m):
+            self.chamadas.append((u, i, m)); return {"ok": True, "ate": "2026-09-30T21:00:00+01:00"}
+    api = Falso()
+    ctx = actions.Contexto(DadosClient(dados_falso, FalsoDados.CHAVE), EMAIL, AGORA, tarefas_api=api)
+    assert actions.executar(conn, ctx, "tarefas.lembrar_mais_tarde", {"instancia": "I0042"}) == {"ate": "2026-09-30T21:00:00+01:00"}
+    assert api.chamadas == [(EMAIL, "I0042", 60)]
+    with pytest.raises(ContaErro):
+        actions.executar(conn, ctx, "tarefas.lembrar_mais_tarde", {"instancia": "I0042", "minutos": 1})       # menos de 5 min: recusado

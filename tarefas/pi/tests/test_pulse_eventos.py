@@ -109,3 +109,15 @@ class SemInjecao(TarefasTestCase):
         self.assertTrue(visto[1][1].startswith("http://127.0.0.1:8897/api/v1/internal/events/tar-"))
         self.assertEqual({v[2] for v in visto}, {"bruno@x.pt"})
         self.assertEqual({v[3] for v in visto}, {"k" * 40})
+
+
+class DadosDoAviso(TarefasTestCase):
+    def test_destino_e_instancia_para_a_app(self):
+        self.assertEqual(pe.dados_do_aviso("inst:I42"), {"link": "pulse://tarefas/hoje", "instancia": "I42"})
+        self.assertEqual(pe.dados_do_aviso("piscina:P11:tarefas_bruno"), {"link": "pulse://tarefas/piscina"})
+        self.assertEqual(pe.dados_do_aviso("horario:Bruno:2031-05-10"), {"link": "pulse://tarefas/horario"})
+
+    def test_o_evento_leva_os_dados(self):
+        http, estado = Falso(), {}
+        pe.reconciliar("inst:I42", AGORA + timedelta(hours=1), "Lixo", "c", ["bruno@x.pt"], estado, AGORA, False, http=http)
+        self.assertEqual(http.pedidos[0][2]["dados"], {"link": "pulse://tarefas/hoje", "instancia": "I42"})
