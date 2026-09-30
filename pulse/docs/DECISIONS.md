@@ -363,3 +363,6 @@ Primeira fase para cada pessoa (ex.: a Camila) ter o seu Pulse. **(1) Isolamento
 
 ## ADR-064 — Ícone do lançador sem ícone adaptativo (30/09/2026)
 Na Xiaomi (MIUI/HyperOS) o ícone adaptativo com fundo transparente (ADR-057) aparecia sobre **preto**: o launcher compõe as camadas transparentes sobre preto. A 0.3.1 deixa de ter ícone adaptativo: `mipmap-*/ic_launcher.png` é só o logo do Pulse (`assets/branding/pulse-icon.png`) com fundo transparente, com margem de 6 %. Noutros launchers (ex.: Pixel) um ícone não adaptativo pode aparecer sobre um fundo claro do próprio launcher; o logo é legível nos dois. Se alguma vez se quiser o ícone adaptativo e o tema de ícones do Android 13, é preciso um fundo opaco e uma camada monocromática.
+
+## ADR-065 — Google: sem login com Google; ligação de contas por configurar no Pi (30/09/2026)
+Decidido: o login do Pulse **fica** e-mail + palavra-passe; o Google serve só para ligar Calendário e Gmail por pessoa (ADR-049/051). Descobriu-se que essa integração **não estava configurada no Pi** (falta `PULSE_GOOGLE_CLIENT_ID/SECRET/REDIRECT_URI/KEY` no `pulse.env`), apesar de o código estar publicado: o passo a passo (consola do Google Cloud, variáveis e ligação na app) fica em `docs/GOOGLE_SETUP.md`. Pendente de o utilizador criar o cliente OAuth e entregar o JSON.

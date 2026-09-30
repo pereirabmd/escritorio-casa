@@ -18,7 +18,7 @@ Legenda: **Feito** · **Pendente** · **Só Android** / **Só Web** (decidido).
 | Bilhetes CP (Semana e editor, Bilhetes, Pedidos, Registo) | Feito | Feito | |
 | Compras (listas, catálogo, favoritos, sugestões, gestão) | Feito | Feito | |
 | Calendário e Email (Google) | Feito | Feito | |
-| Ligar e remover contas Google | Feito | Feito | Custom Tab + `pulse://google` (ADR-051) |
+| Ligar e remover contas Google | Feito | Feito | Custom Tab + `pulse://google` (ADR-051); **integração por configurar no Pi** (`GOOGLE_SETUP.md`) |
 | Sessões e dispositivos | Feito | Feito | |
 | Administração (módulos) | Feito | Feito | |
 | Atualização da app | link para o APK | Feito (interna) | `version.json` (ADR-050) |
