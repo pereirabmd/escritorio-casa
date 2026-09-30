@@ -1,0 +1,6 @@
+:root { color-scheme: light dark; }
+body { font: 16px/1.55 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; max-width: 46rem; margin: 0 auto; padding: 2rem 1rem 4rem; background: Canvas; color: CanvasText; }
+h1 { font-size: 1.6rem; margin-bottom: .25rem; }
+h2 { font-size: 1.1rem; margin-top: 2rem; }
+.meta { opacity: .7; font-size: .9rem; }
+a { color: LinkText; }

@@ -11,6 +11,14 @@ Estado a 30/09/2026: **o código está pronto (ADR-049/051) mas a integração e
    `https://bmdpereira.duckdns.org/pulse/api/v1/google/callback`
 5. **Transferir JSON** (traz `client_id` e `client_secret`). Não vai para o Git (está no `.gitignore` da pasta `pulse/`).
 
+### Marca («Branding») para publicar em produção
+Para passar de «Teste» a «Em produção» (externo) o Google exige nome, e-mail de apoio, **página inicial** e **política de privacidade**. O Pulse serve-as (30/09/2026):
+- **Nome da app:** `Pulse` · **E-mail de apoio:** o do dono da conta.
+- **Página inicial:** `https://bmdpereira.duckdns.org/pulse/`
+- **Política de privacidade:** `https://bmdpereira.duckdns.org/pulse/privacidade.html` (fonte: `pulse/web/public/privacidade.html`; diz que o Gmail nunca envia nem apaga, que nada é copiado para bases de dados e que só o token cifrado fica no servidor pessoal).
+- **Domínios autorizados:** `bmdpereira.duckdns.org` (se a consola recusar o domínio por ser um subdomínio de `duckdns.org`, diz-se e vê-se a alternativa).
+- **E-mail de contacto do programador:** o do dono.
+
 ## 2. No Pi (feito por quem publica; o segredo nunca se mostra nem se comita)
 Acrescentar ao `/etc/pulse-app/pulse.env` (root, 600) e reiniciar `pulse-api`:
 

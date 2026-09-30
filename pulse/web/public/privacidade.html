@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="pt-PT">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Política de privacidade do Pulse</title>
+<link rel="stylesheet" href="privacidade.css">
+<meta name="robots" content="noindex">
+</head>
+<body>
+<main>
+<h1>Política de privacidade do Pulse</h1>
+<p class="meta">Última atualização: 30 de setembro de 2026 · <a href="#english">English summary</a></p>
+
+<p>O Pulse é uma aplicação pessoal e familiar (Web e Android) que reúne, num só sítio, as tarefas, as contas, as compras, os bilhetes de comboio e, se a pessoa o autorizar, o Calendário e o Gmail. Não é um serviço comercial nem está aberto ao público: as contas são criadas pelo administrador para pessoas da casa.</p>
+
+<h2>Que dados do Google o Pulse usa</h2>
+<p>Só se a própria pessoa ligar a sua conta Google, em Definições › Contas Google, e só para o que escolher (Gmail, Calendário ou ambos):</p>
+<ul>
+<li><strong>Gmail</strong> (âmbito <code>gmail.modify</code>): ler o remetente, o assunto e o texto das mensagens para mostrar as importantes por ler, e marcar como lida, arquivar ou pôr uma estrela. O Pulse <strong>nunca envia, responde, reencaminha nem apaga</strong> mensagens.</li>
+<li><strong>Calendário</strong> (<code>calendar.events</code> e <code>calendar.readonly</code>): ler os eventos e criar, alterar ou apagar eventos quando a pessoa o pede no Pulse.</li>
+<li>O nome e o e-mail da conta Google, para mostrar qual conta está ligada.</li>
+</ul>
+
+<h2>Como são guardados e usados</h2>
+<ul>
+<li>Só o necessário para a função pedida. Os dados do Gmail e do Calendário são lidos quando a pessoa abre o Pulse e <strong>não são copiados para uma base de dados</strong>: ficam apenas na memória do servidor, durante o pedido e numa cache de poucos minutos.</li>
+<li>O que fica guardado é a autorização do Google (um «refresh token»), <strong>cifrada</strong>, no servidor pessoal do administrador (um Raspberry Pi em casa). Nunca é enviada para a aplicação Web nem para o telemóvel.</li>
+<li>Os dados <strong>não são vendidos, partilhados com terceiros, usados para publicidade, nem usados para treinar modelos de inteligência artificial</strong>, e nenhuma pessoa os lê manualmente.</li>
+<li>A utilização e a transferência de informação recebida das APIs do Google seguem a <a href="https://developers.google.com/terms/api-services-user-data-policy">Política de Dados do Utilizador dos Serviços de API do Google</a>, incluindo os requisitos de utilização limitada.</li>
+</ul>
+
+<h2>Como retirar o acesso e apagar</h2>
+<ul>
+<li>Em Definições › Contas Google, a pessoa pode remover a conta: o Pulse apaga a autorização guardada.</li>
+<li>Também se pode revogar o acesso em <a href="https://myaccount.google.com/permissions">myaccount.google.com/permissions</a>.</li>
+<li>Para apagar toda a conta do Pulse e os dados associados, basta pedir ao administrador.</li>
+</ul>
+
+<h2>Outros dados do Pulse</h2>
+<p>O Pulse guarda também os dados que a pessoa lá regista (por exemplo peso, tarefas, compras, contas), no mesmo servidor pessoal, acessíveis só à própria pessoa e ao administrador. Não usa ferramentas de análise nem publicidade.</p>
+
+<h2>Contacto</h2>
+<p>Responsável: Bruno Pereira, administrador do Pulse — <a href="mailto:pereirabmd@gmail.com">pereirabmd@gmail.com</a>.</p>
+
+<h2 id="english">English summary</h2>
+<p>Pulse is a private household app. If a user connects their Google account, Pulse reads Gmail messages (and can mark them read, archive or star them — it never sends or deletes email) and reads/creates/edits Calendar events, only on that user's request. Gmail and Calendar data are not copied to any database (they only live in server memory while being served, with a cache of a few minutes): only an encrypted Google authorization token is kept, on the administrator's own server. Data is never sold, shared, used for advertising or to train AI models, and Pulse's use of Google user data complies with the <a href="https://developers.google.com/terms/api-services-user-data-policy">Google API Services User Data Policy</a>, including the Limited Use requirements. Users can remove the account in Pulse settings or revoke access at <a href="https://myaccount.google.com/permissions">myaccount.google.com/permissions</a>. Contact: <a href="mailto:pereirabmd@gmail.com">pereirabmd@gmail.com</a>.</p>
+</main>
+</body>
+</html>
