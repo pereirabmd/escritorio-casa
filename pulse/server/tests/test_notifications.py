@@ -312,3 +312,11 @@ def test_fcm_assina_o_jwt_com_rsa_de_verdade():
     dec = lambda b: __import__("base64").urlsafe_b64decode(b + "=" * (-len(b) % 4))
     chave.public_key().verify(dec(sig), f"{cab}.{pl}".encode(), padding.PKCS1v15(), hashes.SHA256())        # levanta se a assinatura for inválida
     assert json.loads(dec(cab)) == {"alg": "RS256", "typ": "JWT"}
+
+
+def test_notificacao_de_teste(cliente, canal):
+    assert cliente.post("/api/v1/notifications/test", headers={"X-Pulse-Client": "web"}).json()["erro"]["codigo"] == "sem_dispositivo"
+    registar(cliente)
+    r = cliente.post("/api/v1/notifications/test", headers={"X-Pulse-Client": "web"})
+    assert r.status_code == 200 and r.json()["estado"] == "enviado" and r.json()["dispositivos"] == 1
+    assert canal.enviados == [(TOKEN, "Notificação de teste")]

@@ -3,6 +3,7 @@
 
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.USE_BIOMETRIC" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />   <!-- avisos do Pulse (Android 13+) -->
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />   <!-- atualização interna (ADR-026) -->
 
     <queries>
@@ -34,6 +35,13 @@
                 <data android:scheme="pulse" android:host="google" />
             </intent-filter>
         </activity>
+
+        <service android:name=".data.PulseMessagingService" android:exported="false">
+            <intent-filter><action android:name="com.google.firebase.MESSAGING_EVENT" /></intent-filter>
+        </service>
+        <meta-data android:name="com.google.firebase.messaging.default_notification_channel_id" android:value="pulse_geral" />
+        <meta-data android:name="com.google.firebase.messaging.default_notification_icon" android:resource="@drawable/ic_stat_pulse" />
+        <meta-data android:name="com.google.firebase.messaging.default_notification_color" android:resource="@color/notif_cor" />
 
         <provider
             android:name="androidx.core.content.FileProvider"

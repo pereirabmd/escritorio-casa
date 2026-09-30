@@ -34,6 +34,8 @@ class Sessao(val store: SessionStore, private val scope: CoroutineScope, private
     /** O que a Google disse ao regressar ao `pulse://google` («ok» ou o motivo do erro); o ecrã de contas mostra-o e limpa-o. */
     var resultadoGoogle: Pair<Boolean, String>? by mutableStateOf(null)
     private var saiuEm = 0L
+    /** Chamado antes de terminar a sessão (ainda com token): tira este telemóvel das notificações da conta. */
+    var aoSair: suspend () -> Unit = {}
 
     init {
         Api.token = store.token
@@ -68,6 +70,7 @@ class Sessao(val store: SessionStore, private val scope: CoroutineScope, private
 
     fun sair() {
         scope.launch {
+            try { aoSair() } catch (_: Exception) { }
             try { Api.post("/auth/logout") } catch (_: ApiError) { /* sem ligação: a sessão apaga-se aqui na mesma */ }
             terminarLocal()
         }

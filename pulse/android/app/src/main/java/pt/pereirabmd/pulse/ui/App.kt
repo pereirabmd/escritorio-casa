@@ -1,6 +1,13 @@
 package pt.pereirabmd.pulse.ui
 
+import android.Manifest
+import android.os.Build
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.ui.platform.LocalContext
+import pt.pereirabmd.pulse.data.Notificacoes
+import kotlinx.coroutines.launch
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
@@ -43,6 +50,14 @@ private sealed interface Destino {
 private fun Principal(sessao: Sessao, f: Fase.Autenticado) {
     var destino by remember { mutableStateOf<Destino>(Destino.Hoje) }
     val scope = rememberCoroutineScope()
+    val contexto = LocalContext.current
+    // notificações: canais, pedido da permissão (uma só vez; depois só em Definições) e registo deste telemóvel no servidor
+    val pedirPermissao = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { ok -> if (ok) scope.launch { Notificacoes.registar(contexto) } }
+    LaunchedEffect(Unit) {
+        Notificacoes.criarCanais(contexto)
+        if (Notificacoes.permitidas(contexto)) Notificacoes.registar(contexto)
+        else if (Build.VERSION.SDK_INT >= 33 && !sessao.store.notificacoesPedidas) { sessao.store.notificacoesPedidas = true; pedirPermissao.launch(Manifest.permission.POST_NOTIFICATIONS) }
+    }
     val snackbar = remember { SnackbarHostState() }
     val avisos = remember { Avisos(snackbar, scope) }
     // o regresso da Google leva ao ecrã das contas (mesmo depois de a app ter sido bloqueada enquanto se dava a permissão)

@@ -104,6 +104,7 @@ fun EcraDefinicoes(sessao: Sessao, utilizador: Utilizador, aoVoltar: () -> Unit,
                 }
             }
         }
+        NotificacoesSecao(sessao)
         OrdemHojeSecao()
         SessoesSecao()
         if (utilizador.admin) AdministracaoSecao()
@@ -181,6 +182,43 @@ private fun AdministracaoSecao() {
                         scope.launch { try { Api.put("/admin/modules", jo("modulos" to jo(id to ativo))); c.recarregar() } catch (x: Exception) { erro = mensagemDeErro(x) } finally { ocupado = null } } }
                 }, if (m.optBoolean("ativo", true)) "Ativo" else "Desativado")
             }
+        }
+    }
+}
+
+/** Definições › Notificações: estado da permissão e do registo deste telemóvel, e o teste de ponta a ponta (servidor → FCM → telemóvel). */
+@Composable
+private fun NotificacoesSecao(sessao: Sessao) {
+    val ctx = LocalContext.current
+    val avisos = LocalAvisos.current
+    val scope = rememberCoroutineScope()
+    var permitidas by remember { mutableStateOf(Notificacoes.permitidas(ctx)) }
+    var aEnviar by remember { mutableStateOf(false) }
+    val pedir = androidx.activity.compose.rememberLauncherForActivityResult(androidx.activity.result.contract.ActivityResultContracts.RequestPermission()) { ok ->
+        permitidas = Notificacoes.permitidas(ctx)
+        if (ok) scope.launch { Notificacoes.registar(ctx) }
+    }
+    Secao("Notificações") {
+        if (permitidas) {
+            Texto2("Permitidas neste telemóvel. Cada módulo tem o seu canal nas definições de notificações do Android.")
+            Botao("Enviar notificação de teste", {
+                aEnviar = true
+                scope.launch {
+                    try {
+                        Notificacoes.registar(ctx)            // garante o registo (e renova o token) antes do teste
+                        Api.post("/notifications/test")
+                        avisos.mostrar("Teste enviado. Deve aparecer em poucos segundos.")
+                    } catch (e: Exception) { avisos.mostrar(mensagemDeErro(e)) }
+                    aEnviar = false
+                }
+            }, variante = Variante.SECUNDARIO, pequeno = true, carregando = aEnviar)
+        } else {
+            Texto2("Desligadas neste telemóvel: não vais receber avisos do Pulse.")
+            Botao("Ativar notificações", {
+                if (android.os.Build.VERSION.SDK_INT >= 33 && !sessao.store.notificacoesPedidas) { sessao.store.notificacoesPedidas = true; pedir.launch(android.Manifest.permission.POST_NOTIFICATIONS) }
+                else ctx.startActivity(android.content.Intent(android.provider.Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(android.provider.Settings.EXTRA_APP_PACKAGE, ctx.packageName).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK))
+            }, variante = Variante.SECUNDARIO, pequeno = true)
+            Meta("Se o botão abrir as definições do sistema, liga as notificações do Pulse e volta aqui.")
         }
     }
 }

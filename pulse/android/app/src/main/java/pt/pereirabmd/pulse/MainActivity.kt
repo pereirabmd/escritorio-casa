@@ -7,6 +7,7 @@ import androidx.activity.enableEdgeToEdge
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.remember
 import androidx.fragment.app.FragmentActivity
+import pt.pereirabmd.pulse.data.Notificacoes
 import pt.pereirabmd.pulse.data.SessionStore
 import pt.pereirabmd.pulse.ui.PulseApp
 import pt.pereirabmd.pulse.ui.Sessao
@@ -20,7 +21,7 @@ class MainActivity : FragmentActivity() {
         enableEdgeToEdge()
         setContent {
             val scope = rememberCoroutineScope()
-            val s = remember { Sessao(SessionStore(applicationContext), scope).also { it.iniciar(); sessao = it; tratar(intent) } }
+            val s = remember { Sessao(SessionStore(applicationContext), scope).also { it.aoSair = { Notificacoes.remover(applicationContext) }; it.iniciar(); sessao = it; tratar(intent) } }
             PulseApp(s)
         }
     }

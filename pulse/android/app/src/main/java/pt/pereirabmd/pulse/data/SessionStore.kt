@@ -56,6 +56,14 @@ class SessionStore(context: Context) {
         get() = Tema.entries.firstOrNull { it.id == prefs.getString("tema", "sistema") } ?: Tema.SISTEMA
         set(v) = prefs.edit().putString("tema", v.id).apply()
 
+    /** Notificações (ADR-045): o id que o servidor deu a este telemóvel e se já pedimos a permissão do sistema (pede-se uma só vez). */
+    var dispositivoId: Int
+        get() = prefs.getInt("dispositivo_id", 0)
+        set(v) = prefs.edit().putInt("dispositivo_id", v).apply()
+    var notificacoesPedidas: Boolean
+        get() = prefs.getBoolean("notificacoes_pedidas", false)
+        set(v) = prefs.edit().putBoolean("notificacoes_pedidas", v).apply()
+
     fun definirPin(pin: String) {
         val sal = Pin.novoSal()
         prefs.edit().putString("pin_sal", hex(sal)).putString("pin_hash", hex(Pin.hash(pin, sal))).putInt("pin_falhas", 0).apply()

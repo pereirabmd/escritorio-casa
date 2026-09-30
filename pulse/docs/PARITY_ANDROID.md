@@ -1,6 +1,6 @@
 # Paridade Android ↔ Web
 
-O Pulse tem duas interfaces sobre o mesmo servidor (as regras vivem no servidor, ADR-050). A partir de 29/09/2026 **cada funcionalidade nova é entregue nas duas** e discutida antes de implementar. Estado a 29/09/2026 (Android `0.2.4`, ADR-051/052/053/054).
+O Pulse tem duas interfaces sobre o mesmo servidor (as regras vivem no servidor, ADR-050). A partir de 29/09/2026 **cada funcionalidade nova é entregue nas duas** e discutida antes de implementar. Estado a 29/09/2026 (Android `0.2.5`, ADR-051/052/053/054).
 Legenda: **Feito** · **Pendente** · **Só Android** / **Só Web** (decidido).
 
 | Funcionalidade | Web | Android | Notas |
@@ -21,6 +21,6 @@ Legenda: **Feito** · **Pendente** · **Só Android** / **Só Web** (decidido).
 | Sessões e dispositivos | Feito | Feito | |
 | Administração (módulos) | Feito | Feito | |
 | Atualização da app | link para o APK | Feito (interna) | `version.json` (ADR-050) |
-| Notificações (FCM) | — | **Pendente** | servidor pronto (ADR-045); falta a service account do Firebase |
+| Notificações (FCM) | — | **Parcial** | FCM ligado no servidor e registo/canais/teste no APK (ADR-057); falta ligar cada módulo (Bilhetes CP, Tarefas, Finanças) |
 | Fila offline / cache | — | **Pendente** | fase 5 (Room, WorkManager) |
 | Puxar para atualizar | Pendente | Botão «Atualizar» | |

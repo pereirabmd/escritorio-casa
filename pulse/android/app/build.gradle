@@ -3,6 +3,7 @@ import java.util.Properties
 plugins {
     id 'com.android.application'
     id 'org.jetbrains.kotlin.android'
+    id 'com.google.gms.google-services'      // notificações FCM (ADR-045): lê o google-services.json
 }
 
 // A chave de assinatura fica fora do repositório (ADR-034): ~/.local/keystores/pulse-keystore.properties
@@ -18,8 +19,8 @@ android {
         applicationId 'pt.pereirabmd.pulse'
         minSdk 29
         targetSdk 34
-        versionCode 6
-        versionName '0.2.4'
+        versionCode 7
+        versionName '0.2.5'
         // Endereço do servidor Pulse; mudar aqui para apontar a outro ambiente.
         buildConfigField 'String', 'SERVER', '"https://bmdpereira.duckdns.org/pulse"'
     }
@@ -64,6 +65,8 @@ dependencies {
     implementation 'io.coil-kt:coil-compose:2.6.0'
     implementation 'io.coil-kt:coil-gif:2.6.0'                       // WebP animados (assets de marca)
     implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1'
+    implementation platform('com.google.firebase:firebase-bom:33.1.2')
+    implementation 'com.google.firebase:firebase-messaging'            // só as notificações; sem Analytics
 
     testImplementation 'junit:junit:4.13.2'
     testImplementation 'org.json:json:20240303'

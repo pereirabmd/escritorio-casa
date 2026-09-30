@@ -76,6 +76,21 @@ def marcar_lidas(d: LidasIn, s: Sessao = Depends(sessao_ativa), conn=Depends(get
     return {"marcadas": n}
 
 
+@router.post("/notifications/test")
+def testar(request: Request, s: Sessao = Depends(sessao_ativa), conn=Depends(get_conn)):
+    """Envia uma notificação de teste aos dispositivos do utilizador (botão das Definições): mostra se o FCM, o token e o telemóvel funcionam."""
+    canais = request.app.state.canais
+    aparelhos = conn.execute("SELECT COUNT(*) FROM pulse_devices WHERE user_id = ? AND ativo = 1", (s.user["id"],)).fetchone()[0]
+    if not canais:
+        raise ContaErro(409, "fcm_desligado", "as notificações ainda não estão ligadas no servidor")
+    if aparelhos == 0:
+        raise ContaErro(409, "sem_dispositivo", "este telemóvel ainda não está registado para notificações")
+    agora = int(time.time())
+    id_, _ = notifications.guardar(conn, s.user["id"], "teste", "teste", "Notificação de teste", "Se estás a ler isto, as notificações do Pulse funcionam.", {}, f"teste:{s.user['id']}:{agora}")
+    estado = notifications.despachar(conn, id_, canais)
+    return {"id": id_, "estado": estado, "dispositivos": aparelhos}
+
+
 # --- entrada de eventos das apps de origem ------------------------------------------------------------------------------------
 
 class EventoIn(BaseModel):

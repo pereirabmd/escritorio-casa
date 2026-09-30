@@ -1,4 +1,5 @@
 <resources>
-    <color name="ic_background">#0C1418</color>
+    <color name="ic_background">#00000000</color>
+    <color name="notif_cor">#1E5B67</color>
     <color name="window_bg">#F7FAFC</color>
 </resources>
