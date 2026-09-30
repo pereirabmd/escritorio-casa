@@ -1,6 +1,6 @@
 # Google no Pulse: Calendário e Email (passo a passo)
 
-Estado a 30/09/2026: **o código está pronto (ADR-049/051) mas a integração está desligada no Pi**, porque o `/etc/pulse-app/pulse.env` ainda não tem as credenciais Google. Sem elas, ligar uma conta responde `google_desligado` (503) e os cartões dizem «não ligado». O login do Pulse continua a ser e-mail + palavra-passe (decisão de 30/09/2026: **não** há login com Google, só ligação de contas para o Calendário e o Gmail).
+Estado a 30/09/2026 às 19:29: **ligada no Pi** (cliente OAuth «Pulse servidor» do projeto `bmdpereira-5a8f4`, variáveis `PULSE_GOOGLE_*` no `pulse.env`, cópia `pulse.env.bak-antes-google`; o log diz «Google ligado (Gmail/Calendar)»). Verificado que o Google aceita o pedido de consentimento (302 para o início de sessão, sem `redirect_uri_mismatch` nem `invalid_client`). Falta só cada pessoa ligar a sua conta na app. Sem as variáveis, ligar uma conta responde `google_desligado` (503) e os cartões dizem «não ligado». O login do Pulse continua a ser e-mail + palavra-passe (decisão de 30/09/2026: **não** há login com Google, só ligação de contas para o Calendário e o Gmail).
 
 ## 1. Consola do Google Cloud (só o dono da conta Google pode fazer)
 1. https://console.cloud.google.com, no projeto `bmdpereira-5a8f4` (o do Firebase) ou num novo.
@@ -18,6 +18,13 @@ Para passar de «Teste» a «Em produção» (externo) o Google exige nome, e-ma
 - **Política de privacidade:** `https://bmdpereira.duckdns.org/pulse/privacidade.html` (fonte: `pulse/web/public/privacidade.html`; diz que o Gmail nunca envia nem apaga, que nada é copiado para bases de dados e que só o token cifrado fica no servidor pessoal).
 - **Domínios autorizados:** `bmdpereira.duckdns.org` (se a consola recusar o domínio por ser um subdomínio de `duckdns.org`, diz-se e vê-se a alternativa).
 - **E-mail de contacto do programador:** o do dono.
+
+### Marca («Branding») para publicar em produção
+Para passar de «Teste» a «Em produção» (externo) o Google exige nome, e-mail de apoio, **página inicial**, **política de privacidade** e o domínio em «Domínios autorizados». O Pulse serve as páginas (30/09/2026):
+- **Nome da app:** `Pulse` · **E-mail de apoio e de contacto:** o do dono da conta.
+- **Página inicial:** `https://bmdpereira.duckdns.org/pulse/`
+- **Política de privacidade:** `https://bmdpereira.duckdns.org/pulse/privacidade.html` (fonte: `pulse/web/public/privacidade.html`; diz que o Gmail nunca envia nem apaga, que nada é copiado para bases de dados e que só o token cifrado fica no servidor pessoal).
+- **Domínios autorizados:** `bmdpereira.duckdns.org` (o domínio completo, sem `https://` nem caminho).
 
 ## 2. No Pi (feito por quem publica; o segredo nunca se mostra nem se comita)
 Acrescentar ao `/etc/pulse-app/pulse.env` (root, 600) e reiniciar `pulse-api`:
