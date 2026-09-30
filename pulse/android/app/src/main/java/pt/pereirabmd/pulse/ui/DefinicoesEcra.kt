@@ -205,9 +205,9 @@ private fun NotificacoesSecao(sessao: Sessao) {
                 aEnviar = true
                 scope.launch {
                     try {
-                        Notificacoes.registar(ctx)            // garante o registo (e renova o token) antes do teste
-                        Api.post("/notifications/test")
-                        avisos.mostrar("Teste enviado. Deve aparecer em poucos segundos.")
+                        val falha = Notificacoes.registar(ctx)            // garante o registo (e renova o token) antes do teste
+                        if (falha != null) avisos.mostrar("Não foi possível registar este telemóvel: $falha")
+                        else { Api.post("/notifications/test"); avisos.mostrar("Teste enviado. Deve aparecer em poucos segundos.") }
                     } catch (e: Exception) { avisos.mostrar(mensagemDeErro(e)) }
                     aEnviar = false
                 }

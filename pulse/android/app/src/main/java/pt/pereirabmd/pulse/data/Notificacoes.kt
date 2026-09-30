@@ -44,22 +44,26 @@ object Notificacoes {
         (Build.VERSION.SDK_INT < 33 || ContextCompat.checkSelfPermission(ctx, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED) &&
             NotificationManagerCompat.from(ctx).areNotificationsEnabled()
 
-    /** O token FCM deste telemóvel (`null` se o Google não o der, por exemplo sem rede). */
-    private suspend fun token(): String? = suspendCancellableCoroutine { k ->
-        FirebaseMessaging.getInstance().token.addOnCompleteListener { k.resume(if (it.isSuccessful) it.result else null) }
+    /** O token FCM deste telemóvel, ou o motivo de o Google não o dar (por exemplo chave da API restrita, sem rede ou sem Play Services). */
+    private suspend fun token(): Pair<String?, String?> = suspendCancellableCoroutine { k ->
+        try {
+            FirebaseMessaging.getInstance().token.addOnCompleteListener {
+                k.resume(if (it.isSuccessful && !it.result.isNullOrEmpty()) it.result to null else null to (it.exception?.message ?: "o Google não devolveu o token"))
+            }
+        } catch (e: Exception) { k.resume(null to (e.message ?: e.javaClass.simpleName)) }
     }
 
-    /** Regista (ou renova) este telemóvel no servidor para a conta com sessão iniciada. Devolve `true` se ficou registado. */
-    suspend fun registar(ctx: Context, novoToken: String? = null): Boolean {
+    /** Regista (ou renova) este telemóvel no servidor para a conta com sessão iniciada. Devolve `null` se ficou registado, ou o motivo da falha. */
+    suspend fun registar(ctx: Context, novoToken: String? = null): String? {
         val store = SessionStore(ctx.applicationContext)
-        if (store.token == null) return false
+        if (store.token == null) return "sem sessão iniciada"
         Api.token = Api.token ?: store.token
-        val t = novoToken ?: token() ?: return false
+        val t = novoToken ?: token().let { (tk, erro) -> tk ?: return "sem token do Google: $erro" }
         return try {
             val r = Api.post("/devices", JSONObject().put("token", t).put("nome", "${Build.MANUFACTURER} ${Build.MODEL}".take(80)).put("plataforma", "android"))
             store.dispositivoId = r.optInt("id", 0)
-            true
-        } catch (e: Exception) { false }
+            null
+        } catch (e: Exception) { "o servidor recusou o registo: ${(e as? ApiError)?.message ?: e.javaClass.simpleName}" }
     }
 
     /** Ao terminar a sessão este telemóvel deixa de receber os avisos da conta. */
