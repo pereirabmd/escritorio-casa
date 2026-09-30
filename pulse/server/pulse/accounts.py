@@ -38,7 +38,7 @@ def validar_password_nova(password: str, email: str) -> None:
 
 
 def criar_utilizador(conn: sqlite3.Connection, email: str, password: str, nome: str = "", admin: bool = False,
-                     must_change: bool = True, agora: int | None = None) -> int:
+                     must_change: bool = True, agora: int | None = None, modulos: list[str] | None = None) -> int:
     """Cria uma conta (o administrador garante o e-mail). A password inicial não passa pela política — obriga-se a mudá-la
     no primeiro acesso (`must_change`)."""
     email = normalizar_email(email)
@@ -51,6 +51,9 @@ def criar_utilizador(conn: sqlite3.Connection, email: str, password: str, nome: 
                             agora or int(time.time())))
     except sqlite3.IntegrityError:
         raise ContaErro(409, "email_existente", "já existe uma conta com esse e-mail") from None
+    # `modulos=None` (a linha de comandos, os testes): todos; a administração do Pulse dá só os que escolher
+    from pulse.services import modulos as mods
+    mods.definir_permitidos(conn, cur.lastrowid, sorted(mods.DISPONIVEIS) if modulos is None else modulos)
     return cur.lastrowid
 
 

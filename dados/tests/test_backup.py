@@ -189,7 +189,7 @@ class FluxoTest(unittest.TestCase):
             self.assertEqual(backup.fazer_backup(), "backup publicado (dados)")
             self.assertEqual(backup.fazer_backup(), "sem alterações desde o último backup")
             self.assertEqual(pub.call_count, 1)
-            conn = db.connect(); conn.execute("INSERT INTO peso_config VALUES ('sexo','M')"); conn.close()
+            conn = db.connect(); conn.execute("INSERT INTO peso_config (chave, valor) VALUES ('sexo','M')"); conn.close()
             backup.fazer_backup()
             self.assertEqual(pub.call_count, 2)
             backup.fazer_backup(force=True)

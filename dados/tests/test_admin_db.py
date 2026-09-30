@@ -330,7 +330,7 @@ class EscritaTests(Base):
 
 
 class SemRowidTests(Base):
-    """rto_dias e convidados_opcoes são WITHOUT ROWID (chave primária composta ou de texto): não têm `rowid`."""
+    """rto_dias (dono, data) e convidados_opcoes são WITHOUT ROWID (chave primária composta): não têm `rowid`."""
 
     def setUp(self):
         super().setUp()
@@ -342,7 +342,7 @@ class SemRowidTests(Base):
         c.close()
 
     def test_carrega_e_identifica_pela_chave(self):
-        for tabela, chaves in (("rto_dias", [["2026-09-21"], ["2026-09-22"]]), ("convidados_opcoes", [["fase", 1], ["fase", 2]])):
+        for tabela, chaves in (("rto_dias", [["", "2026-09-21"], ["", "2026-09-22"]]), ("convidados_opcoes", [["fase", 1], ["fase", 2]])):
             s, b, _ = self.pedir("GET", f"/api/linhas?db=dados&tabela={tabela}")
             self.assertEqual(s, 200, b)
             self.assertEqual([l["_rowid_"] for l in b["linhas"]], chaves)
@@ -353,12 +353,12 @@ class SemRowidTests(Base):
 
     def test_inserir_atualizar_apagar_e_reverter(self):
         s, b, _ = self.pedir("POST", "/api/linha", {"db": "dados", "tabela": "rto_dias", "valores": {"data": "2026-09-23", "marca": "T"}})
-        self.assertEqual((s, b["rowid"]), (201, ["2026-09-23"]))
-        s, b, _ = self.pedir("PUT", "/api/linha", {"db": "dados", "tabela": "rto_dias", "rowid": ["2026-09-23"], "valores": {"marca": "C"}})
+        self.assertEqual((s, b["rowid"]), (201, ["", "2026-09-23"]))
+        s, b, _ = self.pedir("PUT", "/api/linha", {"db": "dados", "tabela": "rto_dias", "rowid": ["", "2026-09-23"], "valores": {"marca": "C"}})
         self.assertEqual((s, b["linha"]["marca"]), (200, "C"))
-        s, b, _ = self.pedir("PUT", "/api/linha", {"db": "dados", "tabela": "rto_dias", "rowid": ["2026-09-23"], "valores": {"data": "2026-09-24"}})   # muda a chave
-        self.assertEqual((s, b["rowid"]), (200, ["2026-09-24"]))
-        s, b, _ = self.pedir("DELETE", "/api/linha?db=dados&tabela=rto_dias&rowid=" + json.dumps(["2026-09-24"]).replace('"', "%22"))
+        s, b, _ = self.pedir("PUT", "/api/linha", {"db": "dados", "tabela": "rto_dias", "rowid": ["", "2026-09-23"], "valores": {"data": "2026-09-24"}})   # muda a chave
+        self.assertEqual((s, b["rowid"]), (200, ["", "2026-09-24"]))
+        s, b, _ = self.pedir("DELETE", "/api/linha?db=dados&tabela=rto_dias&rowid=" + json.dumps(["", "2026-09-24"], separators=(",", ":")).replace('"', "%22"))
         self.assertEqual(s, 200)
         apagar = next(a for a in self.pedir("GET", "/api/alteracoes")[1]["alteracoes"] if a["op"] == "apagar")
         self.assertEqual(self.pedir("POST", "/api/reverter", {"id": apagar["id"]})[0], 200)
@@ -377,7 +377,7 @@ class SemRowidTests(Base):
             self.assertIn(s, (400, 404), rid)
 
     def test_a_base_recusa_o_invalido(self):
-        s, b, _ = self.pedir("PUT", "/api/linha", {"db": "dados", "tabela": "rto_dias", "rowid": ["2026-09-21"], "valores": {"marca": "X"}})
+        s, b, _ = self.pedir("PUT", "/api/linha", {"db": "dados", "tabela": "rto_dias", "rowid": ["", "2026-09-21"], "valores": {"marca": "X"}})
         self.assertEqual(s, 400)
 
 

@@ -87,3 +87,4 @@ a.list-item:hover, button.list-item:hover { background: var(--surface-2); }
 .ordem-lista li[data-a-arrastar='true'] { box-shadow: 0 6px 18px rgba(0, 0, 0, .18); opacity: .9; }
 .ordem-lista .pega { width: 32px; height: 32px; display: grid; place-items: center; border: 0; background: transparent; color: var(--text-2); border-radius: var(--r-s); cursor: grab; touch-action: none; flex: none; }
 .ordem-lista .pega:hover, .ordem-lista .pega:focus-visible { background: var(--surface-2); color: var(--text); }
+.ordem-lista .row-main[data-escondido='true'] { color: var(--text-2); text-decoration: line-through; }

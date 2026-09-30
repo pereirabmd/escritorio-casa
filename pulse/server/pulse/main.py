@@ -17,7 +17,7 @@ from pulse.services import compras
 from pulse.accounts import ContaErro
 from datetime import datetime
 
-from pulse.api.v1 import actions, auth, dashboard, calendar, finance, google as google_rotas, health, mail, modules, notifications as notificacoes, rto, shopping, tasks, tickets, weight
+from pulse.api.v1 import actions, admin, auth, dashboard, calendar, finance, google as google_rotas, health, mail, modules, notifications as notificacoes, rto, shopping, tasks, tickets, weight
 from pulse.google_api import GoogleApi, GoogleConfig, criar_cofre
 from pulse.notifications import FcmCanal
 from pulse.ratelimit import RateLimiter
@@ -146,6 +146,7 @@ def create_app(settings: config.Settings | None = None, dados: DadosClient | Non
     app.include_router(finance.router, prefix="/api/v1")
     app.include_router(tickets.router, prefix="/api/v1")
     app.include_router(modules.router, prefix="/api/v1")
+    app.include_router(admin.router, prefix="/api/v1")
     app.include_router(shopping.router, prefix="/api/v1")
     app.include_router(google_rotas.router, prefix="/api/v1")
     app.include_router(calendar.router, prefix="/api/v1")

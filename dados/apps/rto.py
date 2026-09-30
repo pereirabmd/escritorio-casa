@@ -81,12 +81,17 @@ def _nota_json(r) -> dict:
 _SEL = "SELECT id, data_inicio, data_fim, categoria, descricao FROM rto_notas"
 
 
-def _gravar_dia(conn, data: str, marca: str) -> None:
+def _dono(ctx) -> str:
+    """Os dados são de quem pede: o e-mail da conta (Google ou Pulse), em minúsculas."""
+    return str(ctx.user).strip().lower()
+
+
+def _gravar_dia(conn, dono: str, data: str, marca: str) -> None:
     if marca == "":
-        conn.execute("DELETE FROM rto_dias WHERE data=?", (data,))
+        conn.execute("DELETE FROM rto_dias WHERE dono=? AND data=?", (dono, data))
     else:
-        conn.execute("INSERT INTO rto_dias (data, marca) VALUES (?, ?) "
-                     "ON CONFLICT(data) DO UPDATE SET marca=excluded.marca", (data, marca))
+        conn.execute("INSERT INTO rto_dias (dono, data, marca) VALUES (?, ?, ?) "
+                     "ON CONFLICT(dono, data) DO UPDATE SET marca=excluded.marca", (dono, data, marca))
 
 
 # --- dias -------------------------------------------------------------------
@@ -94,7 +99,7 @@ def _gravar_dia(conn, data: str, marca: str) -> None:
 def listar_dias(ctx):
     desde = _data(ctx.query.get("desde"), "desde", opcional=True)
     ate = _data(ctx.query.get("ate"), "ate", opcional=True)
-    sql, args = "SELECT data, marca FROM rto_dias WHERE 1=1", []
+    sql, args = "SELECT data, marca FROM rto_dias WHERE dono = ?", [_dono(ctx)]
     if desde:
         sql, args = sql + " AND data >= ?", args + [desde]
     if ate:
@@ -107,7 +112,7 @@ def marcar_dia(ctx):
     data = _data(ctx.groups[0])
     _so_campos(ctx.body, {"marca"})
     marca = _marca(ctx.body.get("marca"))
-    _gravar_dia(ctx.db(), data, marca)
+    _gravar_dia(ctx.db(), _dono(ctx), data, marca)
     return 200, {"data": data, "marca": marca}
 
 
@@ -122,7 +127,7 @@ def marcar_dias(ctx):
     conn.execute("BEGIN IMMEDIATE")
     try:
         for d, m in limpo.items():
-            _gravar_dia(conn, d, m)
+            _gravar_dia(conn, _dono(ctx), d, m)
         conn.execute("COMMIT")
     except Exception:
         conn.execute("ROLLBACK")
@@ -133,13 +138,13 @@ def marcar_dias(ctx):
 # --- notas ------------------------------------------------------------------
 
 def listar_notas(ctx):
-    rows = ctx.db().execute(_SEL + " ORDER BY COALESCE(data_inicio, data_fim), id LIMIT 5000").fetchall()
+    rows = ctx.db().execute(_SEL + " WHERE dono=? ORDER BY COALESCE(data_inicio, data_fim), id LIMIT 5000", (_dono(ctx),)).fetchall()
     return 200, {"notas": [_nota_json(r) for r in rows]}
 
 
-def _inserir(conn, n: dict, id_: int | None = None) -> int:
-    cur = conn.execute("INSERT INTO rto_notas (id, data_inicio, data_fim, categoria, descricao, cid) VALUES (?, ?, ?, ?, ?, ?)",
-                       (id_, n["ini"], n["fim"], n["cat"], n["desc"], n["cid"]))
+def _inserir(conn, dono: str, n: dict, id_: int | None = None) -> int:
+    cur = conn.execute("INSERT INTO rto_notas (id, data_inicio, data_fim, categoria, descricao, cid, dono) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                       (id_, n["ini"], n["fim"], n["cat"], n["desc"], n["cid"], dono))
     return cur.lastrowid
 
 
@@ -149,11 +154,11 @@ def criar_nota(ctx):
     conn.execute("BEGIN IMMEDIATE")
     try:
         if n["cid"]:
-            ja = conn.execute(_SEL + " WHERE cid=?", (n["cid"],)).fetchone()
+            ja = conn.execute(_SEL + " WHERE cid=? AND dono=?", (n["cid"], _dono(ctx))).fetchone()
             if ja:
                 conn.execute("COMMIT")
                 return 200, _nota_json(ja)
-        nid = _inserir(conn, n)
+        nid = _inserir(conn, _dono(ctx), n)
         conn.execute("COMMIT")
     except Exception:
         conn.execute("ROLLBACK")
@@ -171,7 +176,7 @@ def criar_notas_lote(ctx):
     conn = ctx.db()
     conn.execute("BEGIN IMMEDIATE")
     try:
-        ids = [_inserir(conn, n) for n in validas]
+        ids = [_inserir(conn, _dono(ctx), n) for n in validas]
         conn.execute("COMMIT")
     except Exception:
         conn.execute("ROLLBACK")
@@ -187,12 +192,14 @@ def gravar_nota(ctx):
     conn = ctx.db()
     conn.execute("BEGIN IMMEDIATE")
     try:
-        existe = conn.execute("SELECT 1 FROM rto_notas WHERE id=?", (nid,)).fetchone()
+        existe = conn.execute("SELECT dono FROM rto_notas WHERE id=?", (nid,)).fetchone()
+        if existe and existe["dono"] != _dono(ctx):
+            raise ApiError(404, "nao_encontrado", "nota inexistente")         # o id é de outra pessoa: nem se revela que existe
         if existe:
-            conn.execute("UPDATE rto_notas SET data_inicio=?, data_fim=?, categoria=?, descricao=? WHERE id=?",
-                         (n["ini"], n["fim"], n["cat"], n["desc"], nid))
+            conn.execute("UPDATE rto_notas SET data_inicio=?, data_fim=?, categoria=?, descricao=? WHERE id=? AND dono=?",
+                         (n["ini"], n["fim"], n["cat"], n["desc"], nid, _dono(ctx)))
         else:
-            _inserir(conn, n, nid)
+            _inserir(conn, _dono(ctx), n, nid)
         conn.execute("COMMIT")
     except Exception:
         conn.execute("ROLLBACK")
@@ -205,9 +212,9 @@ def eliminar_nota(ctx):
     conn = ctx.db()
     conn.execute("BEGIN IMMEDIATE")
     try:
-        row = conn.execute(_SEL + " WHERE id=?", (nid,)).fetchone()
+        row = conn.execute(_SEL + " WHERE id=? AND dono=?", (nid, _dono(ctx))).fetchone()
         if row:
-            conn.execute("DELETE FROM rto_notas WHERE id=?", (nid,))
+            conn.execute("DELETE FROM rto_notas WHERE id=? AND dono=?", (nid, _dono(ctx)))
         conn.execute("COMMIT")
     except Exception:
         conn.execute("ROLLBACK")

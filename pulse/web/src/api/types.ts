@@ -2,7 +2,8 @@ export interface Utilizador { id: number; email: string; nome: string; admin: bo
 export interface Sessao { id: number; criada: number; ultimoUso: number; expira: number; dispositivo: string; ip: string; cliente: 'web' | 'android'; atual: boolean }
 
 export type EstadoModulo = 'ok' | 'indisponivel' | 'sem_acesso' | 'erro' | 'nao_ligado' | 'desativado'
-export interface ModuloInfo { id: string; nome: string; disponivel: boolean; ativo: boolean }
+export interface ModuloInfo { id: string; nome: string; disponivel: boolean; ativo: boolean; ativoGlobal?: boolean; permitido?: boolean }
+export interface Pessoa { id: number; email: string; nome: string; admin: boolean; ativo: boolean; mudarPassword: boolean; ultimoLogin: number | null; modulos: string[] }
 export interface Modulo<T> { estado: EstadoModulo; dados?: T | null; erro?: { codigo: string; mensagem: string } }
 
 export interface TarefaHoje { id: string; tarefaId: string; nome: string; categoria: string; icone: string; prioridade: 'Alta' | 'Media' | 'Baixa'; hora: string; pessoa: string; estado: string }
@@ -25,6 +26,7 @@ export interface Hoje {
   estado: 'ok' | 'degradado'
   /** Ordem dos cartões escolhida pelo utilizador (ADR-054), já completa. */
   ordem?: string[]
+  ocultos?: string[]
   geradoEm: string
   data: string
   resumo: string | null

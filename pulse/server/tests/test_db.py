@@ -7,8 +7,8 @@ from pulse import db
 
 def test_migra_do_zero_e_e_idempotente(tmp_path):
     conn = db.connect(tmp_path / "teste-x.db")
-    assert db.migrate(conn) == ["001_base.sql", "002_auth.sql", "003_notificacoes.sql", "004_compras.sql", "005_compras_sugestoes.sql", "006_google.sql", "007_google_cliente.sql", "008_hoje_ordem.sql"]
-    assert conn.execute("PRAGMA user_version").fetchone()[0] == 8
+    assert db.migrate(conn) == ["001_base.sql", "002_auth.sql", "003_notificacoes.sql", "004_compras.sql", "005_compras_sugestoes.sql", "006_google.sql", "007_google_cliente.sql", "008_hoje_ordem.sql", "009_pessoas.sql"]
+    assert conn.execute("PRAGMA user_version").fetchone()[0] == 9
     assert db.migrate(conn) == []
     nomes = {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
     assert {"pulse_settings", "pulse_activity", "pulse_users", "pulse_sessions", "pulse_devices", "pulse_events", "shop_products", "shop_lists", "shop_items", "shop_history", "shop_user_categories", "google_accounts", "google_oauth_states"} <= nomes

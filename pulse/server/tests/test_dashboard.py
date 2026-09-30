@@ -249,7 +249,7 @@ def test_ordem_dos_cartoes_guarda_se_por_utilizador_e_completa_se(app_cliente):
     r = app_cliente.put("/api/v1/dashboard/order", json={"ordem": ["peso", "tarefas"]}, headers=H)
     assert r.status_code == 200 and r.json()["ordem"][:2] == ["peso", "tarefas"] and sorted(r.json()["ordem"]) == sorted(origem)
     assert app_cliente.get("/api/v1/dashboard/today").json()["ordem"] == r.json()["ordem"]
-    assert app_cliente.get("/api/v1/dashboard/order").json() == {"ordem": r.json()["ordem"]}
+    assert app_cliente.get("/api/v1/dashboard/order").json()["ordem"] == r.json()["ordem"]
 
 
 @pytest.mark.parametrize("ordem", [["peso", "peso"], ["nao_existe"], []])

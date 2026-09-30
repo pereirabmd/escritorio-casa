@@ -53,6 +53,11 @@ def _so_campos(body: dict, permitidos: set[str]) -> None:
         raise ApiError(400, "campos_desconhecidos", f"campos não aceites: {sorted(extra)[:5]}")
 
 
+def _dono(ctx) -> str:
+    """Os dados são de quem pede: o e-mail da conta (Google ou Pulse), em minúsculas."""
+    return str(ctx.user).strip().lower()
+
+
 def _registo(row) -> dict:
     return {"id": row["id"], "quando": row["quando"], "peso": row["peso"], "nota": row["nota"]}
 
@@ -62,7 +67,7 @@ def listar(ctx):
     for nome, v in (("desde", desde), ("ate", ate)):
         if v is not None and not _DATA_RE.match(v):
             raise ApiError(400, f"{nome}_invalido", f"{nome} tem de ser AAAA-MM-DD")
-    sql, args = "SELECT id, quando, peso, nota FROM peso_registos WHERE 1=1", []
+    sql, args = "SELECT id, quando, peso, nota FROM peso_registos WHERE dono = ?", [_dono(ctx)]
     if desde:
         sql, args = sql + " AND quando >= ?", args + [desde + " 00:00:00"]
     if ate:
@@ -84,12 +89,12 @@ def criar(ctx):
     conn.execute("BEGIN IMMEDIATE")
     try:
         if cid:
-            ja = conn.execute("SELECT id, quando, peso, nota FROM peso_registos WHERE cid = ?", (cid,)).fetchone()
+            ja = conn.execute("SELECT id, quando, peso, nota FROM peso_registos WHERE cid = ? AND dono = ?", (cid, _dono(ctx))).fetchone()
             if ja:  # repetição do mesmo pedido: devolve o registo já criado
                 conn.execute("COMMIT")
                 return 200, _registo(ja)
-        cur = conn.execute("INSERT INTO peso_registos (quando, peso, nota, cid) VALUES (?, ?, ?, ?)",
-                           (quando, peso, nota, cid))
+        cur = conn.execute("INSERT INTO peso_registos (quando, peso, nota, cid, dono) VALUES (?, ?, ?, ?, ?)",
+                           (quando, peso, nota, cid, _dono(ctx)))
         conn.execute("COMMIT")
     except Exception:
         conn.execute("ROLLBACK")
@@ -102,7 +107,7 @@ def atualizar(ctx):
     b = ctx.body
     _so_campos(b, {"quando", "peso", "nota"})
     quando, peso, nota = _quando(b.get("quando")), _numero(b.get("peso"), "peso", 1, 1000), _nota(b.get("nota"))
-    cur = ctx.db().execute("UPDATE peso_registos SET quando=?, peso=?, nota=? WHERE id=?", (quando, peso, nota, rid))
+    cur = ctx.db().execute("UPDATE peso_registos SET quando=?, peso=?, nota=? WHERE id=? AND dono=?", (quando, peso, nota, rid, _dono(ctx)))
     if cur.rowcount == 0:
         raise ApiError(404, "nao_encontrado", "registo inexistente")
     return 200, {"id": rid, "quando": quando, "peso": peso, "nota": nota}
@@ -114,9 +119,9 @@ def eliminar(ctx):
     conn = ctx.db()
     conn.execute("BEGIN IMMEDIATE")
     try:
-        row = conn.execute("SELECT id, quando, peso, nota FROM peso_registos WHERE id=?", (rid,)).fetchone()
+        row = conn.execute("SELECT id, quando, peso, nota FROM peso_registos WHERE id=? AND dono=?", (rid, _dono(ctx))).fetchone()
         if row:
-            conn.execute("DELETE FROM peso_registos WHERE id=?", (rid,))
+            conn.execute("DELETE FROM peso_registos WHERE id=? AND dono=?", (rid, _dono(ctx)))
         conn.execute("COMMIT")
     except Exception:
         conn.execute("ROLLBACK")
@@ -151,8 +156,8 @@ def importar(ctx):
     conn.execute("BEGIN IMMEDIATE")
     try:
         for quando, peso, nota, cid in validos:
-            cur = conn.execute("INSERT OR IGNORE INTO peso_registos (quando, peso, nota, cid) VALUES (?, ?, ?, ?)",
-                               (quando, peso, nota, cid))
+            cur = conn.execute("INSERT OR IGNORE INTO peso_registos (quando, peso, nota, cid, dono) VALUES (?, ?, ?, ?, ?)",
+                               (quando, peso, nota, cid, _dono(ctx)))
             criados += cur.rowcount
         existentes = len(validos) - criados
         conn.execute("COMMIT")
@@ -203,7 +208,7 @@ CONFIG = {  # chave -> (validador, conversor para a resposta)
 
 
 def ler_config(ctx):
-    rows = ctx.db().execute("SELECT chave, valor FROM peso_config").fetchall()
+    rows = ctx.db().execute("SELECT chave, valor FROM peso_config WHERE dono = ?", (_dono(ctx),)).fetchall()
     return 200, {r["chave"]: CONFIG[r["chave"]][1](r["valor"]) for r in rows if r["chave"] in CONFIG}
 
 
@@ -224,10 +229,10 @@ def gravar_config(ctx):
     try:
         for k, v in limpo.items():
             if v is None:
-                conn.execute("DELETE FROM peso_config WHERE chave=?", (k,))
+                conn.execute("DELETE FROM peso_config WHERE dono=? AND chave=?", (_dono(ctx), k))
             else:
-                conn.execute("INSERT INTO peso_config (chave, valor) VALUES (?, ?) "
-                             "ON CONFLICT(chave) DO UPDATE SET valor=excluded.valor", (k, v))
+                conn.execute("INSERT INTO peso_config (dono, chave, valor) VALUES (?, ?, ?) "
+                             "ON CONFLICT(dono, chave) DO UPDATE SET valor=excluded.valor", (_dono(ctx), k, v))
         conn.execute("COMMIT")
     except Exception:
         conn.execute("ROLLBACK")

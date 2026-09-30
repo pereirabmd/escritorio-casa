@@ -12,15 +12,15 @@ router = APIRouter(tags=["módulos"])
 
 def exigir_modulo(nome: str):
     """Dependência de router: a sessão tem de ser válida e o módulo não pode estar desativado pelo administrador."""
-    def dep(_: Sessao = Depends(sessao_ativa), conn=Depends(get_conn)) -> None:
-        modulos.exigir(conn, nome)
+    def dep(s: Sessao = Depends(sessao_ativa), conn=Depends(get_conn)) -> None:
+        modulos.exigir(conn, nome, user_id=s.user["id"])
     return dep
 
 
 @router.get("/modules")
-def ver(_: Sessao = Depends(sessao_ativa), conn=Depends(get_conn)):
-    """Os módulos do Pulse e se estão ativos (a interface esconde os desativados)."""
-    return {"modulos": modulos.lista(conn)}
+def ver(s: Sessao = Depends(sessao_ativa), conn=Depends(get_conn)):
+    """Os módulos do Pulse para esta conta: `ativo` = ligado para todos e com acesso (a interface esconde os outros)."""
+    return {"modulos": modulos.lista(conn, s.user["id"])}
 
 
 class AlterarIn(BaseModel):
@@ -39,4 +39,4 @@ def alterar(d: AlterarIn, s: Sessao = Depends(sessao_ativa), conn=Depends(get_co
         if antes.get(m) != ativo:
             conn.execute("INSERT INTO pulse_activity (utilizador, modulo, acao, origem, resultado, detalhe) VALUES (?, 'conta', ?, 'ui', 'ok', ?)",
                          (s.user["email"], "modulo.ativar" if ativo else "modulo.desativar", m))
-    return {"modulos": r}
+    return {"modulos": modulos.lista(conn, s.user["id"])}

@@ -376,7 +376,12 @@ class Editor:
                 try:
                     cols = ", ".join(f'"{c}"' for c in v)
                     cur = conn.execute(f'INSERT INTO "{tabela}" ({cols}) VALUES ({", ".join("?" * len(v))})', list(v.values()))
-                    rid = [v.get(c) for c in info["pk"]] if info["sem_rowid"] else cur.lastrowid
+                    if info["sem_rowid"]:
+                        # uma coluna da chave que ficou por preencher toma o valor por omissão da tabela (ex.: `dono` = '')
+                        omissoes = {c["nome"]: c["por_omissao"] for c in colunas(conn, tabela)}
+                        rid = [v[c] if c in v else (conn.execute(f"SELECT {omissoes[c]}").fetchone()[0] if omissoes.get(c) is not None else None) for c in info["pk"]]
+                    else:
+                        rid = cur.lastrowid
                     conn.execute("COMMIT")
                 except sqlite3.Error:
                     conn.execute("ROLLBACK")

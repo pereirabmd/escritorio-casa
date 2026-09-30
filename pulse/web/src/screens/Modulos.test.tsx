@@ -84,3 +84,44 @@ describe('Ordem do Hoje (Definições)', () => {
     await waitFor(() => expect(pedidos.some((p) => p.metodo === 'PUT' && p.caminho.includes('/dashboard/order') && JSON.stringify(p.corpo).includes('"peso","tarefas"'))).toBe(true))
   })
 })
+
+describe('O meu Hoje (Definições)', () => {
+  test('só mostra os cartões que a pessoa tem e deixa esconder um', async () => {
+    const { pedidos } = abrir('/definicoes', {
+      'GET /dashboard/order': () => [200, { ordem: ['calendario', 'tarefas', 'peso', 'rto'], ocultos: [], disponiveis: ['tarefas', 'peso'] }],
+      'PUT /dashboard/order': () => [200, { ordem: [], ocultos: [], disponiveis: [] }],
+    })
+    await screen.findByRole('button', { name: /Mover Tarefas/ })
+    expect(screen.queryByRole('button', { name: /Mover RTO/ })).not.toBeInTheDocument()         // sem acesso: nem aparece
+    await userEvent.click(screen.getByRole('switch', { name: /Peso no Hoje/ }))
+    await waitFor(() => expect(pedidos.some((p) => p.metodo === 'PUT' && p.caminho.includes('/dashboard/order') && JSON.stringify(p.corpo).includes('"ocultos":["peso"]'))).toBe(true))
+    expect(screen.getByRole('switch', { name: /Peso no Hoje: escondido/ })).toBeInTheDocument()
+  })
+})
+
+describe('Pessoas (administração)', () => {
+  const PESSOAS = [{ id: 1, email: 'a@b.pt', nome: 'Bruno', admin: true, ativo: true, mudarPassword: false, ultimoLogin: 1, modulos: ['tarefas', 'peso'] },
+    { id: 2, email: 'c@d.pt', nome: 'Camila', admin: false, ativo: true, mudarPassword: true, ultimoLogin: null, modulos: ['compras'] }]
+
+  test('só os administradores veem a secção', async () => {
+    abrir('/definicoes', {}, { ...UTILIZADOR, admin: false })
+    await screen.findByRole('heading', { name: 'Definições' })
+    expect(screen.queryByRole('region', { name: 'Pessoas' })).not.toBeInTheDocument()
+  })
+
+  test('dar um módulo a uma pessoa e criar uma conta', async () => {
+    const { pedidos } = abrir('/definicoes', {
+      'GET /admin/users': () => [200, { pessoas: PESSOAS }],
+      'PUT /admin/users/2/modules': () => [200, PESSOAS[1]],
+      'POST /admin/users': () => [201, PESSOAS[1]],
+    })
+    const camila = await screen.findByRole('group', { name: 'Módulos de Camila' })
+    await userEvent.click(within(camila).getByRole('button', { name: 'Tarefas' }))
+    await waitFor(() => expect(pedidos.some((p) => p.metodo === 'PUT' && p.caminho.endsWith('/admin/users/2/modules') && JSON.stringify(p.corpo) === '{"modulos":["compras","tarefas"]}')).toBe(true))
+    await userEvent.click(screen.getByRole('button', { name: 'Adicionar pessoa' }))
+    await userEvent.type(screen.getByLabelText('E-mail'), 'nova@x.pt')
+    await userEvent.type(screen.getByLabelText(/Palavra-passe provisória \(mínimo 8\)/), 'provisoria1')
+    await userEvent.click(screen.getByRole('button', { name: 'Criar conta' }))
+    await waitFor(() => expect(pedidos.some((p) => p.metodo === 'POST' && p.caminho.endsWith('/admin/users') && JSON.stringify(p.corpo).includes('"modulos":["compras"]'))).toBe(true))
+  })
+})

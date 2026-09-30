@@ -5,6 +5,7 @@ import type { ContaGoogle, ServicoGoogle, Sessao } from '../api/types'
 import { useAuth, useUtilizador } from '../auth/AuthContext'
 import { Icon } from '../components/Icon'
 import { OrdemHoje } from '../components/OrdemHoje'
+import { PessoasAdmin } from '../components/PessoasAdmin'
 import { Botao, Esqueleto, Notice } from '../components/ui'
 import { irPara } from '../lib/navegacao'
 import { useModulos } from '../lib/modulos'
@@ -166,8 +167,8 @@ function AdministracaoModulos() {
           <div className="list-item" key={m.id}>
             <span className="row-main">{m.nome}</span>
             {m.disponivel ? (
-              <button type="button" role="switch" className="chip" aria-checked={m.ativo} aria-label={`${m.nome}: ${m.ativo ? 'ativo' : 'desativado'}`}
-                disabled={ocupado !== null} onClick={() => void alternar(m.id, !m.ativo)}>{m.ativo ? 'Ativo' : 'Desativado'}</button>
+              <button type="button" role="switch" className="chip" aria-checked={m.ativoGlobal ?? m.ativo} aria-label={`${m.nome}: ${(m.ativoGlobal ?? m.ativo) ? 'ativo' : 'desativado'}`}
+                disabled={ocupado !== null} onClick={() => void alternar(m.id, !(m.ativoGlobal ?? m.ativo))}>{(m.ativoGlobal ?? m.ativo) ? 'Ativo' : 'Desativado'}</button>
             ) : <span className="pill">Em breve</span>}
           </div>
         ))}
@@ -194,6 +195,7 @@ export function SettingsScreen() {
       <OrdemHoje />
       <ContasGoogle />
       {u.admin && <AdministracaoModulos />}
+      {u.admin && <PessoasAdmin />}
       <Sessoes />
       <section className="section" aria-label="Aparência">
         <h2 className="t-card muted">Aparência</h2>

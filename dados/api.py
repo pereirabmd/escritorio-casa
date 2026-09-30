@@ -84,6 +84,10 @@ class Settings:
             self.acl.setdefault(a, set())
         chave = e.get("PULSE_SERVICE_KEY", "").strip()
         self.service_key = chave if len(chave) >= 32 else ""   # curta demais = desligado (falha fechado)
+        # PULSE_ACL_DELEGADA=1: os pedidos do backend do Pulse (chave de serviço, loopback) não passam pelas listas ACL_<APP>, porque é o Pulse
+        # que decide que pessoa tem que módulo (ADR-063). Os pedidos com token Google (as apps dedicadas) continuam sujeitos às listas.
+        self.acl_delegada = e.get("PULSE_ACL_DELEGADA", "") == "1"
+        self.dono_inicial = e.get("DONO_DADOS_INICIAL", "").strip().lower()
         self.host, self.port = "127.0.0.1", int(e.get("DADOS_API_PORT", "8898"))
         self.tz = ZoneInfo(e.get("TZ", "Europe/Lisbon"))
         self.limite_ip = int(e.get("RATE_IP_POR_MIN", "120"))
@@ -240,6 +244,7 @@ def make_handler(settings: Settings, verifier: TokenVerifier, rotas):
 
             # 1) autenticação — antes de revelar se a rota existe
             chave = self.headers.get("X-Pulse-Key")
+            por_servico = chave is not None
             if chave is not None:
                 email = self._servico(ip, chave)
             else:
@@ -270,7 +275,7 @@ def make_handler(settings: Settings, verifier: TokenVerifier, rotas):
             if not encontrada:
                 raise ApiError(405, "metodo_invalido", "método não permitido", {"Allow": ", ".join(sorted(set(permitidos)))})
             app, fn, m = encontrada
-            if email not in settings.acl.get(app, set()):
+            if not (por_servico and settings.acl_delegada) and email not in settings.acl.get(app, set()):
                 raise ApiError(403, "sem_acesso", "sem acesso a esta aplicação")
 
             # 3) pedido
@@ -323,6 +328,23 @@ def _configurar_logs():
     LOG.propagate = False
 
 
+def _adotar_orfaos(settings: Settings) -> None:
+    """Peso e RTO ganharam dono (migração 009): o que já existia fica para o dono inicial, que é `DONO_DADOS_INICIAL` ou, se só uma pessoa
+    tem acesso a Peso/RTO, essa. Com várias e sem indicação não se atribui nada (e avisa-se): ninguém veria esses dados por engano."""
+    candidatos = settings.acl.get("peso", set()) | settings.acl.get("rto", set())
+    dono = settings.dono_inicial or (next(iter(candidatos)) if len(candidatos) == 1 else "")
+    conn = db.connect_named("dados")
+    try:
+        n = db.adotar_orfaos(conn, dono) if dono else None
+        pendentes = db.contar_orfaos(conn)
+    finally:
+        conn.close()
+    if n:
+        LOG.info("Peso/RTO: %d linhas sem dono passaram para %s", n, dono)
+    if pendentes and not dono:
+        LOG.warning("Peso/RTO: %d linhas sem dono e sem DONO_DADOS_INICIAL (há várias pessoas com acesso): ninguém as vê", pendentes)
+
+
 def main() -> int:
     _configurar_logs()
     settings = Settings()
@@ -333,6 +355,7 @@ def main() -> int:
         if not settings.acl[app]:
             LOG.warning("ACL_%s vazia: ninguém tem acesso à app %s", app.upper(), app)
     db.migrate_all()  # o serviço arranca sempre com o esquema em dia (todas as bases)
+    _adotar_orfaos(settings)
     for nome in db.DATABASES:
         db.manter_aberta(db.db_path(nome))     # sem isto cada escrita fecha a última ligação e paga um checkpoint no cartão SD
     srv = criar_servidor(settings)

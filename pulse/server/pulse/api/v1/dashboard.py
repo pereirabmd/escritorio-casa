@@ -27,25 +27,45 @@ def ordem_guardada(conn, uid: int) -> list[str]:
     return vistos + [c for c in CARTOES if c not in vistos]
 
 
+def ocultos_guardados(conn, uid: int) -> list[str]:
+    """Os cartões que esta pessoa escondeu do seu Hoje."""
+    linha = conn.execute("SELECT ocultos FROM pulse_hoje_ordem WHERE user_id = ?", (uid,)).fetchone()
+    try:
+        return [x for x in dict.fromkeys(json.loads(linha["ocultos"])) if x in CARTOES] if linha else []
+    except (ValueError, TypeError):
+        return []
+
+
+def _estado_do_hoje(conn, uid: int) -> dict:
+    """Ordem e cartões escondidos da pessoa, e quais cartões existem para ela (módulo ligado e com acesso)."""
+    indisponiveis = modulos.indisponiveis_para(conn, uid)
+    return {"ordem": ordem_guardada(conn, uid), "ocultos": ocultos_guardados(conn, uid), "disponiveis": [c for c in CARTOES if c not in indisponiveis]}
+
+
 class OrdemIn(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    ordem: list[str] = Field(min_length=1, max_length=len(CARTOES))
+    ordem: list[str] | None = Field(default=None, min_length=1, max_length=len(CARTOES))
+    ocultos: list[str] | None = Field(default=None, max_length=len(CARTOES))
 
 
 @router.get("/order")
 def ver_ordem(s: Sessao = Depends(sessao_ativa), conn=Depends(get_conn)):
-    """A ordem dos cartões do Hoje do utilizador (completa), para o ecrã das Definições."""
-    return {"ordem": ordem_guardada(conn, s.user["id"])}
+    """O «Hoje» desta pessoa (ordem, cartões escondidos e cartões disponíveis), para o ecrã das Definições."""
+    return _estado_do_hoje(conn, s.user["id"])
 
 
 @router.put("/order")
 def guardar_ordem(d: OrdemIn, s: Sessao = Depends(sessao_ativa), conn=Depends(get_conn)):
-    """Guarda a ordem dos cartões do Hoje do utilizador (ids desconhecidos ou repetidos são recusados)."""
-    if len(set(d.ordem)) != len(d.ordem) or any(x not in CARTOES for x in d.ordem):
-        raise ContaErro(422, "ordem_invalida", "a ordem tem ids de cartões desconhecidos ou repetidos")
-    conn.execute("INSERT INTO pulse_hoje_ordem (user_id, ordem) VALUES (?, ?) ON CONFLICT(user_id) DO UPDATE SET ordem = excluded.ordem",
-                 (s.user["id"], json.dumps(d.ordem)))
-    return {"ordem": ordem_guardada(conn, s.user["id"])}
+    """Guarda a ordem e/ou os cartões escondidos do Hoje desta pessoa (ids desconhecidos ou repetidos são recusados; o que não vem não muda)."""
+    for lista in (d.ordem, d.ocultos):
+        if lista is not None and (len(set(lista)) != len(lista) or any(x not in CARTOES for x in lista)):
+            raise ContaErro(422, "ordem_invalida", "a lista tem ids de cartões desconhecidos ou repetidos")
+    uid = s.user["id"]
+    ordem = d.ordem if d.ordem is not None else ordem_guardada(conn, uid)
+    ocultos = d.ocultos if d.ocultos is not None else ocultos_guardados(conn, uid)
+    conn.execute("INSERT INTO pulse_hoje_ordem (user_id, ordem, ocultos) VALUES (?, ?, ?) "
+                 "ON CONFLICT(user_id) DO UPDATE SET ordem = excluded.ordem, ocultos = excluded.ocultos", (uid, json.dumps(ordem), json.dumps(ocultos)))
+    return _estado_do_hoje(conn, uid)
 
 
 @router.get("/today")
@@ -91,5 +111,5 @@ def hoje(request: Request, modulos_: str | None = Query(None, alias="modulos"), 
     locais = {"compras": compras_hoje,
               "calendario": google_hoje("calendar", lambda contas, dia: calendario.hoje(app.google, contas, dia, tz)),
               "email": google_hoje("gmail", lambda contas, dia: correio.importantes_hoje(app.google, contas, tz))}
-    r = dashboard.hoje(app.dados, s.user["email"], app.agora(), modulos.desativados(conn), locais, so)
-    return {**r, "ordem": ordem_guardada(conn, uid)}
+    r = dashboard.hoje(app.dados, s.user["email"], app.agora(), modulos.indisponiveis_para(conn, uid) | set(ocultos_guardados(conn, uid)), locais, so)
+    return {**r, "ordem": ordem_guardada(conn, uid), "ocultos": ocultos_guardados(conn, uid)}

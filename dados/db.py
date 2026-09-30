@@ -84,6 +84,31 @@ def connect(path: Path | str | None = None) -> sqlite3.Connection:
     return conn
 
 
+ORFAOS = (("peso_registos", "dono"), ("peso_config", "dono"), ("rto_dias", "dono"), ("rto_notas", "dono"))
+
+
+def adotar_orfaos(conn: sqlite3.Connection, email: str) -> int:
+    """Dá ao `email` as linhas de Peso/RTO ainda sem dono (vieram antes da migração 009). Devolve quantas. Idempotente."""
+    email = email.strip().lower()
+    if not email:
+        return 0
+    total = 0
+    conn.execute("BEGIN IMMEDIATE")
+    try:
+        for tabela, col in ORFAOS:
+            # peso_config/rto_dias têm o dono na chave primária: só se muda se a pessoa ainda não tem essa linha
+            total += conn.execute(f"UPDATE OR IGNORE {tabela} SET {col} = ? WHERE {col} = ''", (email,)).rowcount
+        conn.execute("COMMIT")
+    except Exception:
+        conn.execute("ROLLBACK")
+        raise
+    return total
+
+
+def contar_orfaos(conn: sqlite3.Connection) -> int:
+    return sum(conn.execute(f"SELECT COUNT(*) FROM {t} WHERE {c} = ''").fetchone()[0] for t, c in ORFAOS)
+
+
 _MANTIDAS: list[sqlite3.Connection] = []
 
 

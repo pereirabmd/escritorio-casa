@@ -25,9 +25,37 @@ def desativados(conn: sqlite3.Connection) -> set[str]:
     return {x for x in (r["valor"].split(",") if r else []) if x in DISPONIVEIS}
 
 
-def lista(conn: sqlite3.Connection) -> list[dict]:
+def permitidos(conn: sqlite3.Connection, user_id: int) -> set[str]:
+    """Os módulos a que esta conta tem acesso (dado pelo administrador)."""
+    return {r["modulo"] for r in conn.execute("SELECT modulo FROM pulse_user_modulos WHERE user_id = ?", (user_id,)) if r["modulo"] in DISPONIVEIS}
+
+
+def indisponiveis_para(conn: sqlite3.Connection, user_id: int) -> set[str]:
+    """Desativados para todos ou sem acesso desta conta: o Hoje nem os pede, Mais não os mostra, a API recusa-os."""
+    return desativados(conn) | (DISPONIVEIS - permitidos(conn, user_id))
+
+
+def lista(conn: sqlite3.Connection, user_id: int | None = None) -> list[dict]:
+    """`ativo` = o módulo está ligado para todos **e** (com `user_id`) esta conta tem acesso; `ativoGlobal` é só o interruptor do administrador."""
     off = desativados(conn)
-    return [{"id": i, "nome": n, "disponivel": d, "ativo": i not in off} for i, n, d in MODULOS]
+    meus = permitidos(conn, user_id) if user_id is not None else DISPONIVEIS
+    return [{"id": i, "nome": n, "disponivel": d, "ativo": i not in off and i in meus, "ativoGlobal": i not in off, "permitido": i in meus} for i, n, d in MODULOS]
+
+
+def definir_permitidos(conn: sqlite3.Connection, user_id: int, modulos: list[str]) -> list[str]:
+    """Substitui o acesso desta conta (atómico). Módulos desconhecidos são recusados."""
+    desconhecidos = sorted(set(modulos) - DISPONIVEIS)
+    if desconhecidos:
+        raise ContaErro(400, "modulo_invalido", f"módulo desconhecido: {', '.join(desconhecidos)}")
+    conn.execute("BEGIN IMMEDIATE")
+    try:
+        conn.execute("DELETE FROM pulse_user_modulos WHERE user_id = ?", (user_id,))
+        conn.executemany("INSERT INTO pulse_user_modulos (user_id, modulo) VALUES (?, ?)", [(user_id, m) for m in sorted(set(modulos))])
+        conn.execute("COMMIT")
+    except Exception:
+        conn.execute("ROLLBACK")
+        raise
+    return sorted(set(modulos))
 
 
 def alterar(conn: sqlite3.Connection, alteracoes: dict[str, bool]) -> list[dict]:
@@ -44,6 +72,12 @@ def alterar(conn: sqlite3.Connection, alteracoes: dict[str, bool]) -> list[dict]
     return lista(conn)
 
 
-def exigir(conn: sqlite3.Connection, modulo: str) -> None:
+def exigir(conn: sqlite3.Connection, modulo: str, user_id: int | None = None, email: str | None = None) -> None:
+    """Recusa se o módulo está desativado para todos (`modulo_desativado`) ou se esta conta não tem acesso (`sem_acesso`)."""
     if modulo in desativados(conn):
         raise ContaErro(403, "modulo_desativado", "este módulo foi desativado pelo administrador")
+    if user_id is None and email:
+        r = conn.execute("SELECT id FROM pulse_users WHERE email = ?", (email,)).fetchone()
+        user_id = r["id"] if r else None
+    if user_id is not None and modulo in DISPONIVEIS and modulo not in permitidos(conn, user_id):
+        raise ContaErro(403, "sem_acesso", "não tens acesso a este módulo")

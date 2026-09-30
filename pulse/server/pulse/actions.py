@@ -1323,7 +1323,7 @@ def executar(conn: sqlite3.Connection, ctx: Contexto, nome: str, params: dict, o
     except ValidationError as e:
         campos = ", ".join(sorted({str(x["loc"][0]) for x in e.errors() if x["loc"]}))
         raise ContaErro(400, "parametros_invalidos", f"parâmetros inválidos: {campos}" if campos else "parâmetros inválidos") from None
-    modulos.exigir(conn, acao.modulo)
+    modulos.exigir(conn, acao.modulo, email=ctx.email)
     ctx.conn = ctx.conn or conn
     if acao.nivel == "sensitive_action" and not confirmado:
         raise ContaErro(409, "confirmacao_necessaria", "esta ação precisa de confirmação")

@@ -108,6 +108,7 @@ fun EcraDefinicoes(sessao: Sessao, utilizador: Utilizador, aoVoltar: () -> Unit,
         OrdemHojeSecao()
         SessoesSecao()
         if (utilizador.admin) AdministracaoSecao()
+        if (utilizador.admin) PessoasSecao()
         Secao("Aplicação") {
             Texto("Pulse ${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})")
             val a = sessao.atualizacao
@@ -177,12 +178,85 @@ private fun AdministracaoSecao() {
             is Estado.Erro -> Aviso(TipoAviso.ERRO, e.mensagem)
             is Estado.Pronto -> e.dados.objs("modulos").forEach { m ->
                 val id = m.txtOu("id")
-                Interruptor(m.txtOu("nome"), m.optBoolean("ativo", true), { ativo ->
+                val global = m.optBoolean("ativoGlobal", m.optBoolean("ativo", true))
+                Interruptor(m.txtOu("nome"), global, { ativo ->
                     if (ocupado == null) { ocupado = id; erro = null
                         scope.launch { try { Api.put("/admin/modules", jo("modulos" to jo(id to ativo))); c.recarregar() } catch (x: Exception) { erro = mensagemDeErro(x) } finally { ocupado = null } } }
-                }, if (m.optBoolean("ativo", true)) "Ativo" else "Desativado")
+                }, if (global) "Ativo" else "Desativado")
             }
         }
+    }
+}
+
+/** Só para administradores (ADR-063): o que cada pessoa vê, contas novas, palavra-passe provisória, ativar/desativar. */
+@Composable
+private fun PessoasSecao() {
+    val c = carga { Api.get("/admin/users") }
+    val modulos = carga { Api.get("/modules") }
+    val scope = rememberCoroutineScope()
+    val avisos = LocalAvisos.current
+    var erro by remember { mutableStateOf<String?>(null) }
+    var ocupado by remember { mutableStateOf(false) }
+    var nova by remember { mutableStateOf(false) }
+    var email by remember { mutableStateOf("") }
+    var nome by remember { mutableStateOf("") }
+    var password by remember { mutableStateOf("") }
+    var repor by remember { mutableStateOf<Int?>(null) }
+    var novaPassword by remember { mutableStateOf("") }
+    fun correr(ok: String?, f: suspend () -> Unit) {
+        if (ocupado) return
+        ocupado = true; erro = null
+        scope.launch { try { f(); c.recarregar(); ok?.let { avisos.mostrar(it) } } catch (x: Exception) { erro = mensagemDeErro(x) } finally { ocupado = false } }
+    }
+    Secao("Pessoas") {
+        Texto2("Cada pessoa só vê os módulos que lhe deres e os seus próprios dados (Peso, RTO). Uma conta nova começa com a palavra-passe provisória que indicares e muda-a no primeiro acesso.")
+        erro?.let { Aviso(TipoAviso.ERRO, it) }
+        val ms = (modulos.estado as? Estado.Pronto)?.dados?.objs("modulos")?.filter { it.optBoolean("disponivel", true) }.orEmpty()
+        when (val e = c.estado) {
+            Estado.ACarregar -> Texto2("A carregar…")
+            is Estado.Erro -> Aviso(TipoAviso.ERRO, e.mensagem)
+            is Estado.Pronto -> e.dados.objs("pessoas").forEach { p ->
+                val id = p.getInt("id"); val meus = p.strs("modulos")
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Texto(p.txtOu("nome").ifEmpty { p.txtOu("email") } + if (p.bool("admin")) " · Administrador" else "", Pulse.body2.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold))
+                        if (!p.bool("ativo")) Pilula("Desativada")
+                    }
+                    Meta(p.txtOu("email") + if (p.bool("mudarPassword")) " · ainda não mudou a palavra-passe" else "")
+                    ms.forEach { m ->
+                        val mid = m.txtOu("id"); val tem = mid in meus
+                        Interruptor(m.txtOu("nome"), tem, { quer ->
+                            correr(null) { Api.put("/admin/users/$id/modules", jo("modulos" to ja(if (quer) meus + mid else meus - mid))) }
+                        }, if (tem) "Tem" else "Não tem")
+                    }
+                    if (repor == id) {
+                        Campo("Palavra-passe provisória (mínimo 8)", novaPassword, { novaPassword = it }, password = true)
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Botao("Guardar", { correr("Palavra-passe provisória definida; as sessões dessa pessoa terminaram.") { Api.post("/admin/users/$id/password", jo("password" to novaPassword)); repor = null; novaPassword = "" } },
+                                pequeno = true, ativo = novaPassword.length >= 8 && !ocupado)
+                            Botao("Cancelar", { repor = null; novaPassword = "" }, variante = Variante.SECUNDARIO, pequeno = true)
+                        }
+                    } else Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        LinkBtn("Repor palavra-passe", { repor = id; novaPassword = "" })
+                        LinkBtn(if (p.bool("ativo")) "Desativar" else "Ativar", {
+                            correr(if (p.bool("ativo")) "Conta desativada." else "Conta ativada.") { Api.put("/admin/users/$id/active", jo("ativo" to !p.bool("ativo"))) }
+                        })
+                    }
+                }
+            }
+        }
+        if (nova) {
+            Campo("Nome", nome, { nome = it })
+            Campo("E-mail", email, { email = it }, teclado = androidx.compose.ui.text.input.KeyboardType.Email)
+            Campo("Palavra-passe provisória (mínimo 8)", password, { password = it }, password = true)
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Botao("Criar conta", { correr("Conta criada, com o módulo Compras. Dá-lhe os outros acima.") {
+                    Api.post("/admin/users", jo("email" to email.trim(), "nome" to nome.trim(), "password" to password, "modulos" to ja(listOf("compras"))))
+                    nova = false; email = ""; nome = ""; password = ""
+                } }, pequeno = true, ativo = "@" in email && password.length >= 8 && !ocupado, carregando = ocupado)
+                Botao("Cancelar", { nova = false }, variante = Variante.SECUNDARIO, pequeno = true)
+            }
+        } else Botao("Adicionar pessoa", { nova = true }, variante = Variante.SECUNDARIO, pequeno = true)
     }
 }
 
