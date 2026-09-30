@@ -285,3 +285,5 @@ fieldset { border: 0; padding: 0; margin: 0; min-width: 0; }
 .sec-toggle svg { transition: transform var(--t-fast); }
 .sec-toggle[aria-expanded='true'] svg { transform: rotate(90deg); }
 .sec-toggle:disabled { cursor: default; }
+/* Bilhetes: resultado da verificação do horário na CP (ADR-068) */
+[data-cp='confirmado'] { color: var(--success); }

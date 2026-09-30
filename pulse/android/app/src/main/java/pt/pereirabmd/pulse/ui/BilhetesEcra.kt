@@ -142,6 +142,7 @@ private fun FolhaSemana(d: JSONObject, acoes: Acoes, aoFechar: () -> Unit) {
                             Campo("Comboio", v.comboio, { t -> atual { it.copy(comboio = t.filter(Char::isDigit).take(5)) } }, Modifier.weight(1f), teclado = androidx.compose.ui.text.input.KeyboardType.Number)
                             CampoHora("Hora de partida", v.hora, { h -> atual { it.copy(hora = h) } }, Modifier.weight(1f), opcional = false)
                         }
+                        VerificacaoCp(dia.data, v.origem, v.destino, v.comboio, v.hora) { h -> atual { it.copy(hora = h) } }
                         LinkBtn("Remover viagem ${k + 1}", { mudar(i) { x -> x.copy(viagens = x.viagens.filterIndexed { j, _ -> j != k }) } })
                     }
                 }
@@ -241,5 +242,35 @@ private fun ColumnScope.RegistoTab(d: JSONObject) {
                 r.txt("erro")?.takeIf { it.isNotEmpty() }?.let { Meta(it) }
             }
         }
+    }
+}
+
+
+/** Confere na CP (pelo servidor: as chaves nunca vão para o telemóvel) o comboio, a data, o percurso e a hora. Consultivo: nunca impede de guardar (ADR-068). */
+@Composable
+private fun VerificacaoCp(data: String, origem: String, destino: String, comboio: String, hora: String, aoUsarHora: (String) -> Unit) {
+    val pronto = comboio.isNotEmpty() && origem.isNotEmpty() && destino.isNotEmpty() && origem != destino
+    val chave = "$data|$origem|$destino|$comboio|$hora"
+    var res by remember { mutableStateOf<Pair<String, JSONObject>?>(null) }
+    LaunchedEffect(chave) {
+        if (!pronto) { res = null; return@LaunchedEffect }
+        kotlinx.coroutines.delay(450)
+        val q = "comboio=$comboio&data=$data&origem=${android.net.Uri.encode(origem)}&destino=${android.net.Uri.encode(destino)}" + if (hora.isNotEmpty()) "&hora=${android.net.Uri.encode(hora)}" else ""
+        try {
+            val r = Api.get("/tickets/timetable?$q")
+            res = chave to r
+            if (r.txt("estado") == "preenchido" && hora.isEmpty()) r.txt("sugestaoHora")?.takeIf { it.isNotEmpty() }?.let(aoUsarHora)      // hora em falta: preenche-se com a da CP
+        } catch (e: Exception) { if (e is kotlinx.coroutines.CancellationException) throw e; res = null }
+    }
+    val (c, r) = res ?: return
+    if (!pronto || c != chave) return
+    val estado = r.txtOu("estado"); val mensagem = r.txtOu("mensagem")
+    when (estado) {
+        "desligado" -> Unit
+        "aviso" -> Aviso(TipoAviso.AVISO) {
+            Texto("Verifica na CP: $mensagem", Pulse.body2)
+            r.txt("sugestaoHora")?.takeIf { it.isNotEmpty() && it != hora }?.let { s -> LinkBtn("Usar $s", { aoUsarHora(s) }) }
+        }
+        else -> Meta(if (estado == "confirmado") "✓ $mensagem" else mensagem)
     }
 }

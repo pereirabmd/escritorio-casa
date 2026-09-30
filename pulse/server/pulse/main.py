@@ -13,7 +13,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
 from pulse import VERSION, config, db, logging_setup, notifications
-from pulse.services import compras
+from pulse.services import compras, cp_horarios
 from pulse.accounts import ContaErro
 from datetime import datetime
 
@@ -128,6 +128,7 @@ def create_app(settings: config.Settings | None = None, dados: DadosClient | Non
     app.state.settings = settings
     app.state.dados = dados or DadosClient(settings.dados_url, settings.service_key)
     app.state.avisos = avisos or TarefasApiClient(settings.tarefas_url, settings.service_key)   # recálculo imediato dos avisos das tarefas
+    app.state.cp = cp_horarios.CpHorarios(settings.cp_connect_id, settings.cp_connect_secret, settings.cp_api_key_travel, settings.cp_estacoes)     # horários da CP (só consulta)
     app.state.google = google if google is not None else _google(settings)                    # Gmail/Calendar: None = não configurado
     app.state.canais = canais if canais is not None else _canais(settings)      # canais de entrega das notificações (FCM, se configurado)
     app.state.db = lambda: db.connect(settings.db_path)   # uma ligação por uso: os endpoints correm em threads

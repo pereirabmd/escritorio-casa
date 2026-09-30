@@ -197,3 +197,28 @@ describe('Registo', () => {
     expect(within(screen.getByRole('region', { name: 'Registo' })).getAllByRole('listitem')).toHaveLength(1)
   })
 })
+
+describe('verificação do horário na CP (editor da semana)', () => {
+  const abrirEditor = async (rota: unknown) => {
+    const s = abrir('semana', { 'GET /tickets/timetable?comboio=526&data=2026-10-05&origem=Aveiro&destino=Lisboa+Oriente&hora=07%3A27': () => rota as [number, unknown] })
+    await userEvent.click(await screen.findByRole('button', { name: 'Configurar semana' }))
+    return s
+  }
+
+  test('um aviso da CP aparece bem visível e oferece usar a hora certa; nunca bloqueia', async () => {
+    const s = await abrirEditor([200, { estado: 'aviso', mensagem: 'A CP indica 07:30 (Aveiro) e 07:30 (Aveiro); tens 07:27.', sugestaoHora: '07:30' }])
+    const comboio = (await screen.findAllByPlaceholderText('Comboio'))[0]
+    await userEvent.clear(comboio); await userEvent.type(comboio, '526')
+    const aviso = await screen.findByRole('alert', {}, { timeout: 3000 })
+    expect(aviso).toHaveTextContent('Verifica na CP')
+    await userEvent.click(within(aviso).getByRole('button', { name: 'Usar 07:30' }))
+    expect(s.pedidos.some((p) => p.metodo === 'GET' && p.caminho.includes('/tickets/timetable?') && p.caminho.includes('comboio=526'))).toBe(true)
+  })
+
+  test('desligado no servidor: não mostra nada', async () => {
+    await abrirEditor([200, { estado: 'desligado', mensagem: '' }])
+    const c0 = (await screen.findAllByPlaceholderText('Comboio'))[0]; await userEvent.clear(c0); await userEvent.type(c0, '526')
+    await new Promise((r) => setTimeout(r, 900))
+    expect(screen.queryByText(/Verifica na CP/)).not.toBeInTheDocument()
+  })
+})

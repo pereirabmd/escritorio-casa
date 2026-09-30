@@ -31,6 +31,10 @@ class Settings:
     google_client_id: str = ""              # cliente OAuth «Web» do Google Cloud (Gmail/Calendar); vazio = integração desligada
     google_client_secret: str = ""
     google_redirect_uri: str = ""            # tem de coincidir com o registado no Google Cloud
+    cp_connect_id: str = ""                  # chaves públicas da app da CP (as mesmas dos Bilhetes CP no Pi): só para consultar horários, sem login
+    cp_connect_secret: str = ""
+    cp_api_key_travel: str = ""
+    cp_estacoes: str = ""                    # JSON opcional {"chave_da_estacao": "94-00000"} além de Aveiro e Lisboa Oriente
     google_key: str = ""                     # chave Fernet (url-safe, 32 bytes) que cifra os refresh tokens em repouso
     scheduler_s: int = 30                     # intervalo do agendador de notificações (0 = desligado)
     fcm_project: str = ""                    # projeto Firebase (por omissão o `project_id` do ficheiro)
@@ -83,5 +87,9 @@ def load(environ: dict[str, str] | None = None) -> Settings:
         google_client_secret=e.get("PULSE_GOOGLE_CLIENT_SECRET", "").strip(),
         google_redirect_uri=e.get("PULSE_GOOGLE_REDIRECT_URI", "").strip(),
         google_key=e.get("PULSE_GOOGLE_KEY", "").strip(),
+        cp_connect_id=e.get("PULSE_CP_CONNECT_ID", "").strip(),
+        cp_connect_secret=e.get("PULSE_CP_CONNECT_SECRET", "").strip(),
+        cp_api_key_travel=e.get("PULSE_CP_API_KEY_TRAVEL", "").strip(),
+        cp_estacoes=e.get("PULSE_CP_ESTACOES", "").strip(),
         scheduler_s=_inteiro(e.get("PULSE_SCHEDULER_S", "30"), "PULSE_SCHEDULER_S", 0, 3600),
     )

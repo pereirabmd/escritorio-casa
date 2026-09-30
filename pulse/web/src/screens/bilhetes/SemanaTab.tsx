@@ -1,4 +1,5 @@
-import { useState, type FormEvent } from 'react'
+import { useEffect, useState, type FormEvent } from 'react'
+import { api } from '../../api/client'
 import type { BilhetesModulo, ViagemBilhetes } from '../../api/types'
 import { Icon } from '../../components/Icon'
 import { Botao, Notice } from '../../components/ui'
@@ -50,6 +51,41 @@ function Proxima({ v }: { v: ViagemBilhetes }) {
       {v.compra && <div className="t-body2">Carruagem {v.compra.carruagem}, lugar {v.compra.lugar}{v.compra.referencia ? ` · ref. ${v.compra.referencia}` : ''}</div>}
     </section>
   )
+}
+
+interface ResultadoCp { estado: 'desligado' | 'confirmado' | 'preenchido' | 'aviso' | 'sem_informacao'; mensagem: string; sugestaoHora?: string }
+
+/** Confere na CP (pelo servidor: as chaves nunca vão para o telemóvel) o comboio, a data, o percurso e a hora. Consultivo: nunca impede de guardar (ADR-068). */
+function VerificacaoCp({ data, origem, destino, comboio, hora, aoUsarHora }: { data: string; origem: string; destino: string; comboio: string; hora: string; aoUsarHora: (h: string) => void }) {
+  const [res, setRes] = useState<{ chave: string; r: ResultadoCp } | null>(null)
+  const n = Number(comboio)
+  const pronto = /^\d{1,5}$/.test(comboio.trim()) && n > 0 && !!origem && !!destino && origem !== destino
+  const chave = `${data}|${origem}|${destino}|${comboio.trim()}|${hora}`
+  useEffect(() => {
+    if (!pronto) return
+    let vivo = true
+    const t = window.setTimeout(() => {
+      const q = new URLSearchParams({ comboio: String(n), data, origem, destino, ...(hora ? { hora } : {}) })
+      api.get<ResultadoCp>(`/tickets/timetable?${q}`).then((r) => {
+        if (!vivo) return
+        setRes({ chave, r })
+        if (r.estado === 'preenchido' && r.sugestaoHora && !hora) aoUsarHora(r.sugestaoHora)         // hora em falta: preenche-se com a da CP
+      }, () => { if (vivo) setRes(null) })
+    }, 450)
+    return () => { vivo = false; window.clearTimeout(t) }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chave, pronto])
+  if (!pronto || !res || res.chave !== chave || res.r.estado === 'desligado') return null
+  const { estado, mensagem, sugestaoHora } = res.r
+  if (estado === 'aviso') {
+    return (
+      <Notice tipo="warning" role="alert">
+        <strong>Verifica na CP:</strong> {mensagem}
+        {sugestaoHora && sugestaoHora !== hora && <> <button type="button" className="link-btn" onClick={() => aoUsarHora(sugestaoHora)}>Usar {sugestaoHora}</button></>}
+      </Notice>
+    )
+  }
+  return <p className="t-meta" data-cp={estado} role="status">{estado === 'sem_informacao' ? mensagem : `${estado === 'confirmado' ? '✓ ' : ''}${mensagem}`}</p>
 }
 
 interface EditorProps { dados: BilhetesModulo; f: Ferramentas; fechar: () => void }
@@ -109,6 +145,7 @@ function Editor({ dados, f, fechar }: EditorProps) {
                   <input id={campo('h')} type="time" className="input input-sm" value={v.hora} onChange={(e) => atual({ hora: e.target.value })} />
                   <button type="button" className="link-btn link-danger" aria-label={`Remover viagem ${k + 1} de ${diaCurto(d.data)}`} onClick={() => mudar(i, (x) => ({ ...x, viagens: x.viagens.filter((_, j) => j !== k) }))}>Remover</button>
                 </div>
+                {!d.passado && <VerificacaoCp data={d.data} origem={v.origem} destino={v.destino} comboio={v.comboio} hora={v.hora} aoUsarHora={(h) => atual({ hora: h })} />}
               </div>
             )
           })}

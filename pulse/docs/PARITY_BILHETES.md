@@ -12,7 +12,7 @@ Legenda: **Feito** · **Pendente** · **Substituído** · **Descartado**.
 | Viagens da semana com o estado (comprado, por comprar, inativa, em viagem) | Semana | Semana | Feito | navegar entre semanas |
 | Editor da semana: várias viagens por dia, «Ativo» por dia, validações | Editor | Semana → Configurar semana | Feito | `bilhetes.semana`; preserva os ids; «Desfazer» |
 | «Comboios que já usei» | Editor | Editor | Feito | |
-| Verificação do horário na CP (chaves no telemóvel, âncora da compra) | Editor | — | **Pendente** | precisa das chaves da CP no cliente ou de um serviço no Pi |
+| Verificação do horário na CP (comboio, data, percurso e hora) | Editor | Semana → Configurar semana | Feito | pelo servidor (as chaves da CP ficam no Pi, não no telemóvel); consultiva, aviso bem visível e «Usar HH:MM»; preenche a hora em falta (ADR-068) |
 | Bilhetes comprados (próximos e anteriores) | Bilhetes | Bilhetes | Feito | |
 | Pedidos avulsos: tentar agora, repetição automática de X em X min | Pedidos | Pedidos | Feito | estado incerto pede confirmação na App CP |
 | Registo (compras, erros, verificações) com filtros | Registo | Registo | Feito | |
