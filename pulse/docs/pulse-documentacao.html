@@ -1,0 +1,601 @@
+<!doctype html>
+<html lang="pt-PT">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pulse — Documentação completa</title>
+<style>
+  :root {
+    --bg: #f6f7f9; --surface: #ffffff; --text: #16202b; --text2: #55627a; --line: #dfe3ea;
+    --primary: #1f6f5c; --primary-soft: #e3f1ed; --accent: #b4561f; --code-bg: #0f1a24; --code-text: #d7e3ef;
+    --ok: #1f7a43; --warn: #9a6a00; --pend: #a13d2d; --shadow: 0 1px 2px rgba(20,30,50,.06);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-tema="claro"]) {
+      --bg: #0d1319; --surface: #151d26; --text: #e6edf4; --text2: #9aa9bc; --line: #26313d;
+      --primary: #4fb79d; --primary-soft: #16302a; --accent: #e08a52; --code-bg: #0a1017; --code-text: #d7e3ef;
+      --ok: #55c283; --warn: #e0b04a; --pend: #ef8372; --shadow: none;
+    }
+  }
+  :root[data-tema="escuro"] {
+    --bg: #0d1319; --surface: #151d26; --text: #e6edf4; --text2: #9aa9bc; --line: #26313d;
+    --primary: #4fb79d; --primary-soft: #16302a; --accent: #e08a52; --code-bg: #0a1017; --code-text: #d7e3ef;
+    --ok: #55c283; --warn: #e0b04a; --pend: #ef8372; --shadow: none;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; scroll-padding-top: 16px; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.6 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  a { color: var(--primary); }
+  .layout { display: grid; grid-template-columns: 260px minmax(0, 1fr); max-width: 1280px; margin: 0 auto; }
+  nav.toc { position: sticky; top: 0; align-self: start; height: 100vh; overflow-y: auto; padding: 24px 16px 24px 24px; border-right: 1px solid var(--line); }
+  nav.toc .marca { font-weight: 700; font-size: 20px; letter-spacing: .2px; display: block; margin-bottom: 2px; }
+  nav.toc .sub { color: var(--text2); font-size: 13px; margin-bottom: 18px; }
+  nav.toc a { display: block; padding: 5px 8px; border-radius: 6px; color: var(--text2); text-decoration: none; font-size: 14px; }
+  nav.toc a:hover, nav.toc a.ativo { background: var(--primary-soft); color: var(--primary); }
+  nav.toc .grupo { margin: 14px 8px 4px; font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: var(--text2); }
+  .tema { margin-top: 18px; font-size: 13px; background: none; border: 1px solid var(--line); color: var(--text2); border-radius: 6px; padding: 5px 10px; cursor: pointer; }
+  main { padding: 32px 32px 80px; min-width: 0; }
+  header.capa { padding-bottom: 20px; border-bottom: 1px solid var(--line); margin-bottom: 8px; }
+  header.capa h1 { font-size: 34px; line-height: 1.15; margin: 0 0 8px; }
+  header.capa p { color: var(--text2); margin: 4px 0; max-width: 70ch; }
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+  .chip { background: var(--surface); border: 1px solid var(--line); border-radius: 999px; padding: 3px 12px; font-size: 13px; color: var(--text2); }
+  .chip b { color: var(--text); }
+  section { padding-top: 28px; }
+  h2 { font-size: 26px; margin: 0 0 6px; padding-top: 6px; }
+  h3 { font-size: 18px; margin: 26px 0 8px; }
+  h4 { font-size: 15px; margin: 18px 0 4px; }
+  p { margin: 8px 0; max-width: 78ch; }
+  .lead { color: var(--text2); max-width: 78ch; }
+  ul, ol { padding-left: 22px; } li { margin: 3px 0; max-width: 78ch; }
+  code { font: 13px/1.4 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; background: var(--primary-soft); color: var(--primary); padding: 1px 6px; border-radius: 5px; }
+  pre { position: relative; background: var(--code-bg); color: var(--code-text); padding: 14px 16px; border-radius: 10px; overflow-x: auto; font: 13px/1.55 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; margin: 10px 0 14px; }
+  pre code { background: none; color: inherit; padding: 0; font-size: inherit; }
+  pre .c { color: #7f93a8; }
+  .copiar { position: absolute; top: 8px; right: 8px; background: #22313f; color: #c6d4e2; border: 0; border-radius: 6px; font-size: 12px; padding: 3px 9px; cursor: pointer; }
+  .tabela { overflow-x: auto; margin: 10px 0 16px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); box-shadow: var(--shadow); }
+  table { border-collapse: collapse; width: 100%; font-size: 14px; }
+  th, td { text-align: left; padding: 9px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { font-size: 12px; text-transform: uppercase; letter-spacing: .05em; color: var(--text2); background: var(--bg); white-space: nowrap; }
+  tr:last-child td { border-bottom: 0; }
+  .grelha { display: grid; grid-template-columns: repeat(auto-fill, minmax(290px, 1fr)); gap: 14px; margin: 12px 0; }
+  .cartao { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 16px 18px; box-shadow: var(--shadow); }
+  .cartao h3, .cartao h4 { margin: 0 0 6px; font-size: 16px; }
+  .cartao ul { margin: 6px 0 0; padding-left: 18px; font-size: 14px; } .cartao p { font-size: 14px; }
+  .cartao code, td code { overflow-wrap: anywhere; }
+  .tag { display: inline-block; font-size: 11px; font-weight: 600; border-radius: 4px; padding: 1px 7px; vertical-align: 1px; margin-left: 4px; }
+  .tag.ok { color: var(--ok); background: color-mix(in srgb, var(--ok) 14%, transparent); }
+  .tag.aviso { color: var(--warn); background: color-mix(in srgb, var(--warn) 16%, transparent); }
+  .tag.pend { color: var(--pend); background: color-mix(in srgb, var(--pend) 14%, transparent); }
+  .nota { border-left: 3px solid var(--accent); background: var(--surface); padding: 10px 14px; border-radius: 0 8px 8px 0; margin: 14px 0; font-size: 14.5px; max-width: 80ch; }
+  .nota.ok { border-color: var(--ok); } .nota.perigo { border-color: var(--pend); }
+  figure { margin: 14px 0; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 12px; overflow-x: auto; }
+  figure svg { min-width: 760px; width: 100%; height: auto; display: block; }
+  figcaption { color: var(--text2); font-size: 13px; padding: 6px 4px 0; }
+  svg text { fill: var(--text); font: 13px system-ui, sans-serif; } svg .t2 { fill: var(--text2); font-size: 11.5px; }
+  svg .caixa { fill: var(--surface); stroke: var(--line); stroke-width: 1.4; } svg .forte { fill: var(--primary-soft); stroke: var(--primary); stroke-width: 1.6; }
+  svg .aviso { fill: color-mix(in srgb, var(--accent) 12%, var(--surface)); stroke: var(--accent); stroke-width: 1.4; }
+  svg .seta { stroke: var(--text2); stroke-width: 1.5; fill: none; marker-end: url(#ponta); } svg .tracejado { stroke-dasharray: 5 4; }
+  footer { margin-top: 48px; padding-top: 16px; border-top: 1px solid var(--line); color: var(--text2); font-size: 13px; }
+  @media (max-width: 900px) {
+    .layout { grid-template-columns: 1fr; } nav.toc { position: static; height: auto; border-right: 0; border-bottom: 1px solid var(--line); padding: 16px; }
+    main { padding: 20px 16px 60px; } header.capa h1 { font-size: 27px; }
+  }
+  @media print { nav.toc, .copiar, .tema { display: none; } .layout { display: block; } body { background: #fff; } }
+</style>
+</head>
+<body>
+<div class="layout">
+<nav class="toc" aria-label="Índice">
+  <span class="marca">Pulse</span><div class="sub">Documentação · 30/09/2026</div>
+  <div class="grupo">Produto</div>
+  <a href="#visao">Visão geral</a>
+  <a href="#funcionalidades">Funcionalidades</a>
+  <a href="#assistente">Assistente de voz</a>
+  <div class="grupo">Técnico</div>
+  <a href="#arquitetura">Arquitetura</a>
+  <a href="#api">API e ações</a>
+  <a href="#seguranca">Segurança e dados</a>
+  <a href="#android">Android e Web</a>
+  <div class="grupo">Qualidade</div>
+  <a href="#testes">Testes</a>
+  <div class="grupo">Operação</div>
+  <a href="#operacao">Comandos de operação</a>
+  <a href="#config">Configuração</a>
+  <a href="#resolucao">Resolução de problemas</a>
+  <div class="grupo">Projeto</div>
+  <a href="#estado">Estado e pendentes</a>
+  <a href="#adrs">Decisões (ADR)</a>
+  <button class="tema" id="tema" type="button">Alternar tema</button>
+</nav>
+
+<main>
+<header class="capa">
+  <h1>Pulse — documentação completa</h1>
+  <p>Aplicação pessoal que concentra Gmail, Calendário, Tarefas, Bilhetes CP, Peso, RTO, Finanças e Compras num só produto, com APK Android nativo, interface Web e backend num Raspberry Pi. Este documento junta funcionalidades, arquitetura, testes e comandos de operação.</p>
+  <div class="chips">
+    <span class="chip"><b>8</b> módulos</span>
+    <span class="chip"><b>70</b> ações na camada oficial</span>
+    <span class="chip"><b>77</b> decisões (ADR)</span>
+    <span class="chip"><b>480</b> testes do servidor</span>
+    <span class="chip"><b>277</b> testes da Web</span>
+    <span class="chip">APK <b>0.4.0</b></span>
+    <span class="chip">Release <b>beta_20260930_33</b></span>
+  </div>
+  <div class="nota">Fonte de verdade: o código e <code>pulse/docs/DECISIONS.md</code>. Este ficheiro é um resumo organizado; em caso de dúvida, vale o ADR mais recente.</div>
+</header>
+
+<!-- ===================================================================== -->
+<section id="visao">
+  <h2>Visão geral</h2>
+  <p class="lead">O Pulse parece e comporta-se como uma aplicação comercial: limpa, em português de Portugal, com modo claro e escuro. As regras de negócio vivem no servidor; o Android e a Web são duas interfaces do mesmo produto.</p>
+  <div class="grelha">
+    <div class="cartao"><h4>Plataformas</h4><ul>
+      <li><b>Android</b>: Kotlin, Jetpack Compose, Material 3</li>
+      <li><b>Web</b>: React, Vite, TypeScript</li>
+      <li><b>Backend</b>: Python 3.13, FastAPI, SQLite (Raspberry Pi 3B, 1 GB)</li></ul></div>
+    <div class="cartao"><h4>Acessos</h4><ul>
+      <li>Web: <code>https://bmdpereira.duckdns.org/pulse/</code></li>
+      <li>APK: <code>https://bmdpereira.duckdns.org/pulse/apk/pulse.apk</code></li>
+      <li>Página pública: <code>https://pereirabmd.github.io/escritorio-casa/</code></li>
+      <li>Política de privacidade: <code>/pulse/privacidade.html</code></li></ul></div>
+    <div class="cartao"><h4>Princípios</h4><ul>
+      <li>Escritas só pelas APIs/serviços oficiais (nunca SQL direto nas bases de origem)</li>
+      <li>Um módulo a falhar não derruba o resto (modo degradado)</li>
+      <li>Testes só com bases <code>teste-*</code></li>
+      <li>Toda a interface em <code>pt-PT</code></li></ul></div>
+  </div>
+  <div class="nota">O dashboard <b>Hoje</b> mostra só o essencial e imediato de cada módulo; o completo fica em <b>Mais</b>.</div>
+</section>
+
+<!-- ===================================================================== -->
+<section id="funcionalidades">
+  <h2>Funcionalidades por módulo</h2>
+  <p class="lead">Todos os módulos existem no Android (ecrãs nativos) e na Web. Cada pessoa só vê os módulos que o administrador lhe deu.</p>
+  <div class="grelha">
+    <div class="cartao"><h3>Hoje</h3><ul>
+      <li>Cartões por módulo: tarefas, próximo bilhete, RTO, peso, contas a pagar, compras, próximos 5 eventos e emails importantes</li>
+      <li>Ações diretas: concluir/adiar tarefa, marcar dia RTO, registar peso, pagar conta, marcar compra</li>
+      <li>Ordenar (arrastar) e esconder cartões, por pessoa</li>
+      <li>Atualização parcial por módulo após cada ação</li></ul></div>
+    <div class="cartao"><h3>Tarefas</h3><ul>
+      <li>Hoje, atrasadas, amanhã; filtro por pessoa</li>
+      <li>Concluir, reabrir, saltar, adiar (muda a data) — sempre com «Desfazer»</li>
+      <li>Catálogo: criar/editar/duplicar; repetições (diária, semanal, dias específicos, mensal, trimestral, semestral, pontual); rotação entre pessoas</li>
+      <li>Calendário mensal e semanal com feriados; Horário escolar; Piscina</li>
+      <li>Configuração: pessoas, «não incomodar», administração, auditoria, exportação CSV</li>
+      <li>A app dedicada <code>tarefas/</code> continua para outros utilizadores; partilham a mesma API</li></ul></div>
+    <div class="cartao"><h3>Peso</h3><ul>
+      <li>Resumo: peso atual, variação, IMC, gasto diário, ritmo semanal, previsão do objetivo</li>
+      <li>Gráfico (7 d a 1 ano) com média móvel de 7 dias e linha do alvo</li>
+      <li>Registos: criar, editar, eliminar com «Desfazer»; configuração pessoal</li>
+      <li>Estatísticas calculadas no servidor (<code>services/peso.py</code>)</li></ul></div>
+    <div class="cartao"><h3>RTO</h3><ul>
+      <li>Calendário com T (escritório) e C (casa), feriados portugueses, férias e astreinte</li>
+      <li>Toque no dia marca T→C→vazio; modo Férias; modo Administrador (com confirmação)</li>
+      <li>Totais, quota pro-rata, saldo e visão do ano (mapa de calor)</li>
+      <li>Notas e gerador de validações de 14 em 14 dias</li></ul></div>
+    <div class="cartao"><h3>Finanças</h3><ul>
+      <li>Lançamentos do mês, estados derivados das datas, recorrentes copiadas ao abrir o mês</li>
+      <li>Resumo «ativo − passivo», aviso persistente de vencidas</li>
+      <li>Relatórios por categoria, categorias, lembretes</li>
+      <li>Fica pendente o relatório homólogo e o histórico de uma conta</li></ul></div>
+    <div class="cartao"><h3>Bilhetes CP</h3><ul>
+      <li>Semana: próximo comboio, validade do Passe Verde, editor com verificação do horário na CP</li>
+      <li>Bilhetes, pedidos avulsos (repetição automática), registo com filtros</li>
+      <li>O administrador marca viagens para outras pessoas; a compra usa as credenciais de quem viaja (ADR-069)</li>
+      <li><b>Na CP</b>: passe, bilhetes futuros e cancelar (ADR-075; o cancelamento só foi testado com CP simulada)</li>
+      <li>O Pi compra sozinho e avisa pelo Pulse (FCM); o ntfy está desligado</li></ul></div>
+    <div class="cartao"><h3>Compras <span class="tag ok">só no Pulse</span></h3><ul>
+      <li>Lista «Casa» partilhada e listas pessoais; catálogo de 338 produtos em 13 corredores</li>
+      <li>Favoritos, esconder produtos e categorias, sugestões («acabar», «costumas comprar»)</li>
+      <li>Quantidade e nota opcionais; «Limpar comprados» com «Desfazer»</li>
+      <li><b>Última chamada</b> (ADR-076): avisa toda a gente antes de ir às compras; só uma por ida; reabre com «Limpar comprados» ou ao fim de 12 h</li></ul></div>
+    <div class="cartao"><h3>Calendário e Email</h3><ul>
+      <li>Google Calendar: ver, criar, editar, apagar (com confirmação)</li>
+      <li>Gmail multi-conta: ler, marcar lida, arquivar, estrela — nunca enviar nem apagar</li>
+      <li>Ligar e remover contas Google; emails abrem no Gmail</li></ul></div>
+    <div class="cartao"><h3>Notificações</h3><ul>
+      <li>FCM com prioridade alta; caixa de eventos no servidor</li>
+      <li>Botões na notificação («Marcar feita», «Daqui a 1 h») e toque que abre o sítio certo</li>
+      <li>Avisos de Tarefas, Bilhetes CP, Finanças e Compras (Última chamada)</li></ul></div>
+    <div class="cartao"><h3>Contas e administração</h3><ul>
+      <li>Contas criadas pelo administrador (sem auto-registo); mudança obrigatória da palavra-passe</li>
+      <li>Módulos por pessoa e desativação global; sessões e dispositivos</li>
+      <li>Android: PIN e biometria; atualização interna do APK</li></ul></div>
+  </div>
+</section>
+
+<!-- ===================================================================== -->
+<section id="assistente">
+  <h2>Assistente de voz <span class="tag ok">ADR-077</span></h2>
+  <p class="lead">Tocar no logotipo da barra de baixo (Android) abre o assistente, que começa a ouvir. Dizes, por exemplo, «adiciona à lista de compras pão e cebolas» ou «o que tenho amanhã?».</p>
+  <figure>
+    <svg viewBox="0 0 900 250" role="img" aria-label="Fluxo do assistente de voz">
+      <defs><marker id="ponta" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="var(--text2)"/></marker></defs>
+      <rect class="caixa" x="10" y="20" width="150" height="70" rx="10"/><text x="85" y="50" text-anchor="middle">Toque no logo</text><text class="t2" x="85" y="70" text-anchor="middle">fala (pt-PT, no telemóvel)</text>
+      <rect class="caixa" x="200" y="20" width="150" height="70" rx="10"/><text x="275" y="50" text-anchor="middle">Texto</text><text class="t2" x="275" y="70" text-anchor="middle">SpeechRecognizer</text>
+      <rect class="forte" x="390" y="20" width="170" height="70" rx="10"/><text x="475" y="50" text-anchor="middle">POST /ai/command</text><text class="t2" x="475" y="70" text-anchor="middle">Pi: orquestra</text>
+      <rect class="aviso" x="600" y="20" width="150" height="70" rx="10"/><text x="675" y="50" text-anchor="middle">Modelo Claude</text><text class="t2" x="675" y="70" text-anchor="middle">API Anthropic (HTTPS)</text>
+      <path class="seta" d="M160 55H198"/><path class="seta" d="M350 55H388"/><path class="seta" d="M560 55H598"/>
+      <rect class="forte" x="390" y="150" width="170" height="70" rx="10"/><text x="475" y="180" text-anchor="middle">Propostas</text><text class="t2" x="475" y="200" text-anchor="middle">nada é escrito ainda</text>
+      <rect class="caixa" x="200" y="150" width="150" height="70" rx="10"/><text x="275" y="180" text-anchor="middle">Confirmas?</text><text class="t2" x="275" y="200" text-anchor="middle">toque ou «confirma»</text>
+      <rect class="forte" x="10" y="150" width="150" height="70" rx="10"/><text x="85" y="180" text-anchor="middle">POST /ai/confirm</text><text class="t2" x="85" y="200" text-anchor="middle">actions.executar (origem ia)</text>
+      <path class="seta" d="M475 92V148"/><path class="seta" d="M388 185H352"/><path class="seta" d="M198 185H162"/>
+      <rect class="caixa" x="600" y="150" width="240" height="70" rx="10"/><text x="720" y="180" text-anchor="middle">Mesma camada de ações</text><text class="t2" x="720" y="200" text-anchor="middle">valida · permissões · auditoria</text>
+    </svg>
+    <figcaption>Fluxo: o modelo só propõe. A escrita acontece depois da confirmação, pela mesma camada de ações da interface.</figcaption>
+  </figure>
+  <h3>Regras</h3>
+  <ul>
+    <li><b>Nada se escreve sem confirmar.</b> As ações <code>safe_action</code> e <code>sensitive_action</code> ficam como proposta. Confirma-se com um toque ou dizendo «confirma»; «cancela» desiste. Só conta a frase inteira — «sim, e acrescenta leite» é um pedido novo.</li>
+    <li><b>Âmbito:</b> todos os módulos a que a conta tem acesso; conversa completa (também perguntas); resposta só em texto.</li>
+    <li><b>Leituras</b> (<code>consultar_hoje</code>, <code>compras_procurar</code>) correm logo e só com os dados da própria conta. A pesquisa no catálogo evita duplicados («cebolas» → «Cebola»).</li>
+    <li><b>Limites:</b> 12 pedidos por minuto por conta; até 6 voltas ao modelo por pedido; mensagens até 600 caracteres.</li>
+    <li><b>Auditoria:</b> cada ação executada fica em <code>pulse_activity</code> com <code>origem = 'ia'</code>.</li>
+    <li><b>Privacidade:</b> o texto dito e o que o modelo consulta vão para a Anthropic; a chave (<code>PULSE_AI_KEY</code>) fica só no Pi. Sem chave, o assistente mostra «ainda não está ligado».</li>
+    <li>Modelo por omissão: Haiku 4.5 (<code>PULSE_AI_MODEL</code> muda-o).</li>
+  </ul>
+  <div class="nota">Exceção à paridade com a Web: o assistente é só Android + Pi. <b>Por verificar:</b> o modelo real e a voz real no telemóvel (os testes usam um modelo falso).</div>
+</section>
+
+<!-- ===================================================================== -->
+<section id="arquitetura">
+  <h2>Arquitetura</h2>
+  <figure>
+    <svg viewBox="0 0 900 470" role="img" aria-label="Arquitetura do Pulse">
+      <defs><marker id="ponta2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="var(--text2)"/></marker></defs>
+      <style>.s2{stroke:var(--text2);stroke-width:1.5;fill:none;marker-end:url(#ponta2)}</style>
+      <rect class="caixa" x="120" y="10" width="200" height="56" rx="10"/><text x="220" y="36" text-anchor="middle">Android (APK)</text><text class="t2" x="220" y="54" text-anchor="middle">Kotlin · Compose · PIN/biometria</text>
+      <rect class="caixa" x="580" y="10" width="200" height="56" rx="10"/><text x="680" y="36" text-anchor="middle">Web (PWA)</text><text class="t2" x="680" y="54" text-anchor="middle">React · Vite · TypeScript</text>
+      <path class="s2" d="M220 66V110"/><path class="s2" d="M680 66V110"/>
+      <rect class="caixa" x="60" y="110" width="780" height="36" rx="8"/><text x="450" y="133" text-anchor="middle">nginx (HTTPS, bmdpereira.duckdns.org) — /pulse/ estático · /pulse/api/ → 127.0.0.1:8897 · /pulse/apk/ · /internal/ bloqueado</text>
+      <path class="s2" d="M450 146V180"/>
+      <rect class="forte" x="60" y="180" width="780" height="150" rx="12"/>
+      <text x="80" y="204" style="font-weight:600">pulse-api · FastAPI · 127.0.0.1:8897 (MemoryMax 200 M)</text>
+      <rect class="caixa" x="80" y="216" width="170" height="44" rx="8"/><text x="165" y="243" text-anchor="middle">API /api/v1 (51 rotas)</text>
+      <rect class="caixa" x="262" y="216" width="170" height="44" rx="8"/><text x="347" y="243" text-anchor="middle">Camada de ações (70)</text>
+      <rect class="caixa" x="444" y="216" width="170" height="44" rx="8"/><text x="529" y="243" text-anchor="middle">Serviços por módulo</text>
+      <rect class="caixa" x="626" y="216" width="196" height="44" rx="8"/><text x="724" y="243" text-anchor="middle">Agendador (30 s) + FCM</text>
+      <rect class="aviso" x="80" y="272" width="170" height="44" rx="8"/><text x="165" y="299" text-anchor="middle">Assistente de IA</text>
+      <rect class="caixa" x="262" y="272" width="170" height="44" rx="8"/><text x="347" y="299" text-anchor="middle">Auth · sessões · limites</text>
+      <rect class="caixa" x="444" y="272" width="170" height="44" rx="8"/><text x="529" y="299" text-anchor="middle">Integração Google</text>
+      <rect class="caixa" x="626" y="272" width="196" height="44" rx="8"/><text x="724" y="299" text-anchor="middle">Consulta CP (horários)</text>
+      <path class="s2" d="M165 330V370"/><path class="s2" d="M347 330V370"/><path class="s2" d="M529 330V370"/><path class="s2" d="M724 330V370"/>
+      <rect class="caixa" x="60" y="370" width="210" height="80" rx="10"/><text x="165" y="398" text-anchor="middle">pulse.db (SQLite, WAL)</text><text class="t2" x="165" y="418" text-anchor="middle">contas, compras, eventos,</text><text class="t2" x="165" y="433" text-anchor="middle">atividade, definições</text>
+      <rect class="caixa" x="282" y="370" width="210" height="80" rx="10"/><text x="387" y="398" text-anchor="middle">dados-api :8898</text><text class="t2" x="387" y="418" text-anchor="middle">RTO · Peso · Bilhetes CP ·</text><text class="t2" x="387" y="433" text-anchor="middle">Finanças (chave de serviço)</text>
+      <rect class="caixa" x="504" y="370" width="170" height="80" rx="10"/><text x="589" y="398" text-anchor="middle">tarefas-api :8899</text><text class="t2" x="589" y="418" text-anchor="middle">Tarefas e avisos</text>
+      <rect class="caixa" x="686" y="370" width="154" height="80" rx="10"/><text x="763" y="398" text-anchor="middle">Nuvem</text><text class="t2" x="763" y="418" text-anchor="middle">Google · FCM · CP ·</text><text class="t2" x="763" y="433" text-anchor="middle">Anthropic</text>
+    </svg>
+    <figcaption>O Pi 3B serve a API, a Web e o APK. O raciocínio do assistente vai para a nuvem; tudo o resto corre no Pi.</figcaption>
+  </figure>
+
+  <h3>Camadas</h3>
+  <div class="tabela"><table>
+    <tr><th>Camada</th><th>Onde</th><th>Responsabilidade</th></tr>
+    <tr><td>API</td><td><code>server/pulse/api/v1/</code></td><td>Rotas <code>/api/v1/</code>; validação com Pydantic; erros em <code>pt-PT</code> com código estável</td></tr>
+    <tr><td>Ações</td><td><code>server/pulse/actions.py</code></td><td>Catálogo único usado pela interface e pela IA: módulo, nível (<code>read</code> · <code>safe_action</code> · <code>sensitive_action</code>), parâmetros validados, confirmação, auditoria</td></tr>
+    <tr><td>Serviços</td><td><code>server/pulse/services/</code></td><td>Regras de negócio por módulo (tarefas, peso, RTO, finanças, compras, bilhetes, Google, IA…)</td></tr>
+    <tr><td>Clientes</td><td><code>server/pulse/clients/</code></td><td><code>dados-api</code> e <code>tarefas-api</code> com chave de serviço; 4xx preservados, falhas = modo degradado</td></tr>
+    <tr><td>Dados</td><td><code>server/migrations/NNN_*.sql</code></td><td>SQLite em WAL; migrações numeradas (010 aplicada); nunca se edita uma já aplicada</td></tr>
+    <tr><td>Notificações</td><td><code>server/pulse/notifications.py</code></td><td>Caixa de eventos idempotente (por <code>chave</code>), canal FCM, agendador de fundo</td></tr>
+  </table></div>
+
+  <h3>Fluxos principais</h3>
+  <h4>Escrever dados</h4>
+  <pre><code>Android / Web / IA  →  POST /api/v1/actions/&lt;nome&gt;  →  validação + permissões + confirmação
+                    →  serviço do módulo  →  API oficial do módulo (dados-api / tarefas-api) ou pulse.db
+                    →  registo em pulse_activity (origem: ui | ia)</code></pre>
+  <p>Proibido: SQL direto nas bases de origem. As operações definem estados (<code>comprado = verdadeiro</code>) em vez de os alternar, e usam <code>cid</code> (chave de idempotência), para se poderem repetir sem efeito.</p>
+  <h4>Última chamada</h4>
+  <pre><code>compras.ultima_chamada (sensível, pede confirmação)
+   →  shop_last_call (uma linha por lista)  →  um evento por pessoa (menos quem avisou)
+   →  pulse_events  →  FCM (prioridade alta)  →  faixa «X avisou toda a gente às HH:MM» na lista</code></pre>
+  <h4>Modo degradado</h4>
+  <p>Se o Gmail, a CP ou um módulo falham, o Hoje e os restantes módulos continuam a funcionar; o cartão afetado mostra o estado de forma discreta (<code>ok</code> · <code>nao_ligado</code> · <code>indisponivel</code> · <code>sem_acesso</code> · <code>erro</code> · <code>desativado</code>).</p>
+  <h4>Bilhetes CP (fora do Pulse)</h4>
+  <p>O Pi compra os bilhetes sozinho (scripts em <code>bilhetes_cp/</code>); o Pulse lê e configura pela API <code>/bilhetes/*</code> do <code>dados-api</code> e recebe os avisos em <code>/internal/events</code> (só em loopback).</p>
+</section>
+
+<!-- ===================================================================== -->
+<section id="api">
+  <h2>API e camada de ações</h2>
+  <p class="lead">Todas as rotas estão em <code>/api/v1/</code>. Em produção a documentação interativa está desligada.</p>
+  <div class="tabela"><table>
+    <tr><th>Prefixo</th><th>Para quê</th></tr>
+    <tr><td><code>/health</code> · <code>/version</code></td><td>Estado do serviço, da base e do <code>dados-api</code></td></tr>
+    <tr><td><code>/auth</code></td><td>Login por e-mail e palavra-passe, sessões, mudar palavra-passe, logout</td></tr>
+    <tr><td><code>/dashboard</code></td><td><code>GET /today</code> (o Hoje, <code>?modulos=</code> para atualização parcial) e a ordem dos cartões</td></tr>
+    <tr><td><code>/actions</code></td><td>Catálogo e <code>POST /actions/&lt;nome&gt;</code> (<code>{params, confirmado}</code>)</td></tr>
+    <tr><td><code>/tasks</code> · <code>/weight</code> · <code>/rto</code> · <code>/finance</code> · <code>/tickets</code> · <code>/shopping</code></td><td>Leitura de cada módulo (tudo calculado no servidor)</td></tr>
+    <tr><td><code>/calendar</code> · <code>/mail</code> · <code>/google</code></td><td>Calendário, Gmail e contas Google ligadas</td></tr>
+    <tr><td><code>/devices</code> · <code>/notifications</code></td><td>Registo FCM, caixa de eventos, marcar lidas</td></tr>
+    <tr><td><code>/modules</code> · <code>/admin</code></td><td>Módulos por pessoa, contas, sessões (administradores)</td></tr>
+    <tr><td><code>/ai</code></td><td><code>/status</code>, <code>/command</code> (conversa → propostas), <code>/confirm</code> (executar propostas)</td></tr>
+    <tr><td><code>/internal/events</code></td><td>Entrada de avisos de outras apps; só loopback, bloqueado no nginx</td></tr>
+  </table></div>
+  <h3>Ações por módulo (70)</h3>
+  <div class="tabela"><table>
+    <tr><th>Módulo</th><th>N.º</th><th>Exemplos</th></tr>
+    <tr><td>tarefas</td><td>18</td><td><code>tarefas.concluir</code>, <code>adiar</code>, <code>criar</code>, <code>piscina_registar</code>, <code>reatribuir</code> (sensível)</td></tr>
+    <tr><td>compras</td><td>18</td><td><code>compras.adicionar</code>, <code>comprado</code>, <code>limpar_comprados</code> (sensível), <code>ultima_chamada</code> (sensível)</td></tr>
+    <tr><td>financas</td><td>12</td><td><code>financas.pagar</code>, <code>criar</code>, <code>anular_pagamento</code></td></tr>
+    <tr><td>rto</td><td>7</td><td><code>rto.marcar_dia</code>, <code>ferias_dia</code>, <code>nota_eliminar</code> (sensível)</td></tr>
+    <tr><td>bilhetes</td><td>5</td><td><code>bilhetes.semana</code>, <code>passe</code>, <code>cp_cancelar</code> (sensível)</td></tr>
+    <tr><td>peso</td><td>4</td><td><code>peso.registar</code>, <code>editar</code>, <code>eliminar</code> (sensível)</td></tr>
+    <tr><td>calendario · email</td><td>3 + 3</td><td><code>calendario.criar</code>, <code>apagar</code> (sensível), <code>email.arquivar</code></td></tr>
+  </table></div>
+  <div class="nota">As ações <code>sensitive_action</code> exigem <code>confirmado: true</code>; sem ele a API responde 409 <code>confirmacao_necessaria</code>.</div>
+</section>
+
+<!-- ===================================================================== -->
+<section id="seguranca">
+  <h2>Segurança e dados</h2>
+  <ul>
+    <li><b>Contas:</b> criadas pelo administrador no servidor (<code>python -m pulse.cli</code>); primeiro acesso obriga a mudar a palavra-passe; bloqueio temporário por falhas; limite de tentativas por IP.</li>
+    <li><b>Sessões:</b> só se guarda o hash SHA-256 do token. Web: cookie httpOnly/Secure/SameSite=Lax com cabeçalho <code>X-Pulse-Client</code> em pedidos que alteram (contra CSRF). Android: token <code>Bearer</code> cifrado no telemóvel + PIN e biometria.</li>
+    <li><b>Isolamento:</b> cada pessoa só vê o que lhe pertence; listas pessoais de outra pessoa dão 404; módulos por conta.</li>
+    <li><b>Google:</b> refresh tokens cifrados em repouso (Fernet), nunca devolvidos ao cliente; âmbitos mínimos (Gmail sem enviar/apagar); revogáveis.</li>
+    <li><b>Segredos:</b> em <code>/etc/pulse-app/pulse.env</code> (root, 600), fora do Git. As chaves da CP e a da IA nunca vão para o telemóvel.</li>
+    <li><b>Dados:</b> <code>pulse.db</code> (produção) guarda só dados próprios do Pulse; <code>teste-pulse.db</code> para testes; em produção a base não pode chamar-se <code>teste-*</code> e fora dela tem de se chamar.</li>
+    <li><b>Backup:</b> o <code>pulse.db</code> entra no backup diário às 03:30 do <code>dados/</code> (cifrado com <code>age</code>, repositório privado <code>pereirabmd/backup_database</code>, ficheiro <code>pulse.sql.age</code>); restauro testado ponta a ponta.</li>
+    <li><b>Auditoria:</b> <code>pulse_activity</code> regista módulo, ação, utilizador, origem (<code>ui</code> ou <code>ia</code>), resultado e detalhe.</li>
+  </ul>
+</section>
+
+<!-- ===================================================================== -->
+<section id="android">
+  <h2>Android e Web</h2>
+  <div class="tabela"><table>
+    <tr><th>Tema</th><th>Android</th><th>Web</th></tr>
+    <tr><td>Estado</td><td>APK 0.4.0 (versionCode 19), todos os módulos nativos</td><td>Todos os módulos; servida pelo nginx do Pi</td></tr>
+    <tr><td>Autenticação</td><td>Token cifrado + PIN + biometria</td><td>Cookie de sessão; sem PIN</td></tr>
+    <tr><td>Notificações</td><td>FCM, canais por módulo, botões de ação, toque que abre o sítio certo</td><td>—</td></tr>
+    <tr><td>Assistente de voz</td><td>Sim (toque no logo)</td><td>—</td></tr>
+    <tr><td>Atualização</td><td>Interna, lê <code>version.json</code>; verifica ao voltar à app</td><td>Publicada com o servidor</td></tr>
+    <tr><td>Fila offline / cache</td><td><span class="tag pend">pendente</span> (Room + WorkManager)</td><td>Só online</td></tr>
+  </table></div>
+  <p>Compilação do Android: <code>android/</code>; ecrãs em <code>ui/*Ecra.kt</code>, um por módulo, com <code>Base.kt</code> para o que é comum. Web: <code>web/src/screens/&lt;módulo&gt;/</code>. A tabela de paridade está em <code>docs/PARITY_ANDROID.md</code> e uma por app migrada em <code>docs/PARITY_*.md</code>.</p>
+</section>
+
+<!-- ===================================================================== -->
+<section id="testes">
+  <h2>Testes</h2>
+  <p class="lead">Nenhuma funcionalidade está terminada só porque compila. Os testes usam bases temporárias <code>teste-*.db</code> e um <code>dados-api</code> falso; nunca escrevem em produção.</p>
+  <div class="tabela"><table>
+    <tr><th>Camada</th><th>Ferramenta</th><th>Estado (30/09/2026)</th><th>O que cobre</th></tr>
+    <tr><td>Servidor</td><td>pytest</td><td><b>480</b> a passar (33 ficheiros)</td><td>Unidade, integração, contratos com o <code>dados-api</code>, migrações, autenticação e autorização, idempotência, modo degradado, notificações, ações, assistente (<code>test_ia.py</code>), Última chamada</td></tr>
+    <tr><td>Web</td><td>Vitest + Testing Library; ESLint; <code>tsc</code></td><td><b>277</b> a passar (14 ficheiros)</td><td>Componentes e fluxos por módulo, autenticação, ações do Hoje, estados de erro</td></tr>
+    <tr><td>Android</td><td>JUnit (JVM)</td><td><b>40+</b> testes (7 ficheiros)</td><td>Formatos pt-PT, regras de palavra-passe, leitura do JSON do servidor, PIN, atualização, «confirma/cancela» do assistente</td></tr>
+    <tr><td>Interface Android</td><td>—</td><td><span class="tag aviso">só compilação</span></td><td>A UI verifica-se no telemóvel; não há testes de Compose automatizados</td></tr>
+  </table></div>
+  <h3>Como correr</h3>
+<pre><code><span class="c"># Servidor (a partir de pulse/server)</span>
+.venv/bin/python -m pytest -q                       <span class="c"># tudo (~2,5 min no PC)</span>
+.venv/bin/python -m pytest -q tests/test_ia.py      <span class="c"># um ficheiro</span>
+.venv/bin/python -m pytest -q -k ultima_chamada     <span class="c"># por nome</span>
+
+<span class="c"># Web (a partir de pulse/web)</span>
+npm ci --no-audit --no-fund
+npm run lint &amp;&amp; npx tsc --noEmit &amp;&amp; npm test
+npx vitest run src/screens/compras                  <span class="c"># uma pasta</span>
+npm run build
+
+<span class="c"># Android (a partir de pulse/android)</span>
+export JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64 ANDROID_HOME=~/Android/Sdk
+~/.local/opt/gradle-8.7/bin/gradle :app:compileDebugKotlin       <span class="c"># só compilar</span>
+~/.local/opt/gradle-8.7/bin/gradle :app:testDebugUnitTest        <span class="c"># testes JVM</span>
+~/.local/opt/gradle-8.7/bin/gradle :app:assembleRelease          <span class="c"># APK (assinado se houver keystore)</span></code></pre>
+  <h3>Regras</h3>
+  <ul>
+    <li>Antes de uma beta: build Android, build Web, testes do servidor, contratos, migrações e <i>smoke test</i> no Pi.</li>
+    <li>Nunca remover ou enfraquecer um teste só para a build passar.</li>
+    <li>Quando uma migração acrescenta ficheiro, atualizar os testes que contam migrações (<code>test_db.py</code>, <code>test_health.py</code>) e o catálogo de ações (<code>test_actions.py</code>).</li>
+    <li>O deploy corre lint, testes e build da Web antes de tocar no Pi.</li>
+  </ul>
+</section>
+
+<!-- ===================================================================== -->
+<section id="operacao">
+  <h2>Comandos de operação</h2>
+  <div class="tabela"><table>
+    <tr><th>O quê</th><th>Onde</th></tr>
+    <tr><td>Releases (guarda as 5 últimas); <code>current</code> aponta para a ativa</td><td><code>/opt/pulse/releases/beta_YYYYMMDD_X</code> · <code>/opt/pulse/current</code></td></tr>
+    <tr><td>Ambiente virtual partilhado</td><td><code>/opt/pulse/venv</code></td></tr>
+    <tr><td>Base de produção (dono <code>bpereira</code>, 600)</td><td><code>/var/lib/pulse/pulse.db</code></td></tr>
+    <tr><td>Segredos e configuração (root, 600)</td><td><code>/etc/pulse-app/pulse.env</code></td></tr>
+    <tr><td>Logs</td><td><code>/var/log/pulse/api.log</code> (rotativo) e journald</td></tr>
+    <tr><td>Serviço</td><td><code>pulse-api.service</code> — <code>127.0.0.1:8897</code>, <code>MemoryMax=200M</code></td></tr>
+    <tr><td>APK e manifesto</td><td><code>/opt/pulse/apk/</code> (<code>pulse.apk</code>, <code>pulse-&lt;versão&gt;.apk</code>, <code>version.json</code>; guarda os 3 últimos)</td></tr>
+    <tr><td>Serviços vizinhos</td><td><code>dados-api</code> :8898 · <code>tarefas-api</code> :8899 · <code>dados-backup.service</code></td></tr>
+  </table></div>
+
+  <h3>Publicar uma versão</h3>
+<pre><code><span class="c"># Servidor + Web: compila, cria a release, instala dependências, troca o symlink, reinicia e verifica /health (até 90 s).</span>
+<span class="c"># Se falhar, volta sozinho à release anterior. Nunca toca nos dados. Demora vários minutos (npm ci + testes).</span>
+pulse/scripts/deploy/deploy_pi.sh
+
+<span class="c"># APK: subir versionCode/versionName em android/app/build.gradle e depois</span>
+pulse/scripts/deploy/publicar_apk.sh "notas da versão"
+
+<span class="c"># Código: commit + push + GitHub Pages (sempre pelo script do repositório)</span>
+./push.sh "mensagem do commit"</code></pre>
+  <div class="nota">O <code>publicar_apk.sh</code> recusa um <code>versionCode</code> igual ou menor ao publicado. Publica o APK antes do <code>version.json</code>, para a app nunca ver uma versão anunciada sem ficheiro.</div>
+
+  <h3>Estado e logs</h3>
+<pre><code>ssh casamento-pi 'systemctl status pulse-api --no-pager'
+ssh casamento-pi 'curl -s http://127.0.0.1:8897/api/v1/health'
+ssh casamento-pi 'journalctl -u pulse-api -n 100 --no-pager'
+ssh casamento-pi 'journalctl -u pulse-api -f'                     <span class="c"># seguir em direto</span>
+ssh casamento-pi 'tail -n 100 /var/log/pulse/api.log'
+ssh casamento-pi 'readlink /opt/pulse/current; ls -t /opt/pulse/releases | head'</code></pre>
+
+  <h3>Reiniciar e voltar atrás (rollback de código)</h3>
+<pre><code>ssh casamento-pi 'sudo systemctl restart pulse-api'
+<span class="c"># voltar a uma release anterior (os dados não voltam atrás):</span>
+ssh casamento-pi 'ln -sfn /opt/pulse/releases/beta_20260930_31 /opt/pulse/current &amp;&amp; sudo systemctl restart pulse-api'</code></pre>
+  <div class="nota perigo">As migrações da base (<code>pulse.db</code>) só avançam. Voltar a uma release antiga não desfaz a migração; por isso as migrações devem ser sempre compatíveis com a release anterior (só acrescentar).</div>
+
+  <h3>Contas (não há auto-registo)</h3>
+<pre><code>ADM='sudo sh -c "set -a; . /etc/pulse-app/pulse.env; set +a; cd /opt/pulse/current/server &amp;&amp; exec sudo -u bpereira -E /opt/pulse/venv/bin/python -m pulse.cli'
+printf '%s\n' '&lt;password provisória&gt;' | ssh casamento-pi "$ADM criar --email a@b.pt --nome Nome [--admin]\""
+printf '%s\n' '&lt;nova provisória&gt;'    | ssh casamento-pi "$ADM repor --email a@b.pt\""      <span class="c"># esqueci-me da password</span>
+ssh casamento-pi "$ADM listar\""                                                              <span class="c"># também: desativar / ativar --email …</span></code></pre>
+  <p>A palavra-passe vai pelo <i>stdin</i>, nunca na linha de comandos. Executar sempre como <code>bpereira</code> (dono do <code>pulse.db</code>); como root os ficheiros WAL ficariam com o dono errado.</p>
+
+  <h3>Backup e restauro do <code>pulse.db</code></h3>
+<pre><code><span class="c"># o backup é diário (03:30) e automático; estado:</span>
+ssh casamento-pi 'systemctl status dados-backup.service --no-pager'
+
+<span class="c"># cópia pontual de segurança, em consistência (sem parar o serviço):</span>
+ssh casamento-pi 'python3 -c "import sqlite3; s=sqlite3.connect(\"/var/lib/pulse/pulse.db\"); d=sqlite3.connect(\"/var/lib/pulse/pulse.db.bak-manual\"); s.backup(d)"'
+
+<span class="c"># restaurar a partir do backup cifrado (a chave age NÃO está no Pi: restaurar na máquina de desenvolvimento e enviar o .db)</span>
+cd ~/dados &amp;&amp; python3 backup.py restore pulse.sql.age --identity &lt;chave.txt&gt; --out /var/lib/pulse/pulse-restaurado.db
+sudo systemctl stop pulse-api &amp;&amp; mv /var/lib/pulse/pulse.db /var/lib/pulse/pulse.db.antigo \
+  &amp;&amp; mv /var/lib/pulse/pulse-restaurado.db /var/lib/pulse/pulse.db &amp;&amp; sudo systemctl start pulse-api</code></pre>
+
+  <h3>Notificações, Google e assistente</h3>
+<pre><code><span class="c"># FCM: instalar cryptography no venv, pôr a service account e a variável</span>
+/opt/pulse/venv/bin/pip install cryptography
+<span class="c"># /etc/pulse-app/fcm-service-account.json (root, 600) e PULSE_FCM_CREDENTIALS no pulse.env</span>
+
+<span class="c"># Assistente de IA: pôr a chave (sem a mostrar) e reiniciar</span>
+sudo nano /etc/pulse-app/pulse.env        <span class="c"># PULSE_AI_KEY=sk-ant-…   (opcional: PULSE_AI_MODEL)</span>
+sudo systemctl restart pulse-api
+
+<span class="c"># a caixa de eventos também se consulta em GET /api/v1/notifications (a app mostra o que lá está)</span></code></pre>
+
+  <h3>nginx</h3>
+<pre><code>sudo nginx -t &amp;&amp; sudo systemctl reload nginx     <span class="c"># sempre testar antes de recarregar; guardar cópia do vhost antes de mexer</span>
+<span class="c"># configuração no repositório: pulse/infra/nginx/pulse-api.conf e pulse-web.conf</span></code></pre>
+
+  <h3>Desenvolvimento local</h3>
+<pre><code>cd pulse/server
+python3 -m venv --without-pip .venv
+python3 -m pip --python .venv/bin/python install -r requirements-dev.txt
+PULSE_ENV=development PULSE_DB_PATH=/tmp/teste-pulse.db .venv/bin/uvicorn pulse.asgi:app --port 8897</code></pre>
+</section>
+
+<!-- ===================================================================== -->
+<section id="config">
+  <h2>Configuração</h2>
+  <p class="lead">Variáveis no <code>/etc/pulse-app/pulse.env</code> (carregado pelo systemd). Nunca vão para o Git.</p>
+  <div class="tabela"><table>
+    <tr><th>Variável</th><th>Para quê</th></tr>
+    <tr><td><code>PULSE_ENV</code></td><td><code>production</code>, <code>development</code> ou <code>test</code></td></tr>
+    <tr><td><code>PULSE_DB_PATH</code></td><td>Base (<code>/var/lib/pulse/pulse.db</code>; fora de produção tem de ser <code>teste-*.db</code>)</td></tr>
+    <tr><td><code>PULSE_WEB_BASE_PATH</code></td><td>Base da Web (<code>/pulse/</code>)</td></tr>
+    <tr><td><code>PULSE_DADOS_URL</code> · <code>PULSE_TAREFAS_URL</code></td><td><code>http://127.0.0.1:8898</code> e <code>:8899</code></td></tr>
+    <tr><td><code>PULSE_SERVICE_KEY</code></td><td>Chave de serviço, a mesma do <code>dados-api</code> e do <code>tarefas-api</code></td></tr>
+    <tr><td><code>PULSE_LOG_DIR</code></td><td><code>/var/log/pulse</code></td></tr>
+    <tr><td><code>PULSE_SESSION_DAYS</code></td><td>Duração da sessão (1–365; por omissão 30)</td></tr>
+    <tr><td><code>PULSE_SCHEDULER_S</code></td><td>Intervalo do agendador de notificações (0 desliga; por omissão 30)</td></tr>
+    <tr><td><code>PULSE_FCM_CREDENTIALS</code> · <code>PULSE_FCM_PROJECT</code> · <code>PULSE_FCM_SO_DADOS</code></td><td>FCM: service account, projeto e modo «só dados» (botões nas notificações)</td></tr>
+    <tr><td><code>PULSE_GOOGLE_CLIENT_ID</code> · <code>_CLIENT_SECRET</code> · <code>_REDIRECT_URI</code> · <code>PULSE_GOOGLE_KEY</code></td><td>Integração Google (OAuth e chave Fernet dos tokens)</td></tr>
+    <tr><td><code>PULSE_CP_CONNECT_ID</code> · <code>_CONNECT_SECRET</code> · <code>PULSE_CP_API_KEY_TRAVEL</code> · <code>PULSE_CP_ESTACOES</code></td><td>Consulta de horários da CP (chaves públicas da app da CP; só no Pi)</td></tr>
+    <tr><td><code>PULSE_AI_KEY</code> · <code>PULSE_AI_MODEL</code></td><td>Assistente: chave da API da Anthropic (vazio = desligado) e modelo (por omissão Haiku 4.5)</td></tr>
+  </table></div>
+</section>
+
+<!-- ===================================================================== -->
+<section id="resolucao">
+  <h2>Resolução de problemas</h2>
+  <div class="tabela"><table>
+    <tr><th>Sintoma</th><th>Causa provável</th><th>O que fazer</th></tr>
+    <tr><td>O deploy não acaba / excede o tempo</td><td><code>npm ci</code>, lint e testes da Web demoram vários minutos</td><td>Correr em segundo plano e esperar; se a release nova ficou a meio, o <code>current</code> continua na anterior. Repetir o script</td></tr>
+    <tr><td><code>/health</code> falha após o deploy</td><td>Primeiro arranque no Pi 3 (~1 min a compilar bytecode) ou erro no código</td><td>O script espera 90 s e faz rollback sozinho; ver <code>journalctl -u pulse-api -n 100</code></td></tr>
+    <tr><td>O APK mostra o botão mas dá erro</td><td>Servidor do Pi sem a ação/migração novas</td><td>Publicar primeiro o servidor (<code>deploy_pi.sh</code>), depois o APK</td></tr>
+    <tr><td>Assistente diz «não está ligado»</td><td><code>PULSE_AI_KEY</code> vazia ou serviço sem reiniciar</td><td>Conferir a chave no <code>pulse.env</code> e <code>sudo systemctl restart pulse-api</code></td></tr>
+    <tr><td>Assistente: «demasiados pedidos»</td><td>Limite de 12 pedidos por minuto por conta</td><td>Esperar um minuto</td></tr>
+    <tr><td>Erros 500 intermitentes</td><td>Ligação SQLite partilhada entre threads (já corrigido, ADR-075)</td><td>Confirmar que a release é posterior; ver o log</td></tr>
+    <tr><td>Notificações não chegam</td><td>FCM sem credenciais, token inativo, permissão do Android</td><td>Ver <code>PULSE_FCM_CREDENTIALS</code>, <code>GET /notifications</code> (a caixa guarda tudo) e a permissão no telemóvel</td></tr>
+    <tr><td>Ligação Google mostra só uma conta</td><td>Já corrigido (ADR-073)</td><td>Usar «Usar outra conta» na lista do Google</td></tr>
+    <tr><td>Última chamada recusada (409)</td><td>Já foi feita nesta ida às compras</td><td>Reabre com «Limpar comprados» na Casa ou ao fim de 12 h</td></tr>
+  </table></div>
+</section>
+
+<!-- ===================================================================== -->
+<section id="estado">
+  <h2>Estado e pendentes</h2>
+  <div class="grelha">
+    <div class="cartao"><h4>Feito <span class="tag ok">ok</span></h4><ul>
+      <li>Todos os módulos, no Android e na Web</li>
+      <li>Camada de ações, auditoria e módulos por pessoa</li>
+      <li>FCM com botões e deep links; Última chamada</li>
+      <li>Backup do <code>pulse.db</code> testado ponta a ponta</li>
+      <li>Assistente de voz publicado (servidor e APK 0.4.0)</li></ul></div>
+    <div class="cartao"><h4>Por verificar <span class="tag aviso">atenção</span></h4><ul>
+      <li>Assistente com o modelo real e voz real no telemóvel</li>
+      <li>Envio de notificação da Última chamada a dois aparelhos</li>
+      <li>Cancelamento de bilhetes na CP (só testado com CP simulada)</li>
+      <li>Dados CP da Camila e <code>ensaio_compra.py --utilizador 2</code> antes da primeira compra real</li></ul></div>
+    <div class="cartao"><h4>Pendente <span class="tag pend">a fazer</span></h4><ul>
+      <li>Android: fila offline e cache (Room + WorkManager)</li>
+      <li>«Puxar para atualizar» na Web</li>
+      <li>Finanças: relatório homólogo e histórico de uma conta</li>
+      <li>Peso e RTO: exportação para Excel</li>
+      <li>Decidir a descontinuação das apps dedicadas (só quando o utilizador o declarar)</li></ul></div>
+  </div>
+  <div class="nota">Segurança da chave de IA: a chave foi colada numa conversa durante a configuração. Recomenda-se revogá-la na consola da Anthropic, criar outra e substituir a linha <code>PULSE_AI_KEY</code> no <code>pulse.env</code>; definir também um limite mensal de gasto.</div>
+</section>
+
+<!-- ===================================================================== -->
+<section id="adrs">
+  <h2>Decisões (ADR)</h2>
+  <p class="lead">77 decisões registadas em <code>pulse/docs/DECISIONS.md</code>. Resumo por tema:</p>
+  <div class="tabela"><table>
+    <tr><th>Tema</th><th>ADR</th></tr>
+    <tr><td>Fundações: plataformas, base própria, escritas, offline, idioma, visual</td><td>001–030</td></tr>
+    <tr><td>Fronteira com as APIs existentes; FCM vs ntfy; «adiar» muda a data</td><td>031–033</td></tr>
+    <tr><td>Android: identidade, assinatura, toolchain; instalação no Pi; contas por e-mail</td><td>034–037</td></tr>
+    <tr><td>Web, camada de ações, estatísticas no servidor</td><td>038–040</td></tr>
+    <tr><td>Módulos: RTO, Tarefas, Finanças, Bilhetes CP, Compras, Google (Calendário e Email)</td><td>041–049</td></tr>
+    <tr><td>APK v1 e módulos nativos; afinações de uso; desempenho no Pi</td><td>050–056</td></tr>
+    <tr><td>Notificações FCM (Bilhetes, Finanças, Tarefas), botões, pausa do ntfy</td><td>057–062, 066</td></tr>
+    <tr><td>Multiutilizador, ícone, Google no Pi, barra de baixo</td><td>063–065, 067, 072–074</td></tr>
+    <tr><td>Bilhetes CP avançado: horário, marcar para outros, avisos, documento, «Na CP»</td><td>068–071, 075</td></tr>
+    <tr><td>Compras: Última chamada</td><td>076</td></tr>
+    <tr><td>Assistente de voz (só Android + Pi)</td><td>077</td></tr>
+  </table></div>
+</section>
+
+<footer>
+  Pulse · documentação gerada a 30/09/2026 a partir do código e de <code>pulse/docs/</code>. Para o detalhe de cada módulo, ver <code>docs/PARITY_*.md</code>, <code>docs/MODULE_CONTRACTS.md</code> e <code>docs/API_CONTRACT.md</code>.
+</footer>
+</main>
+</div>
+
+<script>
+  // tema: segue o sistema; o botão alterna e lembra (se o browser deixar)
+  (function () {
+    var raiz = document.documentElement, b = document.getElementById('tema');
+    try { var t = localStorage.getItem('pulse-doc-tema'); if (t) raiz.setAttribute('data-tema', t); } catch (e) {}
+    b.addEventListener('click', function () {
+      var atual = raiz.getAttribute('data-tema') || (matchMedia('(prefers-color-scheme: dark)').matches ? 'escuro' : 'claro');
+      var novo = atual === 'escuro' ? 'claro' : 'escuro';
+      raiz.setAttribute('data-tema', novo);
+      try { localStorage.setItem('pulse-doc-tema', novo); } catch (e) {}
+    });
+    // botões «Copiar» nos blocos de código
+    document.querySelectorAll('pre').forEach(function (pre) {
+      var bt = document.createElement('button'); bt.className = 'copiar'; bt.type = 'button'; bt.textContent = 'Copiar';
+      bt.addEventListener('click', function () {
+        var txt = pre.innerText.replace(/Copiar$/, '').trim();
+        (navigator.clipboard ? navigator.clipboard.writeText(txt) : Promise.reject()).then(function () { bt.textContent = 'Copiado'; setTimeout(function () { bt.textContent = 'Copiar'; }, 1400); }, function () {});
+      });
+      pre.appendChild(bt);
+    });
+    // destaque do item ativo no índice
+    var links = [].slice.call(document.querySelectorAll('nav.toc a'));
+    var mapa = {}; links.forEach(function (a) { mapa[a.getAttribute('href').slice(1)] = a; });
+    if ('IntersectionObserver' in window) {
+      var io = new IntersectionObserver(function (es) {
+        es.forEach(function (e) { if (e.isIntersecting) { links.forEach(function (a) { a.classList.remove('ativo'); }); var a = mapa[e.target.id]; if (a) a.classList.add('ativo'); } });
+      }, { rootMargin: '-20% 0px -70% 0px' });
+      document.querySelectorAll('main section').forEach(function (s) { io.observe(s); });
+    }
+  })();
+</script>
+</body>
+</html>
