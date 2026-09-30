@@ -44,6 +44,9 @@ def cliente(tmp_path_factory):
             time.sleep(0.2)
         else:
             pytest.fail("o dados-api não arrancou")
+        import sqlite3
+        b = sqlite3.connect(tmp / "teste-bilhetes.db")          # a conta tem de estar registada nos Bilhetes (ADR-069): em produção o utilizador 1 é o Bruno
+        b.execute("UPDATE bilhetes_utilizadores SET email = ? WHERE id = 1", (EMAIL,)); b.commit(); b.close()
         yield c
     finally:
         proc.terminate(); proc.wait(5)
