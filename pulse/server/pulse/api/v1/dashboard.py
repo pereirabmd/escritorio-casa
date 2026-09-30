@@ -68,13 +68,8 @@ def guardar_ordem(d: OrdemIn, s: Sessao = Depends(sessao_ativa), conn=Depends(ge
     return _estado_do_hoje(conn, uid)
 
 
-@router.get("/today")
-def hoje(request: Request, modulos_: str | None = Query(None, alias="modulos"), s: Sessao = Depends(sessao_ativa), conn=Depends(get_conn)):
-    """O «Hoje»: tarefas, próximo bilhete, RTO da semana, peso e contas a pagar, num só pedido (cada módulo independente).
-    `?modulos=tarefas,peso` devolve só esses (é o que as interfaces pedem depois de uma ação: o resto não muda e a Google é lenta)."""
-    so = {m for m in (modulos_ or "").split(",") if m in CARTOES} if modulos_ else None
-    app = request.app.state
-    uid = s.user["id"]
+def construir_locais(app, uid: int) -> dict:
+    """Os módulos do Hoje que não vêm do `dados-api` (Compras e Google). Também é o que o agente de IA usa para consultar."""
     if not hasattr(app, "cache_google"):
         app.cache_google = {}               # por aplicação (não global): cada base de dados tem os seus
     cache_google = app.cache_google
@@ -111,5 +106,16 @@ def hoje(request: Request, modulos_: str | None = Query(None, alias="modulos"), 
     locais = {"compras": compras_hoje,
               "calendario": google_hoje("calendar", lambda contas, dia: calendario.hoje(app.google, contas, dia, tz, agora=app.agora())),
               "email": google_hoje("gmail", lambda contas, dia: correio.importantes_hoje(app.google, contas, tz))}
+    return locais
+
+
+@router.get("/today")
+def hoje(request: Request, modulos_: str | None = Query(None, alias="modulos"), s: Sessao = Depends(sessao_ativa), conn=Depends(get_conn)):
+    """O «Hoje»: tarefas, próximo bilhete, RTO da semana, peso e contas a pagar, num só pedido (cada módulo independente).
+    `?modulos=tarefas,peso` devolve só esses (é o que as interfaces pedem depois de uma ação: o resto não muda e a Google é lenta)."""
+    so = {m for m in (modulos_ or "").split(",") if m in CARTOES} if modulos_ else None
+    app = request.app.state
+    uid = s.user["id"]
+    locais = construir_locais(app, uid)
     r = dashboard.hoje(app.dados, s.user["email"], app.agora(), modulos.indisponiveis_para(conn, uid) | set(ocultos_guardados(conn, uid)), locais, so)
     return {**r, "ordem": ordem_guardada(conn, uid), "ocultos": ocultos_guardados(conn, uid)}

@@ -38,6 +38,8 @@ class Settings:
     google_key: str = ""                     # chave Fernet (url-safe, 32 bytes) que cifra os refresh tokens em repouso
     scheduler_s: int = 30                     # intervalo do agendador de notificações (0 = desligado)
     fcm_project: str = ""                    # projeto Firebase (por omissão o `project_id` do ficheiro)
+    ai_key: str = ""                         # chave da API da Anthropic (só no Pi); vazio = assistente desligado
+    ai_model: str = ""                       # modelo do assistente (por omissão o Haiku 4.5)
 
     @property
     def production(self) -> bool:
@@ -91,5 +93,7 @@ def load(environ: dict[str, str] | None = None) -> Settings:
         cp_connect_secret=e.get("PULSE_CP_CONNECT_SECRET", "").strip(),
         cp_api_key_travel=e.get("PULSE_CP_API_KEY_TRAVEL", "").strip(),
         cp_estacoes=e.get("PULSE_CP_ESTACOES", "").strip(),
+        ai_key=e.get("PULSE_AI_KEY", "").strip(),
+        ai_model=e.get("PULSE_AI_MODEL", "").strip(),
         scheduler_s=_inteiro(e.get("PULSE_SCHEDULER_S", "30"), "PULSE_SCHEDULER_S", 0, 3600),
     )

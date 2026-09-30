@@ -18,7 +18,7 @@ PULSE_ENV=development PULSE_DB_PATH=/tmp/teste-pulse.db .venv/bin/uvicorn pulse.
 ```
 
 Variáveis (ver `../.env.example`): `PULSE_ENV`, `PULSE_DB_PATH`, `PULSE_WEB_BASE_PATH`, `PULSE_DADOS_URL`, `PULSE_TAREFAS_URL` (o `tarefas-api`, por omissão `http://127.0.0.1:8899`; vazio desliga o recálculo imediato dos avisos),
-`PULSE_SERVICE_KEY` (a mesma do `.env` do `dados-api` **e do `tarefas-api`**), `PULSE_LOG_DIR`, `PULSE_FCM_CREDENTIALS`, `PULSE_FCM_PROJECT`, `PULSE_SCHEDULER_S`.
+`PULSE_SERVICE_KEY` (a mesma do `.env` do `dados-api` **e do `tarefas-api`**), `PULSE_LOG_DIR`, `PULSE_FCM_CREDENTIALS`, `PULSE_FCM_PROJECT`, `PULSE_SCHEDULER_S`, `PULSE_AI_KEY` (chave da API da Anthropic; vazio = assistente desligado) e `PULSE_AI_MODEL` (opcional).
 
 ## Ainda por fazer nesta fase
 

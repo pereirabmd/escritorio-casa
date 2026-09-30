@@ -59,6 +59,8 @@ private val MODULOS_ABRIVEIS = setOf("tarefas", "bilhetes", "financas", "peso", 
 @Composable
 private fun Principal(sessao: Sessao, f: Fase.Autenticado) {
     var destino by remember { mutableStateOf<Destino>(Destino.Hoje) }
+    var assistente by remember { mutableStateOf(false) }
+    var recarga by remember { mutableIntStateOf(0) }          // sobe depois de o assistente alterar dados: o ecrã aberto volta a pedi-los
     val scope = rememberCoroutineScope()
     val contexto = LocalContext.current
     // notificações: canais, pedido da permissão (uma só vez; depois só em Definições) e registo deste telemóvel no servidor
@@ -93,7 +95,7 @@ private fun Principal(sessao: Sessao, f: Fase.Autenticado) {
             bottomBar = {
                 // sempre visível (o «Hoje» está a um toque de qualquer ecrã), exceto nos formulários de ecrã inteiro
                 if (destino != Destino.Password && destino != Destino.Pin && !tecladoAberto) {
-                    // «Hoje» à esquerda e «Mais» à direita, do mesmo tamanho e discretos; o logotipo ao centro, maior e sem toque (ADR-067/075)
+                    // «Hoje» à esquerda e «Mais» à direita, do mesmo tamanho e discretos; o logotipo ao centro, maior; tocar nele abre o assistente de voz (ADR-067/075/077)
                     val emHoje = destino == Destino.Hoje
                     val corHoje = if (emHoje) c.primary else c.text2.copy(alpha = 0.65f)
                     val corMais = if (!emHoje) c.primary else c.text2.copy(alpha = 0.65f)
@@ -106,7 +108,7 @@ private fun Principal(sessao: Sessao, f: Fase.Autenticado) {
                                 Icon(Icone.HOJE, corHoje, tamanho = 16.dp)
                                 Text("Hoje", style = Pulse.meta, color = corHoje)
                             }
-                            LogoPulse(40.dp, 1f, Modifier.align(Alignment.Center))
+                            LogoPulse(40.dp, 1f, Modifier.align(Alignment.Center).clip(RoundedCornerShape(20.dp)).clickable(role = Role.Button, onClickLabel = "Abrir o assistente") { assistente = true })
                             Row(Modifier.align(Alignment.CenterEnd).padding(end = 8.dp).clip(RoundedCornerShape(10.dp)).clickable(role = Role.Tab) { destino = Destino.Mais }
                                 .semantics { selected = !emHoje }.padding(horizontal = 10.dp, vertical = 10.dp),
                                 verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -119,7 +121,7 @@ private fun Principal(sessao: Sessao, f: Fase.Autenticado) {
             },
         ) { pad ->
             Box(Modifier.padding(pad).consumeWindowInsets(pad).fillMaxSize()) {
-                when (val d = destino) {
+                key(recarga) { when (val d = destino) {
                     Destino.Hoje -> Column(Modifier.statusBarsPadding()) { EcraHoje(sessao, f.utilizador) { sessao.atualizacao?.let { AvisoAtualizacao(it) } } }
                     Destino.Mais -> Box(Modifier.statusBarsPadding()) { EcraMais({ destino = Destino.Modulo(it) }) { destino = Destino.Definicoes } }
                     Destino.Definicoes -> Box(Modifier.statusBarsPadding()) {
@@ -128,7 +130,8 @@ private fun Principal(sessao: Sessao, f: Fase.Autenticado) {
                     Destino.Password -> EcraMudarPassword(sessao, f.utilizador.email, obrigatorio = false, aoConcluir = {}, aoVoltar = { destino = Destino.Definicoes })
                     Destino.Pin -> EcraDefinirPin({ sessao.definirPin(it); destino = Destino.Definicoes }, { destino = Destino.Definicoes })
                     is Destino.Modulo -> EcraDoModulo(d.id, sessao) { destino = Destino.Mais }
-                }
+                } }
+                if (assistente) AssistenteFolha({ assistente = false }, { recarga++ })
             }
         }
     }

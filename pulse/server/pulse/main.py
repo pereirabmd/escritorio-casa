@@ -13,11 +13,11 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
 from pulse import VERSION, config, db, logging_setup, notifications
-from pulse.services import compras, cp_horarios
+from pulse.services import compras, cp_horarios, ia
 from pulse.accounts import ContaErro
 from datetime import datetime
 
-from pulse.api.v1 import actions, admin, auth, dashboard, calendar, finance, google as google_rotas, health, mail, modules, notifications as notificacoes, rto, shopping, tasks, tickets, weight
+from pulse.api.v1 import actions, admin, ai as ai_rotas, auth, dashboard, calendar, finance, google as google_rotas, health, mail, modules, notifications as notificacoes, rto, shopping, tasks, tickets, weight
 from pulse.google_api import GoogleApi, GoogleConfig, criar_cofre
 from pulse.notifications import FcmCanal
 from pulse.ratelimit import RateLimiter
@@ -93,7 +93,7 @@ class PedidosLentos:
 
 
 def create_app(settings: config.Settings | None = None, dados: DadosClient | None = None, avisos: TarefasApiClient | None = None, canais: list | None = None,
-               google: GoogleApi | None = None) -> FastAPI:
+               google: GoogleApi | None = None, ia_agente: ia.Agente | None = None) -> FastAPI:
     settings = settings or config.load()
     logging_setup.configurar(settings.log_dir)
 
@@ -131,6 +131,7 @@ def create_app(settings: config.Settings | None = None, dados: DadosClient | Non
     app.state.cp = cp_horarios.CpHorarios(settings.cp_connect_id, settings.cp_connect_secret, settings.cp_api_key_travel, settings.cp_estacoes)     # horários da CP (só consulta)
     app.state.google = google if google is not None else _google(settings)                    # Gmail/Calendar: None = não configurado
     app.state.canais = canais if canais is not None else _canais(settings)      # canais de entrega das notificações (FCM, se configurado)
+    app.state.ia = ia.Agente(settings.ai_key, settings.ai_model) if ia_agente is None else ia_agente     # assistente de IA (desligado sem chave)
     app.state.db = lambda: db.connect(settings.db_path)   # uma ligação por uso: os endpoints correm em threads
     app.state.agora = lambda: datetime.now(settings.tz)     # substituível nos testes
     app.state.limite_login = RateLimiter(10)   # tentativas de login por IP e minuto (o nginx limita antes)
@@ -141,6 +142,7 @@ def create_app(settings: config.Settings | None = None, dados: DadosClient | Non
     app.include_router(auth.router, prefix="/api/v1")
     app.include_router(dashboard.router, prefix="/api/v1")
     app.include_router(actions.router, prefix="/api/v1")
+    app.include_router(ai_rotas.router, prefix="/api/v1")
     app.include_router(weight.router, prefix="/api/v1")
     app.include_router(rto.router, prefix="/api/v1")
     app.include_router(tasks.router, prefix="/api/v1")

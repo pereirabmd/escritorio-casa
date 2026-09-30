@@ -60,6 +60,7 @@ O primeiro acesso obriga a mudar a password (`POST /api/v1/auth/password`); até
 - A migração `003_notificacoes.sql` aplica-se sozinha no arranque. O agendador de fundo (`PULSE_SCHEDULER_S`, 30 s) corre no próprio `pulse-api`.
 - **Bloco novo do nginx**: `location ^~ /pulse/api/v1/internal/ { return 404; }` (em `nginx/pulse-api.conf`) — a entrada de eventos das outras apps é só em `http://127.0.0.1:8897`. `nginx -t` antes do reload.
 - **FCM (opcional)**: instalar `cryptography` no venv (`/opt/pulse/venv/bin/pip install cryptography`), pôr a service account em `/etc/pulse-app/fcm-service-account.json` (root, 600) e `PULSE_FCM_CREDENTIALS` no `pulse.env`. Sem isto os eventos ficam na caixa (`GET /notifications`).
+- **Assistente de IA (opcional, ADR-077)**: pôr `PULSE_AI_KEY=<chave da API da Anthropic>` no `pulse.env` (e, se quiseres outro modelo, `PULSE_AI_MODEL`) e reiniciar o serviço. Sem chave o assistente fica desligado (`GET /ai/status` → `ativo: false`).
 - **bilhetes_cp** copia os avisos ntfy para o Pulse com `PULSE_EVENTS_URL=http://127.0.0.1:8897/api/v1/internal/events`, `PULSE_SERVICE_KEY` e `PULSE_EVENTS_USER` no `.env` do `bilhetes_cp` (ver `bilhetes_cp/PLANO_FINAL.md` §9.12).
 - **Módulos**: nada a instalar; ficam em `pulse_settings` (`modulos_desativados`), por isso entram no backup do `pulse.db`.
 

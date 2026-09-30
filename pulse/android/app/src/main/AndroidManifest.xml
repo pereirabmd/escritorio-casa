@@ -3,10 +3,12 @@
 
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.USE_BIOMETRIC" />
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />   <!-- assistente de voz (ADR-077): o reconhecimento de fala é do Android -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />   <!-- avisos do Pulse (Android 13+) -->
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />   <!-- atualização interna (ADR-026) -->
 
     <queries>
+        <intent><action android:name="android.speech.RecognitionService" /></intent>
         <intent><action android:name="android.support.customtabs.action.CustomTabsService" /></intent>
     </queries>
 
