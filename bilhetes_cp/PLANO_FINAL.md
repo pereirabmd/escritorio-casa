@@ -1411,3 +1411,7 @@ O ntfy **continua a ser o canal em uso** (Priority high em tudo, sem alteraçõe
 - **Segurança**: `PULSE_SERVICE_KEY` entrou na lista de valores redigidos dos logs (`_SENSITIVE_ENV`).
 - **Passar o Android de ntfy para FCM** (mais tarde): registar o token (`POST /api/v1/devices`) e deixar de subscrever o tópico ntfy no telemóvel; nada a alterar aqui. Testes: `PulseEventTests` (6; total 282).
 
+
+### 9.x Consultas à conta da CP e ntfy desligado (30/09/2026, ADR-075 do Pulse)
+- **`scripts/consulta_cp.py --utilizador N futuros|passe|cancelar --venda ID`**: um JSON no stdout. Usa a sessão guardada da pessoa (renova o token; só faz login se for preciso). Bilhetes futuros (`ticketing-api/trips` + `sales`), devolução (`available-operations` → `post-sale/refund` POST → PUT) e validade do Passe Verde (`mobility-cards-api`, e-mail cifrado com AES-ECB e a chave pública do site). É chamado pelo `dados-api`; `CPClient.data_registo` só se usa nestas consultas. Testes: `tests/test_consulta_cp.py`.
+- **`NTFY_DESLIGADO=1`** no `.env`: `notify()` só avisa o Pulse e devolve se o Pulse aceitou (o `notify_once` depende disso). Apagar a linha volta ao ntfy.
