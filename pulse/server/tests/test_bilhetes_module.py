@@ -161,3 +161,31 @@ def test_passe_pedidos(conn, dados_falso):
         ("PUT", "/bilhetes/pedidos/4", {"retry": True, "intervaloMinutos": 20}), ("POST", "/bilhetes/pedidos/4/forcar", None)]
     with pytest.raises(ContaErro):
         correr(conn, dados_falso, "bilhetes.pedido_repetir", {"pedido": 4, "retry": True, "intervaloMinutos": 0})
+
+
+def test_marcar_para_outra_pessoa_leva_o_utilizador_ao_dados_api(conn, dados_falso):
+    """O Bruno marca no Pulse para a Camila (utilizador 2): a semana lê-se e grava-se como dela, e o «Desfazer» repõe a dela."""
+    FalsoDados.respostas["/bilhetes/dados"] = (200, DADOS)
+    FalsoDados.respostas["PUT /bilhetes/semana"] = (200, {"viagens": []})
+    FalsoDados.pedidos.clear()
+    r = correr(conn, dados_falso, "bilhetes.semana", {"inicio": "2026-10-05", "utilizador": 2, "viagens": [VIAGEM]})
+    assert any(p[0].startswith("/bilhetes/dados?utilizador=2") for p in FalsoDados.pedidos)             # as «anteriores» lêem-se da Camila
+    assert FalsoDados.escritas == [("PUT", "/bilhetes/semana", {"inicio": "2026-10-05", "viagens": [{**VIAGEM, "ativo": "SIM"}], "utilizadorId": 2}, EMAIL)]
+    assert "anteriores" in r
+    FalsoDados.escritas.clear()
+    correr(conn, dados_falso, "bilhetes.passe", {"dataUltimaCompra": "2026-09-30", "utilizador": 2})
+    assert FalsoDados.escritas[0][2] == {"dataUltimaCompra": "2026-09-30", "utilizadorId": 2}
+
+
+def test_visao_traz_a_pessoa_e_as_pessoas_por_quem_se_pode_marcar():
+    j = bilhetes.visao({**DADOS, "utilizador": {"id": 2, "nome": "Camila", "eu": False}, "pessoas": [{"id": 1, "nome": "Bruno"}, {"id": 2, "nome": "Camila"}]}, AGORA)
+    assert j["utilizador"]["nome"] == "Camila" and [p["nome"] for p in j["pessoas"]] == ["Bruno", "Camila"]
+    assert bilhetes.visao(DADOS, AGORA)["pessoas"] == []               # um dados-api antigo: sem seletor
+
+
+def test_api_passa_o_utilizador_pedido(cliente):
+    cliente.post("/api/v1/auth/login", json={"email": EMAIL, "password": "1234qweR"})
+    FalsoDados.pedidos.clear()
+    assert cliente.get("/api/v1/tickets?utilizador=2").status_code == 200
+    assert any(p[0] == "/bilhetes/dados?utilizador=2" for p in FalsoDados.pedidos)
+    assert cliente.get("/api/v1/tickets?utilizador=0").status_code in (400, 422)

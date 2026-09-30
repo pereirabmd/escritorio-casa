@@ -174,14 +174,15 @@ NTFY_CLICK_URL = "https://pereirabmd.github.io/escritorio-casa/bilhetes_cp/"
 
 
 def notify(title: str, message: str, *, tags: Iterable[str] = (), at: datetime | None = None,
-           logger: logging.Logger | None = None, tipo: str = "bilhetes.aviso") -> bool:
+           logger: logging.Logger | None = None, tipo: str = "bilhetes.aviso", utilizador_id: int | Iterable[int] = 1) -> bool:
     """Avisa por ntfy (o canal em uso) e copia o aviso para o Pulse (a caminho do FCM). Devolve se o ntfy entregou.
 
-    A cópia para o Pulse é um canal independente e de melhor esforço: nunca muda o resultado nem atrasa o ntfy.
+    A cópia para o Pulse é um canal independente e de melhor esforço: nunca muda o resultado nem atrasa o ntfy. Numa viagem de outra pessoa
+    (`utilizador_id` ≠ 1) o ntfy continua a ser só do Bruno (não há ntfy por pessoa), e o Pulse avisa o Bruno **e** a própria pessoa, se tiver conta.
     """
     tags = list(tags)
     ok = _notify_ntfy(title, message, tags=tags, at=at, logger=logger)
-    pulse_event(title, message, tipo=tipo, tags=tags, at=at, logger=logger)
+    pulse_event(title, message, tipo=tipo, tags=tags, at=at, logger=logger, utilizador_id=utilizador_id)
     return ok
 
 
@@ -237,36 +238,57 @@ PULSE_EVENT_TIMEOUT = (2, 3)
 
 
 def pulse_event(title: str, message: str, *, tipo: str = "bilhetes.aviso", tags: Iterable[str] = (), at: datetime | None = None,
-                logger: logging.Logger | None = None) -> bool:
+                logger: logging.Logger | None = None, utilizador_id: int | Iterable[int] = 1) -> bool:
     """Entrega o aviso ao Pulse (`POST /api/v1/internal/events`, só na mesma máquina) para chegar ao Android por FCM.
 
     Desligado (não faz nada) sem PULSE_EVENTS_URL, PULSE_SERVICE_KEY e PULSE_EVENTS_USER. Nunca levanta exceção: o Pulse em baixo
     não pode afetar os avisos nem as compras. Com `at`, o Pulse guarda-o e só o envia a essa hora (o FCM não agenda).
-    A `chave` faz repetir o mesmo aviso não o duplicar.
+    A `chave` faz repetir o mesmo aviso não o duplicar. Devolve se o Pulse aceitou o aviso do Bruno (o primeiro destinatário).
+
+    Destinatários: sempre o PULSE_EVENTS_USER (o Bruno, que marca e compra) e, numa viagem de outra pessoa, também o e-mail Pulse dessa
+    pessoa (bilhetes_utilizadores.email), se tiver. Cada destinatário tem a sua chave (o Pulse deduplica por chave).
     """
     url, key, user = env("PULSE_EVENTS_URL"), env("PULSE_SERVICE_KEY"), env("PULSE_EVENTS_USER")
     if not (url and key and user):
         return False
     log = logger or get_logger("notify")
+    destinatarios = [user]
+    for uid in ([utilizador_id] if isinstance(utilizador_id, int) else sorted(set(utilizador_id))):
+        if uid == 1:
+            continue
+        try:
+            import credenciais
+            extra = credenciais.email_pulse(uid)
+        except Exception:  # noqa: BLE001 - sem saber o e-mail, avisa-se só o Bruno
+            extra = None
+        if extra and extra.lower() not in {d.lower() for d in destinatarios}:
+            destinatarios.append(extra)
+    ok_primeiro = False
     try:
         import requests
 
         titulo, corpo = sanitize(title), sanitize(message)
         quando = int(at.timestamp()) if at is not None else int(time.time() // 60)
-        payload: dict[str, Any] = {
-            "modulo": "bilhetes", "tipo": tipo, "titulo": titulo[:200], "corpo": corpo[:1000],
-            "dados": {"tags": ",".join(tags)[:200], "link": "pulse://bilhetes"},
-            "chave": "cp-" + short_hash(titulo, corpo, quando),
-        }
-        if at is not None:
-            payload["entregarEm"] = quando
-        r = requests.post(url, json=payload, headers={"X-Pulse-Key": key, "X-Pulse-User": user}, timeout=PULSE_EVENT_TIMEOUT)
-        if 200 <= r.status_code < 300:
-            return True
-        log.warning("Pulse não aceitou o evento (HTTP %s)", r.status_code)
+        for i, dest in enumerate(destinatarios):
+            payload: dict[str, Any] = {
+                "modulo": "bilhetes", "tipo": tipo, "titulo": titulo[:200], "corpo": corpo[:1000],
+                "dados": {"tags": ",".join(tags)[:200], "link": "pulse://bilhetes"},
+                "chave": "cp-" + short_hash(titulo, corpo, quando) + ("" if i == 0 else "-" + short_hash(dest)),
+            }
+            if at is not None:
+                payload["entregarEm"] = quando
+            try:
+                r = requests.post(url, json=payload, headers={"X-Pulse-Key": key, "X-Pulse-User": dest}, timeout=PULSE_EVENT_TIMEOUT)
+            except Exception as e:  # noqa: BLE001 - um destinatário em baixo não impede o outro
+                log.warning("Pulse não recebeu o evento (%s)", type(e).__name__)
+                continue
+            if 200 <= r.status_code < 300:
+                ok_primeiro = ok_primeiro or i == 0
+            else:
+                log.warning("Pulse não aceitou o evento (HTTP %s)", r.status_code)
     except Exception as e:  # noqa: BLE001 - melhor esforço: nada aqui pode estragar um aviso ou uma compra
         log.warning("Pulse não recebeu o evento (%s)", type(e).__name__)
-    return False
+    return ok_primeiro
 
 
 # ---------------------------------------------------------------------------
@@ -294,7 +316,7 @@ def _write_json_atomic(path: Path, data: Any) -> None:
 
 
 def notify_once(key: str, title: str, message: str, *, cooldown_s: float = 6 * 3600,
-                tags: Iterable[str] = (), logger: logging.Logger | None = None) -> bool:
+                tags: Iterable[str] = (), logger: logging.Logger | None = None, utilizador_id: int | Iterable[int] = 1) -> bool:
     """Notifica no máximo uma vez por `cooldown_s` para a mesma chave.
 
     A chave deve identificar a situação (ex.: hash do problema), não a hora. Só
@@ -305,7 +327,7 @@ def notify_once(key: str, title: str, message: str, *, cooldown_s: float = 6 * 3
     now = time.time()
     if now - seen.get(key, 0) < cooldown_s:
         return False
-    if notify(title, message, tags=tags, logger=logger):
+    if notify(title, message, tags=tags, logger=logger, utilizador_id=utilizador_id):
         seen[key] = now
         seen = {k: v for k, v in seen.items() if now - v < 30 * 86400}
         _write_json_atomic(path, seen)
@@ -409,6 +431,8 @@ class Leg:
     # Pedidos. None em retry_minutes cai no valor de reserva de app_config (pedido_retry_interval_minutes).
     retry: bool = False
     retry_minutes: float | None = None
+    # Quem viaja (bilhetes_utilizadores.id): a compra faz-se com as credenciais desta pessoa (credenciais.py). 1 = Bruno, como sempre.
+    utilizador_id: int = 1
 
     @property
     def key(self) -> str:
@@ -460,6 +484,17 @@ def _to_train(v: Any) -> int | None:
     except ValueError:
         return None
     return int(f) if f == int(f) and f > 0 else None
+
+
+def _utilizador(raw: list[Any], col: int) -> int:
+    """O dono da viagem/pedido: coluna extra que só a base de dados traz (a Sheet não a tinha: era sempre o Bruno, 1)."""
+    if len(raw) > col and raw[col] not in (None, ""):
+        try:
+            n = int(raw[col])
+            return n if n > 0 else 1
+        except (TypeError, ValueError):
+            pass
+    return 1
 
 
 def _row_id(raw: list[Any], i: int, first_row: int, id_col: int) -> int:
@@ -530,7 +565,7 @@ def parse_config_rows(rows: list[list[Any]], today: date, first_row: int = 12
             issues.append(f"Linha {row}: " + "; ".join(problems))
             continue
 
-        legs.append(Leg(d, f"v{row}", org, dst, train, hora, row))
+        legs.append(Leg(d, f"v{row}", org, dst, train, hora, row, utilizador_id=_utilizador(raw, 7)))
     return legs, issues
 
 
@@ -636,7 +671,7 @@ def parse_request_rows(rows: list[list[Any]], today: date, first_row: int = 5
             continue
 
         legs.append(Leg(d, f"pedido{row}", org, dst, train, hora, row,
-                        retry=str(retry_v).strip().upper() == "SIM", retry_minutes=_to_minutes(interval_v)))
+                        retry=str(retry_v).strip().upper() == "SIM", retry_minutes=_to_minutes(interval_v), utilizador_id=_utilizador(raw, 14)))
     return legs, issues
 
 
@@ -717,13 +752,13 @@ class SheetsClient:
 
     def append_log(self, tipo: str, data_viagem: str = "", perna: str = "", comboio: Any = "",
                    status_http: Any = "", resultado: str = "", referencia: str = "",
-                   mensagem_erro: str = "") -> None:
+                   mensagem_erro: str = "", utilizador_id: int = 1) -> None:
         self._append("Logs", [datetime.now(TZ).isoformat(timespec="milliseconds"), tipo,
                               data_viagem, perna, comboio, status_http, resultado,
                               referencia, mensagem_erro])
 
     def append_ticket(self, data: str, comboio: Any, origem: str, destino: str,
-                      hora: str, carruagem: Any, lugar: Any, referencia: str) -> None:
+                      hora: str, carruagem: Any, lugar: Any, referencia: str, utilizador_id: int = 1) -> None:
         self._append("Bilhetes", [data, comboio, origem, destino, hora, carruagem, lugar, referencia])
 
     def read_requests(self) -> list[list[Any]]:
@@ -762,10 +797,19 @@ class SheetsClient:
 TOKEN_FILE = BASE_DIR / "token.json"
 
 
-def save_tokens(tokens: dict) -> None:
+def token_file(utilizador_id: int = 1) -> Path:
+    """O Bruno (1) continua em `token.json`; cada outra pessoa tem o seu, em `tokens/<id>.json` (sessões da CP nunca se misturam)."""
+    if utilizador_id == 1:
+        return TOKEN_FILE
+    pasta = TOKEN_FILE.parent / "tokens"
+    pasta.mkdir(mode=0o700, exist_ok=True)
+    return pasta / f"{int(utilizador_id)}.json"
+
+
+def save_tokens(tokens: dict, utilizador_id: int = 1) -> None:
     """Guarda os tokens mais recentes em token.json (chmod 600, fora do git; PLANO_FINAL 3.1)."""
     now = time.time()
-    _write_json_atomic(TOKEN_FILE, {
+    _write_json_atomic(token_file(utilizador_id), {
         "access_token": tokens.get("access_token"), "refresh_token": tokens.get("refresh_token"),
         "access_expires_at": now + float(tokens.get("expires_in", 300)),
         "refresh_expires_at": now + float(tokens.get("refresh_expires_in", 1799)),
@@ -773,8 +817,8 @@ def save_tokens(tokens: dict) -> None:
     })
 
 
-def load_tokens() -> dict | None:
-    data = _read_json(TOKEN_FILE, None)
+def load_tokens(utilizador_id: int = 1) -> dict | None:
+    data = _read_json(token_file(utilizador_id), None)
     return data if isinstance(data, dict) and data.get("access_token") else None
 
 

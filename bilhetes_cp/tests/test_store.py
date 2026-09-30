@@ -21,12 +21,13 @@ import store
 MIGRACOES = Path(__file__).resolve().parents[2] / "dados" / "migrations_bilhetes"
 SCHEMA_001 = MIGRACOES / "001_bilhetes.sql"
 SCHEMA_002 = MIGRACOES / "002_tentativas.sql"
+SCHEMA_003 = MIGRACOES / "003_utilizadores.sql"      # o dono de cada viagem, pedido, compra e registo (fase 1 dos vários utilizadores)
 
 
 class _Schema:
     """As migrações da base `bilhetes` por ordem (o teste só precisa de `.read_text()`)."""
     def read_text(self):
-        return SCHEMA_001.read_text() + "\n" + SCHEMA_002.read_text()
+        return SCHEMA_001.read_text() + "\n" + SCHEMA_002.read_text() + "\n" + SCHEMA_003.read_text()
 
 
 SCHEMA = _Schema()
@@ -99,7 +100,8 @@ class ConfigTest(StoreBase):
         legs, issues = common.parse_snapshot(snap, TODAY)
         self.assertEqual(issues, [])
         self.assertEqual([(l.leg, l.row, l.train) for l in legs], [("v12", 12, 731), ("v100", 100, 520)])
-        self.assertEqual(snap["weekly"][0], ["2026-09-25", "Lisboa Oriente", "Aveiro", 731, "17:30", "SIM", 12])
+        self.assertEqual(snap["weekly"][0], ["2026-09-25", "Lisboa Oriente", "Aveiro", 731, "17:30", "SIM", 12, 1])        # …, id, dono (1 = Bruno)
+        self.assertEqual({l.utilizador_id for l in legs}, {1})
 
     def test_ids_nunca_se_reutilizam_e_novos_comecam_em_100(self):
         self.viagem(12)
@@ -123,7 +125,7 @@ class TicketsTest(StoreBase):
         self.st.append_ticket(*args)
         self.st.append_ticket(*args)                                   # repetição da escrita: ignorada
         rows = self.st.read_tickets()
-        self.assertEqual(rows, [["2026-09-24", 731, "Lisboa Oriente", "Aveiro", "17:39", "22", "105", "CP-QHYZ7B4OKS1J"]])
+        self.assertEqual(rows, [["2026-09-24", 731, "Lisboa Oriente", "Aveiro", "17:39", "22", "105", "CP-QHYZ7B4OKS1J", 1]])
 
     def test_already_bought_e_live_delay_leem_do_store(self):
         self.st.append_ticket("2026-09-24", 731, "Lisboa Oriente", "Aveiro", "17:39", 22, 105, "CP-X")

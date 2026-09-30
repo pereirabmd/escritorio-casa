@@ -13,15 +13,17 @@ router = APIRouter(prefix="/tickets", tags=["bilhetes"], dependencies=[Depends(e
 
 
 @router.get("")
-def ver(request: Request, semana: str | None = Query(default=None, pattern=r"^\d{4}-\d{2}-\d{2}$"), s: Sessao = Depends(sessao_ativa)):
+def ver(request: Request, semana: str | None = Query(default=None, pattern=r"^\d{4}-\d{2}-\d{2}$"), utilizador: int | None = Query(default=None, ge=1),
+        s: Sessao = Depends(sessao_ativa)):
     """Bilhetes CP: próxima viagem, semana em edição, bilhetes, passe, pedidos e registo (regras em `services/bilhetes.py`).
-    `semana` = uma data qualquer da semana pretendida (usa-se a sua segunda-feira)."""
+    `semana` = uma data qualquer da semana pretendida (usa-se a sua segunda-feira). `utilizador` = ver e marcar por outra pessoa (só o administrador,
+    decidido no `dados-api`); por omissão, os da própria conta."""
     app = request.app.state
     try:
         alvo = bilhetes.segunda_de(date.fromisoformat(semana)) if semana else None
     except ValueError:
         raise ContaErro(400, "semana_invalida", "data inválida") from None
-    _, d = app.dados.pedir("GET", "/bilhetes/dados", s.user["email"])
+    _, d = app.dados.pedir("GET", "/bilhetes/dados", s.user["email"], {"utilizador": utilizador} if utilizador else None)
     return bilhetes.visao(d or {}, app.agora(), alvo)
 
 

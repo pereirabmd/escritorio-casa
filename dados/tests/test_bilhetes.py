@@ -4,7 +4,7 @@ import unittest
 from datetime import datetime, timedelta
 
 import db
-from tests.test_api import ApiBase
+from tests.test_api import ApiBase, EU, OUTRO
 
 INI = "2035-03-05"     # uma segunda-feira, no futuro
 
@@ -29,6 +29,10 @@ class BilhetesApiTest(ApiBase):
 
     def setUp(self):
         self.limpar()
+        c = self.bd()                                       # a conta que pede tem de estar registada nos Bilhetes (ADR-063): aqui é o utilizador 1 (Bruno)
+        c.execute("UPDATE bilhetes_utilizadores SET email = ?, admin = 1, ativo = 1 WHERE id = 1", (EU,))
+        c.execute("DELETE FROM bilhetes_utilizadores WHERE id > 1"); c.execute("DELETE FROM bilhetes_compras"); c.execute("DELETE FROM bilhetes_logs")
+        c.close()
 
     def test_acesso(self):
         self.assertEqual(self.pedir("GET", "/bilhetes/dados", token="t" * 30 + "outro")[0], 403)
@@ -244,3 +248,102 @@ class BilhetesUtilizadoresApiTest(ApiBase):
             self.assertFalse(ab.na_lan("2a01:4f8::1"))
             self.assertFalse(ab.na_lan("lixo"))
 
+
+
+class BilhetesPorPessoaTest(ApiBase):
+    """O Bruno (administrador) marca para outras pessoas; cada pessoa só vê o que é seu (ADR-063)."""
+
+    bd = BilhetesApiTest.bd
+    limpar = BilhetesApiTest.limpar
+
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        import threading
+        import api
+        from tests.test_api import CLIENT
+        cls.srv.shutdown(); cls.srv.server_close()
+        cls.settings = api.Settings({"GOOGLE_CLIENT_IDS": CLIENT, "ACL_BILHETES": f"{EU},{OUTRO}", "RATE_IP_POR_MIN": "1000", "RATE_FALHAS_POR_MIN": "1000"})
+        cls.srv = api.criar_servidor(cls.settings, cls.verifier, porta=0)
+        cls.porta = cls.srv.server_address[1]
+        threading.Thread(target=cls.srv.serve_forever, daemon=True).start()
+
+    def setUp(self):
+        self.limpar()
+        c = self.bd()
+        c.execute("UPDATE bilhetes_utilizadores SET email = ?, admin = 1, ativo = 1 WHERE id = 1", (EU,))
+        c.execute("DELETE FROM bilhetes_utilizadores WHERE id > 1"); c.execute("DELETE FROM bilhetes_compras"); c.execute("DELETE FROM bilhetes_logs")
+        c.execute("INSERT INTO bilhetes_utilizadores (id, nome, email, ativo) VALUES (2, 'Camila', ?, 1)", (OUTRO,))
+        c.execute("INSERT INTO bilhetes_utilizadores (id, nome, ativo) VALUES (3, 'Davi', 1)")          # sem login próprio
+        c.close()
+
+    def dela(self, metodo, caminho, corpo=None):
+        return self.pedir(metodo, caminho, corpo, token="t" * 30 + "outro")
+
+    def test_o_bruno_marca_para_a_camila_e_cada_um_ve_so_o_seu(self):
+        s, b, _ = self.pedir("PUT", "/bilhetes/semana", {"inicio": INI, "utilizadorId": 2, "viagens": [viagem(0, comboio=520, hora="07:27")]})
+        self.assertEqual(s, 200, b)
+        self.pedir("PUT", "/bilhetes/semana", {"inicio": INI, "viagens": [viagem(1, comboio=731)]})             # a dele
+        dela = self.dela("GET", "/bilhetes/dados")[1]
+        dele = self.pedir("GET", "/bilhetes/dados")[1]
+        self.assertEqual([v["comboio"] for v in dela["viagens"]], [520])
+        self.assertEqual([v["comboio"] for v in dele["viagens"]], [731])
+        self.assertEqual((dela["utilizador"]["nome"], dela["pessoas"]), ("Camila", []))                             # ela não escolhe por quem marca
+        vista = self.pedir("GET", "/bilhetes/dados?utilizador=2")[1]                                               # o Bruno vê a dela
+        self.assertEqual(([v["comboio"] for v in vista["viagens"]], vista["utilizador"]), ([520], {"id": 2, "nome": "Camila", "eu": False}))
+        self.assertEqual([p["nome"] for p in dele["pessoas"]], ["Bruno", "Camila", "Davi"])
+        c = self.bd()
+        self.assertEqual({r[0] for r in c.execute("SELECT utilizador_id FROM bilhetes_viagens WHERE comboio = 520")}, {2})     # o dono fica gravado: é com as credenciais dela que se compra
+        c.close()
+
+    def test_gravar_uma_semana_so_mexe_nas_viagens_da_pessoa_indicada(self):
+        self.pedir("PUT", "/bilhetes/semana", {"inicio": INI, "viagens": [viagem(0, comboio=731)]})
+        self.pedir("PUT", "/bilhetes/semana", {"inicio": INI, "utilizadorId": 2, "viagens": [viagem(0, comboio=520, hora="07:27")]})
+        self.pedir("PUT", "/bilhetes/semana", {"inicio": INI, "utilizadorId": 2, "viagens": []})                    # esvazia a da Camila…
+        self.assertEqual([v["comboio"] for v in self.pedir("GET", "/bilhetes/dados")[1]["viagens"]], [731])          # …e a do Bruno fica como estava
+
+    def test_so_o_administrador_marca_por_outros_e_so_por_pessoas_ativas(self):
+        corpo = {"inicio": INI, "utilizadorId": 1, "viagens": [viagem(0)]}
+        self.assertEqual(self.dela("PUT", "/bilhetes/semana", corpo)[0], 403)                                       # a Camila não marca pelo Bruno
+        self.assertEqual(self.dela("GET", "/bilhetes/dados?utilizador=1")[0], 403)
+        c = self.bd(); c.execute("UPDATE bilhetes_utilizadores SET ativo = 0 WHERE id = 3"); c.close()
+        self.assertEqual(self.pedir("PUT", "/bilhetes/semana", {"inicio": INI, "utilizadorId": 3, "viagens": []})[0], 404)
+        self.assertEqual(self.pedir("PUT", "/bilhetes/semana", {"inicio": INI, "utilizadorId": 99, "viagens": []})[0], 404)
+        self.assertEqual(self.pedir("GET", "/bilhetes/dados?utilizador=abc")[0], 400)
+
+    def test_conta_nao_registada_nos_bilhetes_nao_ve_nada_nem_assume_ser_o_bruno(self):
+        c = self.bd(); c.execute("UPDATE bilhetes_utilizadores SET email = NULL WHERE id = 2"); c.close()            # a Camila ainda não tem login nos Bilhetes
+        for caminho in ("/bilhetes/dados", "/bilhetes/proximo"):
+            s, b, _ = self.dela("GET", caminho)
+            self.assertEqual((s, b["erro"]["codigo"]), (403, "sem_utilizador"))
+
+    def test_passe_por_pessoa(self):
+        d = lambda n: (datetime.now().date() - timedelta(days=n)).isoformat()         # noqa: E731 (o passe não pode estar no futuro)
+        self.pedir("PUT", "/bilhetes/passe", {"dataUltimaCompra": d(9)})
+        s, b, _ = self.pedir("PUT", "/bilhetes/passe", {"dataUltimaCompra": d(3), "validadeDias": 20, "utilizadorId": 2})
+        self.assertEqual((s, b["dataUltimaCompra"], b["validadeDias"]), (200, d(3), 20))
+        self.assertEqual(self.pedir("GET", "/bilhetes/dados")[1]["passe"]["dataUltimaCompra"], d(9))                   # o dele não mudou
+        self.assertEqual(self.dela("GET", "/bilhetes/dados")[1]["passe"]["dataUltimaCompra"], d(3))
+
+    def test_pedidos_so_do_dono_ou_do_administrador(self):
+        c = self.bd()
+        c.execute("INSERT INTO bilhetes_pedidos (id, data, origem, destino, comboio, hora, estado, utilizador_id) VALUES (50, ?, 'Aveiro', 'Lisboa Oriente', 520, '07:27', 'PENDENTE', 1)", (dia(0),))
+        c.execute("INSERT INTO bilhetes_pedidos (id, data, origem, destino, comboio, hora, estado, utilizador_id) VALUES (51, ?, 'Aveiro', 'Lisboa Oriente', 522, '07:27', 'PENDENTE', 2)", (dia(0),))
+        c.close()
+        self.assertEqual(self.dela("PUT", "/bilhetes/pedidos/50", {"retry": True})[0], 404)                          # o do Bruno: «inexistente»
+        self.assertEqual(self.dela("POST", "/bilhetes/pedidos/50/forcar", {})[0], 404)
+        self.assertEqual(self.dela("PUT", "/bilhetes/pedidos/51", {"retry": True})[0], 200)
+        self.assertEqual(self.pedir("PUT", "/bilhetes/pedidos/51", {"retry": False})[0], 200)                        # o administrador mexe em qualquer um
+        self.assertEqual([p["id"] for p in self.dela("GET", "/bilhetes/dados")[1]["pedidos"]], [51])
+
+    def test_proximo_e_da_propria_conta(self):
+        hoje = datetime.now().date()
+        c = self.bd()
+        c.execute("INSERT INTO bilhetes_viagens (data, origem, destino, comboio, hora, ativo, utilizador_id) VALUES (?, 'Aveiro', 'Lisboa Oriente', 520, '23:50', 'SIM', 2)", ((hoje + timedelta(days=2)).isoformat(),))
+        c.close()
+        self.assertEqual(self.dela("GET", "/bilhetes/proximo")[1]["proximo"]["comboio"], 520)
+        self.assertIsNone(self.pedir("GET", "/bilhetes/proximo")[1]["proximo"])
+
+
+if __name__ == "__main__":
+    unittest.main()

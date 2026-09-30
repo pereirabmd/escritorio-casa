@@ -174,6 +174,9 @@ export interface BilhetesModulo {
   bilhetes: { proximos: BilheteCp[]; anteriores: BilheteCp[] }
   pedidos: PedidoCp[]; registo: RegistoCp[]
   estacoes: string[]; historico: { comboio: number; origem: string; destino: string; hora: string }[]
+  /** Quem se está a ver (o Bruno, administrador, pode ver e marcar por outras pessoas) e as pessoas por quem se pode marcar (vazio = só a própria conta). */
+  utilizador?: { id: number; nome: string; eu: boolean } | null
+  pessoas?: { id: number; nome: string; eu: boolean }[]
 }
 
 // --- Compras (GET /shopping) ---

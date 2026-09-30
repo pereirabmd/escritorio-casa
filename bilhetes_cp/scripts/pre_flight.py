@@ -175,10 +175,22 @@ def check_ntfy(title: str, message: str) -> Check:
 
 # -- orquestração -------------------------------------------------------------
 
+def check_credenciais_da_pessoa(leg: Leg) -> Check:
+    """Quem viaja tem os dados da CP todos preenchidos e a password decifra-se (só nomes em falta, nunca valores)."""
+    import credenciais
+    try:
+        c = credenciais.carregar(leg.utilizador_id)
+    except credenciais.CredenciaisIncompletas as e:
+        return Check("credenciais_da_pessoa", False, str(e))
+    return Check("credenciais_da_pessoa", True, f"dados da CP de {c.nome} completos")
+
+
 def run_preflight(leg: Leg | None = None, ntfy: tuple[str, str] | None = None) -> list[Check]:
     """Corre as verificações na ordem do plano. Continua mesmo que uma falhe."""
     checks = [check_internet(), check_dns(), check_clock(), check_credentials(),
               check_config(leg), check_cp_reachable()]
+    if leg is not None and leg.utilizador_id != 1:
+        checks.append(check_credenciais_da_pessoa(leg))
     if ntfy:
         checks.append(check_ntfy(*ntfy))
     for c in checks:

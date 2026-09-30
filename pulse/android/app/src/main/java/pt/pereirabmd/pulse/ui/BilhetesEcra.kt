@@ -20,10 +20,22 @@ private val ABAS = listOf("Semana", "Bilhetes", "Pedidos", "Registo")
 fun BilhetesEcra(aoVoltar: () -> Unit) {
     var aba by remember { mutableIntStateOf(0) }
     var semana by remember { mutableStateOf<String?>(null) }          // null = a próxima semana (o servidor sabe qual é)
-    val c = carga(semana) { Api.get("/tickets" + (semana?.let { "?semana=$it" } ?: "")) }
+    var utilizador by remember { mutableStateOf<Int?>(null) }         // null = a própria conta; o administrador pode ver e marcar por outra pessoa (ADR-069)
+    val c = carga(semana to utilizador) {
+        val q = listOfNotNull(semana?.let { "semana=$it" }, utilizador?.let { "utilizador=$it" }).joinToString("&")
+        Api.get("/tickets" + if (q.isNotEmpty()) "?$q" else "")
+    }
     val acoes = rememberAcoes { c.recarregar() }
     EcraModulo("Bilhetes CP", aoVoltar) {
         Ao(c, "A carregar os bilhetes…") { d ->
+            val pessoas = d.objs("pessoas")
+            if (pessoas.size > 1) Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                val euId = pessoas.firstOrNull { it.bool("eu") }?.getInt("id")
+                Filtros(pessoas.map { it.getInt("id") to (it.txtOu("nome") + if (it.bool("eu")) " (eu)" else "") }, d.obj("utilizador")?.getInt("id")) { id ->
+                    utilizador = if (id == euId) null else id; semana = null
+                }
+                d.obj("utilizador")?.takeIf { !it.bool("eu") }?.let { Meta("A marcar para ${it.txtOu("nome")}: a compra faz-se com os dados dela, e recebes os avisos tu e ela.") }
+            }
             Abas(ABAS, aba) { aba = it }
             Rolar {
                 ErroAcao(acoes)
@@ -105,7 +117,7 @@ private fun Passe(d: JSONObject, acoes: Acoes) {
     if (editar) Folha("Atualizar passe", { editar = false }) {
         CampoData("Data do último carregamento", data, { data = it })
         ErroAcao(acoes)
-        Botao("Guardar", { acoes.executar("passe", "bilhetes.passe", jo("dataUltimaCompra" to data)) { editar = false; avisos.mostrar("Passe atualizado.") } },
+        Botao("Guardar", { acoes.executar("passe", "bilhetes.passe", jo("dataUltimaCompra" to data).paraOutraPessoa(d)) { editar = false; avisos.mostrar("Passe atualizado.") } },
             grande = true, ativo = data.isNotEmpty() && data <= somarDias(hoje, 1) && acoes.ocupado == null, carregando = acoes.ocupado == "passe")
     }
 }
@@ -155,10 +167,10 @@ private fun FolhaSemana(d: JSONObject, acoes: Acoes, aoFechar: () -> Unit) {
             val e = validarDias(dias); erros = e
             if (e.any { it.isNotEmpty() }) return@Botao
             val anteriores = semana.objs("viagens").map { jo("data" to it.txt("data"), "origem" to it.txt("origem"), "destino" to it.txt("destino"), "comboio" to it.optInt("comboio"), "hora" to it.txt("hora"), "ativo" to it.bool("ativo")) }
-            acoes.executar("semana", "bilhetes.semana", jo("inicio" to semana.getString("inicio"), "viagens" to ja(viagensParaEnviar(dias)))) { r ->
+            acoes.executar("semana", "bilhetes.semana", jo("inicio" to semana.getString("inicio"), "viagens" to ja(viagensParaEnviar(dias))).paraOutraPessoa(d)) { r ->
                 aoFechar()
                 avisos.mostrar("Semana guardada. O Pi vai ler a nova configuração.") {
-                    acoes.executar("desfazer", "bilhetes.semana", jo("inicio" to semana.getString("inicio"), "viagens" to (r.optJSONArray("anteriores") ?: ja(anteriores))))
+                    acoes.executar("desfazer", "bilhetes.semana", jo("inicio" to semana.getString("inicio"), "viagens" to (r.optJSONArray("anteriores") ?: ja(anteriores))).paraOutraPessoa(d))
                 }
             }
         }, grande = true, ativo = acoes.ocupado == null, carregando = acoes.ocupado == "semana")
@@ -273,4 +285,11 @@ private fun VerificacaoCp(data: String, origem: String, destino: String, comboio
         }
         else -> Meta(if (estado == "confirmado") "✓ $mensagem" else mensagem)
     }
+}
+
+
+/** Marcar a semana ou o passe **para a pessoa que se está a ver** (a compra usa os dados dela): acrescenta o utilizador quando não é a própria conta. */
+private fun JSONObject.paraOutraPessoa(d: JSONObject): JSONObject {
+    d.obj("utilizador")?.takeIf { !it.bool("eu") }?.let { put("utilizador", it.getInt("id")) }
+    return this
 }

@@ -285,7 +285,7 @@ def make_pkce_pair():
 # Login
 # ---------------------------------------------------------------------------
 
-def login() -> dict:
+def login(cred=None) -> dict:
     """Login via Keycloak com PKCE; devolve os tokens (access/refresh)."""
     session = make_session()
 
@@ -318,7 +318,7 @@ def login() -> dict:
 
     r = session.post(
         form_action,
-        data={"username": CP_EMAIL, "password": CP_PASSWORD, "credentialId": ""},
+        data={"username": cred.cp_email if cred else CP_EMAIL, "password": cred.cp_password if cred else CP_PASSWORD, "credentialId": ""},
         allow_redirects=False,
         timeout=TIMEOUT_CONNECT_READ,
     )
@@ -366,9 +366,16 @@ def refresh_tokens(refresh_token: str) -> dict:
 # ---------------------------------------------------------------------------
 
 class CPClient:
-    def __init__(self, access_token: str, session: requests.Session | None = None):
+    def __init__(self, access_token: str, session: requests.Session | None = None, cred=None):
         self.access_token = access_token
         self.session = session or make_session()
+        # `cred`: as credenciais de quem viaja (`credenciais.Credenciais`); sem ele usa-se o `.env` (o Bruno), exatamente como sempre
+        self.cp_email = cred.cp_email if cred else CP_EMAIL
+        self.nome = cred.passageiro_nome if cred else PASSENGER_NAME
+        self.cc = cred.passageiro_cc if cred else PASSENGER_CC
+        self.telemovel = cred.passageiro_telemovel if cred else PASSENGER_PHONE
+        self.nif = cred.nif if cred else PASSENGER_NIF
+        self.passe = cred.passe_numero if cred else GREEN_PASS_NUMBER
 
     def _headers(self, api_key: str, with_client_id: bool = False, with_token: bool = True) -> dict:
         h = {
@@ -382,7 +389,7 @@ class CPClient:
         if with_token:
             h["x-access-token"] = self.access_token
         if with_client_id:
-            h["x-cp-client-id"] = CP_EMAIL
+            h["x-cp-client-id"] = self.cp_email
         return h
 
     def request(self, method: str, path: str, *, api_key: str, body: Any = None,
@@ -522,21 +529,21 @@ class CPClient:
     def set_passengers(self, sale_id: int) -> CPResponse:
         body = {"salePassengers": [{
             "idtype": {"code": "CC", "designation": "Cartão de Cidadão"},
-            "passengerID": PASSENGER_CC,
-            "passengerName": PASSENGER_NAME,
+            "passengerID": self.cc,
+            "passengerName": self.nome,
         }]}
         return self._checked("PUT", f"/ticketing-api/sale/{sale_id}/passengers",
                              api_key=X_API_KEY_TICKETING, body=body, with_client_id=True)
 
     def set_client(self, sale_id: int) -> CPResponse:
-        body = {"clientEmail": CP_EMAIL, "clientID": CP_EMAIL,
-                "clientMobile": PASSENGER_PHONE, "clientName": PASSENGER_NAME}
+        body = {"clientEmail": self.cp_email, "clientID": self.cp_email,
+                "clientMobile": self.telemovel, "clientName": self.nome}
         return self._checked("PUT", f"/ticketing-api/sale/{sale_id}/client",
                              api_key=X_API_KEY_TICKETING, body=body, with_client_id=True)
 
     def set_fiscal(self, sale_id: int) -> CPResponse:
-        body: dict = {"countryCode": "PT", "fiscalID": PASSENGER_NIF, "fiscalName": PASSENGER_NAME}
-        addr = fiscal_address()
+        body: dict = {"countryCode": "PT", "fiscalID": self.nif, "fiscalName": self.nome}
+        addr = fiscal_address() if self.cp_email == CP_EMAIL else None      # a morada de CP_FISCAL_ADDRESS é a do Bruno: nunca se envia com os dados de outra pessoa
         if addr is not None:
             body["fiscalAddress"] = addr
         return self._checked("PUT", f"/ticketing-api/sale/{sale_id}/fiscal",
@@ -546,7 +553,7 @@ class CPClient:
         """Aplica o desconto do Passe Ferroviário Verde (equivalente à dropdown)."""
         body = {"requestedItems": [{
             "itemCode": "302", "relatedTrain": None, "ticketIndex": 0,
-            "type": "DISCOUNT", "inputData": GREEN_PASS_NUMBER,
+            "type": "DISCOUNT", "inputData": self.passe,
         }]}
         return self._checked("PUT", f"/ticketing-api/sale/{sale_id}/items",
                              api_key=X_API_KEY_TICKETING, body=body, with_client_id=True)

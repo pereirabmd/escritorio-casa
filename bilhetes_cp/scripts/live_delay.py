@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import sys
 import time
+import dataclasses
 from dataclasses import dataclass
 from datetime import date
 
@@ -35,6 +36,7 @@ class Watch:
     hhmm: str             # hora de embarque, como gravada na aba Bilhetes
     carriage: str
     seat: str
+    donos: frozenset = frozenset({1})      # quem viaja neste comboio (bilhetes_utilizadores.id): o Pulse avisa cada um
 
     @property
     def key(self) -> str:
@@ -60,10 +62,14 @@ def upcoming_watches(rows: list[list], now) -> list[Watch]:
         except (TypeError, ValueError):
             continue
         w = Watch(d, train, norm_station(cells[2]), norm_station(cells[3]), hhmm,
-                  str(cells[5] or ""), str(cells[6] or ""))
+                  str(cells[5] or ""), str(cells[6] or ""), frozenset({common._utilizador(list(r), 8)}))
         left = (w.departure - now).total_seconds()
         if 0 <= left <= WINDOW_S:
-            out.append(w)
+            outro = next((x for x in out if x.key == w.key), None)
+            if outro is None:
+                out.append(w)
+            else:                          # duas pessoas no mesmo comboio: uma só vigilância, os avisos vão para as duas
+                out[out.index(outro)] = dataclasses.replace(outro, donos=outro.donos | w.donos)
     return out
 
 
@@ -133,7 +139,7 @@ def check_one(watch: Watch, cache: dict, now_ts: float) -> None:
     urgent = snap["supression"] and not prev["supression"]
     title = ("Comboio suprimido — " if urgent else "Mudou algo no comboio — ") + label
     seat = f" · carruagem {watch.carriage}, lugar {watch.seat}" if watch.carriage or watch.seat else ""
-    notify(title, "; ".join(changes) + seat, tags=["rotating_light"] if urgent else ["warning"], logger=log)
+    notify(title, "; ".join(changes) + seat, tags=["rotating_light"] if urgent else ["warning"], logger=log, utilizador_id=set(watch.donos))
     log.info("%s: %s", label, "; ".join(changes))
 
 

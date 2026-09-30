@@ -20,6 +20,7 @@ na aba Logs; erros inesperados também.
 from __future__ import annotations
 
 import argparse
+import functools
 import re
 import sys
 import time
@@ -28,6 +29,7 @@ from datetime import datetime
 from typing import Any, Callable
 
 import common
+import credenciais
 from common import (STATES, TERMINAL, TZ, Leg, PurchaseLock, app_config, get_logger,
                     notify, notify_once, short_hash, station_code)
 from cp_ticket import (CPClient, CPError, classify_sale_response, login, pick_aisle_seats, pick_trip,
@@ -159,15 +161,37 @@ def already_bought(sheets_client: Any, leg: Leg) -> bool:
                     cooldown_s=3600, logger=log)
         return False
     for r in rows:
-        r = list(r) + [""] * 2
+        r = list(r) + [""] * 9
         d = common.parse_sheet_date(r[0])
         try:
             train = int(float(r[1]))
         except (TypeError, ValueError):
             continue
-        if d == leg.date and train == leg.train:
+        if d == leg.date and train == leg.train and common._utilizador(r, 8) == leg.utilizador_id:   # cada pessoa compra o seu: o bilhete de outra não conta
             return True
     return False
+
+
+def _dono_kw(leg: Leg) -> dict[str, int]:
+    """O dono a gravar nos registos da base (só para as viagens de outras pessoas: para o Bruno nada muda, nem para a Sheet)."""
+    return {"utilizador_id": leg.utilizador_id} if leg.utilizador_id != credenciais.UTILIZADOR_PRINCIPAL else {}
+
+
+class DonoMixin:
+    """Compra com as credenciais de quem viaja (`leg.utilizador_id`, credenciais.py). Para o Bruno (1) nada muda: usa o `.env`, como sempre."""
+
+    def _configurar_dono(self, leg: Leg, login_fn, cp_factory, notify_fn):
+        self.cred = None
+        if leg.utilizador_id == credenciais.UTILIZADOR_PRINCIPAL:
+            return login_fn, cp_factory, notify_fn
+        self.cred = credenciais.carregar(leg.utilizador_id)          # CredenciaisIncompletas: o main() avisa e não tenta
+        if login_fn is login:
+            login_fn = lambda: login(self.cred)                      # noqa: E731
+        if cp_factory is CPClient:
+            cp_factory = lambda token: CPClient(token, cred=self.cred)   # noqa: E731
+        if notify_fn is notify:
+            notify_fn = functools.partial(notify, utilizador_id=leg.utilizador_id)    # o Pulse avisa o Bruno e a própria pessoa
+        return login_fn, cp_factory, notify_fn
 
 
 class SeatMixin:
@@ -258,7 +282,7 @@ class SeatMixin:
         return "", f" ⚠️ pedi o lugar {alvo} (corredor) mas o bilhete diz {carriage}/{seat}"
 
 
-class Buyer(SeatMixin):
+class Buyer(DonoMixin, SeatMixin):
     def __init__(self, leg: Leg, lock: PurchaseLock, *, sheets: Any = None,
                  login_fn: Callable[[], dict] = login,
                  refresh_fn: Callable[[str], dict] = refresh_tokens,
@@ -269,6 +293,7 @@ class Buyer(SeatMixin):
         self.leg = leg
         self.lock = lock
         self.sheets = sheets
+        login_fn, cp_factory, notify_fn = self._configurar_dono(leg, login_fn, cp_factory, notify_fn)
         self.login_fn, self.refresh_fn, self.cp_factory = login_fn, refresh_fn, cp_factory
         self.clock, self.sleep, self.notify = clock, sleep, notify_fn
         self.cp: CPClient | None = None
@@ -277,7 +302,7 @@ class Buyer(SeatMixin):
         self.origin_code = station_code(leg.origin) or ""
         self.dest_code = station_code(leg.destination) or ""
         rota = f"{common.station_label(leg.origin)}→{common.station_label(leg.destination)}"
-        self.label = f"comboio {leg.train} ({rota}) {leg.date.strftime('%d/%m')} {leg.hhmm}"
+        self.label = f"comboio {leg.train} ({rota}) {leg.date.strftime('%d/%m')} {leg.hhmm}" + (f" — {self.cred.nome}" if self.cred else "")
 
     # ---- utilitários ----------------------------------------------------
 
@@ -306,7 +331,7 @@ class Buyer(SeatMixin):
 
     def slog(self, tipo: str, resultado: str, *, status: Any = "", ref: str = "", err: str = "") -> None:
         self.sheet("append_log", tipo, self.leg.date.isoformat(), self.leg.leg, self.leg.train,
-                   status, resultado, ref, err)
+                   status, resultado, ref, err, **_dono_kw(self.leg))
 
     def wait_until(self, ts: float, keepalive: bool = False) -> None:
         """Espera (grosso) até `ts`; com keepalive mantém a ligação e o token vivos."""
@@ -497,7 +522,7 @@ class Buyer(SeatMixin):
     def persist_tokens(self) -> None:
         """Guarda sempre o refresh_token mais recente (o prazo da sessão não desliza; 3.1)."""
         try:
-            common.save_tokens(self.tokens)
+            common.save_tokens(self.tokens, self.leg.utilizador_id)
         except Exception as e:  # noqa: BLE001 — não é crítico para a compra, mas fica registado
             log.warning("Não consegui guardar token.json: %s", type(e).__name__)
 
@@ -898,7 +923,7 @@ class Buyer(SeatMixin):
         pretty = lambda k: k.replace("_", " ").title()  # noqa: E731
         boarding = leg.board or leg.hhmm                   # hora de embarque real, não a da 1.ª estação
         self.sheet("append_ticket", leg.date.isoformat(), leg.train, pretty(leg.origin),
-                   pretty(leg.destination), boarding, carriage or "", seat or "", ref)
+                   pretty(leg.destination), boarding, carriage or "", seat or "", ref, **_dono_kw(leg))
         have_seat = bool(complete)
         seat_txt = (seat_phrase(complete) if have_seat else
                     f"carruagem {carriage}" if carriage else f"lugar {seat}" if seat else
@@ -932,7 +957,7 @@ class Buyer(SeatMixin):
 REQUEST_ESTADO = {"CONFIRMED": "CONFIRMADO", "SOLD_OUT": "ESGOTADO", "FAILED": "FALHOU", "AMBIGUOUS": "AMBIGUO"}
 
 
-class PedidoAttempt(SeatMixin):
+class PedidoAttempt(DonoMixin, SeatMixin):
     """Uma única tentativa de compra de um pedido avulso (aba Pedidos, 3.2.1): login e compra
     já, sem esperar por T-24h (`leg.fire` já é "agora" para um pedido) e sem hotstart (nada de
     pre-flight nem de login antecipado). No máximo UMA repetição por passo — nunca a rajada de
@@ -950,13 +975,14 @@ class PedidoAttempt(SeatMixin):
         self.leg = leg
         self.lock = lock
         self.sheets = sheets
+        login_fn, cp_factory, notify_fn = self._configurar_dono(leg, login_fn, cp_factory, notify_fn)
         self.login_fn, self.cp_factory = login_fn, cp_factory
         self.clock, self.sleep, self.notify = clock, sleep, notify_fn
         self.cp: CPClient | None = None
         self.origin_code = station_code(leg.origin) or ""
         self.dest_code = station_code(leg.destination) or ""
         rota = f"{common.station_label(leg.origin)}→{common.station_label(leg.destination)}"
-        self.label = f"comboio {leg.train} ({rota}) {leg.date.strftime('%d/%m')} {leg.hhmm} — pedido"
+        self.label = f"comboio {leg.train} ({rota}) {leg.date.strftime('%d/%m')} {leg.hhmm} — pedido" + (f" — {self.cred.nome}" if self.cred else "")
 
     def _sheets(self):
         if self.sheets is None:
@@ -973,7 +999,7 @@ class PedidoAttempt(SeatMixin):
 
     def slog(self, tipo: str, resultado: str, *, status: Any = "", ref: str = "", err: str = "") -> None:
         self.sheet("append_log", tipo, self.leg.date.isoformat(), self.leg.leg, self.leg.train,
-                   status, resultado, ref, err)
+                   status, resultado, ref, err, **_dono_kw(self.leg))
 
     def _update_request(self, **fields: Any) -> None:
         self.sheet("update_request", self.leg.row, ultima_tentativa=datetime.now(TZ).isoformat(timespec="seconds"),
@@ -1021,7 +1047,7 @@ class PedidoAttempt(SeatMixin):
         try:
             tokens = self.login_fn()
             self.cp = self.cp_factory(tokens["access_token"])
-            common.save_tokens(tokens)
+            common.save_tokens(tokens, self.leg.utilizador_id)
             log.info("Login na CP bem-sucedido (pedido).")
         except Exception as e:  # noqa: BLE001
             return self.terminate("FAILED", f"Login na CP falhou — {self.label}",
@@ -1107,9 +1133,9 @@ class PedidoAttempt(SeatMixin):
                 status = e.response.status if e.response is not None else None
                 if status in (401, 403) and attempt == 1:
                     try:
-                        tokens = refresh_tokens(common.load_tokens()["refresh_token"])
+                        tokens = refresh_tokens(common.load_tokens(self.leg.utilizador_id)["refresh_token"])
                         self.cp.access_token = tokens["access_token"]
-                        common.save_tokens(tokens)
+                        common.save_tokens(tokens, self.leg.utilizador_id)
                     except Exception:  # noqa: BLE001 — se o refresh falhar, a repetição abaixo falha na mesma
                         pass
                     continue
@@ -1197,7 +1223,7 @@ class PedidoAttempt(SeatMixin):
         pretty = lambda k: k.replace("_", " ").title()  # noqa: E731
         boarding = leg.board or leg.hhmm
         self.sheet("append_ticket", leg.date.isoformat(), leg.train, pretty(leg.origin),
-                   pretty(leg.destination), boarding, carriage or "", seat or "", ref)
+                   pretty(leg.destination), boarding, carriage or "", seat or "", ref, **_dono_kw(leg))
         have_seat = bool(complete)
         seat_txt = (seat_phrase(complete) if have_seat else
                     f"carruagem {carriage}" if carriage else f"lugar {seat}" if seat else
@@ -1307,9 +1333,17 @@ def main() -> int:
         return 1
     if args.search_only:
         return search_only(leg)
-    if leg.is_request:
-        return PedidoAttempt(leg, PurchaseLock(leg.lock_key)).run()
-    return Buyer(leg, PurchaseLock(leg.lock_key)).run()
+    try:
+        if leg.is_request:
+            return PedidoAttempt(leg, PurchaseLock(leg.lock_key)).run()
+        return Buyer(leg, PurchaseLock(leg.lock_key)).run()
+    except credenciais.CredenciaisIncompletas as e:
+        # nunca se compra com os dados de outra pessoa: avisa (o Bruno e a pessoa, sem repetir de 5 em 5 min) e não tenta
+        nome = credenciais.nome_de(leg.utilizador_id) or f"utilizador {leg.utilizador_id}"
+        notify_once(f"hotbuy-sem-creds-{leg.lock_key}", f"Não consigo comprar — {nome}, comboio {leg.train} {leg.date.strftime('%d/%m')} {leg.hhmm}",
+                    f"{e}. Completa os dados na página de administração dos Bilhetes (rede de casa). Não comprei nada.",
+                    cooldown_s=6 * 3600, logger=log, utilizador_id=leg.utilizador_id)
+        return 1
 
 
 if __name__ == "__main__":

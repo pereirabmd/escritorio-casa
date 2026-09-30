@@ -73,8 +73,40 @@ def _so_campos(b: dict, permitidos: set[str]) -> None:
 
 # --- leitura ------------------------------------------------------------------
 
-def _passe(conn, hoje: date) -> dict:
-    p = conn.execute("SELECT data_ultima_compra, validade_dias FROM bilhetes_passe WHERE id=1").fetchone()
+def _utilizador(ctx):
+    return ctx.db().execute("SELECT id, nome, admin, ativo FROM bilhetes_utilizadores WHERE email = ?", (str(ctx.user).strip().lower(),)).fetchone()
+
+
+def _e_admin(row) -> bool:
+    return bool(row and row["admin"] and row["ativo"])
+
+
+def _alvo(ctx, pedido: object = None) -> int:
+    """De quem são os dados deste pedido (ADR-063, vários utilizadores): da conta que pede, ou (só o administrador, o Bruno) de outra pessoa ativa,
+    indicada em `?utilizador=` / `utilizadorId`. Uma conta que não está registada nos Bilhetes não vê nada: nunca assume ser o Bruno."""
+    eu = _utilizador(ctx)
+    if eu is None or not eu["ativo"]:
+        raise ApiError(403, "sem_utilizador", "esta conta não está registada nos Bilhetes")
+    if pedido in (None, ""):
+        return eu["id"]
+    try:
+        alvo = int(pedido)
+    except (TypeError, ValueError):
+        raise ApiError(400, "utilizador_invalido", "utilizador inválido") from None
+    if alvo == eu["id"]:
+        return alvo
+    if not _e_admin(eu):
+        raise ApiError(403, "so_admin", "só o administrador marca para outras pessoas")
+    if not ctx.db().execute("SELECT 1 FROM bilhetes_utilizadores WHERE id = ? AND ativo = 1", (alvo,)).fetchone():
+        raise ApiError(404, "nao_encontrado", "essa pessoa não existe ou está desativada")
+    return alvo
+
+
+def _passe(conn, hoje: date, uid: int = 1) -> dict:
+    if uid == 1:
+        p = conn.execute("SELECT data_ultima_compra, validade_dias FROM bilhetes_passe WHERE id=1").fetchone()
+    else:
+        p = conn.execute("SELECT passe_data_ultima_compra AS data_ultima_compra, passe_validade_dias AS validade_dias FROM bilhetes_utilizadores WHERE id=?", (uid,)).fetchone()
     ultima, validade = (p["data_ultima_compra"], p["validade_dias"]) if p else (None, 29)
     if not ultima:
         return {"dataUltimaCompra": None, "validadeDias": validade, "dataExpira": None, "diasRestantes": None}
@@ -98,15 +130,20 @@ def _pedido(r) -> dict:
 def dados(ctx):
     conn = ctx.db()
     hoje = datetime.now(ctx.tz).date()
-    viagens = conn.execute("SELECT id, data, origem, destino, comboio, hora, ativo FROM bilhetes_viagens "
-                           "ORDER BY data, hora, id").fetchall()
+    eu = _utilizador(ctx)
+    uid = _alvo(ctx, ctx.query.get("utilizador"))
+    viagens = conn.execute("SELECT id, data, origem, destino, comboio, hora, ativo FROM bilhetes_viagens WHERE utilizador_id = ? "
+                           "ORDER BY data, hora, id", (uid,)).fetchall()
     compras = conn.execute("SELECT id, data, comboio, origem, destino, hora_partida, carruagem, lugar, referencia "
-                           "FROM bilhetes_compras ORDER BY data, hora_partida, id").fetchall()
-    pedidos = conn.execute("SELECT * FROM bilhetes_pedidos ORDER BY id").fetchall()
+                           "FROM bilhetes_compras WHERE utilizador_id = ? ORDER BY data, hora_partida, id", (uid,)).fetchall()
+    pedidos = conn.execute("SELECT * FROM bilhetes_pedidos WHERE utilizador_id = ? ORDER BY id", (uid,)).fetchall()
     logs = conn.execute("SELECT ts, tipo, data_viagem, perna, comboio, status_http, resultado, referencia, mensagem_erro "
-                        "FROM bilhetes_logs ORDER BY id DESC LIMIT ?", (MAX_LOGS,)).fetchall()
+                        "FROM bilhetes_logs WHERE utilizador_id = ? ORDER BY id DESC LIMIT ?", (uid, MAX_LOGS)).fetchall()
+    pessoas = [{"id": r["id"], "nome": r["nome"], "eu": r["id"] == eu["id"]} for r in conn.execute("SELECT id, nome FROM bilhetes_utilizadores WHERE ativo = 1 ORDER BY id")] if _e_admin(eu) else []
+    nome = conn.execute("SELECT nome FROM bilhetes_utilizadores WHERE id = ?", (uid,)).fetchone()["nome"]
     return 200, {
-        "passe": _passe(conn, hoje),
+        "utilizador": {"id": uid, "nome": nome, "eu": uid == eu["id"]}, "pessoas": pessoas,
+        "passe": _passe(conn, hoje, uid),
         "viagens": [_viagem(r) for r in viagens],
         "compras": [{"id": r["id"], "data": r["data"], "comboio": r["comboio"], "origem": r["origem"], "destino": r["destino"],
                      "hora": r["hora_partida"], "carruagem": r["carruagem"], "lugar": r["lugar"], "referencia": r["referencia"]}
@@ -122,11 +159,12 @@ def proximo(ctx):
     """A viagem ativa em curso (até à chegada estimada) ou, se não houver, a seguinte com a compra já feita, se houver, e o passe.
     Leve de propósito: é o que o «Hoje» do Pulse precisa, sem os logs nem os pedidos de `/bilhetes/dados`."""
     conn = ctx.db()
+    uid = _alvo(ctx)                                       # o «Hoje» é sempre da própria conta
     agora = datetime.now(ctx.tz).replace(tzinfo=None)
     ontem = (agora.date() - timedelta(days=1)).isoformat()
     v = fim = None
     for r in conn.execute("SELECT id, data, origem, destino, comboio, hora, ativo FROM bilhetes_viagens "
-                          "WHERE ativo = 'SIM' AND data >= ? ORDER BY data, hora, id", (ontem,)):
+                          "WHERE ativo = 'SIM' AND data >= ? AND utilizador_id = ? ORDER BY data, hora, id", (ontem, uid)):
         f = datetime.fromisoformat(f"{r['data']}T{r['hora']}") + timedelta(minutes=DURACAO_ESTIMADA_MIN)
         if f >= agora:                               # ainda não terminou
             v, fim = r, f
@@ -134,11 +172,11 @@ def proximo(ctx):
     viagem = None
     if v:
         c = conn.execute("SELECT carruagem, lugar, referencia FROM bilhetes_compras "
-                         "WHERE data = ? AND comboio = ? AND hora_partida = ? ORDER BY id DESC LIMIT 1",
-                         (v["data"], v["comboio"], v["hora"])).fetchone()
+                         "WHERE data = ? AND comboio = ? AND hora_partida = ? AND utilizador_id = ? ORDER BY id DESC LIMIT 1",
+                         (v["data"], v["comboio"], v["hora"], uid)).fetchone()
         viagem = {**_viagem(v), "fimEstimado": fim.strftime("%H:%M"), "emCurso": fim - timedelta(minutes=DURACAO_ESTIMADA_MIN) <= agora,
                   "compra": {"carruagem": c["carruagem"], "lugar": c["lugar"], "referencia": c["referencia"]} if c else None}
-    return 200, {"proximo": viagem, "passe": _passe(conn, agora.date())}
+    return 200, {"proximo": viagem, "passe": _passe(conn, agora.date(), uid)}
 
 
 # --- semana -------------------------------------------------------------------
@@ -165,7 +203,8 @@ def gravar_semana(ctx):
 
     Compara por (data, comboio, hora): o que continua a existir mantém o id (e só se atualizam
     origem/destino/ativo); o que desapareceu apaga-se; o que é novo recebe um id novo."""
-    _so_campos(ctx.body, {"inicio", "viagens"})
+    _so_campos(ctx.body, {"inicio", "viagens", "utilizadorId"})
+    uid = _alvo(ctx, ctx.body.get("utilizadorId"))         # o administrador pode marcar para outra pessoa; a compra faz-se com os dados dela
     ini = _data(ctx.body.get("inicio"), "inicio")
     fim = (date.fromisoformat(ini) + timedelta(days=6)).isoformat()
     itens = ctx.body.get("viagens")
@@ -180,7 +219,7 @@ def gravar_semana(ctx):
     conn.execute("BEGIN IMMEDIATE")
     try:
         atuais = conn.execute("SELECT id, data, comboio, hora, origem, destino, ativo FROM bilhetes_viagens "
-                              "WHERE data >= ? AND data <= ? ORDER BY id", (ini, fim)).fetchall()
+                              "WHERE data >= ? AND data <= ? AND utilizador_id = ? ORDER BY id", (ini, fim, uid)).fetchall()
         por_chave: dict[tuple, list] = {}
         for r in atuais:
             por_chave.setdefault((r["data"], r["comboio"], r["hora"]), []).append(r)
@@ -194,13 +233,13 @@ def gravar_semana(ctx):
                     conn.execute("UPDATE bilhetes_viagens SET origem=?, destino=?, ativo=? WHERE id=?",
                                  (v["origem"], v["destino"], v["ativo"], r["id"]))
             else:
-                conn.execute("INSERT INTO bilhetes_viagens (data, origem, destino, comboio, hora, ativo) VALUES (?, ?, ?, ?, ?, ?)",
-                             (v["data"], v["origem"], v["destino"], v["comboio"], v["hora"], v["ativo"]))
+                conn.execute("INSERT INTO bilhetes_viagens (data, origem, destino, comboio, hora, ativo, utilizador_id) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                             (v["data"], v["origem"], v["destino"], v["comboio"], v["hora"], v["ativo"], uid))
         for r in atuais:
             if r["id"] not in manter:
                 conn.execute("DELETE FROM bilhetes_viagens WHERE id=?", (r["id"],))
         rows = conn.execute("SELECT id, data, origem, destino, comboio, hora, ativo FROM bilhetes_viagens "
-                            "WHERE data >= ? AND data <= ? ORDER BY data, hora, id", (ini, fim)).fetchall()
+                            "WHERE data >= ? AND data <= ? AND utilizador_id = ? ORDER BY data, hora, id", (ini, fim, uid)).fetchall()
         conn.execute("COMMIT")
     except Exception:
         conn.execute("ROLLBACK")
@@ -212,7 +251,8 @@ def gravar_semana(ctx):
 
 def gravar_passe(ctx):
     """Atualiza a data do último carregamento do passe (antes era editar a célula na Sheet)."""
-    _so_campos(ctx.body, {"dataUltimaCompra", "validadeDias"})
+    _so_campos(ctx.body, {"dataUltimaCompra", "validadeDias", "utilizadorId"})
+    uid = _alvo(ctx, ctx.body.get("utilizadorId"))
     if "dataUltimaCompra" not in ctx.body:
         raise ApiError(400, "dataUltimaCompra_invalida", "dataUltimaCompra é obrigatória")
     ultima = _data(ctx.body["dataUltimaCompra"], "dataUltimaCompra")
@@ -224,13 +264,28 @@ def gravar_passe(ctx):
         v = ctx.body["validadeDias"]
         if isinstance(v, bool) or not isinstance(v, int) or not 1 <= v <= 366:
             raise ApiError(400, "validadeDias_invalida", "validadeDias tem de ser um inteiro entre 1 e 366")
-        conn.execute("UPDATE bilhetes_passe SET data_ultima_compra=?, validade_dias=? WHERE id=1", (ultima, v))
-    else:
+        if uid == 1:
+            conn.execute("UPDATE bilhetes_passe SET data_ultima_compra=?, validade_dias=? WHERE id=1", (ultima, v))
+        else:
+            conn.execute("UPDATE bilhetes_utilizadores SET passe_data_ultima_compra=?, passe_validade_dias=? WHERE id=?", (ultima, v, uid))
+    elif uid == 1:                                          # o passe do Bruno vive em `bilhetes_passe` (a base espelha-o para a tabela de utilizadores)
         conn.execute("UPDATE bilhetes_passe SET data_ultima_compra=? WHERE id=1", (ultima,))
-    return 200, _passe(conn, hoje)
+    else:
+        conn.execute("UPDATE bilhetes_utilizadores SET passe_data_ultima_compra=? WHERE id=?", (ultima, uid))
+    return 200, _passe(conn, hoje, uid)
 
 
 # --- pedidos ------------------------------------------------------------------
+
+def _pedido_acessivel(ctx, pid: int) -> None:
+    """O pedido é da conta que pede (ou o administrador mexe em qualquer um); o de outra pessoa responde «inexistente»."""
+    eu = _utilizador(ctx)
+    if eu is None or not eu["ativo"]:
+        raise ApiError(403, "sem_utilizador", "esta conta não está registada nos Bilhetes")
+    r = ctx.db().execute("SELECT utilizador_id FROM bilhetes_pedidos WHERE id=?", (pid,)).fetchone()
+    if r is None or (r["utilizador_id"] != eu["id"] and not _e_admin(eu)):
+        raise ApiError(404, "nao_encontrado", "pedido inexistente")
+
 
 def gravar_pedido(ctx):
     """A PWA só controla a repetição automática: `retry` (true/false) e `intervaloMinutos` (1-1440)."""
@@ -246,6 +301,7 @@ def gravar_pedido(ctx):
     else:
         minutos_sql = minutos
     conn = ctx.db()
+    _pedido_acessivel(ctx, pid)
     cur = conn.execute("UPDATE bilhetes_pedidos SET retry=?, intervalo_minutos=? WHERE id=?",
                        ("SIM" if ctx.body["retry"] else "NAO", minutos_sql, pid))
     if cur.rowcount == 0:
@@ -257,6 +313,7 @@ def forcar_pedido(ctx):
     """"Tentar agora": marca `forcar=SIM`; o Pi (pedidos.py, a cada minuto) faz uma única tentativa e limpa-o."""
     pid = int(ctx.groups[0])
     conn = ctx.db()
+    _pedido_acessivel(ctx, pid)
     conn.execute("BEGIN IMMEDIATE")
     try:
         r = conn.execute("SELECT estado FROM bilhetes_pedidos WHERE id=?", (pid,)).fetchone()
@@ -299,14 +356,6 @@ def na_lan(ip: str) -> bool:
     except ValueError:
         return False
     return a.is_private or a.is_loopback or ip == _ip_publico_de_casa()
-
-
-def _utilizador(ctx):
-    return ctx.db().execute("SELECT id, nome, admin, ativo FROM bilhetes_utilizadores WHERE email = ?", (ctx.user,)).fetchone()
-
-
-def _e_admin(row) -> bool:
-    return bool(row and row["admin"] and row["ativo"])
 
 
 def eu(ctx):

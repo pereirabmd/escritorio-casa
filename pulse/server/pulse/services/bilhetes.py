@@ -88,6 +88,7 @@ def visao(dados: dict, agora: datetime, semana: date | None = None) -> dict:
 
     return {
         "hoje": hoje_iso, "passe": _passe(dados.get("passe", {}), hoje),
+        "utilizador": dados.get("utilizador"), "pessoas": dados.get("pessoas", []),      # quem se está a ver e (só para o administrador) as pessoas por quem se pode marcar
         "proxima": proximas[0] if proximas else None, "proximas": proximas[:10],
         "semanaSeguinte": {"inicio": seguinte.isoformat(), "ativas": ativas_seguinte},
         "semana": {"inicio": segunda.isoformat(), "dias": dias_semana, "viagens": da_semana},

@@ -370,6 +370,7 @@ class SemanaIn(_Params):
     """Substitui as viagens da semana (segunda a domingo) pelas enviadas; o servidor preserva os ids das que continuam (a chave do lock de compra)."""
     inicio: date
     viagens: list[ViagemIn] = Field(max_length=100)
+    utilizador: int | None = Field(default=None, ge=1)       # marcar para outra pessoa (só o administrador); por omissão, para quem executa
 
     @model_validator(mode="after")
     def _coerente(self):
@@ -390,6 +391,7 @@ class SemanaIn(_Params):
 class PasseIn(_Params):
     dataUltimaCompra: date
     validadeDias: int | None = Field(default=None, ge=1, le=366)
+    utilizador: int | None = Field(default=None, ge=1)       # o passe de outra pessoa (só o administrador)
 
 
 class PedidoRepetirIn(_Params):
@@ -1049,14 +1051,15 @@ def _corpo_viagem(v: ViagemIn) -> dict:
 def _semana(c: Contexto, p: SemanaIn):
     """Guarda a semana. Devolve também as viagens que lá estavam, para o «Desfazer» (voltar a gravar a semana com elas)."""
     fim = (p.inicio + timedelta(days=6)).isoformat()
-    _, d = c.client.pedir("GET", "/bilhetes/dados", c.email)
+    _, d = c.client.pedir("GET", "/bilhetes/dados", c.email, {"utilizador": p.utilizador} if p.utilizador else None)
     antes = [{k: v[k] for k in ("data", "origem", "destino", "comboio", "hora", "ativo")} for v in (d or {}).get("viagens", []) if p.inicio.isoformat() <= v["data"] <= fim]
-    _, r = c.client.pedir("PUT", "/bilhetes/semana", c.email, corpo={"inicio": p.inicio.isoformat(), "viagens": [_corpo_viagem(v) for v in p.viagens]})
-    return {**(r or {}), "anteriores": antes}, f"semana {p.inicio.isoformat()}: {len(p.viagens)} viagens"
+    corpo = {"inicio": p.inicio.isoformat(), "viagens": [_corpo_viagem(v) for v in p.viagens], **({"utilizadorId": p.utilizador} if p.utilizador else {})}
+    _, r = c.client.pedir("PUT", "/bilhetes/semana", c.email, corpo=corpo)
+    return {**(r or {}), "anteriores": antes}, f"semana {p.inicio.isoformat()}: {len(p.viagens)} viagens" + (f" (pessoa {p.utilizador})" if p.utilizador else "")
 
 
 def _passe(c: Contexto, p: PasseIn):
-    corpo = {"dataUltimaCompra": p.dataUltimaCompra.isoformat(), **({"validadeDias": p.validadeDias} if p.validadeDias else {})}
+    corpo = {"dataUltimaCompra": p.dataUltimaCompra.isoformat(), **({"validadeDias": p.validadeDias} if p.validadeDias else {}), **({"utilizadorId": p.utilizador} if p.utilizador else {})}
     _, r = c.client.pedir("PUT", "/bilhetes/passe", c.email, corpo=corpo)
     return r, f"passe {p.dataUltimaCompra.isoformat()}"
 

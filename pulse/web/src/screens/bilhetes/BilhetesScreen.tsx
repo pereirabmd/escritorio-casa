@@ -19,10 +19,17 @@ export function BilhetesScreen() {
   const [params] = useSearchParams()
   const [aba, setAba] = useState<Aba>(ABAS.find((a) => a.id === params.get('aba'))?.id ?? 'semana')
   const [semana, setSemana] = useState<string | null>(null)          // null = a próxima semana (o servidor sabe qual é)
-  const [estado, recarregar] = useAsync(() => api.get<BilhetesModulo>(`/tickets${semana ? `?semana=${semana}` : ''}`), semana)
-  const { ocupado, erro, executar, limparErro } = useAcao(recarregar)
+  const [utilizador, setUtilizador] = useState<number | null>(null)   // null = a própria conta; o administrador pode ver e marcar por outra pessoa (ADR-069)
+  const [estado, recarregar] = useAsync(() => {
+    const q = new URLSearchParams({ ...(semana ? { semana } : {}), ...(utilizador ? { utilizador: String(utilizador) } : {}) }).toString()
+    return api.get<BilhetesModulo>(`/tickets${q ? `?${q}` : ''}`)
+  }, `${semana}|${utilizador}`)
+  const { ocupado, erro, executar: executarBase, limparErro } = useAcao(recarregar)
   const avisos = useAvisos()
   const base = useId()
+  // marcar a semana e o passe fazem-se **para a pessoa escolhida** (a compra usa os dados dela); o «Desfazer» passa pelo mesmo caminho
+  const executar: typeof executarBase = (chave, nome, params, confirmado) =>
+    executarBase(chave, nome, utilizador && (nome === 'bilhetes.semana' || nome === 'bilhetes.passe') && !('utilizador' in params) ? { ...params, utilizador } : params, confirmado)
   const f = { executar, ocupado, avisos }
 
   return (
@@ -41,6 +48,17 @@ export function BilhetesScreen() {
       )}
       {estado.fase === 'pronto' && (
         <>
+          {(estado.dados.pessoas?.length ?? 0) > 1 && (
+            <div className="stack">
+              <div className="chips" role="group" aria-label="Ver e marcar bilhetes de">
+                {estado.dados.pessoas!.map((p) => (
+                  <button key={p.id} type="button" className="chip" aria-pressed={estado.dados.utilizador?.id === p.id}
+                    onClick={() => { setUtilizador(p.eu ? null : p.id); setSemana(null) }}>{p.eu ? `${p.nome} (eu)` : p.nome}</button>
+                ))}
+              </div>
+              {estado.dados.utilizador && !estado.dados.utilizador.eu && <p className="t-meta">A marcar para <b>{estado.dados.utilizador.nome}</b>: a compra faz-se com os dados dela, e recebes os avisos tu e ela.</p>}
+            </div>
+          )}
           <div className="segmented tabs" role="tablist" aria-label="Secções dos Bilhetes CP">
             {ABAS.map((a) => <button key={a.id} role="tab" id={`${base}-${a.id}`} aria-selected={aba === a.id} aria-controls={`${base}-p`} onClick={() => setAba(a.id)}>{a.nome}</button>)}
           </div>

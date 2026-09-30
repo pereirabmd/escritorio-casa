@@ -60,7 +60,7 @@ class SqliteStore:
     def read_config(self) -> dict:
         with closing(self._connect()) as c:
             p = c.execute("SELECT data_ultima_compra, validade_dias FROM bilhetes_passe WHERE id=1").fetchone()
-            rows = c.execute("SELECT data, origem, destino, comboio, hora, ativo, id FROM bilhetes_viagens "
+            rows = c.execute("SELECT data, origem, destino, comboio, hora, ativo, id, utilizador_id FROM bilhetes_viagens "
                              "ORDER BY data, hora, id").fetchall()
         ultima = p["data_ultima_compra"] if p else None
         validade = p["validade_dias"] if p else 29
@@ -74,14 +74,14 @@ class SqliteStore:
 
     def read_tickets(self) -> list[list[Any]]:
         with closing(self._connect()) as c:
-            rows = c.execute("SELECT data, comboio, origem, destino, hora_partida, carruagem, lugar, referencia "
+            rows = c.execute("SELECT data, comboio, origem, destino, hora_partida, carruagem, lugar, referencia, utilizador_id "
                              "FROM bilhetes_compras ORDER BY data, hora_partida, id").fetchall()
         return [list(r) for r in rows]
 
     def read_requests(self) -> list[list[Any]]:
         with closing(self._connect()) as c:
             rows = c.execute("SELECT data, origem, destino, comboio, hora, ativo, retry, intervalo_minutos, forcar, "
-                             "estado, ultima_tentativa, referencia, mensagem, id FROM bilhetes_pedidos ORDER BY id").fetchall()
+                             "estado, ultima_tentativa, referencia, mensagem, id, utilizador_id FROM bilhetes_pedidos ORDER BY id").fetchall()
         out = []
         for r in rows:
             cells = list(r)
@@ -94,12 +94,12 @@ class SqliteStore:
 
     def append_log(self, tipo: str, data_viagem: str = "", perna: str = "", comboio: Any = "",
                    status_http: Any = "", resultado: str = "", referencia: str = "",
-                   mensagem_erro: str = "") -> None:
+                   mensagem_erro: str = "", utilizador_id: int = 1) -> None:
         with closing(self._connect()) as c:
             c.execute("INSERT INTO bilhetes_logs (ts, tipo, data_viagem, perna, comboio, status_http, resultado, "
-                      "referencia, mensagem_erro) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                      "referencia, mensagem_erro, utilizador_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                       (datetime.now(TZ).isoformat(timespec="milliseconds"), _txt(tipo), _txt(data_viagem), _txt(perna),
-                       _txt(comboio), _txt(status_http), _txt(resultado), _txt(referencia), _txt(mensagem_erro)))
+                       _txt(comboio), _txt(status_http), _txt(resultado), _txt(referencia), _txt(mensagem_erro), int(utilizador_id)))
 
     def append_attempts(self, rows: list[dict[str, Any]]) -> int:
         """Grava, numa só transação, os pedidos à CP de uma compra (ver `bilhetes_tentativas`) e poda os de há mais de 90 dias.
@@ -122,7 +122,7 @@ class SqliteStore:
         return len(rows)
 
     def append_ticket(self, data: str, comboio: Any, origem: str, destino: str,
-                      hora: str, carruagem: Any, lugar: Any, referencia: str) -> None:
+                      hora: str, carruagem: Any, lugar: Any, referencia: str, utilizador_id: int = 1) -> None:
         try:
             train = int(float(comboio))
         except (TypeError, ValueError):
@@ -130,8 +130,8 @@ class SqliteStore:
         with closing(self._connect()) as c:
             # OR IGNORE: repetir a escrita da mesma compra (mesma referência) nunca duplica nem falha
             c.execute("INSERT OR IGNORE INTO bilhetes_compras (data, comboio, origem, destino, hora_partida, "
-                      "carruagem, lugar, referencia) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-                      (_txt(data), train, _txt(origem), _txt(destino), _txt(hora), _txt(carruagem), _txt(lugar), _txt(referencia)))
+                      "carruagem, lugar, referencia, utilizador_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                      (_txt(data), train, _txt(origem), _txt(destino), _txt(hora), _txt(carruagem), _txt(lugar), _txt(referencia), int(utilizador_id)))
 
     def append_request(self, data: str, origem: str, destino: str, comboio: Any, hora: str,
                        ativo: str = "SIM", retry: str = "NAO", intervalo: Any = "",

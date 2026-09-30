@@ -222,3 +222,29 @@ describe('verificação do horário na CP (editor da semana)', () => {
     expect(screen.queryByText(/Verifica na CP/)).not.toBeInTheDocument()
   })
 })
+
+describe('marcar para outras pessoas (administrador)', () => {
+  const pessoas = [{ id: 1, nome: 'Bruno', eu: true }, { id: 2, nome: 'Camila', eu: false }]
+  const meus = { ...DADOS, utilizador: { id: 1, nome: 'Bruno', eu: true }, pessoas }
+  const dela = { ...DADOS, utilizador: { id: 2, nome: 'Camila', eu: false }, pessoas, semana: { ...DADOS.semana, viagens: [] } }
+
+  test('sem pessoas (conta normal) não há seletor', async () => {
+    abrir('semana')
+    await screen.findByRole('button', { name: 'Configurar semana' })
+    expect(screen.queryByRole('group', { name: 'Ver e marcar bilhetes de' })).not.toBeInTheDocument()
+  })
+
+  test('escolher a Camila carrega a semana dela e guardar marca para ela', async () => {
+    const s = abrir('semana', { 'GET /tickets?utilizador=2': () => [200, dela], 'POST /actions/bilhetes.semana': () => [200, { resultado: { anteriores: [] } }] }, meus)
+    const grupo = await screen.findByRole('group', { name: 'Ver e marcar bilhetes de' })
+    expect(within(grupo).getByRole('button', { name: 'Bruno (eu)' })).toHaveAttribute('aria-pressed', 'true')
+    await userEvent.click(within(grupo).getByRole('button', { name: 'Camila' }))
+    expect(await screen.findByText(/A marcar para/)).toHaveTextContent('Camila')
+    await userEvent.click(await screen.findByRole('button', { name: 'Configurar semana' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Adicionar viagem a seg 05/10' }))
+    await userEvent.type(screen.getAllByPlaceholderText('Comboio')[0], '520')
+    await userEvent.type(screen.getAllByLabelText('Hora de partida')[0], '07:27')
+    await userEvent.click(screen.getByRole('button', { name: 'Guardar semana' }))
+    await waitFor(() => expect(s.pedidos.some((p) => p.metodo === 'POST' && p.caminho === '/actions/bilhetes.semana' && (p.corpo as { params: { utilizador?: number } }).params.utilizador === 2)).toBe(true))
+  })
+})
