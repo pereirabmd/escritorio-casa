@@ -131,7 +131,7 @@ def _pedido(r) -> dict:
             "forcar": r["forcar"], "estado": r["estado"], "ultimaTentativa": r["ultima_tentativa"],
             "referencia": r["referencia"], "mensagem": r["mensagem"],
             # troca (ADR-083): este pedido troca o bilhete `trocaVenda` (CP) por este comboio, assim que houver lugar
-            "trocaVenda": r["troca_venda"], "trocaReferencia": r["troca_referencia"], "trocaAntecedenciaMin": r["troca_antecedencia_min"]}
+            "trocaVenda": r["troca_venda"], "trocaReferencia": r["troca_referencia"], "trocaAntecedenciaMin": r["troca_antecedencia_min"], "trocaInicio": r["troca_inicio"]}
 
 
 def dados(ctx):
@@ -468,7 +468,7 @@ def criar_troca(ctx):
     """Ativa a troca de um bilhete futuro por outro comboio (mesma data e sentido). Cria um pedido com repetição de 15 em 15 min: o Pi
     reserva o lugar, **cancela o bilhete antigo** e só então confirma o novo; para 30 min antes da partida. Antes de ativar confirma na CP
     (só leitura) que o bilhete existe e que a CP deixa devolvê-lo."""
-    _so_campos(ctx.body, {"venda", "comboio", "hora", "utilizadorId"})
+    _so_campos(ctx.body, {"venda", "comboio", "hora", "inicio", "utilizadorId"})
     uid = _alvo(ctx, ctx.body.get("utilizadorId"))
     venda, comboio, hora = ctx.body.get("venda"), ctx.body.get("comboio"), ctx.body.get("hora")
     if isinstance(venda, bool) or not isinstance(venda, int) or venda <= 0:
@@ -477,6 +477,9 @@ def criar_troca(ctx):
         raise ApiError(400, "comboio_invalido", "comboio inválido")
     if not isinstance(hora, str) or not re.fullmatch(r"([01]\d|2[0-3]):[0-5]\d", hora):
         raise ApiError(400, "hora_invalida", "hora inválida (HH:MM)")
+    inicio = ctx.body.get("inicio") or ""
+    if inicio and (not isinstance(inicio, str) or not re.fullmatch(r"\d{4}-\d{2}-\d{2}T([01]\d|2[0-3]):[0-5]\d", inicio)):
+        raise ApiError(400, "inicio_invalido", "início inválido (AAAA-MM-DDTHH:MM)")
     antigo = next((b for b in _cp(uid, "futuros")["bilhetes"] if b.get("venda") == venda), None)
     if antigo is None:
         raise ApiError(404, "nao_encontrado", "esse bilhete não é um bilhete futuro desta conta")
@@ -487,15 +490,23 @@ def criar_troca(ctx):
     eleg = _cp(uid, "elegibilidade", venda)
     if not eleg.get("cancelavel"):
         raise ApiError(409, "nao_cancelavel", eleg.get("motivo") or "a CP não deixa devolver este bilhete; não ativei a troca")
+    if inicio:
+        try:
+            partida = datetime.fromisoformat(f"{antigo['data']}T{hora}")
+            limite = partida - timedelta(minutes=TROCA_ANTECEDENCIA_MIN)
+            if datetime.fromisoformat(inicio) >= limite:
+                raise ApiError(400, "inicio_tarde", f"o início tem de ser antes de {limite:%d/%m %H:%M} (a troca para {TROCA_ANTECEDENCIA_MIN} min antes da partida)")
+        except ValueError:
+            raise ApiError(400, "inicio_invalido", "início inválido") from None
     conn = ctx.db()
     conn.execute("BEGIN IMMEDIATE")
     try:
         if conn.execute("SELECT 1 FROM bilhetes_pedidos WHERE troca_venda = ? AND ativo = 'SIM' AND estado NOT IN ('CONFIRMADO', 'AMBIGUO', 'EXPIRADO')", (venda,)).fetchone():
             raise ApiError(409, "troca_ja_ativa", "já há uma troca ativa para este bilhete")
         cur = conn.execute("INSERT INTO bilhetes_pedidos (data, origem, destino, comboio, hora, ativo, retry, intervalo_minutos, forcar, estado, utilizador_id, "
-                           "troca_venda, troca_referencia, troca_antecedencia_min) VALUES (?,?,?,?,?, 'SIM', 'SIM', ?, 'NAO', 'PENDENTE', ?, ?, ?, ?)",
+                           "troca_venda, troca_referencia, troca_antecedencia_min, troca_inicio) VALUES (?,?,?,?,?, 'SIM', 'SIM', ?, 'NAO', 'PENDENTE', ?, ?, ?, ?, ?)",
                            (antigo["data"], antigo["origem"], antigo["destino"], comboio, hora, TROCA_INTERVALO_MIN, uid, venda,
-                            antigo.get("referencia") or eleg.get("referencia") or "", TROCA_ANTECEDENCIA_MIN))
+                            antigo.get("referencia") or eleg.get("referencia") or "", TROCA_ANTECEDENCIA_MIN, inicio))
         conn.execute("COMMIT")
     except Exception:
         conn.execute("ROLLBACK")

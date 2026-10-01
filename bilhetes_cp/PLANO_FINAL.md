@@ -1418,6 +1418,9 @@ O ntfy **continua a ser o canal em uso** (Priority high em tudo, sem alteraçõe
 - **Histórico dos pedidos à CP**: `dados-api` `GET /bilhetes/historico?dias=1..90` (só administrador, só leitura) junta `bilhetes_tentativas` (escrita pelo Pi no fim de cada compra, podada aos 90 dias) e `bilhetes_logs`, com o nome de quem viaja (pela `perna` `v<id>`/`pedido<id>`). Páginas: `bilhetes_historico/` (web simples) e aba **Histórico** no Pulse. Nada disto escreve na base nem toca no caminho da compra.
 - **Pi (01/10/2026)**: scripts copiados (cópia `~/bilhetes_cp/scripts.bak-antes-aviso-3-tentativas`) e `dados-api` reiniciado (cópia `~/dados/apps.bak-antes-historico`).
 
+### 9.14 Troca com início agendado (01/10/2026, ADR-086 do Pulse)
+`bilhetes_pedidos.troca_inicio` (`dados/migrations_bilhetes/006_troca_inicio.sql`, `AAAA-MM-DDTHH:MM` local, vazio = já). `Leg.troca_inicio` (`common.py`, coluna 19 de `read_requests`), `pedidos.py` não lança a troca antes dessa hora (exceto «Tentar agora»; um valor ilegível conta como «já»). O fim não mudou: 30 min antes da partida. Ordem de publicação: `dados-api` (aplica a migração) → scripts do Pi → Pulse → APK.
+
 ### 9.x Consultas à conta da CP e ntfy desligado (30/09/2026, ADR-075 do Pulse)
 - **`scripts/consulta_cp.py --utilizador N futuros|passe|cancelar --venda ID`**: um JSON no stdout. Usa a sessão guardada da pessoa (renova o token; só faz login se for preciso). Bilhetes futuros (`ticketing-api/trips` + `sales`), devolução (`available-operations` → `post-sale/refund` POST → PUT) e validade do Passe Verde (`mobility-cards-api`, e-mail cifrado com AES-ECB e a chave pública do site). É chamado pelo `dados-api`; `CPClient.data_registo` só se usa nestas consultas. Testes: `tests/test_consulta_cp.py`.
 - **`NTFY_DESLIGADO=1`** no `.env`: `notify()` só avisa o Pulse e devolve se o Pulse aceitou (o `notify_once` depende disso). Apagar a linha volta ao ntfy.

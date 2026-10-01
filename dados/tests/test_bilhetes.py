@@ -451,6 +451,16 @@ class BilhetesPorPessoaTest(ApiBase):
             self.assertEqual(self.pedir("POST", "/bilhetes/trocas", {"venda": 99, "comboio": 731, "hora": "17:30"})[0], 404)   # não é um bilhete desta conta
             self.assertEqual(self.pedir("POST", "/bilhetes/trocas", {"venda": 77, "comboio": 731, "hora": "17:30", "x": 1})[0], 400)
 
+    def test_troca_com_inicio_agendado_guarda_o_inicio_e_recusa_um_inicio_invalido_ou_tarde_demais(self):
+        ok = {"futuros": {"ok": True, "bilhetes": [self.ANTIGO]}, "elegibilidade": {"ok": True, "venda": 77, "cancelavel": True, "referencia": "CP-ANTIGO"}}
+        base = {"venda": 77, "comboio": 731, "hora": "17:30"}
+        with self._cp_por_comando(ok):
+            for mau in ("amanha", "2035-03-05 08:00", "2035-03-05T25:00", 5, "2035-03-06T17:00"):      # o último é depois do limite (17:30 − 30 min = 17:00)
+                self.assertEqual(self.pedir("POST", "/bilhetes/trocas", {**base, "inicio": mau})[0], 400, mau)
+            s, b, _ = self.pedir("POST", "/bilhetes/trocas", {**base, "inicio": "2035-03-05T08:00"})
+        self.assertEqual((s, b["trocaInicio"]), (201, "2035-03-05T08:00"))
+        self.assertEqual(self.pedir("GET", "/bilhetes/dados")[1]["pedidos"][0]["trocaInicio"], "2035-03-05T08:00")
+
     def test_desarmar_a_troca_para_o_pedido_sem_cancelar_nada(self):
         ok = {"futuros": {"ok": True, "bilhetes": [self.ANTIGO]}, "elegibilidade": {"ok": True, "venda": 77, "cancelavel": True, "referencia": "CP-ANTIGO"}}
         with self._cp_por_comando(ok):

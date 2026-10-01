@@ -414,6 +414,7 @@ class TrocaArmarIn(_Params):
     venda: Annotated[int, Field(ge=1)]                     # a venda da CP do bilhete a cancelar (de Bilhetes › Na CP)
     comboio: int = Field(ge=1, le=99999)                   # o comboio que se quer
     hora: str = Field(pattern=r"^([01]\d|2[0-3]):[0-5]\d$")
+    inicio: str | None = Field(default=None, pattern=r"^\d{4}-\d{2}-\d{2}T([01]\d|2[0-3]):[0-5]\d$")   # só começa a tentar a partir daqui (hora local); sem isto, já (ADR-086)
     utilizador: int | None = Field(default=None, ge=1)     # trocar o bilhete de outra pessoa (só o administrador)
 
 
@@ -1131,9 +1132,9 @@ def _marcar_favorito(c: Contexto, p: MarcarFavoritoIn):
 
 
 def _troca_armar(c: Contexto, p: TrocaArmarIn):
-    corpo = {"venda": p.venda, "comboio": p.comboio, "hora": p.hora, **({"utilizadorId": p.utilizador} if p.utilizador else {})}
+    corpo = {"venda": p.venda, "comboio": p.comboio, "hora": p.hora, **({"inicio": p.inicio} if p.inicio else {}), **({"utilizadorId": p.utilizador} if p.utilizador else {})}
     _, r = c.client.pedir("POST", "/bilhetes/trocas", c.email, corpo=corpo, timeout=100)       # o `dados-api` confirma na CP que o bilhete se pode cancelar
-    return r, f"troca: venda {p.venda} -> comboio {p.comboio} às {p.hora}"
+    return r, f"troca: venda {p.venda} -> comboio {p.comboio} às {p.hora}" + (f", a partir de {p.inicio}" if p.inicio else "")
 
 
 def _troca_desarmar(c: Contexto, p: PedidoRefIn):

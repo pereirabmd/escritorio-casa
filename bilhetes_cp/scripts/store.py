@@ -31,7 +31,7 @@ from common import BASE_DIR, TZ, env, sanitize
 
 _REQUEST_FIELDS = {"data", "origem", "destino", "comboio", "hora", "ativo", "retry", "intervalo_minutos",
                    "forcar", "estado", "ultima_tentativa", "referencia", "mensagem",
-                   "troca_venda", "troca_referencia", "troca_antecedencia_min"}
+                   "troca_venda", "troca_referencia", "troca_antecedencia_min", "troca_inicio"}
 
 
 def default_db_path() -> Path:
@@ -83,7 +83,7 @@ class SqliteStore:
         with closing(self._connect()) as c:
             rows = c.execute("SELECT data, origem, destino, comboio, hora, ativo, retry, intervalo_minutos, forcar, "
                              "estado, ultima_tentativa, referencia, mensagem, id, utilizador_id, "
-                             "troca_venda, troca_referencia, troca_antecedencia_min FROM bilhetes_pedidos ORDER BY id").fetchall()
+                             "troca_venda, troca_referencia, troca_antecedencia_min, troca_inicio FROM bilhetes_pedidos ORDER BY id").fetchall()
         out = []
         for r in rows:
             cells = list(r)

@@ -444,6 +444,7 @@ class Leg:
     troca_venda: int | None = None
     troca_ref: str = ""
     troca_antecedencia: int = 30
+    troca_inicio: str = ""          # 'AAAA-MM-DDTHH:MM' (hora local): só começa a tentar a partir daqui; vazio = já
 
     @property
     def key(self) -> str:
@@ -691,7 +692,7 @@ def parse_request_rows(rows: list[list[Any]], today: date, first_row: int = 5
 
         legs.append(Leg(d, f"pedido{row}", org, dst, train, hora, row,
                         retry=str(retry_v).strip().upper() == "SIM", retry_minutes=_to_minutes(interval_v), utilizador_id=_utilizador(raw, 14),
-                        troca_venda=_to_int(cells[15]), troca_ref=str(cells[16] or "").strip(), troca_antecedencia=_to_int(cells[17]) or 30))
+                        troca_venda=_to_int(cells[15]), troca_ref=str(cells[16] or "").strip(), troca_antecedencia=_to_int(cells[17]) or 30, troca_inicio=str(cells[18] or "").strip()))
     return legs, issues
 
 

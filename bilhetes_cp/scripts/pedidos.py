@@ -58,6 +58,14 @@ def is_due(leg, raw_row: list, default_interval_min: float, now_ts: float) -> tu
     return (now_ts - last_ts >= interval_s), False
 
 
+def _inicio_ts(inicio: str) -> float:
+    """O instante (hora local) a partir do qual a troca começa a tentar; um valor ilegível conta como «já» (nunca bloqueia a troca)."""
+    try:
+        return datetime.fromisoformat(inicio).replace(tzinfo=TZ).timestamp()
+    except ValueError:
+        return 0.0
+
+
 def _ancorar(leg):
     """A mesma perna com a hora de embarque real (melhor esforço: sem horário oficial, usa a hora do pedido)."""
     try:
@@ -159,6 +167,8 @@ def run(plan_only: bool = False) -> int:
         due, forced = is_due(leg, raw, default_interval, now_ts)
         if not due or scheduler.is_running(leg):
             continue
+        if leg.troca_inicio and not forced and now_ts < _inicio_ts(leg.troca_inicio):
+            continue                                           # troca agendada: ainda não é a hora de começar a tentar («Tentar agora» ignora isto)
         if plan_only:
             log.info("[plano] lançaria %s (comboio %s)%s", leg.key, leg.train, " — forçado" if forced else "")
         elif launch(leg):

@@ -4,6 +4,7 @@ import type { BilheteNaCp, FavoritoBilhetes, PasseNaCp } from '../../api/types'
 import { useAvisos } from '../../components/Avisos'
 import { BrandLoading, Botao, Notice } from '../../components/ui'
 import { diaCurto } from '../../lib/bilhetes'
+import { VerificacaoCp } from './SemanaTab'
 import { fmtDataIso, plural } from '../../lib/format'
 import { useAcao } from '../../lib/useAcao'
 import { useAsync } from '../../lib/useAsync'
@@ -16,15 +17,16 @@ function Troca({ b, utilizador, favoritos, aoMudar }: { b: BilheteNaCp; utilizad
   const [aberta, setAberta] = useState(false)
   const [comboio, setComboio] = useState('')
   const [hora, setHora] = useState('')
+  const [inicio, setInicio] = useState('')                       // «AAAA-MM-DDTHH:MM»: só começa a tentar a partir daqui; vazio = já
   const [pedirConfirmacao, setPedirConfirmacao] = useState(false)
   const mesmoSentido = favoritos.filter((f) => f.origem.toLowerCase() === b.origem.toLowerCase() && f.destino.toLowerCase() === b.destino.toLowerCase() && f.comboio !== b.comboio)
   const valido = /^\d{1,5}$/.test(comboio) && Number(comboio) > 0 && Number(comboio) !== b.comboio && /^([01]\d|2[0-3]):[0-5]\d$/.test(hora)
 
   async function ativar() {
-    const r = await executar(`troca-${b.venda}`, 'bilhetes.troca_armar', { venda: b.venda, comboio: Number(comboio), hora, ...(utilizador ? { utilizador } : {}) }, true)
+    const r = await executar(`troca-${b.venda}`, 'bilhetes.troca_armar', { venda: b.venda, comboio: Number(comboio), hora, ...(inicio ? { inicio } : {}), ...(utilizador ? { utilizador } : {}) }, true)
     if (r) {
-      setAberta(false); setPedirConfirmacao(false); setComboio(''); setHora('')
-      avisos.mostrar(`Troca ativada: tento o comboio ${comboio} de 15 em 15 min, até 30 min antes da partida.`)
+      setAberta(false); setPedirConfirmacao(false); setComboio(''); setHora(''); setInicio('')
+      avisos.mostrar(inicio ? `Troca agendada: começo a tentar o comboio ${comboio} em ${inicio.slice(8, 10)}/${inicio.slice(5, 7)} às ${inicio.slice(11)}, de 15 em 15 min, até 30 min antes da partida.` : `Troca ativada: tento o comboio ${comboio} de 15 em 15 min, até 30 min antes da partida.`)
     }
   }
   if (!aberta) return <div><button type="button" className="link-btn" onClick={() => setAberta(true)}>Trocar por outro comboio</button></div>
@@ -43,10 +45,15 @@ function Troca({ b, utilizador, favoritos, aoMudar }: { b: BilheteNaCp; utilizad
         <label className="sr-only" htmlFor={`th-${b.venda}`}>Hora de partida do comboio novo</label>
         <input id={`th-${b.venda}`} type="time" className="input input-sm" value={hora} onChange={(e) => { setHora(e.target.value); setPedirConfirmacao(false) }} />
       </div>
+      <VerificacaoCp data={b.data} origem={b.origem} destino={b.destino} comboio={comboio} hora={hora} aoUsarHora={(h) => { setHora(h); setPedirConfirmacao(false) }} />
+      <div className="stack">
+        <label className="t-meta" htmlFor={`ti-${b.venda}`}>Começar a tentar em (opcional; vazio = já)</label>
+        <input id={`ti-${b.venda}`} type="datetime-local" className="input input-sm" value={inicio} max={`${b.data}T${hora || '23:59'}`} onChange={(e) => { setInicio(e.target.value); setPedirConfirmacao(false) }} />
+      </div>
       {erro && <Notice tipo="error">{erro} <button type="button" className="link-btn" onClick={limparErro}>Fechar</button></Notice>}
       {pedirConfirmacao ? (
         <div className="stack" role="group" aria-label="Confirmar a troca">
-          <p className="t-body2">Confirmas? O bilhete atual (comboio {b.comboio}, {b.hora}) <b>só é cancelado depois de o lugar no comboio {comboio} estar reservado</b>.</p>
+          <p className="t-body2">Confirmas? O bilhete atual (comboio {b.comboio}, {b.hora}) <b>só é cancelado depois de o lugar no comboio {comboio} estar reservado</b>.{inicio && <> Começo a tentar em {inicio.slice(8, 10)}/{inicio.slice(5, 7)} às {inicio.slice(11)}.</>}</p>
           <div className="quick">
             <Botao variante="danger" pequeno carregando={ocupado === `troca-${b.venda}`} disabled={ocupado !== null} onClick={() => void ativar()}>Ativar troca</Botao>
             <Botao variante="secondary" pequeno disabled={ocupado !== null} onClick={() => setPedirConfirmacao(false)}>Voltar</Botao>

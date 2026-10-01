@@ -29,7 +29,7 @@ function Linha({ p, f }: { p: PedidoCp; f: Ferramentas }) {
       <div className="row-main">
         <div className="t-body">{diaCurto(p.data)} · {p.hora} <span className={`pill${ambiguo ? ' pill-soon' : p.estado === 'CONFIRMADO' ? ' pill-ok' : ''}`}>{ESTADO_PEDIDO[p.estado] ?? p.estado}</span></div>
         <div className="t-meta">{p.origem} → {p.destino} · comboio {p.comboio}</div>
-        {troca && <div className="t-meta">Troca: cancela o bilhete {p.trocaReferencia || ''} quando houver lugar neste comboio (de {p.intervaloMinutos ?? 15} em {p.intervaloMinutos ?? 15} min, até {p.trocaAntecedenciaMin ?? 30} min antes da partida).</div>}
+        {troca && <div className="t-meta">Troca: cancela o bilhete {p.trocaReferencia || ''} quando houver lugar neste comboio (de {p.intervaloMinutos ?? 15} em {p.intervaloMinutos ?? 15} min, até {p.trocaAntecedenciaMin ?? 30} min antes da partida).{p.trocaInicio && p.estado !== 'CONFIRMADO' && <> Tenta a partir de {p.trocaInicio.slice(8, 10)}/{p.trocaInicio.slice(5, 7)} às {p.trocaInicio.slice(11)}.</>}</div>}
         {p.mensagem && <div className="t-meta">{p.mensagem}</div>}
         {ambiguo ? <p className="t-meta">Confirma na App CP se a compra chegou a ser feita antes de tentares outra vez.</p> : (
           <div className="quick" role="group" aria-label={`Pedido de ${diaCurto(p.data)} às ${p.hora}`}>

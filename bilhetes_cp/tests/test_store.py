@@ -23,12 +23,13 @@ SCHEMA_001 = MIGRACOES / "001_bilhetes.sql"
 SCHEMA_002 = MIGRACOES / "002_tentativas.sql"
 SCHEMA_003 = MIGRACOES / "003_utilizadores.sql"      # o dono de cada viagem, pedido, compra e registo (fase 1 dos vários utilizadores)
 SCHEMA_005 = MIGRACOES / "005_trocas.sql"            # a troca de bilhetes (ADR-083): colunas extra nos pedidos
+SCHEMA_006 = MIGRACOES / "006_troca_inicio.sql"      # a troca começa a tentar a partir de uma data e hora (ADR-086)
 
 
 class _Schema:
     """As migrações da base `bilhetes` por ordem (o teste só precisa de `.read_text()`)."""
     def read_text(self):
-        return SCHEMA_001.read_text() + "\n" + SCHEMA_002.read_text() + "\n" + SCHEMA_003.read_text() + "\n" + SCHEMA_005.read_text()
+        return SCHEMA_001.read_text() + "\n" + SCHEMA_002.read_text() + "\n" + SCHEMA_003.read_text() + "\n" + SCHEMA_005.read_text() + "\n" + SCHEMA_006.read_text()
 
 
 SCHEMA = _Schema()
@@ -224,9 +225,9 @@ class TrocaStoreTest(StoreBase):
     def test_pedido_de_recuperacao_e_a_troca_chegam_ao_motor(self):
         self.st.append_request("2026-10-02", "Lisboa Oriente", "Aveiro", 723, "19:39", retry="SIM", intervalo=5, utilizador_id=1, forcar="SIM")
         rid = self.st.read_requests()[-1][13]
-        self.st.update_request(rid, troca_venda=125951095, troca_referencia="CP-ANTIGO", troca_antecedencia_min=45)
+        self.st.update_request(rid, troca_venda=125951095, troca_referencia="CP-ANTIGO", troca_antecedencia_min=45, troca_inicio="2035-03-05T08:00")
         legs, _ = common.parse_request_rows(self.st.read_requests(), date(2026, 9, 24))
         l = legs[0]
         self.assertEqual((l.train, l.retry, l.retry_minutes, l.utilizador_id), (723, True, 5.0, 1))
-        self.assertEqual((l.troca_venda, l.troca_ref, l.troca_antecedencia), (125951095, "CP-ANTIGO", 45))
+        self.assertEqual((l.troca_venda, l.troca_ref, l.troca_antecedencia, l.troca_inicio), (125951095, "CP-ANTIGO", 45, "2035-03-05T08:00"))
 

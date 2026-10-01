@@ -244,6 +244,10 @@ def test_troca_armar_e_desarmar_passam_pelo_dados_api(conn, dados_falso):
     r = correr(conn, dados_falso, "bilhetes.troca_armar", {"venda": 77, "comboio": 731, "hora": "17:30"}, confirmado=True)
     assert r["trocaVenda"] == 77
     assert ("POST", "/bilhetes/trocas", {"venda": 77, "comboio": 731, "hora": "17:30"}, EMAIL) in FalsoDados.escritas
+    correr(conn, dados_falso, "bilhetes.troca_armar", {"venda": 77, "comboio": 731, "hora": "17:30", "inicio": "2026-10-05T08:00"}, confirmado=True)
+    assert ("POST", "/bilhetes/trocas", {"venda": 77, "comboio": 731, "hora": "17:30", "inicio": "2026-10-05T08:00"}, EMAIL) in FalsoDados.escritas     # o início agendado chega ao dados-api
+    with pytest.raises(ContaErro):
+        correr(conn, dados_falso, "bilhetes.troca_armar", {"venda": 77, "comboio": 731, "hora": "17:30", "inicio": "amanhã"}, confirmado=True)
     assert correr(conn, dados_falso, "bilhetes.troca_desarmar", {"pedido": 104})["estado"] == "DESARMADO"
     with pytest.raises(ContaErro) as e:                                                       # cancela um bilhete: pede confirmação
         correr(conn, dados_falso, "bilhetes.troca_armar", {"venda": 77, "comboio": 731, "hora": "17:30"})

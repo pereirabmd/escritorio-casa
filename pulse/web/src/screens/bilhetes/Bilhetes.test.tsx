@@ -1,4 +1,4 @@
-import { render, screen, waitFor, within } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { App } from '../../App'
 import { diasParaEditor, linhaVazia, segundaDe, somarDias, validarDias, viagensParaEnviar } from '../../lib/bilhetes'
@@ -326,6 +326,20 @@ describe('Na CP (ADR-075)', () => {
     expect(screen.getByText(/só é cancelado depois de o lugar no comboio 731 estar reservado/)).toBeInTheDocument()
     await userEvent.click(screen.getByRole('button', { name: 'Ativar troca' }))
     await waitFor(() => expect(corpo(s.pedidos, '/actions/bilhetes.troca_armar')).toEqual({ params: { venda: 77, comboio: 731, hora: '17:30' }, confirmado: true }))
+  })
+
+  test('trocar: a hora de partida do comboio novo vem da CP e a troca pode ser agendada para uma data e hora (ADR-086)', async () => {
+    const s = abrir('cp', { 'GET /tickets/cp/passe': () => [200, PASSE], 'GET /tickets/cp/futuros': () => [200, FUTUROS],
+      'GET /tickets/timetable?comboio=731&data=2026-10-01&origem=Lisboa+Oriente&destino=Aveiro': () => [200, { estado: 'preenchido', mensagem: 'Hora da partida do comboio (Lisboa Oriente) às 17:30.', sugestaoHora: '17:30' }],
+      'POST /actions/bilhetes.troca_armar': () => [200, { resultado: { id: 104 } }] })
+    await userEvent.click(await screen.findByRole('button', { name: 'Trocar por outro comboio' }))
+    await userEvent.type(screen.getByLabelText('Comboio novo'), '731')
+    await waitFor(() => expect(screen.getByLabelText('Hora de partida do comboio novo')).toHaveValue('17:30'))      // preenchida pela CP, sem escrever
+    fireEvent.change(screen.getByLabelText(/Começar a tentar em/), { target: { value: '2026-10-01T08:00' } })
+    await userEvent.click(screen.getByRole('button', { name: 'Continuar' }))
+    expect(screen.getByText(/Começo a tentar em 01\/10 às 08:00/)).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: 'Ativar troca' }))
+    await waitFor(() => expect(corpo(s.pedidos, '/actions/bilhetes.troca_armar')).toEqual({ params: { venda: 77, comboio: 731, hora: '17:30', inicio: '2026-10-01T08:00' }, confirmado: true }))
   })
 
   test('uma troca ativa aparece nos Pedidos e pode ser desativada', async () => {

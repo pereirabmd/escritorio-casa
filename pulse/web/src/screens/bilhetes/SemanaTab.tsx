@@ -56,7 +56,7 @@ function Proxima({ v }: { v: ViagemBilhetes }) {
 interface ResultadoCp { estado: 'desligado' | 'confirmado' | 'preenchido' | 'aviso' | 'sem_informacao'; mensagem: string; sugestaoHora?: string }
 
 /** Confere na CP (pelo servidor: as chaves nunca vão para o telemóvel) o comboio, a data, o percurso e a hora. Consultivo: nunca impede de guardar (ADR-068). */
-function VerificacaoCp({ data, origem, destino, comboio, hora, aoUsarHora }: { data: string; origem: string; destino: string; comboio: string; hora: string; aoUsarHora: (h: string) => void }) {
+export function VerificacaoCp({ data, origem, destino, comboio, hora, aoUsarHora }: { data: string; origem: string; destino: string; comboio: string; hora: string; aoUsarHora: (h: string) => void }) {
   const [res, setRes] = useState<{ chave: string; r: ResultadoCp } | null>(null)
   const n = Number(comboio)
   const pronto = /^\d{1,5}$/.test(comboio.trim()) && n > 0 && !!origem && !!destino && origem !== destino

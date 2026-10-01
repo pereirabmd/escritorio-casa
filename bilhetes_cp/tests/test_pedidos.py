@@ -185,9 +185,9 @@ if __name__ == "__main__":
     unittest.main()
 
 
-def trow(venda=125951095, ref="CP-ANTIGO", antecedencia=30, **kw):
+def trow(venda=125951095, ref="CP-ANTIGO", antecedencia=30, inicio="", **kw):
     """Uma linha de Pedidos com as colunas da troca (id, utilizador, troca_venda, troca_referencia, troca_antecedencia_min)."""
-    return prow(**kw) + [9, 1, venda, ref, antecedencia]
+    return prow(**kw) + [9, 1, venda, ref, antecedencia, inicio]
 
 
 class TrocaPedidoTests(unittest.TestCase):
@@ -221,6 +221,20 @@ class TrocaPedidoTests(unittest.TestCase):
         with self.rows(trow()):                                   # daqui a 3 dias
             pedidos.run()
         self.assertEqual(len(self.launched), 1)
+
+    def test_troca_agendada_so_comeca_a_tentar_a_partir_do_inicio(self):
+        agora = common.now_local()
+        futuro = (agora + timedelta(hours=2)).strftime("%Y-%m-%dT%H:%M")
+        passado = (agora - timedelta(minutes=5)).strftime("%Y-%m-%dT%H:%M")
+        with self.rows(trow(inicio=futuro)):
+            pedidos.run()
+        self.assertEqual(self.launched, [])                       # ainda não é a hora
+        with self.rows(trow(inicio=passado)):
+            pedidos.run()
+        self.assertEqual(len(self.launched), 1)                   # já passou o início
+        with self.rows(trow(inicio="lixo")):
+            pedidos.run()
+        self.assertEqual(len(self.launched), 2)                   # um início ilegível nunca bloqueia a troca
 
     def test_troca_expira_30_min_antes_da_partida_e_fica_a_manter_o_antigo(self):
         agora = common.now_local()

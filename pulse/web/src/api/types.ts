@@ -164,7 +164,7 @@ export interface PedidoCp {
   id: number; data: string; hora: string; origem: string; destino: string; comboio: number; ativo: boolean; retry: boolean; intervaloMinutos: number | null
   forcar: boolean; estado: string; ultimaTentativa: string | null; referencia: string | null; mensagem: string | null
   /** Troca (ADR-083): este pedido troca o bilhete `trocaVenda` por este comboio quando houver lugar (reserva, cancela o antigo e confirma). */
-  trocaVenda?: number | null; trocaReferencia?: string; trocaAntecedenciaMin?: number
+  trocaVenda?: number | null; trocaReferencia?: string; trocaAntecedenciaMin?: number; trocaInicio?: string
 }
 export interface RegistoCp { ts: string; tipo: string; data: string | null; perna: string | null; comboio: number | null; status: number | null; resultado: string | null; referencia: string | null; erro: string | null }
 export interface BilheteNaCp { venda: number; referencia: string; estado: string; origem: string; destino: string; data: string; hora: string; chegada: string; comboio: number | null; servico: string; carruagem: number | null; lugar: number | null; valor: number; podeCancelar: boolean }
