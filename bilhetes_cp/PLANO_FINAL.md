@@ -1412,6 +1412,12 @@ O ntfy **continua a ser o canal em uso** (Priority high em tudo, sem alteraçõe
 - **Passar o Android de ntfy para FCM** (mais tarde): registar o token (`POST /api/v1/devices`) e deixar de subscrever o tópico ntfy no telemóvel; nada a alterar aqui. Testes: `PulseEventTests` (6; total 282).
 
 
+### 9.13 Aviso após 3 tentativas de retenção e histórico de pedidos (01/10/2026, ADR-085 do Pulse)
+- **`hold_sale`** envia «Sem lugar reservado (N tentativas) — <viagem>» **uma só vez** quando a tentativa N (`purchase.hold_notify_after_attempts`, por omissão 3, de `hold_retry_interval_s`=15 s) ainda não conseguiu reter lugar antes de T; continua a tentar. O aviso de T-1 min («Sem lugar retido») e a rajada do esgotado a T **não mudaram**. Testes em `tests/test_hold.py`.
+- **`common.pulse_event`**: `link=pulse://bilhetes/semana` e botão `acao`=«Abrir histórico» → `acaoLink=pulse://bilhetes/historico`. O ntfy não mudou.
+- **Histórico dos pedidos à CP**: `dados-api` `GET /bilhetes/historico?dias=1..90` (só administrador, só leitura) junta `bilhetes_tentativas` (escrita pelo Pi no fim de cada compra, podada aos 90 dias) e `bilhetes_logs`, com o nome de quem viaja (pela `perna` `v<id>`/`pedido<id>`). Páginas: `bilhetes_historico/` (web simples) e aba **Histórico** no Pulse. Nada disto escreve na base nem toca no caminho da compra.
+- **Pi (01/10/2026)**: scripts copiados (cópia `~/bilhetes_cp/scripts.bak-antes-aviso-3-tentativas`) e `dados-api` reiniciado (cópia `~/dados/apps.bak-antes-historico`).
+
 ### 9.x Consultas à conta da CP e ntfy desligado (30/09/2026, ADR-075 do Pulse)
 - **`scripts/consulta_cp.py --utilizador N futuros|passe|cancelar --venda ID`**: um JSON no stdout. Usa a sessão guardada da pessoa (renova o token; só faz login se for preciso). Bilhetes futuros (`ticketing-api/trips` + `sales`), devolução (`available-operations` → `post-sale/refund` POST → PUT) e validade do Passe Verde (`mobility-cards-api`, e-mail cifrado com AES-ECB e a chave pública do site). É chamado pelo `dados-api`; `CPClient.data_registo` só se usa nestas consultas. Testes: `tests/test_consulta_cp.py`.
 - **`NTFY_DESLIGADO=1`** no `.env`: `notify()` só avisa o Pulse e devolve se o Pulse aceitou (o `notify_once` depende disso). Apagar a linha volta ao ntfy.

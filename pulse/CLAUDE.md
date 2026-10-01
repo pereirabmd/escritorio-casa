@@ -31,7 +31,7 @@ Não introduzir React Native, Flutter ou wrappers Web para substituir o APK Andr
 
 ## Android e Web em paridade
 
-Desde 29/09/2026 cada funcionalidade nova é entregue **no APK e na Web** (`docs/PARITY_ANDROID.md`), com as regras no servidor. Discutir e esclarecer todas as dúvidas com o utilizador **antes** de implementar.
+Desde 29/09/2026 cada funcionalidade nova é entregue **no APK e na Web** (`docs/PARITY_ANDROID.md`), com as regras no servidor. Discutir e esclarecer todas as dúvidas com o utilizador **antes** de implementar (regras gerais de perguntar em `../CLAUDE.md`).
 
 ## Linguagem
 
