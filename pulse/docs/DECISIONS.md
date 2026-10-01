@@ -447,3 +447,5 @@ O ADR-087 entendeu mal o pedido: o `hot_buy.py` só trocava se o lugar novo foss
 
 **Plano B manual (02/10/2026):** o utilizador perguntou por «se não houver lugar às 17:30, comprar o das 19:30 e tentar trocar para o das 17:30». Isto **já existe** (troca por outro comboio, ADR-083, na aba Na CP, a partir do bilhete de reserva); decidiu-se que **o fluxo manual chega** (sem ligar a troca à Semana). Só se acrescentou, na lista de favoritos da troca, a ordenação com os comboios **mais cedo que o bilhete** primeiro e a etiqueta «· mais cedo» (Web e Android 0.4.7). Um plano B automático a partir da Semana ficou como ideia, não decidida.
 
+
+**Publicado a 02/10/2026 (ADR-088):** `hot_buy.py` no Pi (cópia `hot_buy.py.bak-antes-adr088`), Pulse (`/health` ok) e **APK 0.4.7** (versionCode 26). Falta instalar o 0.4.7 e fazer a primeira troca real.
