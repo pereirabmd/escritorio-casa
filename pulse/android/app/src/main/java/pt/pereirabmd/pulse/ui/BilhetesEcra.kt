@@ -416,7 +416,7 @@ private fun TrocaBilhete(b: JSONObject, utilizador: Int?, favoritos: List<JSONOb
     Campo("Comboio novo", comboio, { comboio = it.filter(Char::isDigit).take(5); confirmar = false }, teclado = androidx.compose.ui.text.input.KeyboardType.Number)
     CampoHora("Hora de partida do comboio novo", hora, { hora = it; confirmar = false }, opcional = false)
     VerificacaoCp(b.txtOu("data"), b.txtOu("origem"), b.txtOu("destino"), comboio, hora) { h -> hora = h; confirmar = false }     // preenche a hora da CP e avisa se não bate certo
-    if (mesmoComboio) Meta("Mesmo comboio: serve para trocar um bilhete comprado sem desconto (só para garantir lugar) pelo mesmo comboio com o desconto do passe. Quando houver lugar, reservo um 2.º lugar, devolvo o atual e confirmo o novo com desconto. Se não houver, o atual mantém-se e volto a tentar.")
+    if (mesmoComboio) Meta("Mesmo comboio: serve para trocar um bilhete comprado sem desconto pelo mesmo comboio com o desconto do passe. Não espero por lugares livres: devolvo já o bilhete atual e compro logo a seguir o lugar que ficar livre. Risco: se alguém o apanhar nesse instante, fico sem bilhete e tento voltar a comprar o antigo de 5 em 5 min.")
     if (mesmoComboio && (b.optDouble("valor", -1.0) == 0.0)) Aviso(TipoAviso.AVISO, "Este bilhete já custa 0 € (já tem desconto): trocar pelo mesmo comboio não poupa nada.")
     Botao("Simular devolução", {
         simAcorrer = true; sim = "A consultar a CP…"

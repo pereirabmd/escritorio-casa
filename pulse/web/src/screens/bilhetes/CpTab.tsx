@@ -62,7 +62,7 @@ function Troca({ b, utilizador, favoritos, aoMudar }: { b: BilheteNaCp; utilizad
         <label className="t-meta" htmlFor={`ti-${b.venda}`}>Começar a tentar em (opcional; vazio = já)</label>
         <input id={`ti-${b.venda}`} type="datetime-local" className="input input-sm" value={inicio} max={`${b.data}T${hora || '23:59'}`} onChange={(e) => { setInicio(e.target.value); setPedirConfirmacao(false) }} />
       </div>
-      {mesmoComboio && <p className="t-meta" role="status">Mesmo comboio: serve para trocar um bilhete comprado <b>sem desconto</b> (só para garantir lugar) pelo mesmo comboio <b>com o desconto do passe</b>. Quando houver lugar, reservo um 2.º lugar, devolvo o atual e confirmo o novo com desconto. Se não houver, o atual mantém-se e volto a tentar.</p>}
+      {mesmoComboio && <p className="t-meta" role="status">Mesmo comboio: serve para trocar um bilhete comprado <b>sem desconto</b> pelo mesmo comboio <b>com o desconto do passe</b>. Não espero por lugares livres: <b>devolvo já o bilhete atual</b> e compro logo a seguir o lugar que ficar livre. <b>Risco:</b> se alguém o apanhar nesse instante, fico sem bilhete e tento voltar a comprar o antigo de 5 em 5 min.</p>}
       {mesmoComboio && b.valor === 0 && <Notice tipo="warning">Este bilhete já custa 0 € (já tem desconto): trocar pelo mesmo comboio não poupa nada.</Notice>}
       <div className="quick">
         <Botao variante="secondary" pequeno carregando={!!sim?.a} disabled={!!sim?.a || ocupado !== null} onClick={() => void simular()}>Simular devolução</Botao>

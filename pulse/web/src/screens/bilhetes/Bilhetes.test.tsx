@@ -348,7 +348,7 @@ describe('Na CP (ADR-075)', () => {
     await userEvent.click(await screen.findByRole('button', { name: 'Trocar por outro comboio' }))
     await userEvent.type(screen.getByLabelText('Comboio novo'), '723')                  // o comboio do próprio bilhete
     fireEvent.change(screen.getByLabelText('Hora de partida do comboio novo'), { target: { value: '19:39' } })
-    expect(screen.getByText(/Mesmo comboio: serve para trocar um bilhete comprado/)).toBeInTheDocument()
+    expect(screen.getByText(/devolvo já o bilhete atual/)).toBeInTheDocument()
     expect(screen.getByText(/já custa 0 €/)).toBeInTheDocument()                          // o bilhete de teste custa 0
     expect(screen.getByRole('button', { name: 'Continuar' })).toBeEnabled()
     await userEvent.click(screen.getByRole('button', { name: 'Simular devolução' }))

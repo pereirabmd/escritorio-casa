@@ -1100,6 +1100,8 @@ class PedidoAttempt(DonoMixin, SeatMixin):
         if sections is None:
             return 2   # search_trip() já terminou (sem serviço em cache para tentar às cegas)
 
+        if mesmo_comboio:
+            return self._troca_mesmo_comboio(sections)
         outcome, resp = self.fire_sale(sections)
         if outcome != "ok":
             return 0 if outcome == "sold_out" else 2
@@ -1117,6 +1119,25 @@ class PedidoAttempt(DonoMixin, SeatMixin):
 
     # ---- troca (ADR-083) ----------------------------------------------------------------------------------------------------
 
+    def _troca_mesmo_comboio(self, sections: list) -> int:
+        """Troca pelo MESMO comboio (ADR-089): não há lugar livre a validar nem a reservar antes (o comboio pode estar cheio): devolve-se o antigo e
+        compra-se logo a seguir, apanhando o lugar que acabou de ficar livre (com umas repetições rápidas, caso a CP demore a libertá-lo). Se mesmo
+        assim não houver lugar o utilizador já aceitou o risco: a rede de segurança volta a tentar comprar o bilhete antigo de 5 em 5 minutos."""
+        if not self.trocar_bilhete_antigo(None):
+            return 2                                  # não conseguiu devolver: o bilhete antigo mantém-se
+        outcome, resp = self.fire_sale(sections, esgotado_repetir=int(cfg("troca_mesmo_comboio_repeticoes", 6)))
+        if outcome != "ok":
+            self.rede_de_seguranca_troca()
+            return 0 if outcome == "sold_out" else 2
+        sale_id = resp.body["saleID"]
+        self.improve_seat(sale_id)
+        resultado = self.complete_sale(sale_id)
+        if resultado == 0:
+            self.notify(f"Troca concluída — {self.label}", f"Devolvi o bilhete antigo e comprei o comboio {self.leg.train} com desconto.", tags=["repeat"], logger=log)
+        else:
+            self.rede_de_seguranca_troca()
+        return resultado
+
     def _troca_no_mesmo_comboio(self) -> bool:
         """Troca pelo MESMO comboio e dia do bilhete que se vai cancelar (ADR-088): o bilhete antigo, comprado sem desconto para garantir lugar, é
         substituído pelo mesmo comboio com o desconto do passe quando houver lugar. Só nesse caso o bilhete já existir é o objetivo (não é «já comprado»)."""
@@ -1130,7 +1151,7 @@ class PedidoAttempt(DonoMixin, SeatMixin):
         self._troca_antigo = antigo
         return bool(antigo) and antigo.get("comboio") == leg.train and str(antigo.get("data")) == leg.date.isoformat()
 
-    def trocar_bilhete_antigo(self, sale_id: int) -> bool:
+    def trocar_bilhete_antigo(self, sale_id: int | None) -> bool:
         """O lugar novo já está **retido**: cancela o bilhete antigo e só depois se confirma o novo (a CP recusa o desconto enquanto o antigo
         existe, «SIV:BSC:5151»). Se não conseguir cancelar, liberta a reserva e fica tudo como estava."""
         leg = self.leg
@@ -1145,12 +1166,14 @@ class PedidoAttempt(DonoMixin, SeatMixin):
             r = consulta_cp.cancelar(self.cp, int(leg.troca_venda))
         except Exception as e:  # noqa: BLE001 — ConsultaErro, CPError ou outra: nunca se confirma o novo sem o antigo cancelado
             motivo = getattr(e, "mensagem", None) or f"{type(e).__name__}"
-            try:
-                self.cp.cancel_sale(sale_id)
-            except Exception as e2:  # noqa: BLE001
-                log.error("Não consegui libertar a reserva %s: %s", sale_id, type(e2).__name__)
+            if sale_id is not None:
+                try:
+                    self.cp.cancel_sale(sale_id)
+                except Exception as e2:  # noqa: BLE001
+                    log.error("Não consegui libertar a reserva %s: %s", sale_id, type(e2).__name__)
             self.terminate("FAILED", f"Troca não feita — {self.label}",
-                           f"Reservei o lugar mas não consegui cancelar o bilhete antigo ({motivo}). Libertei a reserva; ficas com o bilhete antigo.", "ERRO")
+                           (f"Reservei o lugar mas não consegui cancelar o bilhete antigo ({motivo}). Libertei a reserva; ficas com o bilhete antigo." if sale_id is not None
+                            else f"Não consegui devolver o bilhete antigo ({motivo}); ficas com ele."), "ERRO")
             self._update_request(ativo="NAO")
             return False
         self._antigo_cancelado = True
@@ -1176,6 +1199,7 @@ class PedidoAttempt(DonoMixin, SeatMixin):
             except Exception as e:  # noqa: BLE001
                 log.error("Não consegui criar o pedido de recuperação: %s", type(e).__name__)
                 aviso = "O bilhete antigo foi cancelado e o novo não ficou confirmado; não consegui criar o pedido de recuperação. COMPRA JÁ um bilhete na App CP."
+        self._update_request(ativo="NAO")             # o antigo já foi devolvido: esta troca não se repete (o pedido de recuperação trata do resto)
         self.notify(f"URGENTE — troca incompleta — {self.label}", aviso, tags=["rotating_light"], logger=log)
 
     def search_trip(self) -> list | None:
@@ -1198,11 +1222,12 @@ class PedidoAttempt(DonoMixin, SeatMixin):
         self.lock.update(sections=sections)
         return sections
 
-    def fire_sale(self, sections: list) -> tuple[str, Any]:
+    def fire_sale(self, sections: list, esgotado_repetir: int = 0) -> tuple[str, Any]:
         """UM disparo, com no máximo 1 repetição — só para um erro técnico (nunca esgotado/
-        recusa: aí a tentativa acaba já, sem rajada nem espera)."""
+        recusa: aí a tentativa acaba já, sem rajada nem espera). `esgotado_repetir` = repetições rápidas (0,4 s) num «esgotado»: só a troca pelo
+        mesmo comboio as usa, para apanhar o lugar que acabou de devolver."""
         target = self.clock()
-        for attempt in (1, 2):
+        for attempt in range(1, 3 + esgotado_repetir):
             try:
                 resp = self.cp.create_sale_request(self.leg.date.isoformat(), sections)
             except CPError as e:
@@ -1232,6 +1257,9 @@ class PedidoAttempt(DonoMixin, SeatMixin):
                 self.sleep(0.5)
                 continue
             if kind == "sold_out":
+                if esgotado_repetir and attempt < 2 + esgotado_repetir:
+                    self.sleep(0.4)
+                    continue
                 self.terminate("SOLD_OUT", f"Esgotado — {self.label}", f"Não há lugares. {detail}", "COMPRA",
                                tags=["no_entry"], status=resp.status)
                 return "sold_out", None

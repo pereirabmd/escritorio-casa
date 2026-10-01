@@ -927,8 +927,8 @@ class TrocaTests(PedidoFlowBase):
 
 
 class TrocaMesmoComboioTests(PedidoFlowBase):
-    """Troca pelo MESMO comboio (ADR-088): o bilhete antigo (sem desconto, comprado para garantir lugar) é substituído pelo mesmo comboio com
-    desconto. Reserva o novo ao lado do antigo, devolve o antigo e só então aplica o desconto e confirma. Sem lugar, o antigo mantém-se."""
+    """Troca pelo MESMO comboio (ADR-089): sem lugar a validar nem a reservar antes (o comboio pode estar cheio). Devolve o antigo e compra logo a
+    seguir, apanhando o lugar libertado; se mesmo assim não houver, a rede de segurança volta a comprar o antigo."""
     train = 731
     cp731 = staticmethod(TrocaTests.cp731)
     run_troca = TrocaTests.run_troca
@@ -940,7 +940,7 @@ class TrocaMesmoComboioTests(PedidoFlowBase):
         self.sheets = TrocaSheets()
         self.sheets.ANTIGO = {**TrocaSheets.ANTIGO, "comboio": 731, "hora_partida": "17:30", "carruagem": "21", "lugar": "111"}
 
-    def test_reserva_o_novo_devolve_o_antigo_e_so_depois_aplica_o_desconto(self):
+    def test_devolve_o_antigo_primeiro_e_compra_o_lugar_libertado_com_desconto(self):
         ordem = []
         cp = self.cp731()
         antes, desconto = cp.create_sale_request, cp.apply_green_pass
@@ -948,20 +948,30 @@ class TrocaMesmoComboioTests(PedidoFlowBase):
         cp.apply_green_pass = lambda sid: (ordem.append("desconto"), desconto(sid))[1]
         code, st, m = self.run_troca(cp, lambda cli, venda: (ordem.append("devolver"), {"estado": "CONFIRMED", "reembolso": "€ 23,45"})[1])
         self.assertEqual((code, st["state"]), (0, "CONFIRMED"))
-        self.assertEqual(ordem, ["reservar", "devolver", "desconto"])             # a CP recusa o desconto enquanto o antigo existe (SIV:BSC:5151)
+        self.assertEqual(ordem, ["devolver", "reservar", "desconto"])             # nada se reserva antes: o lugar é o que a devolução libertou
         self.assertEqual(self.sheets.apagados, ["CP-ANTIGO"])
-        self.assertFalse(any("Já comprado" in t for t in self.titles()))          # o bilhete atual já existir não bloqueia a troca
+        self.assertFalse(any("Já comprado" in t for t in self.titles()))
         self.assertTrue(any("Troca concluída" in t for t in self.titles()))
 
-    def test_qualquer_lugar_serve_nao_ha_regra_de_corredor_que_bloqueie(self):
-        cp = self.cp731(); cp.seat_map = None                                    # sem mapa de lugares: a troca segue na mesma
+    def test_apanha_o_lugar_libertado_com_repeticoes_rapidas_se_a_cp_demora_a_liberta_lo(self):
+        cp = self.cp731(sale_script=[resp(409, {}, messages=[{"message": "Comboio esgotado"}]), resp(409, {}, messages=[{"message": "Comboio esgotado"}]), resp(200, {"saleID": 777})])
         code, st, m = self.run_troca(cp, lambda cli, venda: {"estado": "CONFIRMED", "reembolso": "€ 23,45"})
         self.assertEqual((code, st["state"]), (0, "CONFIRMED"))
-        m.assert_called_once()
+        self.assertEqual(cp.calls.count("sale"), 3)                                # 2 esgotados e à 3.ª apanhou o lugar
 
-    def test_sem_lugar_no_mesmo_comboio_mantem_o_antigo_e_continua_a_tentar(self):
-        cp = self.cp731(sale_script=[resp(409, {}, messages=[{"message": "Comboio esgotado"}])])
-        code, st, m = self.run_troca(cp, lambda cli, venda: {"estado": "CONFIRMED"})
-        self.assertEqual((code, st["state"]), (0, "SOLD_OUT"))
-        m.assert_not_called()                                                     # sem lugar novo nunca se devolve o antigo
-        self.assertEqual((self.sheets.apagados, self.sheets.bilhetes), ([], []))
+    def test_se_o_lugar_libertado_for_apanhado_por_outro_a_rede_de_seguranca_volta_a_comprar_o_antigo(self):
+        cp = self.cp731(sale_script=[resp(409, {}, messages=[{"message": "Comboio esgotado"}])] * 20)
+        code, st, m = self.run_troca(cp, lambda cli, venda: {"estado": "CONFIRMED", "reembolso": "€ 23,45"})
+        self.assertEqual(st["state"], "SOLD_OUT")
+        (linha, kw), = self.sheets.requests                                        # pedido de recuperação do bilhete antigo
+        self.assertEqual((linha[3], kw.get("retry"), kw.get("intervalo"), kw.get("forcar")), (731, "SIM", 5, "SIM"))
+        self.assertTrue(any("URGENTE" in t for t in self.titles()))
+        self.assertEqual(self.sheets.request_updates[-1][1]["ativo"], "NAO")      # esta troca não se repete
+
+    def test_se_nao_consegue_devolver_o_antigo_mantem_se_e_nao_compra_nada(self):
+        from consulta_cp import ConsultaErro
+        cp = self.cp731()
+        code, st, _ = self.run_troca(cp, lambda cli, venda: (_ for _ in ()).throw(ConsultaErro("nao_cancelavel", "A CP já não permite devolver este bilhete.")))
+        self.assertEqual((code, st["state"]), (2, "FAILED"))
+        self.assertNotIn("sale", cp.calls)                                         # nunca chegou a comprar
+        self.assertEqual(self.sheets.requests, [])
