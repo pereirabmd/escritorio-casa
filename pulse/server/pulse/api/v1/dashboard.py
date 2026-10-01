@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import threading
 import time
 
 from fastapi import APIRouter, Depends, Query, Request
@@ -13,6 +14,7 @@ from pulse.services import calendario, compras, contas_google, correio, dashboar
 router = APIRouter(prefix="/dashboard", tags=["dashboard"])
 
 CACHE_GOOGLE_S = 60          # os cartões Google (chamadas lentas à rede) repetem-se no máximo 1×/min por utilizador
+CACHE_GOOGLE_VELHO_S = 900   # passado 1 min serve-se na mesma o que está em cache (até 15 min) e atualiza-se em segundo plano: o Hoje abre logo
 CARTOES = ("calendario", "tarefas", "email", "bilhetes", "rto", "peso", "compras", "financas")   # ordem de origem do Hoje
 
 
@@ -80,13 +82,11 @@ def construir_locais(app, uid: int) -> dict:
             return compras.resumo_hoje(c, uid)
         finally:
             c.close()
+    refrescar: set = getattr(app, "google_a_refrescar", None) or set()
+    app.google_a_refrescar = refrescar
+
     def google_hoje(servico, fn):
-        def local(dia):
-            if app.google is None:
-                raise dashboard.NaoLigado()
-            em_cache = cache_google.get((uid, servico))
-            if em_cache and time.monotonic() - em_cache[0] < CACHE_GOOGLE_S:
-                return em_cache[1]
+        def calcular(dia):
             c = app.db()
             try:
                 contas = contas_google.com_servico(c, uid, servico)
@@ -101,6 +101,34 @@ def construir_locais(app, uid: int) -> dict:
                 return r
             finally:
                 c.close()
+
+        def refrescar_em_fundo(dia):
+            chave = (uid, servico)
+            if chave in refrescar:
+                return                                          # já há uma atualização a caminho
+            refrescar.add(chave)
+
+            def trabalho():
+                try:
+                    calcular(dia)
+                except Exception:                               # noqa: BLE001 — em segundo plano nunca rebenta; o próximo pedido tenta de novo
+                    pass
+                finally:
+                    refrescar.discard(chave)
+            threading.Thread(target=trabalho, daemon=True).start()
+
+        def local(dia):
+            if app.google is None:
+                raise dashboard.NaoLigado()
+            em_cache = cache_google.get((uid, servico))
+            if em_cache:
+                idade = time.monotonic() - em_cache[0]
+                if idade < CACHE_GOOGLE_S:
+                    return em_cache[1]
+                if idade < CACHE_GOOGLE_VELHO_S:                # serve o que há (já) e atualiza para a próxima vez
+                    refrescar_em_fundo(dia)
+                    return em_cache[1]
+            return calcular(dia)
         return local
     tz = app.settings.tz
     locais = {"compras": compras_hoje,

@@ -609,3 +609,26 @@ def test_configuracao_google_so_liga_com_tudo_e_com_chave_valida(tmp_path, dados
     for falta in completo:
         assert create_app(config.load({**base, **{k: v for k, v in completo.items() if k != falta}})).state.google is None
     assert create_app(config.load({**base, **completo, "PULSE_GOOGLE_KEY": "chave-invalida"})).state.google is None
+
+
+def test_hoje_serve_o_google_em_cache_velho_e_atualiza_em_segundo_plano(app, fake, monkeypatch):
+    """Passado 1 min o Hoje não espera pelo Google: serve o que tem em cache (até 15 min) e atualiza para a próxima vez."""
+    import time as _t
+    from pulse.api.v1 import dashboard as dash
+    b = entrar(app)
+    ligar_via_api(app, BRUNO)
+    cal_lista(fake, [PRINCIPAL])
+    eventos(fake, "ele@gmail.com", [{"id": "a", "summary": "Reunião", "start": {"dateTime": "2026-09-30T22:00:00+01:00"}, "end": {"dateTime": "2026-09-30T23:30:00+01:00"}}])
+    caixa_falsa(fake, [msg("m1", "Urgente", labels=("INBOX", "IMPORTANT", "UNREAD"))])
+    assert b.get("/api/v1/dashboard/today").json()["modulos"]["calendario"]["dados"]["eventos"][0]["titulo"] == "Reunião"
+    eventos(fake, "ele@gmail.com", [{"id": "b", "summary": "Dentista", "start": {"dateTime": "2026-09-30T22:00:00+01:00"}, "end": {"dateTime": "2026-09-30T23:30:00+01:00"}}])
+    agora = _t.monotonic()
+    monkeypatch.setattr(dash.time, "monotonic", lambda: agora + dash.CACHE_GOOGLE_S + 5)            # passou 1 min: a cache já é «velha», mas serve-se
+    velho = b.get("/api/v1/dashboard/today").json()["modulos"]["calendario"]["dados"]["eventos"][0]["titulo"]
+    assert velho == "Reunião"                                                                        # não esperou pelo Google
+    for _ in range(100):                                                                              # a atualização corre em segundo plano
+        if not app.state.google_a_refrescar:
+            break
+        _t.sleep(0.05)
+    monkeypatch.setattr(dash.time, "monotonic", lambda: agora + dash.CACHE_GOOGLE_S + 6)
+    assert b.get("/api/v1/dashboard/today").json()["modulos"]["calendario"]["dados"]["eventos"][0]["titulo"] == "Dentista"

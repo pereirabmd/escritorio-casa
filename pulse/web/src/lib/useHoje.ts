@@ -10,15 +10,21 @@ export const moduloDaAcao = (nome: string): string => nome.split('.')[0]
  * O «Hoje» com três formas de atualizar: tudo (`recarregar`), só alguns módulos (`atualizar`, o que as ações usam: o resto não mudou e
  * a Google é lenta) e uma alteração local imediata (`otimista`, que o pedido seguinte confirma ou corrige).
  */
-export function useHoje() {
-  const [estado, setEstado] = useState<Async<Hoje>>({ fase: 'a-carregar' })
+/** O último Hoje carregado nesta sessão: ao voltar ao Hoje mostra-se logo (e atualiza-se em segundo plano) em vez de recomeçar do zero. */
+let ultimoHoje: { utilizador: number; dados: Hoje } | null = null
+/** Só para os testes: esquece o que ficou guardado entre ecrãs. */
+export const esquecerUltimoHoje = () => { ultimoHoje = null }
+
+export function useHoje(utilizador: number) {
+  // só o Hoje desta mesma conta: nunca se mostra o de outra pessoa
+  const [estado, setEstado] = useState<Async<Hoje>>(() => (ultimoHoje?.utilizador === utilizador ? { fase: 'pronto', dados: ultimoHoje.dados } : { fase: 'a-carregar' }))
   const geracao = useRef(0)
 
   const buscar = useCallback(() => {
     const minha = ++geracao.current
     api.get<Hoje>('/dashboard/today').then(
       (dados) => { if (minha === geracao.current) setEstado({ fase: 'pronto', dados }) },
-      (erro) => { if (minha === geracao.current) setEstado({ fase: 'erro', erro }) },
+      (erro) => { if (minha === geracao.current) setEstado((e) => (e.fase === 'pronto' ? e : { fase: 'erro', erro })) },     // com o último Hoje à vista, uma falha não o apaga
     )
   }, [])
 
@@ -26,6 +32,8 @@ export function useHoje() {
     setEstado((e) => (e.fase === 'pronto' ? e : { fase: 'a-carregar' }))      // com dados à vista mantém-nos enquanto volta a pedir
     buscar()
   }, [buscar])
+
+  useEffect(() => { if (estado.fase === 'pronto') ultimoHoje = { utilizador, dados: estado.dados } }, [estado, utilizador])
 
   // o contador é meu (não é um nó do DOM): invalida o pedido em curso quando o ecrã sai
   // eslint-disable-next-line react-hooks/exhaustive-deps

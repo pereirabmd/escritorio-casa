@@ -270,9 +270,19 @@ private fun resumo(h: Hoje): String = buildList {
     if (h.bilhetes.ok && v != null) add("próximo comboio ${fmtDiaMes(v.data)} às ${v.hora}")
 }.joinToString(" · ")
 
+/** O último Hoje carregado, só da conta que o carregou (nunca se mostra o de outra pessoa). */
+internal object UltimoHoje {
+    private var utilizador = -1
+    private var hoje: Hoje? = null
+    fun de(id: Int): Hoje? = hoje.takeIf { utilizador == id }
+    fun guardar(id: Int, h: Hoje) { utilizador = id; hoje = h }
+}
+
 @Composable
 fun EcraHoje(sessao: Sessao, utilizador: Utilizador, cabecalho: @Composable () -> Unit) {
-    var estado by remember { mutableStateOf<EstadoHoje>(EstadoHoje.ACarregar) }
+    // ao voltar ao Hoje (do «Mais», por exemplo) mostra-se logo o último e atualiza-se em segundo plano, em vez de recomeçar do zero (o Google demora ~3 s)
+    var estado by remember { mutableStateOf<EstadoHoje>(UltimoHoje.de(utilizador.id)?.let { EstadoHoje.Pronto(it) } ?: EstadoHoje.ACarregar) }
+    LaunchedEffect(estado) { (estado as? EstadoHoje.Pronto)?.let { UltimoHoje.guardar(utilizador.id, it.hoje) } }
     var versao by remember { mutableIntStateOf(0) }
     val scope = rememberCoroutineScope()
     // depois de uma ação só o módulo dela volta a ser pedido (o resto não mudou e a Google é lenta); se falhar, pede-se tudo
@@ -288,7 +298,10 @@ fun EcraHoje(sessao: Sessao, utilizador: Utilizador, cabecalho: @Composable () -
     val acoes = rememberAcoes { nome -> atualizar(setOf(nome.substringBefore('.'))) }
     LaunchedEffect(versao) {
         if (estado is EstadoHoje.Erro) estado = EstadoHoje.ACarregar
-        estado = try { EstadoHoje.Pronto(parseHoje(Api.get("/dashboard/today"))) } catch (e: Exception) { EstadoHoje.Erro(mensagemDeErro(e)) }
+        estado = try { EstadoHoje.Pronto(parseHoje(Api.get("/dashboard/today"))) } catch (e: Exception) {
+            if (e is kotlinx.coroutines.CancellationException) throw e
+            if (estado is EstadoHoje.Pronto) estado else EstadoHoje.Erro(mensagemDeErro(e))          // com o último Hoje à vista, uma falha não o apaga
+        }
     }
     val agora = Calendar.getInstance()
     val nome = utilizador.nome.trim().substringBefore(' ')

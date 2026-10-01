@@ -116,10 +116,10 @@
   <div class="chips">
     <span class="chip"><b>8</b> módulos</span>
     <span class="chip"><b>75</b> ações na camada oficial</span>
-    <span class="chip"><b>83</b> decisões (ADR)</span>
-    <span class="chip"><b>489</b> testes do servidor</span>
-    <span class="chip"><b>280</b> testes da Web</span>
-    <span class="chip">APK <b>0.4.3</b></span>
+    <span class="chip"><b>84</b> decisões (ADR)</span>
+    <span class="chip"><b>490</b> testes do servidor</span>
+    <span class="chip"><b>281</b> testes da Web</span>
+    <span class="chip">APK <b>0.4.4</b></span>
     <span class="chip">Release <b>beta_20260930_34</b></span>
   </div>
   <div class="nota">Fonte de verdade: o código e <code>pulse/docs/DECISIONS.md</code>. Este ficheiro é um resumo organizado; em caso de dúvida, vale o ADR mais recente.</div>
@@ -351,7 +351,7 @@
   <h2>Android e Web</h2>
   <div class="tabela"><table>
     <tr><th>Tema</th><th>Android</th><th>Web</th></tr>
-    <tr><td>Estado</td><td>APK 0.4.3 (versionCode 22), todos os módulos nativos</td><td>Todos os módulos; servida pelo nginx do Pi</td></tr>
+    <tr><td>Estado</td><td>APK 0.4.4 (versionCode 23), todos os módulos nativos</td><td>Todos os módulos; servida pelo nginx do Pi</td></tr>
     <tr><td>Autenticação</td><td>Token cifrado + PIN + biometria</td><td>Cookie de sessão; sem PIN</td></tr>
     <tr><td>Notificações</td><td>FCM, canais por módulo, botões de ação, toque que abre o sítio certo</td><td>—</td></tr>
     <tr><td>Assistente de voz</td><td>Sim (toque no logo)</td><td>—</td></tr>
@@ -367,8 +367,8 @@
   <p class="lead">Nenhuma funcionalidade está terminada só porque compila. Os testes usam bases temporárias <code>teste-*.db</code> e um <code>dados-api</code> falso; nunca escrevem em produção.</p>
   <div class="tabela"><table>
     <tr><th>Camada</th><th>Ferramenta</th><th>Estado (30/09/2026)</th><th>O que cobre</th></tr>
-    <tr><td>Servidor</td><td>pytest</td><td><b>489</b> a passar (34 ficheiros)</td><td>Unidade, integração, contratos com o <code>dados-api</code>, migrações, autenticação e autorização, idempotência, modo degradado, notificações, ações, assistente (<code>test_ia.py</code>), Última chamada</td></tr>
-    <tr><td>Web</td><td>Vitest + Testing Library; ESLint; <code>tsc</code></td><td><b>280</b> a passar (14 ficheiros)</td><td>Componentes e fluxos por módulo, autenticação, ações do Hoje, estados de erro</td></tr>
+    <tr><td>Servidor</td><td>pytest</td><td><b>490</b> a passar (34 ficheiros)</td><td>Unidade, integração, contratos com o <code>dados-api</code>, migrações, autenticação e autorização, idempotência, modo degradado, notificações, ações, assistente (<code>test_ia.py</code>), Última chamada</td></tr>
+    <tr><td>Web</td><td>Vitest + Testing Library; ESLint; <code>tsc</code></td><td><b>281</b> a passar (14 ficheiros)</td><td>Componentes e fluxos por módulo, autenticação, ações do Hoje, estados de erro</td></tr>
     <tr><td>Android</td><td>JUnit (JVM)</td><td><b>40+</b> testes (7 ficheiros)</td><td>Formatos pt-PT, regras de palavra-passe, leitura do JSON do servidor, PIN, atualização, «confirma/cancela» do assistente</td></tr>
     <tr><td>Interface Android</td><td>—</td><td><span class="tag aviso">só compilação</span></td><td>A UI verifica-se no telemóvel; não há testes de Compose automatizados</td></tr>
   </table></div>
@@ -546,7 +546,7 @@ PULSE_ENV=development PULSE_DB_PATH=/tmp/teste-pulse.db .venv/bin/uvicorn pulse.
 <!-- ===================================================================== -->
 <section id="adrs">
   <h2>Decisões (ADR)</h2>
-  <p class="lead">83 decisões registadas em <code>pulse/docs/DECISIONS.md</code>. Resumo por tema:</p>
+  <p class="lead">84 decisões registadas em <code>pulse/docs/DECISIONS.md</code>. Resumo por tema:</p>
   <div class="tabela"><table>
     <tr><th>Tema</th><th>ADR</th></tr>
     <tr><td>Fundações: plataformas, base própria, escritas, offline, idioma, visual</td><td>001–030</td></tr>
@@ -566,6 +566,7 @@ PULSE_ENV=development PULSE_DB_PATH=/tmp/teste-pulse.db .venv/bin/uvicorn pulse.
     <tr><td>Revisão visual do APK e capturas de ecrãs sem emulador</td><td>081</td></tr>
     <tr><td>Viagem com a hora da venda também «tem bilhete»</td><td>082</td></tr>
     <tr><td>Troca de bilhete por outro comboio (reservar → cancelar → confirmar)</td><td>083</td></tr>
+    <tr><td>Hoje: abrir logo, sem esperar pelo Google</td><td>084</td></tr>
   </table></div>
 </section>
 

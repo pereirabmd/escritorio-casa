@@ -400,7 +400,7 @@ function Cartoes({ dados, acoes }: { dados: Hoje; acoes: Acoes }) {
 
 export function TodayScreen() {
   const utilizador = useUtilizador()
-  const { estado, recarregar, atualizar, otimista } = useHoje()
+  const { estado, recarregar, atualizar, otimista } = useHoje(utilizador.id)
   const { ocupado, erro, executar, limparErro } = useAcao((nome) => atualizar([moduloDaAcao(nome)]))
   const agora = new Date()
   const nome = utilizador.nome.split(' ')[0]

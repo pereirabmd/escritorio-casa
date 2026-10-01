@@ -18,6 +18,18 @@ const escritas = (p: { metodo: string }[]) => p.filter((x) => x.metodo !== 'GET'
 
 afterEach(() => { vi.unstubAllGlobals(); localStorage.clear() })
 
+describe('voltar ao Hoje', () => {
+  test('mostra logo o último Hoje (sem recomeçar do zero) enquanto volta a pedir', async () => {
+    abrir()
+    expect(await screen.findByText('Limpar WC')).toBeInTheDocument()
+    await userEvent.click(screen.getAllByRole('link', { name: /Mais/ })[0])
+    await screen.findByRole('heading', { name: 'Mais' })
+    await userEvent.click(screen.getAllByRole('link', { name: /Hoje/ })[0])
+    expect(screen.getByText('Limpar WC')).toBeInTheDocument()                    // à primeira (getBy, não findBy): já estava à vista
+    expect(screen.queryByText(/A preparar o teu dia/)).not.toBeInTheDocument()
+  })
+})
+
 describe('tarefas', () => {
   test('concluir chama a ação, atualiza o Hoje e oferece desfazer', async () => {
     let n = 0
