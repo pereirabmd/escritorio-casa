@@ -109,11 +109,11 @@ class CapturaEcras : CapturaBase() {
     @Test fun rto() = ecra("rto", listOf("Ano", "Notas")) { RtoEcra {} }
     @Test fun peso() = ecra("peso", listOf("Gráfico", "Registos", "Configuração")) { PesoEcra {} }
     @Test fun financas() = ecra("financas", listOf("Lançamentos", "Relatórios", "Categorias", "Lembretes")) { FinancasEcra {} }
-    @Test fun bilhetes() = ecra("bilhetes", listOf("Bilhetes", "Pedidos", "Na CP", "Registo")) { BilhetesEcra {} }
+    @Test fun bilhetes() = ecra("bilhetes", listOf("Bilhetes", "Pedidos", "Na CP", "Registo")) { BilhetesEcra(aoVoltar = {}) }
     @Test fun trocaFormulario() = ecra("bilhetes-troca", antes = {
         regra.onAllNodes(hasText("Na CP") and hasClickAction()).onFirst().performClick(); esperar()
         regra.onNode(hasText("Trocar por outro comboio") and hasClickAction()).performClick(); esperar()
-    }) { BilhetesEcra {} }
+    }) { BilhetesEcra(aoVoltar = {}) }
     @Test fun compras() = ecra("compras", listOf("Catálogo")) { ComprasEcra {} }
     @Test fun tarefas() = ecra("tarefas", listOf("Calendário", "Tarefas", "Horário", "Piscina", "Config")) { TarefasEcra({}, null) {} }
     @Test fun calendario() = ecra("calendario") { CalendarioGoogleEcra {} }
@@ -137,7 +137,7 @@ class CapturaEcrasLongos : CapturaBase() {
     }
     private val utilizador = Utilizador(1, "pereirabmd@gmail.com", "Bruno", true, false)
 
-    @Test fun bilhetesEditor() = ecra("bilhetes-editor", antes = { regra.onNode(hasText("Configurar semana") and hasClickAction()).performClick(); esperar() }) { BilhetesEcra {} }
+    @Test fun bilhetesEditor() = ecra("bilhetes-editor", antes = { regra.onNode(hasText("Configurar semana") and hasClickAction()).performClick(); esperar() }) { BilhetesEcra(aoVoltar = {}) }
     @Test fun hoje() = ecra("hoje") { EcraHoje(sessao(), utilizador) {} }
     @Test fun definicoes() = ecra("definicoes") { EcraDefinicoes(sessao(), utilizador, {}, {}, {}) }
     @Test fun google() = ecra("google") { GoogleContasEcra(sessao()) {} }

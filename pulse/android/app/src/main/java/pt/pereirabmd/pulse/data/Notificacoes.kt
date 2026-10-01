@@ -77,8 +77,8 @@ object Notificacoes {
     }
 
     /** Desenha o aviso (o servidor manda só dados, por isso é sempre a app a mostrá-lo): canal do módulo, toque que abre o sítio certo (`link`) e, nas
-     *  tarefas, os botões «Marcar feita» e «Daqui a 1 h» que agem sem abrir a app. */
-    fun mostrar(ctx: Context, titulo: String, corpo: String, modulo: String, link: String = "", instancia: String = "") {
+     *  tarefas, os botões «Marcar feita» e «Daqui a 1 h» que agem sem abrir a app; `acao`/`acaoLink` = um botão que abre a app noutro ecrã. */
+    fun mostrar(ctx: Context, titulo: String, corpo: String, modulo: String, link: String = "", instancia: String = "", acao: String = "", acaoLink: String = "") {
         if (!permitidas(ctx)) return
         val id = (System.currentTimeMillis() % Int.MAX_VALUE).toInt()
         val abrir = PendingIntent.getActivity(ctx, id, Intent(ctx, MainActivity::class.java).putExtra(EXTRA_LINK, link)
@@ -89,6 +89,11 @@ object Notificacoes {
         if (instancia.isNotEmpty()) {
             b.addAction(0, "Marcar feita", acao(ctx, id, AcaoNotificacaoReceiver.CONCLUIR, instancia))
             b.addAction(0, "Daqui a 1 h", acao(ctx, id, AcaoNotificacaoReceiver.LEMBRAR, instancia))
+        }
+        if (acao.isNotEmpty() && acaoLink.isNotEmpty()) {          // botão que abre a app noutro ecrã (ex.: «Abrir histórico» nos Bilhetes)
+            val abrirAcao = PendingIntent.getActivity(ctx, id + 1_000_000, Intent(ctx, MainActivity::class.java).putExtra(EXTRA_LINK, acaoLink)
+                .addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP), PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
+            b.addAction(0, acao, abrirAcao)
         }
         try { NotificationManagerCompat.from(ctx).notify(id, b.build()) } catch (_: SecurityException) { /* sem permissão */ }
     }
@@ -141,6 +146,6 @@ class PulseMessagingService : FirebaseMessagingService() {
         // desde o ADR-061 o servidor manda só dados; o bloco `notification` (mensagens antigas ou de teste na consola) continua a servir de reserva
         val titulo = m.data["titulo"] ?: m.notification?.title ?: return
         Notificacoes.mostrar(applicationContext, titulo, m.data["corpo"] ?: m.notification?.body.orEmpty(), m.data["modulo"].orEmpty(),
-            m.data["link"].orEmpty(), m.data["instancia"].orEmpty())
+            m.data["link"].orEmpty(), m.data["instancia"].orEmpty(), m.data["acao"].orEmpty(), m.data["acaoLink"].orEmpty())
     }
 }

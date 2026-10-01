@@ -219,7 +219,7 @@ class PulseEventTests(unittest.TestCase):
         (url, corpo, cab, tmo) = next(e for e in enviados if "internal/events" in e[0])
         self.assertEqual(cab, {"X-Pulse-Key": "s" * 40, "X-Pulse-User": "eu@exemplo.pt"})
         self.assertEqual((corpo["modulo"], corpo["tipo"], corpo["titulo"]), ("bilhetes", "bilhetes.aviso", "Comprado"))
-        self.assertEqual(corpo["dados"], {"tags": "train", "link": "pulse://bilhetes"})
+        self.assertEqual(corpo["dados"], {"tags": "train", "link": "pulse://bilhetes/semana", "acao": "Abrir histórico", "acaoLink": "pulse://bilhetes/historico"})
         self.assertNotIn("entregarEm", corpo)
         self.assertRegex(corpo["chave"], r"^cp-[0-9a-f]{12}$")
         self.assertEqual(tmo, common.PULSE_EVENT_TIMEOUT)                       # nunca segura o aviso mais que uns segundos

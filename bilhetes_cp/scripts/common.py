@@ -275,7 +275,9 @@ def pulse_event(title: str, message: str, *, tipo: str = "bilhetes.aviso", tags:
         for i, dest in enumerate(destinatarios):
             payload: dict[str, Any] = {
                 "modulo": "bilhetes", "tipo": tipo, "titulo": titulo[:200], "corpo": corpo[:1000],
-                "dados": {"tags": ",".join(tags)[:200], "link": "pulse://bilhetes"},
+                # o toque abre a aba Semana dos Bilhetes; o botão de ação do aviso abre o Histórico dos pedidos (ecrã nativo do Pulse)
+                "dados": {"tags": ",".join(tags)[:200], "link": "pulse://bilhetes/semana",
+                          "acao": "Abrir histórico", "acaoLink": "pulse://bilhetes/historico"},
                 "chave": "cp-" + short_hash(titulo, corpo, quando) + ("" if i == 0 else "-" + short_hash(dest)),
             }
             if at is not None:

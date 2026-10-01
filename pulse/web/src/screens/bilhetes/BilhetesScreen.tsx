@@ -9,11 +9,12 @@ import { useAcao } from '../../lib/useAcao'
 import { useAsync } from '../../lib/useAsync'
 import { BilhetesTab } from './BilhetesTab'
 import { CpTab } from './CpTab'
+import { HistoricoTab } from './HistoricoTab'
 import { PedidosTab } from './PedidosTab'
 import { RegistoTab } from './RegistoTab'
 import { SemanaTab } from './SemanaTab'
 
-const ABAS = [{ id: 'semana', nome: 'Semana' }, { id: 'bilhetes', nome: 'Bilhetes' }, { id: 'pedidos', nome: 'Pedidos' }, { id: 'cp', nome: 'Na CP' }, { id: 'registo', nome: 'Registo' }] as const
+const ABAS = [{ id: 'semana', nome: 'Semana' }, { id: 'bilhetes', nome: 'Bilhetes' }, { id: 'pedidos', nome: 'Pedidos' }, { id: 'cp', nome: 'Na CP' }, { id: 'registo', nome: 'Registo' }, { id: 'historico', nome: 'Histórico' }] as const
 type Aba = (typeof ABAS)[number]['id']
 
 export function BilhetesScreen() {
@@ -61,7 +62,7 @@ export function BilhetesScreen() {
             </div>
           )}
           <div className="segmented tabs" role="tablist" aria-label="Secções dos Bilhetes CP">
-            {ABAS.map((a) => <button key={a.id} role="tab" id={`${base}-${a.id}`} aria-selected={aba === a.id} aria-controls={`${base}-p`} onClick={() => setAba(a.id)}>{a.nome}</button>)}
+            {ABAS.filter((a) => a.id !== 'historico' || (estado.dados.pessoas?.length ?? 0) > 0).map((a) => <button key={a.id} role="tab" id={`${base}-${a.id}`} aria-selected={aba === a.id} aria-controls={`${base}-p`} onClick={() => setAba(a.id)}>{a.nome}</button>)}
           </div>
           {erro && <Notice tipo="error">{erro} <button type="button" className="link-btn" onClick={limparErro}>Fechar</button></Notice>}
           <div role="tabpanel" id={`${base}-p`} aria-labelledby={`${base}-${aba}`} className="tabpanel">
@@ -70,6 +71,7 @@ export function BilhetesScreen() {
             {aba === 'pedidos' && <PedidosTab dados={estado.dados} f={f} />}
             {aba === 'cp' && <CpTab utilizador={utilizador} nome={estado.dados.utilizador?.nome ?? ''} favoritos={estado.dados.favoritos} aoMudar={recarregar} />}
             {aba === 'registo' && <RegistoTab dados={estado.dados} />}
+            {aba === 'historico' && <HistoricoTab />}
           </div>
         </>
       )}

@@ -29,6 +29,13 @@ def ver(request: Request, semana: str | None = Query(default=None, pattern=r"^\d
     return {**r, "favoritos": bilhetes_favoritos.listar(conn, s.user["id"])}
 
 
+@router.get("/history")
+def historico(request: Request, dias: int = Query(default=90, ge=1, le=90), s: Sessao = Depends(sessao_ativa)):
+    """Todos os pedidos feitos à CP nas compras (hora, fase, resposta, tempo) e o desfecho de cada compra, até 90 dias. Só o administrador (decidido no `dados-api`)."""
+    _, d = request.app.state.dados.pedir("GET", "/bilhetes/historico", s.user["email"], {"dias": dias}, timeout=20)
+    return d or {"dias": dias, "truncado": False, "pedidos": [], "desfechos": []}
+
+
 CP_TIMEOUT_S = 100        # a CP pode pedir um início de sessão (o `dados-api` espera até 90 s)
 
 

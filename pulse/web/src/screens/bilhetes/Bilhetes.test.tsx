@@ -214,6 +214,29 @@ describe('Registo', () => {
   })
 })
 
+describe('Histórico dos pedidos à CP (administrador)', () => {
+  const pessoas = [{ id: 1, nome: 'Bruno', eu: true }, { id: 2, nome: 'Camila', eu: false }]
+  const admin = { ...DADOS, utilizador: { id: 1, nome: 'Bruno', eu: true }, pessoas }
+  const HIST = { dias: 90, truncado: false, desfechos: [], pedidos: [
+    { ts: '2026-10-01T17:20:00.100+01:00', data: '2026-10-01', perna: 'v102', pessoa: 'Camila', comboio: 731, fase: 'retencao', http: 200, resultado: 'sold_out', relTms: -600000, rttMs: 90, ligacaoNova: 0, codigo: '', detalhe: 'sem lugares' },
+    { ts: '2026-10-01T17:19:45.000+01:00', data: '2026-10-01', perna: 'v101', pessoa: 'Bruno', comboio: 731, fase: 'retencao', http: 200, resultado: 'ok', relTms: -615000, rttMs: 80, ligacaoNova: 1, codigo: '', detalhe: '' }] }
+
+  test('a aba abre pelo link da notificação e mostra hora, pessoa e resposta de cada pedido; filtra por pessoa', async () => {
+    abrir('historico', { 'GET /tickets/history?dias=90': () => [200, HIST] }, admin)
+    const reg = await screen.findByRole('region', { name: 'Histórico' })
+    expect(within(reg).getAllByRole('listitem')).toHaveLength(2)
+    expect(within(reg).getByText('Esgotado')).toBeInTheDocument()
+    expect(within(reg).getByText(/10\.0 min de T/)).toBeInTheDocument()
+    await userEvent.click(within(screen.getByRole('group', { name: 'Pessoa' })).getByRole('button', { name: 'Camila' }))
+    expect(within(screen.getByRole('region', { name: 'Histórico' })).getAllByRole('listitem')).toHaveLength(1)
+  })
+  test('quem não é administrador não vê a aba', async () => {
+    abrir('semana')
+    await screen.findByRole('tablist', { name: 'Secções dos Bilhetes CP' })
+    expect(screen.queryByRole('tab', { name: 'Histórico' })).toBeNull()
+  })
+})
+
 describe('verificação do horário na CP (editor da semana)', () => {
   const abrirEditor = async (rota: unknown) => {
     const s = abrir('semana', { 'GET /tickets/timetable?comboio=526&data=2026-10-05&origem=Aveiro&destino=Lisboa+Oriente&hora=07%3A27': () => rota as [number, unknown] })

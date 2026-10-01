@@ -13,12 +13,13 @@ import org.json.JSONObject
 import pt.pereirabmd.pulse.data.*
 import pt.pereirabmd.pulse.util.*
 
-private val ABAS = listOf("Semana", "Bilhetes", "Pedidos", "Na CP", "Registo")
+private val ABAS = listOf("Semana", "Bilhetes", "Pedidos", "Na CP", "Registo", "Histórico")
 
 /** Bilhetes CP (ADR-046): Semana (próximo comboio, passe, editor), Bilhetes, Pedidos e Registo. As regras vivem no servidor e no Pi. */
 @Composable
-fun BilhetesEcra(aoVoltar: () -> Unit) {
-    var aba by remember { mutableIntStateOf(0) }
+fun BilhetesEcra(aoVoltar: () -> Unit, abaPedida: String? = null, aoUsarAba: () -> Unit = {}) {
+    var aba by remember { mutableIntStateOf(when (abaPedida) { "bilhetes" -> 1; "pedidos" -> 2; "cp" -> 3; "registo" -> 4; "historico" -> 5; else -> 0 }) }   // o toque numa notificação abre a aba certa
+    LaunchedEffect(Unit) { aoUsarAba() }
     var semana by remember { mutableStateOf<String?>(null) }          // null = a próxima semana (o servidor sabe qual é)
     var utilizador by remember { mutableStateOf<Int?>(null) }         // null = a própria conta; o administrador pode ver e marcar por outra pessoa (ADR-069)
     val c = carga(semana to utilizador) {
@@ -36,7 +37,8 @@ fun BilhetesEcra(aoVoltar: () -> Unit) {
                 }
                 d.obj("utilizador")?.takeIf { !it.bool("eu") }?.let { Meta("A marcar para ${it.txtOu("nome")}: a compra faz-se com os dados dela, e recebes os avisos tu e ela.") }
             }
-            Abas(ABAS, aba) { aba = it }
+            val euAdmin = pessoas.isNotEmpty()                                   // só o administrador vê o Histórico
+            Abas(if (euAdmin) ABAS else ABAS.dropLast(1), aba.coerceAtMost(if (euAdmin) 5 else 4)) { aba = it }
             Rolar {
                 ErroAcao(acoes)
                 when (aba) {
@@ -44,7 +46,8 @@ fun BilhetesEcra(aoVoltar: () -> Unit) {
                     1 -> BilhetesTab(d)
                     2 -> PedidosTab(d, acoes)
                     3 -> CpTab(utilizador, d.obj("utilizador")?.txtOu("nome").orEmpty(), d.objs("favoritos")) { c.recarregar() }
-                    else -> RegistoTab(d)
+                    4 -> RegistoTab(d)
+                    else -> if (euAdmin) HistoricoTab() else RegistoTab(d)
                 }
             }
         }
@@ -285,6 +288,65 @@ private fun ColumnScope.RegistoTab(d: JSONObject) {
     }
 }
 
+
+/** Todos os pedidos feitos à CP nas compras (retenção, venda a T, mudança de lugar, desconto) e o desfecho de cada compra, até 90 dias. Só o administrador. */
+@Composable
+private fun ColumnScope.HistoricoTab() {
+    var dias by remember { mutableIntStateOf(90) }
+    var pessoa by remember { mutableStateOf("") }
+    var vista by remember { mutableStateOf("pedidos") }
+    var mais by remember { mutableStateOf(false) }
+    val c = Pulse.cores
+    val h = carga("historico$dias") { Api.get("/tickets/history?dias=$dias", Api.LEITURA_CP_MS) }
+    Filtros(listOf("90" to "90 dias", "30" to "30 dias", "7" to "7 dias", "1" to "Hoje"), dias.toString()) { dias = it.toInt(); mais = false }
+    when (val e = h.estado) {
+        Estado.ACarregar -> BrandLoading("A carregar o histórico…")
+        is Estado.Erro -> { Aviso(TipoAviso.ERRO, e.mensagem); Botao("Tentar de novo", h.recarregar, variante = Variante.SECUNDARIO, pequeno = true) }
+        is Estado.Pronto -> {
+            val d = e.dados
+            val todos = d.objs("pedidos") + d.objs("desfechos")
+            val pessoas = todos.map { it.txtOu("pessoa") }.filter { it.isNotEmpty() }.distinct().sorted()
+            if (pessoas.size > 1) Filtros(listOf("" to "Todas") + pessoas.map { it to it }, pessoa) { pessoa = it }
+            val pedidos = d.objs("pedidos").filter { pessoa.isEmpty() || it.txtOu("pessoa") == pessoa }
+            val desfechos = d.objs("desfechos").filter { pessoa.isEmpty() || it.txtOu("pessoa") == pessoa }
+            Filtros(listOf("pedidos" to "Pedidos à CP (${pedidos.size})", "desfechos" to "Desfecho das compras (${desfechos.size})"), vista) { vista = it; mais = false }
+            if (d.optBoolean("truncado")) Meta("Só os 5000 pedidos mais recentes; reduz o período.")
+            val linhas = if (vista == "pedidos") pedidos else desfechos
+            if (linhas.isEmpty()) { Texto2("Sem registos para mostrar."); return }
+            Bloco {
+                (if (mais) linhas else linhas.take(200)).forEach { l ->
+                    val ts = l.txtOu("ts")
+                    val quando = "${diaMes(ts.take(10))} ${ts.drop(11).take(8)}"
+                    val resultado = l.txtOu("resultado")
+                    val nome = RESPOSTA_PEDIDO[resultado] ?: RESULTADO_REGISTO[resultado] ?: resultado.ifEmpty { "—" }
+                    val ok = resultado == "ok" || resultado == "CONFIRMED" || resultado == "SALE_CREATED"
+                    val oQue = listOfNotNull(l.txtOu("pessoa").ifEmpty { null }, l.inteiroOuNull("comboio")?.let { "comboio $it" }, l.txtOu("data").ifEmpty { null }?.let { diaMes(it) },
+                        if (vista == "pedidos") FASE_PEDIDO[l.txtOu("fase")] ?: l.txtOu("fase") else l.txtOu("tipo")).joinToString(" · ")
+                    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Texto(quando)
+                            Pilula(nome, if (ok) c.success else if (resultado.isNotEmpty()) c.warning else c.text2, if (ok || resultado.isEmpty()) c.surface2 else c.warningBg)
+                        }
+                        if (oQue.isNotEmpty()) Meta(oQue)
+                        if (vista == "pedidos") {
+                            val rel = l.inteiroOuNull("relTms")?.let { relativoT(it) }
+                            Meta(listOfNotNull(l.inteiroOuNull("http")?.let { "HTTP $it" } ?: "sem resposta", l.txtOu("codigo").ifEmpty { null }, rel?.let { "$it de T" },
+                                l.inteiroOuNull("rttMs")?.let { "$it ms" }, l.txtOu("detalhe").ifEmpty { null }).joinToString(" · "))
+                        } else (l.txtOu("referencia").ifEmpty { l.txtOu("erro") }).takeIf { it.isNotEmpty() }?.let { Meta(it) }
+                    }
+                }
+            }
+            if (!mais && linhas.size > 200) Botao("Mostrar todos (${linhas.size})", { mais = true }, variante = Variante.SECUNDARIO, pequeno = true)
+        }
+    }
+}
+
+private val RESPOSTA_PEDIDO = mapOf("ok" to "Aceite", "sold_out" to "Esgotado", "not_open" to "Ainda não abriu", "recusado" to "Recusado", "transient" to "Erro temporário", "erro" to "Erro", "429" to "Demasiados pedidos")
+private val FASE_PEDIDO = mapOf("retencao" to "Reter lugar", "venda" to "Venda a T", "lugar" to "Mudar de lugar", "desconto" to "Desconto do passe")
+private fun relativoT(ms: Int): String {
+    val a = kotlin.math.abs(ms); val sinal = if (ms < 0) "−" else "+"
+    return when { a >= 60000 -> "$sinal${"%.1f".format(java.util.Locale.US, a / 60000.0)} min"; a >= 1000 -> "$sinal${"%.1f".format(java.util.Locale.US, a / 1000.0)} s"; else -> "$sinal$a ms" }
+}
 
 /** Confere na CP (pelo servidor: as chaves nunca vão para o telemóvel) o comboio, a data, o percurso e a hora. Consultivo: nunca impede de guardar (ADR-068). */
 @Composable

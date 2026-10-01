@@ -216,6 +216,17 @@ def test_api_cp_futuros_e_passe_passam_pelo_dados_api(cliente):
     assert cliente.get("/api/v1/tickets/cp/passe").status_code == 401
 
 
+def test_api_historico_passa_pelo_dados_api_e_recusa_quem_nao_e_administrador(cliente):
+    FalsoDados.respostas["/bilhetes/historico"] = (200, {"dias": 90, "truncado": False, "pedidos": [{"ts": "2026-10-01T17:20:00.100+01:00", "perna": "v102", "pessoa": "Camila", "fase": "retencao", "resultado": "sold_out"}], "desfechos": []})
+    FalsoDados.pedidos.clear()
+    r = cliente.get("/api/v1/tickets/history?dias=30")
+    assert r.status_code == 200 and r.json()["pedidos"][0]["pessoa"] == "Camila"
+    assert [p[0] for p in FalsoDados.pedidos] == ["/bilhetes/historico?dias=30"]
+    assert cliente.get("/api/v1/tickets/history?dias=91").status_code == 400
+    FalsoDados.respostas["/bilhetes/historico"] = (403, {"erro": {"codigo": "so_administrador", "mensagem": "só o administrador vê o histórico de pedidos"}})
+    assert cliente.get("/api/v1/tickets/history").status_code == 403
+
+
 def test_viagem_com_a_hora_da_venda_diferente_da_de_embarque_conta_como_comprada():
     # a viagem é das 06:45 (abre a venda) e a compra guardou 07:27 (embarque): é o mesmo bilhete (ADR-068)
     d = {"viagens": [V(111, "2026-10-02", "06:45", 520), V(112, "2026-10-02", "17:30", 731, origem="Lisboa Oriente", destino="Aveiro")],
