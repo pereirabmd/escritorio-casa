@@ -32,7 +32,7 @@ import common
 import credenciais
 from common import (STATES, TERMINAL, TZ, Leg, PurchaseLock, app_config, get_logger,
                     notify, notify_once, short_hash, station_code)
-from cp_ticket import (CPClient, CPError, classify_sale_response, login, pick_aisle_seats, pick_trip, seats_by_position,
+from cp_ticket import (CPClient, CPError, classify_sale_response, login, pick_aisle_seats, pick_trip,
                        refresh_tokens, trip_sections)
 import pre_flight
 import timetable
@@ -1104,9 +1104,6 @@ class PedidoAttempt(DonoMixin, SeatMixin):
         if outcome != "ok":
             return 0 if outcome == "sold_out" else 2
         sale_id = resp.body["saleID"]
-        if mesmo_comboio:
-            if not self.lugar_novo_compensa(sale_id):
-                return 0                              # reserva libertada, o bilhete e o lugar atuais mantêm-se (o pedido repete até ao limite)
         if self.leg.troca_venda and not self.trocar_bilhete_antigo(sale_id):
             return 2                                  # a troca falhou antes de cancelar: a reserva foi libertada e o bilhete antigo mantém-se
         self.improve_seat(sale_id)                   # lugar ao corredor (a venda já segura o lugar: não é uma corrida)
@@ -1121,7 +1118,8 @@ class PedidoAttempt(DonoMixin, SeatMixin):
     # ---- troca (ADR-083) ----------------------------------------------------------------------------------------------------
 
     def _troca_no_mesmo_comboio(self) -> bool:
-        """«Mudar de lugar» (ADR-087): a troca é pelo MESMO comboio e dia do bilhete que se vai cancelar. Só nesse caso o bilhete já existir é o objetivo."""
+        """Troca pelo MESMO comboio e dia do bilhete que se vai cancelar (ADR-088): o bilhete antigo, comprado sem desconto para garantir lugar, é
+        substituído pelo mesmo comboio com o desconto do passe quando houver lugar. Só nesse caso o bilhete já existir é o objetivo (não é «já comprado»)."""
         leg = self.leg
         if not leg.troca_venda or not leg.troca_ref:
             return False
@@ -1131,43 +1129,6 @@ class PedidoAttempt(DonoMixin, SeatMixin):
             return False
         self._troca_antigo = antigo
         return bool(antigo) and antigo.get("comboio") == leg.train and str(antigo.get("data")) == leg.date.isoformat()
-
-    def lugar_novo_compensa(self, sale_id: Any) -> bool:
-        """Mudar de lugar no mesmo comboio: a reserva nova já existe ao lado da antiga (a CP deu outro lugar). Aplica a preferência de lugar
-        (corredor) à reserva nova e **só segue para o cancelamento do bilhete antigo se o novo for corredor e o antigo não**. Caso contrário
-        liberta a reserva nova e não toca no bilhete antigo. Devolve True se vale a pena trocar."""
-        antigo = getattr(self, "_troca_antigo", None) or {}
-        self.improve_seat(sale_id)
-        novo = {"carriage": self.lock.state.get("carriage"), "seat": self.lock.state.get("seat")}
-        try:
-            mapa = self.cp.get_seat_map(sale_id, self.leg.train)
-            lugares = seats_by_position(mapa)
-
-            def pos(c: Any, n: Any) -> str | None:
-                try:
-                    return next((x["position"] for x in lugares if x["carriage"] == int(c) and x["seat"] == int(n)), None)
-                except (TypeError, ValueError):
-                    return None
-            pos_novo, pos_antigo = pos(novo["carriage"], novo["seat"]), pos(antigo.get("carruagem"), antigo.get("lugar"))
-        except Exception as e:  # noqa: BLE001 — sem mapa não se arrisca o bilhete: não se troca
-            log.warning("Troca de lugar: não consegui ler o mapa de lugares (%s); não troco.", type(e).__name__)
-            pos_novo, pos_antigo = None, None
-        if pos_novo == "corredor" and pos_antigo != "corredor":
-            log.info("Troca de lugar: novo %s/%s (corredor) melhor que o atual %s/%s; sigo.", novo["carriage"], novo["seat"], antigo.get("carruagem"), antigo.get("lugar"))
-            return True
-        try:
-            self.cp.cancel_sale(sale_id)
-        except Exception as e2:  # noqa: BLE001
-            log.error("Não consegui libertar a reserva %s: %s", sale_id, type(e2).__name__)
-        if pos_antigo == "corredor":
-            msg = "O lugar atual já é ao corredor; não há nada a trocar."
-            self.terminate("FAILED", f"Troca de lugar não feita — {self.label}", msg, "ERRO")
-            self._update_request(ativo="NAO")
-        else:
-            msg = f"Não consegui um lugar ao corredor (a CP deu {novo['carriage']}/{novo['seat']}). Libertei a reserva; mantém-se o lugar atual. Volto a tentar."
-            self.terminate("SOLD_OUT", f"Sem lugar melhor — {self.label}", msg, "COMPRA", tags=["seat"])
-        return False
-
 
     def trocar_bilhete_antigo(self, sale_id: int) -> bool:
         """O lugar novo já está **retido**: cancela o bilhete antigo e só depois se confirma o novo (a CP recusa o desconto enquanto o antigo

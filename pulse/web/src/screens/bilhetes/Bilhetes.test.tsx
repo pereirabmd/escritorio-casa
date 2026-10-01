@@ -342,13 +342,14 @@ describe('Na CP (ADR-075)', () => {
     await waitFor(() => expect(corpo(s.pedidos, '/actions/bilhetes.troca_armar')).toEqual({ params: { venda: 77, comboio: 731, hora: '17:30', inicio: '2026-10-01T08:00' }, confirmado: true }))
   })
 
-  test('mesmo comboio = mudar de lugar: o botão ativa, explica a regra e a devolução pode ser simulada sem cancelar (ADR-087)', async () => {
+  test('mesmo comboio: o botão ativa, explica que serve para ter o desconto, avisa se já custa 0 € e a devolução pode ser simulada sem cancelar (ADR-088)', async () => {
     const s = abrir('cp', { 'GET /tickets/cp/passe': () => [200, PASSE], 'GET /tickets/cp/futuros': () => [200, FUTUROS],
       'GET /tickets/cp/simular?venda=77': () => [200, { venda: 77, cancelavel: true, valor: '€ 6,10', motivo: '' }] })
     await userEvent.click(await screen.findByRole('button', { name: 'Trocar por outro comboio' }))
     await userEvent.type(screen.getByLabelText('Comboio novo'), '723')                  // o comboio do próprio bilhete
     fireEvent.change(screen.getByLabelText('Hora de partida do comboio novo'), { target: { value: '19:39' } })
-    expect(screen.getByText(/Mesmo comboio = /)).toBeInTheDocument()
+    expect(screen.getByText(/Mesmo comboio: serve para trocar um bilhete comprado/)).toBeInTheDocument()
+    expect(screen.getByText(/já custa 0 €/)).toBeInTheDocument()                          // o bilhete de teste custa 0
     expect(screen.getByRole('button', { name: 'Continuar' })).toBeEnabled()
     await userEvent.click(screen.getByRole('button', { name: 'Simular devolução' }))
     expect(await screen.findByText(/reembolso previsto: € 6,10\. Nada foi cancelado/)).toBeInTheDocument()
