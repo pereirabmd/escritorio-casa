@@ -227,6 +227,15 @@ def test_api_historico_passa_pelo_dados_api_e_recusa_quem_nao_e_administrador(cl
     assert cliente.get("/api/v1/tickets/history").status_code == 403
 
 
+def test_api_simular_devolucao_passa_pelo_dados_api(cliente):
+    FalsoDados.respostas["/bilhetes/trocas/simular"] = (200, {"venda": 77, "cancelavel": True, "valor": "€ 6,10", "referencia": "CP-X"})
+    FalsoDados.pedidos.clear()
+    r = cliente.get("/api/v1/tickets/cp/simular?venda=77&utilizador=2")
+    assert r.status_code == 200 and r.json()["valor"] == "€ 6,10"
+    assert [p[0] for p in FalsoDados.pedidos] == ["/bilhetes/trocas/simular?venda=77&utilizador=2"]
+    assert cliente.get("/api/v1/tickets/cp/simular").status_code == 400                       # falta a venda
+
+
 def test_viagem_com_a_hora_da_venda_diferente_da_de_embarque_conta_como_comprada():
     # a viagem é das 06:45 (abre a venda) e a compra guardou 07:27 (embarque): é o mesmo bilhete (ADR-068)
     d = {"viagens": [V(111, "2026-10-02", "06:45", 520), V(112, "2026-10-02", "17:30", 731, origem="Lisboa Oriente", destino="Aveiro")],

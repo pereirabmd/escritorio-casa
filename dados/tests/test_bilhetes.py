@@ -446,7 +446,7 @@ class BilhetesPorPessoaTest(ApiBase):
         with self._cp_por_comando(ok):
             self.assertEqual(self.pedir("POST", "/bilhetes/trocas", {"venda": 77, "comboio": 731, "hora": "17:30"})[0], 201)
             self.assertEqual(self.pedir("POST", "/bilhetes/trocas", {"venda": 77, "comboio": 731, "hora": "17:30"})[0], 409)   # já ativa
-            self.assertEqual(self.pedir("POST", "/bilhetes/trocas", {"venda": 77, "comboio": 723, "hora": "17:30"})[0], 400)   # o mesmo comboio
+            self.assertEqual(self.pedir("POST", "/bilhetes/trocas", {"venda": 77, "comboio": 723, "hora": "17:30"})[0], 409)   # o mesmo comboio já é permitido (mudar de lugar), mas já há troca ativa
             self.assertEqual(self.pedir("POST", "/bilhetes/trocas", {"venda": 77, "comboio": 731, "hora": "7:30"})[0], 400)
             self.assertEqual(self.pedir("POST", "/bilhetes/trocas", {"venda": 99, "comboio": 731, "hora": "17:30"})[0], 404)   # não é um bilhete desta conta
             self.assertEqual(self.pedir("POST", "/bilhetes/trocas", {"venda": 77, "comboio": 731, "hora": "17:30", "x": 1})[0], 400)
@@ -460,6 +460,26 @@ class BilhetesPorPessoaTest(ApiBase):
             s, b, _ = self.pedir("POST", "/bilhetes/trocas", {**base, "inicio": "2035-03-05T08:00"})
         self.assertEqual((s, b["trocaInicio"]), (201, "2035-03-05T08:00"))
         self.assertEqual(self.pedir("GET", "/bilhetes/dados")[1]["pedidos"][0]["trocaInicio"], "2035-03-05T08:00")
+
+    def test_troca_pelo_mesmo_comboio_e_permitida_mudar_de_lugar(self):
+        ok = {"futuros": {"ok": True, "bilhetes": [self.ANTIGO]}, "elegibilidade": {"ok": True, "venda": 77, "cancelavel": True, "referencia": "CP-ANTIGO"}}
+        with self._cp_por_comando(ok):
+            s, b, _ = self.pedir("POST", "/bilhetes/trocas", {"venda": 77, "comboio": 723, "hora": "19:39"})
+        self.assertEqual((s, b["comboio"], b["trocaVenda"]), (201, 723, 77))
+
+    def test_simular_a_devolucao_so_le_e_diz_se_a_cp_deixa_e_quanto(self):
+        chamadas = []
+        ok = {"futuros": {"ok": True, "bilhetes": [self.ANTIGO]}, "elegibilidade": {"ok": True, "venda": 77, "cancelavel": True, "referencia": "CP-ANTIGO", "valor": "€ 6,10"}}
+        with self._cp_por_comando(ok, chamadas):
+            s, b, _ = self.pedir("GET", "/bilhetes/trocas/simular?venda=77")
+            self.assertEqual((s, b["cancelavel"], b["valor"], b["referencia"]), (200, True, "€ 6,10", "CP-ANTIGO"))
+            self.assertEqual(self.pedir("GET", "/bilhetes/trocas/simular?venda=99")[0], 404)
+            self.assertEqual(self.pedir("GET", "/bilhetes/trocas/simular")[0], 400)
+        self.assertEqual(sorted(set(chamadas)), ["elegibilidade", "futuros"])                    # só leituras: nunca «cancelar»
+        self.assertEqual(self.pedir("GET", "/bilhetes/dados")[1]["pedidos"], [])                  # não cria nenhuma troca
+        rec = {**ok, "elegibilidade": {"ok": True, "venda": 77, "cancelavel": False, "motivo": "A CP já não permite devolver este bilhete."}}
+        with self._cp_por_comando(rec):
+            self.assertEqual(self.pedir("GET", "/bilhetes/trocas/simular?venda=77")[1]["cancelavel"], False)
 
     def test_desarmar_a_troca_para_o_pedido_sem_cancelar_nada(self):
         ok = {"futuros": {"ok": True, "bilhetes": [self.ANTIGO]}, "elegibilidade": {"ok": True, "venda": 77, "cancelavel": True, "referencia": "CP-ANTIGO"}}

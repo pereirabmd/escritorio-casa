@@ -342,6 +342,19 @@ describe('Na CP (ADR-075)', () => {
     await waitFor(() => expect(corpo(s.pedidos, '/actions/bilhetes.troca_armar')).toEqual({ params: { venda: 77, comboio: 731, hora: '17:30', inicio: '2026-10-01T08:00' }, confirmado: true }))
   })
 
+  test('mesmo comboio = mudar de lugar: o botão ativa, explica a regra e a devolução pode ser simulada sem cancelar (ADR-087)', async () => {
+    const s = abrir('cp', { 'GET /tickets/cp/passe': () => [200, PASSE], 'GET /tickets/cp/futuros': () => [200, FUTUROS],
+      'GET /tickets/cp/simular?venda=77': () => [200, { venda: 77, cancelavel: true, valor: '€ 6,10', motivo: '' }] })
+    await userEvent.click(await screen.findByRole('button', { name: 'Trocar por outro comboio' }))
+    await userEvent.type(screen.getByLabelText('Comboio novo'), '723')                  // o comboio do próprio bilhete
+    fireEvent.change(screen.getByLabelText('Hora de partida do comboio novo'), { target: { value: '19:39' } })
+    expect(screen.getByText(/Mesmo comboio = /)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Continuar' })).toBeEnabled()
+    await userEvent.click(screen.getByRole('button', { name: 'Simular devolução' }))
+    expect(await screen.findByText(/reembolso previsto: € 6,10\. Nada foi cancelado/)).toBeInTheDocument()
+    expect(s.pedidos.some((p) => p.caminho.startsWith('/actions/'))).toBe(false)         // simular não executa nenhuma ação
+  })
+
   test('uma troca ativa aparece nos Pedidos e pode ser desativada', async () => {
     const troca = { ...DADOS.pedidos[0], id: 104, comboio: 731, hora: '17:30', retry: true, estado: 'PENDENTE', trocaVenda: 77, trocaReferencia: 'CP-X', trocaAntecedenciaMin: 30 }
     const s = abrir('pedidos', { 'POST /actions/bilhetes.troca_desarmar': () => [200, { resultado: { estado: 'DESARMADO' } }] }, { ...DADOS, pedidos: [troca] })

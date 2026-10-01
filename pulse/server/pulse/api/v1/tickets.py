@@ -53,6 +53,14 @@ def cp_passe(request: Request, utilizador: int | None = Query(default=None, ge=1
     return d or {"passes": []}
 
 
+@router.get("/cp/simular")
+def simular_devolucao(request: Request, venda: int = Query(ge=1), utilizador: int | None = Query(default=None, ge=1), s: Sessao = Depends(sessao_ativa)):
+    """Simula a devolução de um bilhete futuro (só leitura, nunca cancela): a CP deixa devolver e quanto se recebe? Para a troca e «mudar de lugar» (ADR-087)."""
+    q = {"venda": venda, **({"utilizador": utilizador} if utilizador else {})}
+    _, d = request.app.state.dados.pedir("GET", "/bilhetes/trocas/simular", s.user["email"], q, timeout=CP_TIMEOUT_S)
+    return d or {}
+
+
 @router.get("/timetable")
 def horario(request: Request, comboio: int = Query(ge=1, le=99999), data: str = Query(pattern=r"^\d{4}-\d{2}-\d{2}$"),
             origem: str = Query(min_length=1, max_length=60), destino: str = Query(min_length=1, max_length=60),

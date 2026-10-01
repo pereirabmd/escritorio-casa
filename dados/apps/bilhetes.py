@@ -483,8 +483,7 @@ def criar_troca(ctx):
     antigo = next((b for b in _cp(uid, "futuros")["bilhetes"] if b.get("venda") == venda), None)
     if antigo is None:
         raise ApiError(404, "nao_encontrado", "esse bilhete não é um bilhete futuro desta conta")
-    if antigo.get("comboio") == comboio:
-        raise ApiError(400, "mesmo_comboio", "o comboio novo é o mesmo do bilhete atual")
+    # o mesmo comboio é permitido: é «mudar de lugar» (ADR-087); o Pi só cancela o antigo se o lugar novo for melhor (corredor)
     if not antigo.get("podeCancelar"):
         raise ApiError(409, "nao_cancelavel", "este bilhete já não pode ser cancelado na CP")
     eleg = _cp(uid, "elegibilidade", venda)
@@ -512,6 +511,27 @@ def criar_troca(ctx):
         conn.execute("ROLLBACK")
         raise
     return 201, _pedido(conn.execute("SELECT * FROM bilhetes_pedidos WHERE id = ?", (cur.lastrowid,)).fetchone())
+
+
+def simular_troca(ctx):
+    """**Só leitura:** simula a devolução de um bilhete futuro antes de ativar a troca (ADR-087): a CP deixa devolver? quanto se recebe? Nunca cancela nada."""
+    uid = _alvo(ctx, ctx.query.get("utilizador"))
+    try:
+        venda = int(ctx.query.get("venda") or 0)
+    except ValueError:
+        venda = 0
+    if venda <= 0:
+        raise ApiError(400, "venda_invalida", "venda inválida")
+    antigo = next((b for b in _cp(uid, "futuros")["bilhetes"] if b.get("venda") == venda), None)
+    if antigo is None:
+        raise ApiError(404, "nao_encontrado", "esse bilhete não é um bilhete futuro desta conta")
+    if not antigo.get("podeCancelar"):
+        return 200, {"venda": venda, "cancelavel": False, "motivo": "A CP já não permite cancelar este bilhete.", "referencia": antigo.get("referencia") or "", "valor": ""}
+    eleg = _cp(uid, "elegibilidade", venda)
+    return 200, {"venda": venda, "cancelavel": bool(eleg.get("cancelavel")), "motivo": eleg.get("motivo") or "",
+                 "referencia": antigo.get("referencia") or eleg.get("referencia") or "", "valor": eleg.get("valor", ""),
+                 "bilhete": {"data": antigo.get("data"), "hora": antigo.get("hora"), "comboio": antigo.get("comboio"), "origem": antigo.get("origem"),
+                             "destino": antigo.get("destino"), "carruagem": antigo.get("carruagem"), "lugar": antigo.get("lugar")}}
 
 
 def desarmar_troca(ctx):
@@ -575,6 +595,7 @@ ROUTES = [
     ("GET", r"^/bilhetes/cp/passe$", cp_passe),
     ("POST", r"^/bilhetes/cp/cancelar$", cp_cancelar),
     ("POST", r"^/bilhetes/trocas$", criar_troca),
+    ("GET", r"^/bilhetes/trocas/simular$", simular_troca),
     ("DELETE", r"^/bilhetes/trocas/(\d{1,12})$", desarmar_troca),
     ("GET", r"^/bilhetes/eu$", eu),
     ("GET", r"^/bilhetes/admin/utilizadores$", admin_utilizadores),

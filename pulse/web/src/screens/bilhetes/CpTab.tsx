@@ -17,15 +17,27 @@ function Troca({ b, utilizador, favoritos, aoMudar }: { b: BilheteNaCp; utilizad
   const [aberta, setAberta] = useState(false)
   const [comboio, setComboio] = useState('')
   const [hora, setHora] = useState('')
+  const [sim, setSim] = useState<{ a: boolean; texto: string; ok?: boolean } | null>(null)   // «Simular devolução» (só leitura)
   const [inicio, setInicio] = useState('')                       // «AAAA-MM-DDTHH:MM»: só começa a tentar a partir daqui; vazio = já
   const [pedirConfirmacao, setPedirConfirmacao] = useState(false)
   const mesmoSentido = favoritos.filter((f) => f.origem.toLowerCase() === b.origem.toLowerCase() && f.destino.toLowerCase() === b.destino.toLowerCase() && f.comboio !== b.comboio)
-  const valido = /^\d{1,5}$/.test(comboio) && Number(comboio) > 0 && Number(comboio) !== b.comboio && /^([01]\d|2[0-3]):[0-5]\d$/.test(hora)
+  const valido = /^\d{1,5}$/.test(comboio) && Number(comboio) > 0 && /^([01]\d|2[0-3]):[0-5]\d$/.test(hora)
+
+  const mesmoComboio = Number(comboio) === b.comboio                // «mudar de lugar» (ADR-087)
+
+  async function simular() {
+    setSim({ a: true, texto: 'A consultar a CP…' })
+    try {
+      const q = new URLSearchParams({ venda: String(b.venda), ...(utilizador ? { utilizador: String(utilizador) } : {}) })
+      const r = await api.get<{ cancelavel: boolean; motivo: string; valor: string }>(`/tickets/cp/simular?${q}`)
+      setSim({ a: false, ok: r.cancelavel, texto: r.cancelavel ? `A CP deixa devolver este bilhete${r.valor ? `; reembolso previsto: ${r.valor}` : ''}. Nada foi cancelado.` : (r.motivo || 'A CP não deixa devolver este bilhete.') })
+    } catch (e) { setSim({ a: false, ok: false, texto: mensagemDeErro(e) }) }
+  }
 
   async function ativar() {
     const r = await executar(`troca-${b.venda}`, 'bilhetes.troca_armar', { venda: b.venda, comboio: Number(comboio), hora, ...(inicio ? { inicio } : {}), ...(utilizador ? { utilizador } : {}) }, true)
     if (r) {
-      setAberta(false); setPedirConfirmacao(false); setComboio(''); setHora(''); setInicio('')
+      setAberta(false); setPedirConfirmacao(false); setComboio(''); setHora(''); setInicio(''); setSim(null)
       avisos.mostrar(inicio ? `Troca agendada: começo a tentar o comboio ${comboio} em ${inicio.slice(8, 10)}/${inicio.slice(5, 7)} às ${inicio.slice(11)}, de 15 em 15 min, até 30 min antes da partida.` : `Troca ativada: tento o comboio ${comboio} de 15 em 15 min, até 30 min antes da partida.`)
     }
   }
@@ -50,6 +62,11 @@ function Troca({ b, utilizador, favoritos, aoMudar }: { b: BilheteNaCp; utilizad
         <label className="t-meta" htmlFor={`ti-${b.venda}`}>Começar a tentar em (opcional; vazio = já)</label>
         <input id={`ti-${b.venda}`} type="datetime-local" className="input input-sm" value={inicio} max={`${b.data}T${hora || '23:59'}`} onChange={(e) => { setInicio(e.target.value); setPedirConfirmacao(false) }} />
       </div>
+      {mesmoComboio && <p className="t-meta" role="status">Mesmo comboio = <b>mudar de lugar</b>: reservo um lugar novo, aplico o corredor e só cancelo o lugar atual se o novo for corredor e o atual não. Se não houver, o atual mantém-se e volto a tentar.</p>}
+      <div className="quick">
+        <Botao variante="secondary" pequeno carregando={!!sim?.a} disabled={!!sim?.a || ocupado !== null} onClick={() => void simular()}>Simular devolução</Botao>
+      </div>
+      {sim && !sim.a && <Notice tipo={sim.ok ? 'info' : 'warning'}>{sim.texto}</Notice>}
       {erro && <Notice tipo="error">{erro} <button type="button" className="link-btn" onClick={limparErro}>Fechar</button></Notice>}
       {pedirConfirmacao ? (
         <div className="stack" role="group" aria-label="Confirmar a troca">

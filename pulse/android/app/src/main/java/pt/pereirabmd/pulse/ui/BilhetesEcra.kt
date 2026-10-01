@@ -9,6 +9,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.launch
 import org.json.JSONObject
 import pt.pereirabmd.pulse.data.*
 import pt.pereirabmd.pulse.util.*
@@ -394,13 +395,18 @@ private fun TrocaBilhete(b: JSONObject, utilizador: Int?, favoritos: List<JSONOb
     var aberta by remember { mutableStateOf(false) }
     var comboio by remember { mutableStateOf("") }
     var hora by remember { mutableStateOf("") }
+    val n = comboio.toIntOrNull() ?: 0
+    var sim by remember { mutableStateOf<String?>(null) }            // resultado da simulação da devolução (só leitura)
+    var simOk by remember { mutableStateOf(false) }
+    var simAcorrer by remember { mutableStateOf(false) }
+    val mesmoComboio = n == b.inteiroOuNull("comboio")                // «mudar de lugar» (ADR-087)
+    val scope = rememberCoroutineScope()
     var inicioData by remember { mutableStateOf("") }               // «Começar a tentar em» (opcional; vazio = já): data e hora locais
     var inicioHora by remember { mutableStateOf("") }
     var confirmar by remember { mutableStateOf(false) }
     val mesmoSentido = favoritos.filter { it.txtOu("origem").equals(b.txtOu("origem"), true) && it.txtOu("destino").equals(b.txtOu("destino"), true) && it.inteiro("comboio") != b.inteiroOuNull("comboio") }
-    val n = comboio.toIntOrNull() ?: 0
     val inicio = if (inicioData.isNotEmpty()) "${inicioData}T${inicioHora.ifEmpty { "00:00" }}" else ""
-    val valido = n in 1..99999 && n != b.inteiroOuNull("comboio") && Regex("^([01]\\d|2[0-3]):[0-5]\\d$").matches(hora)
+    val valido = n in 1..99999 && Regex("^([01]\\d|2[0-3]):[0-5]\\d$").matches(hora)
     if (!aberta) { LinkBtn("Trocar por outro comboio", { aberta = true }); return }
     Texto2("Do mesmo dia e sentido. Quando houver lugar no comboio novo, o Pulse reserva-o, cancela este bilhete e confirma o novo. Tenta de 15 em 15 min, até 30 min antes da partida.")
     if (mesmoSentido.isNotEmpty()) Seletor("Favoritos para a troca", mesmoSentido.mapIndexed { i, f -> i to ((f.txtOu("apelido").takeIf { it.isNotEmpty() }?.let { "$it · " } ?: "") + "${f.inteiro("comboio")} (${f.txtOu("hora")})") }, null, { i ->
@@ -409,6 +415,21 @@ private fun TrocaBilhete(b: JSONObject, utilizador: Int?, favoritos: List<JSONOb
     Campo("Comboio novo", comboio, { comboio = it.filter(Char::isDigit).take(5); confirmar = false }, teclado = androidx.compose.ui.text.input.KeyboardType.Number)
     CampoHora("Hora de partida do comboio novo", hora, { hora = it; confirmar = false }, opcional = false)
     VerificacaoCp(b.txtOu("data"), b.txtOu("origem"), b.txtOu("destino"), comboio, hora) { h -> hora = h; confirmar = false }     // preenche a hora da CP e avisa se não bate certo
+    if (mesmoComboio) Meta("Mesmo comboio = mudar de lugar: reservo um lugar novo, aplico o corredor e só cancelo o lugar atual se o novo for corredor e o atual não. Se não houver, o atual mantém-se e volto a tentar.")
+    Botao("Simular devolução", {
+        simAcorrer = true; sim = "A consultar a CP…"
+        scope.launch {
+            try {
+                val q = "venda=$venda" + (utilizador?.let { "&utilizador=$it" } ?: "")
+                val r = Api.get("/tickets/cp/simular?$q", Api.LEITURA_CP_MS)
+                simOk = r.optBoolean("cancelavel")
+                val valor = r.txtOu("valor")
+                sim = if (simOk) "A CP deixa devolver este bilhete" + (if (valor.isNotEmpty()) "; reembolso previsto: $valor" else "") + ". Nada foi cancelado." else r.txtOu("motivo").ifEmpty { "A CP não deixa devolver este bilhete." }
+            } catch (e: Exception) { simOk = false; sim = mensagemDeErro(e) }
+            simAcorrer = false
+        }
+    }, variante = Variante.SECUNDARIO, pequeno = true, ativo = !simAcorrer && acoes.ocupado == null, carregando = simAcorrer)
+    sim?.takeIf { !simAcorrer }?.let { Aviso(if (simOk) TipoAviso.INFO else TipoAviso.AVISO, it) }
     Meta("Começar a tentar em (opcional; vazio = já)")
     CampoData("Data de início", inicioData, { inicioData = it; confirmar = false }, minimo = null, opcional = true)
     if (inicioData.isNotEmpty()) CampoHora("Hora de início", inicioHora, { inicioHora = it; confirmar = false }, opcional = false)
@@ -416,7 +437,7 @@ private fun TrocaBilhete(b: JSONObject, utilizador: Int?, favoritos: List<JSONOb
         Texto2("Confirmas? O bilhete atual (comboio ${b.inteiro("comboio")}, ${b.txtOu("hora")}) só é cancelado depois de o lugar no comboio $n estar reservado." + if (inicio.isNotEmpty()) " Começo a tentar em ${inicio.substring(8, 10)}/${inicio.substring(5, 7)} às ${inicio.substring(11)}." else "")
         Botao("Ativar troca", {
             acoes.executar("troca-$venda", "bilhetes.troca_armar", jo("venda" to venda, "comboio" to n, "hora" to hora).also { if (inicio.isNotEmpty()) it.put("inicio", inicio); if (utilizador != null) it.put("utilizador", utilizador) }, confirmado = true, aoFalhar = { confirmar = false }) {
-                aberta = false; confirmar = false; comboio = ""; hora = ""; inicioData = ""; inicioHora = ""; aoMudar()
+                aberta = false; confirmar = false; comboio = ""; hora = ""; inicioData = ""; inicioHora = ""; sim = null; aoMudar()
                 avisos.mostrar(if (inicio.isNotEmpty()) "Troca agendada: começo a tentar o comboio $n em ${inicio.substring(8, 10)}/${inicio.substring(5, 7)} às ${inicio.substring(11)}, de 15 em 15 min, até 30 min antes da partida." else "Troca ativada: tento o comboio $n de 15 em 15 min, até 30 min antes da partida.")
             }
         }, variante = Variante.PERIGO, pequeno = true, ativo = acoes.ocupado == null, carregando = acoes.ocupado == "troca-$venda")

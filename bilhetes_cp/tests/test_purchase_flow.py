@@ -924,3 +924,68 @@ class TrocaTests(PedidoFlowBase):
         code, st, m = self.run_troca(self.cp731(), lambda cli, venda: {})
         self.assertEqual((code, st["state"]), (0, "CONFIRMED"))
         m.assert_not_called()
+
+
+class TrocaMesmoComboioTests(PedidoFlowBase):
+    """Mudar de lugar no mesmo comboio (ADR-087): reserva um lugar novo ao lado do antigo, aplica o corredor e só cancela o antigo se o novo
+    for corredor e o antigo não. Caso contrário liberta a reserva nova e o bilhete antigo fica intacto."""
+    train = 731
+    cp731 = staticmethod(TrocaTests.cp731)
+    run_troca = TrocaTests.run_troca
+
+    def setUp(self):
+        super().setUp()
+        self.leg = common.Leg(DAY, "pedido7", "lisboa_oriente", "aveiro", 731, "17:30", 7, troca_venda=125951095, troca_ref="CP-ANTIGO")
+        common.lock_path(self.leg.lock_key).unlink(missing_ok=True)
+        self.sheets = TrocaSheets()
+        self.sheets.ANTIGO = {**TrocaSheets.ANTIGO, "comboio": 731, "hora_partida": "17:30", "carruagem": "21", "lugar": "111"}   # janela
+
+    def cp(self, mapa_=None, **kw):
+        import test_hold
+        cp = self.cp731(sale_script=[resp(200, test_hold.SALE_COM_LUGAR)], **kw)
+        cp.seat_map = mapa_ or test_hold.mapa()
+        return cp
+
+    def test_troca_de_janela_para_corredor_cancela_o_antigo_e_confirma(self):
+        ordem = []
+        cp = self.cp()
+        antes = cp.create_sale_request
+        cp.create_sale_request = lambda *a: (ordem.append("reservar"), antes(*a))[1]
+        code, st, m = self.run_troca(cp, lambda cli, venda: (ordem.append("cancelar"), {"estado": "CONFIRMED", "reembolso": "€ 0,00"})[1])
+        self.assertEqual((code, st["state"]), (0, "CONFIRMED"))
+        self.assertEqual(ordem, ["reservar", "cancelar"])                          # reservou o novo antes de cancelar o antigo
+        self.assertIn(("change_seat", 21, 113), cp.calls)                          # corredor
+        self.assertEqual(self.sheets.apagados, ["CP-ANTIGO"])
+        self.assertFalse(any("Já comprado" in t for t in self.titles()))           # o bilhete atual já existir não bloqueia
+
+    def test_se_o_lugar_atual_ja_e_corredor_nao_troca_nada(self):
+        self.sheets.ANTIGO = {**self.sheets.ANTIGO, "lugar": "118"}
+        cp = self.cp()
+        code, st, m = self.run_troca(cp, lambda cli, venda: {"estado": "CONFIRMED"})
+        m.assert_not_called()                                                      # nunca cancela o antigo
+        self.assertIn("cancel", cp.calls)                                          # liberta a reserva nova
+        self.assertNotIn("passengers", cp.calls)
+        self.assertEqual(self.sheets.request_updates[-1][1]["ativo"], "NAO")
+        self.assertTrue(any("Troca de lugar não feita" in t for t in self.titles()))
+
+    def test_sem_corredor_livre_liberta_a_reserva_e_continua_a_tentar(self):
+        import test_hold
+        cheio = test_hold.mapa(status_corredor=(1, 1))
+        for linha in cheio["carriages"][0]["rows"][3:4]:
+            for p in linha["places"]:
+                p["statusCode"] = 1                                                 # 114 e 117 ocupados também
+        cp = self.cp(cheio)
+        code, st, m = self.run_troca(cp, lambda cli, venda: {"estado": "CONFIRMED"})
+        self.assertEqual((code, st["state"]), (0, "SOLD_OUT"))                      # estado «esgotado»: o pedido repete
+        m.assert_not_called()
+        self.assertIn("cancel", cp.calls)
+        self.assertEqual((self.sheets.apagados, self.sheets.bilhetes), ([], []))
+        self.assertTrue(any("Sem lugar melhor" in t for t in self.titles()))
+
+    def test_sem_mapa_de_lugares_nao_arrisca_o_bilhete(self):
+        import cp_ticket
+        cp = self.cp()
+        cp.seat_map = cp_ticket.CPError("http", "mapa indisponível")
+        code, st, m = self.run_troca(cp, lambda cli, venda: {"estado": "CONFIRMED"})
+        m.assert_not_called()
+        self.assertIn("cancel", cp.calls)
