@@ -316,11 +316,11 @@ private fun ColumnScope.HistoricoTab() {
             Bloco {
                 (if (mais) linhas else linhas.take(200)).forEach { l ->
                     val ts = l.txtOu("ts")
-                    val quando = "${diaMes(ts.take(10))} ${ts.drop(11).take(8)}"
+                    val quando = "#${l.optInt("id")} ${ts.take(10)} ${ts.drop(11).take(12)}"
                     val resultado = l.txtOu("resultado")
                     val nome = RESPOSTA_PEDIDO[resultado] ?: RESULTADO_REGISTO[resultado] ?: resultado.ifEmpty { "—" }
                     val ok = resultado == "ok" || resultado == "CONFIRMED" || resultado == "SALE_CREATED"
-                    val oQue = listOfNotNull(l.txtOu("pessoa").ifEmpty { null }, l.inteiroOuNull("comboio")?.let { "comboio $it" }, l.txtOu("data").ifEmpty { null }?.let { diaMes(it) },
+                    val oQue = listOfNotNull(l.txtOu("pessoa").ifEmpty { null }, l.inteiroOuNull("comboio")?.let { "comboio $it" }, l.txtOu("data").ifEmpty { null }?.let { "viagem $it" }, l.txtOu("perna").ifEmpty { null },
                         if (vista == "pedidos") FASE_PEDIDO[l.txtOu("fase")] ?: l.txtOu("fase") else l.txtOu("tipo")).joinToString(" · ")
                     Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {

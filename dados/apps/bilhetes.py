@@ -544,16 +544,16 @@ def historico(ctx):
     def pessoa(perna):
         return nomes.get(dono.get(perna), "")
 
-    tent = conn.execute("SELECT ts, data_viagem, perna, comboio, fase, http, resultado, rel_t_ms, rtt_ms, ligacao_nova, codigo, detalhe "
+    tent = conn.execute("SELECT id, ts, data_viagem, perna, comboio, fase, http, resultado, rel_t_ms, rtt_ms, ligacao_nova, codigo, detalhe "
                         "FROM bilhetes_tentativas WHERE ts >= ? ORDER BY ts DESC, id DESC LIMIT ?", (desde, MAX_HISTORICO + 1)).fetchall()
-    logs = conn.execute("SELECT ts, tipo, data_viagem, perna, comboio, status_http, resultado, referencia, mensagem_erro "
+    logs = conn.execute("SELECT id, ts, tipo, data_viagem, perna, comboio, status_http, resultado, referencia, mensagem_erro "
                         "FROM bilhetes_logs WHERE ts >= ? ORDER BY id DESC LIMIT ?", (desde, MAX_HISTORICO)).fetchall()
     return 200, {
         "dias": dias, "truncado": len(tent) > MAX_HISTORICO,
-        "pedidos": [{"ts": r["ts"], "data": r["data_viagem"], "perna": r["perna"], "pessoa": pessoa(r["perna"]), "comboio": r["comboio"],
+        "pedidos": [{"id": r["id"], "ts": r["ts"], "data": r["data_viagem"], "perna": r["perna"], "pessoa": pessoa(r["perna"]), "comboio": r["comboio"],
                      "fase": r["fase"], "http": r["http"], "resultado": r["resultado"], "relTms": r["rel_t_ms"], "rttMs": r["rtt_ms"],
                      "ligacaoNova": r["ligacao_nova"], "codigo": r["codigo"], "detalhe": r["detalhe"]} for r in tent[:MAX_HISTORICO]],
-        "desfechos": [{"ts": r["ts"], "tipo": r["tipo"], "data": r["data_viagem"], "perna": r["perna"], "pessoa": pessoa(r["perna"]),
+        "desfechos": [{"id": r["id"], "ts": r["ts"], "tipo": r["tipo"], "data": r["data_viagem"], "perna": r["perna"], "pessoa": pessoa(r["perna"]),
                        "comboio": r["comboio"], "status": r["status_http"], "resultado": r["resultado"], "referencia": r["referencia"],
                        "erro": r["mensagem_erro"]} for r in logs],
     }

@@ -46,6 +46,7 @@ class BilhetesApiTest(ApiBase):
         c.close()
         s, b, _ = self.pedir("GET", "/bilhetes/historico")
         self.assertEqual(s, 200)
+        self.assertIsInstance(b["pedidos"][0]["id"], int)
         self.assertEqual([(p["perna"], p["pessoa"], p["resultado"], p["fase"], p["rttMs"]) for p in b["pedidos"]], [("v102", "Camila", "sold_out", "retencao", 90)])
         self.assertEqual(self.pedir("GET", "/bilhetes/historico?dias=91")[0], 400)
         c = self.bd(); c.execute("UPDATE bilhetes_utilizadores SET admin = 0 WHERE id = 1"); c.close()

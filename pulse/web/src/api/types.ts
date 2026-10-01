@@ -170,8 +170,8 @@ export interface RegistoCp { ts: string; tipo: string; data: string | null; pern
 export interface BilheteNaCp { venda: number; referencia: string; estado: string; origem: string; destino: string; data: string; hora: string; chegada: string; comboio: number | null; servico: string; carruagem: number | null; lugar: number | null; valor: number; podeCancelar: boolean }
 export interface PasseNaCp { cartao: string; designacao: string; origem: string; destino: string; inicio: string; validade: string; renovavel: boolean; diasRestantes: number | null }
 export interface FavoritoBilhetes { id: number; apelido: string; comboio: number; hora: string; origem: string; destino: string }
-export interface PedidoAoCp { ts: string; data: string; perna: string; pessoa: string; comboio: number | null; fase: string; http: number | null; resultado: string; relTms: number | null; rttMs: number | null; ligacaoNova: number | null; codigo: string; detalhe: string }
-export interface DesfechoCompra { ts: string; tipo: string; data: string; perna: string; pessoa: string; comboio: number | null; status: number | null; resultado: string | null; referencia: string | null; erro: string | null }
+export interface PedidoAoCp { id: number; ts: string; data: string; perna: string; pessoa: string; comboio: number | null; fase: string; http: number | null; resultado: string; relTms: number | null; rttMs: number | null; ligacaoNova: number | null; codigo: string; detalhe: string }
+export interface DesfechoCompra { id: number; ts: string; tipo: string; data: string; perna: string; pessoa: string; comboio: number | null; status: number | null; resultado: string | null; referencia: string | null; erro: string | null }
 export interface HistoricoBilhetes { dias: number; truncado: boolean; pedidos: PedidoAoCp[]; desfechos: DesfechoCompra[] }
 export interface BilhetesModulo {
   hoje: string

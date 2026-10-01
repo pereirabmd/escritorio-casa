@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { api, mensagemDeErro } from '../../api/client'
 import type { HistoricoBilhetes } from '../../api/types'
 import { BrandLoading, Botao, Notice } from '../../components/ui'
-import { classeRegisto, diaMes, RESULTADO_REGISTO } from '../../lib/bilhetes'
+import { classeRegisto, RESULTADO_REGISTO } from '../../lib/bilhetes'
 import { useAsync } from '../../lib/useAsync'
 
 const RESPOSTA: Record<string, string> = { ok: 'Aceite', sold_out: 'Esgotado', not_open: 'Ainda não abriu', recusado: 'Recusado', transient: 'Erro temporário', erro: 'Erro', '429': 'Demasiados pedidos' }
@@ -12,7 +12,7 @@ const MAX_LINHAS = 200
 
 const nomeResposta = (r: string) => RESPOSTA[r] ?? RESULTADO_REGISTO[r] ?? (r || '—')
 const classeResposta = (r: string) => (r === 'ok' ? 'pill-ok' : r ? 'pill-soon' : '')
-const hora = (ts: string) => `${diaMes(ts.slice(0, 10))} ${ts.slice(11, 19)}`
+const hora = (ts: string) => `${ts.slice(0, 10)} ${ts.slice(11, 23)}`
 const relativo = (ms: number | null) => (ms == null ? '' : Math.abs(ms) >= 60000 ? `${ms < 0 ? '−' : '+'}${(Math.abs(ms) / 60000).toFixed(1)} min` : Math.abs(ms) >= 1000 ? `${ms < 0 ? '−' : '+'}${(Math.abs(ms) / 1000).toFixed(1)} s` : `${ms < 0 ? '−' : '+'}${Math.abs(ms)} ms`)
 
 /** Todos os pedidos feitos à CP nas compras (retenção do lugar, venda a T, mudança de lugar, desconto) e o desfecho de cada compra, até 90 dias.
@@ -53,14 +53,14 @@ export function HistoricoTab() {
               <div className="row-main">
                 {'fase' in l ? (
                   <>
-                    <div className="t-body">{hora(l.ts)} <span className={`pill ${classeResposta(l.resultado)}`}>{nomeResposta(l.resultado)}</span></div>
-                    <div className="t-meta">{[l.pessoa, l.comboio && `comboio ${l.comboio}`, l.data && diaMes(l.data), FASE[l.fase] ?? l.fase].filter(Boolean).join(' · ')}</div>
+                    <div className="t-body"><span className="t-meta">#{l.id}</span> {hora(l.ts)} <span className={`pill ${classeResposta(l.resultado)}`}>{nomeResposta(l.resultado)}</span></div>
+                    <div className="t-meta">{[l.pessoa, l.comboio && `comboio ${l.comboio}`, l.data && `viagem ${l.data}`, l.perna, FASE[l.fase] ?? l.fase].filter(Boolean).join(' · ')}</div>
                     <div className="t-meta">{[l.http ? `HTTP ${l.http}` : 'sem resposta', l.codigo, relativo(l.relTms) && `${relativo(l.relTms)} de T`, l.rttMs != null && `${l.rttMs} ms`, l.detalhe].filter(Boolean).join(' · ')}</div>
                   </>
                 ) : (
                   <>
-                    <div className="t-body">{hora(l.ts)} <span className={`pill${classeRegisto(l) === 'ok' ? ' pill-ok' : classeRegisto(l) ? ' pill-soon' : ''}`}>{nomeResposta(l.resultado ?? '')}</span></div>
-                    <div className="t-meta">{[l.pessoa, l.comboio && `comboio ${l.comboio}`, l.data && diaMes(l.data), l.tipo].filter(Boolean).join(' · ')}</div>
+                    <div className="t-body"><span className="t-meta">#{l.id}</span> {hora(l.ts)} <span className={`pill${classeRegisto(l) === 'ok' ? ' pill-ok' : classeRegisto(l) ? ' pill-soon' : ''}`}>{nomeResposta(l.resultado ?? '')}</span></div>
+                    <div className="t-meta">{[l.pessoa, l.comboio && `comboio ${l.comboio}`, l.data && `viagem ${l.data}`, l.perna, l.tipo].filter(Boolean).join(' · ')}</div>
                     {(l.referencia || l.erro) && <div className="t-meta">{l.referencia || l.erro}</div>}
                   </>
                 )}

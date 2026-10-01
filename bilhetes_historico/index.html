@@ -59,7 +59,7 @@ td.n{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
       <select id="fResultado" aria-label="Resposta"><option value="">Todas as respostas</option></select>
       <select id="fFase" aria-label="Fase"><option value="">Todas as fases</option></select>
       <select id="fDias" aria-label="Período"><option value="90">90 dias</option><option value="30">30 dias</option><option value="7">7 dias</option><option value="1">Hoje</option></select>
-      <input id="fTexto" type="search" placeholder="Procurar (comboio, código, detalhe…)" aria-label="Procurar">
+      <input id="fTexto" type="search" placeholder="Procurar (ID, comboio, código, detalhe…)" aria-label="Procurar">
       <button id="btnAtualizar" class="sec" type="button">Atualizar</button>
     </div>
     <div id="resumo" class="resumo"></div>
@@ -89,17 +89,17 @@ const FASE = { retencao: 'Reter lugar (antes de T)', venda: 'Venda (a T)', lugar
 const classe = (r) => /^(ok|CONFIRMED|SALE_CREATED|OK)$/.test(r) ? 'ok' : /^(sold_out|not_open|transient|SOLD_OUT|AMBIGUOUS)$/.test(r) ? 'warn' : r ? 'err' : '';
 const nomeRes = (r) => RESULTADO[r] || r || '—';
 
-function fmtHora(ts) {   // «2026-10-01T17:20:00.100+01:00» → «01/10 17:20:00.100» (hora de Lisboa)
+function fmtHora(ts) {   // «2026-10-01T17:20:00.100+01:00» → «2026-10-01 17:20:00.100» (hora de Lisboa, data completa para debug)
   const d = new Date(ts); if (isNaN(d)) return esc(ts || '');
-  const p = new Intl.DateTimeFormat('pt-PT', { timeZone: TZ, day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23' }).format(d).replace(',', '');
-  return p + '.' + String(d.getMilliseconds()).padStart(3, '0');
+  const f = Object.fromEntries(new Intl.DateTimeFormat('en-CA', { timeZone: TZ, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23' }).formatToParts(d).map(p => [p.type, p.value]));
+  return `${f.year}-${f.month}-${f.day} ${f.hour}:${f.minute}:${f.second}.${String(d.getMilliseconds()).padStart(3, '0')}`;
 }
 function fmtRel(ms) {
   if (ms == null) return '';
   const a = Math.abs(ms), s = ms < 0 ? '−' : '+';
   return a >= 60000 ? s + (a / 60000).toFixed(1) + ' min' : a >= 1000 ? s + (a / 1000).toFixed(1) + ' s' : s + a + ' ms';
 }
-const fmtData = (d) => d ? d.slice(8, 10) + '/' + d.slice(5, 7) : '';
+const fmtData = (d) => d || '';
 
 /* ---------- autenticação Google ---------- */
 let accessToken = null, tokenClient = null;
@@ -149,7 +149,7 @@ function opcoes(sel, valores, rotulo) {
 function filtrar(linhas, campoRes) {
   const p = $('#fPessoa').value, r = $('#fResultado').value, f = $('#fFase').value, t = $('#fTexto').value.trim().toLowerCase();
   return linhas.filter(l => (!p || l.pessoa === p) && (!r || l[campoRes] === r) && (!f || !l.fase || l.fase === f) &&
-    (!t || [l.comboio, l.data, l.perna, l.pessoa, l.codigo, l.detalhe, l.erro, l.referencia, l.tipo, nomeRes(l[campoRes])].join(' ').toLowerCase().includes(t)));
+    (!t || [l.id, l.comboio, l.data, l.perna, l.pessoa, l.codigo, l.detalhe, l.erro, l.referencia, l.tipo, nomeRes(l[campoRes])].join(' ').toLowerCase().includes(t)));
 }
 function desenhar() {
   const pedidos = filtrar(dados.pedidos, 'resultado'), desfechos = filtrar(dados.desfechos, 'resultado');
@@ -161,12 +161,12 @@ function desenhar() {
   const el = $('#lista');
   if (!linhas.length) { el.innerHTML = '<div class="vazio">Sem registos para estes filtros.</div>'; return; }
   el.innerHTML = separador === 'pedidos'
-    ? `<table><thead><tr><th>Hora</th><th>Pessoa</th><th>Comboio</th><th>Fase</th><th>Resposta</th><th class="n esconde-m">vs T</th><th class="n esconde-m">Demorou</th><th class="esconde-m">Detalhe</th></tr></thead><tbody>` +
-      linhas.map(l => `<tr><td class="hora">${fmtHora(l.ts)}</td><td>${esc(l.pessoa || '—')}</td><td>${esc(l.comboio ?? '')} <span class="mut">${esc(fmtData(l.data))}</span></td>` +
+    ? `<table><thead><tr><th>ID</th><th>Data e hora</th><th>Pessoa</th><th>Comboio · viagem</th><th>Perna</th><th>Fase</th><th>Resposta</th><th class="n esconde-m">vs T</th><th class="n esconde-m">Demorou</th><th class="esconde-m">Detalhe</th></tr></thead><tbody>` +
+      linhas.map(l => `<tr><td class="n">${esc(l.id)}</td><td class="hora">${fmtHora(l.ts)}</td><td>${esc(l.pessoa || '—')}</td><td>${esc(l.comboio ?? '')} <span class="mut">${esc(fmtData(l.data))}</span></td><td class="mut">${esc(l.perna)}</td>` +
         `<td>${esc(FASE[l.fase] || l.fase)}</td><td><span class="tag ${classe(l.resultado)}">${esc(nomeRes(l.resultado))}</span> <span class="mut">${l.http ? 'HTTP ' + esc(l.http) : 'sem resposta'}${l.codigo ? ' · ' + esc(l.codigo) : ''}</span></td>` +
         `<td class="n esconde-m">${esc(fmtRel(l.relTms))}</td><td class="n esconde-m">${l.rttMs != null ? esc(l.rttMs) + ' ms' : ''}</td><td class="mut esconde-m">${esc(l.detalhe)}</td></tr>`).join('') + '</tbody></table>'
-    : `<table><thead><tr><th>Hora</th><th>Pessoa</th><th>Comboio</th><th>Tipo</th><th>Resultado</th><th class="esconde-m">Referência / erro</th></tr></thead><tbody>` +
-      linhas.map(l => `<tr><td class="hora">${fmtHora(l.ts)}</td><td>${esc(l.pessoa || '—')}</td><td>${esc(l.comboio ?? '')} <span class="mut">${esc(fmtData(l.data))}</span></td><td>${esc(l.tipo)}</td>` +
+    : `<table><thead><tr><th>ID</th><th>Data e hora</th><th>Pessoa</th><th>Comboio · viagem</th><th>Tipo</th><th>Resultado</th><th class="esconde-m">Referência / erro</th></tr></thead><tbody>` +
+      linhas.map(l => `<tr><td class="n">${esc(l.id)}</td><td class="hora">${fmtHora(l.ts)}</td><td>${esc(l.pessoa || '—')}</td><td>${esc(l.comboio ?? '')} <span class="mut">${esc(fmtData(l.data))}</span></td><td>${esc(l.tipo)}</td>` +
         `<td><span class="tag ${classe(l.resultado)}">${esc(nomeRes(l.resultado))}</span> <span class="mut">${l.status ? 'HTTP ' + esc(l.status) : ''}</span></td><td class="mut esconde-m">${esc(l.referencia || l.erro || '')}</td></tr>`).join('') + '</tbody></table>';
 }
 async function carregar() {
