@@ -436,6 +436,12 @@ class Leg:
     retry_minutes: float | None = None
     # Quem viaja (bilhetes_utilizadores.id): a compra faz-se com as credenciais desta pessoa (credenciais.py). 1 = Bruno, como sempre.
     utilizador_id: int = 1
+    # Troca (ADR-083): este pedido existe para trocar um bilhete por este comboio. Quando há lugar, reserva-o, **cancela** o bilhete antigo
+    # (venda `troca_venda`, ref. `troca_ref`) e só então confirma (a CP recusa o desconto enquanto o antigo existe). Para de tentar
+    # `troca_antecedencia` minutos antes da partida.
+    troca_venda: int | None = None
+    troca_ref: str = ""
+    troca_antecedencia: int = 30
 
     @property
     def key(self) -> str:
@@ -630,6 +636,14 @@ def _to_minutes(v: Any) -> float | None:
     return f if f > 0 else None
 
 
+def _to_int(v: Any) -> int | None:
+    try:
+        n = int(float(v))
+    except (TypeError, ValueError):
+        return None
+    return n if n > 0 else None
+
+
 def parse_request_rows(rows: list[list[Any]], today: date, first_row: int = 5
                        ) -> tuple[list[Leg], list[str]]:
     """Valida a aba Pedidos. Cada linha ativa e válida vira uma `Leg` com `leg='pedidoN'`
@@ -640,7 +654,7 @@ def parse_request_rows(rows: list[list[Any]], today: date, first_row: int = 5
     issues: list[str] = []
     for i, raw in enumerate(rows):
         row = _row_id(raw, i, first_row, 13)
-        cells = list(raw) + [""] * 13
+        cells = list(raw) + [""] * 20
         data_v, org_v, dst_v, train_v, hora_v, ativo, retry_v, interval_v = cells[:8]
         if str(ativo).strip().upper() != "SIM":
             continue
@@ -674,7 +688,8 @@ def parse_request_rows(rows: list[list[Any]], today: date, first_row: int = 5
             continue
 
         legs.append(Leg(d, f"pedido{row}", org, dst, train, hora, row,
-                        retry=str(retry_v).strip().upper() == "SIM", retry_minutes=_to_minutes(interval_v), utilizador_id=_utilizador(raw, 14)))
+                        retry=str(retry_v).strip().upper() == "SIM", retry_minutes=_to_minutes(interval_v), utilizador_id=_utilizador(raw, 14),
+                        troca_venda=_to_int(cells[15]), troca_ref=str(cells[16] or "").strip(), troca_antecedencia=_to_int(cells[17]) or 30))
     return legs, issues
 
 

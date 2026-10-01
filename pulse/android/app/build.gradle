@@ -19,8 +19,8 @@ android {
         applicationId 'pt.pereirabmd.pulse'
         minSdk 29
         targetSdk 34
-        versionCode 21
-        versionName '0.4.2'
+        versionCode 22
+        versionName '0.4.3'
         // Endereço do servidor Pulse; mudar aqui para apontar a outro ambiente.
         buildConfigField 'String', 'SERVER', '"https://bmdpereira.duckdns.org/pulse"'
     }
@@ -37,6 +37,10 @@ android {
     }
 
     buildTypes {
+        debug {
+            // as capturas de ecrãs (testes JVM, `-PservidorDemo`, ADR-081) falam com o servidor de demonstração local; sem a propriedade nada muda
+            if (project.hasProperty('servidorDemo')) buildConfigField 'String', 'SERVER', '"http://127.0.0.1:18897"'
+        }
         release {
             minifyEnabled false
             if (ksFile.exists()) signingConfig signingConfigs.release
@@ -48,7 +52,11 @@ android {
     compileOptions { sourceCompatibility JavaVersion.VERSION_17; targetCompatibility JavaVersion.VERSION_17 }
     kotlinOptions { jvmTarget = '17' }
     packagingOptions { resources { excludes += '/META-INF/{AL2.0,LGPL2.1}' } }
-    testOptions { unitTests.returnDefaultValues = true }
+    testOptions {
+        unitTests.returnDefaultValues = true
+        unitTests.includeAndroidResources = true
+        unitTests.all { maxHeapSize = '1536m'; systemProperty 'robolectric.graphicsMode', 'NATIVE' }
+    }
 }
 
 dependencies {
@@ -70,4 +78,9 @@ dependencies {
 
     testImplementation 'junit:junit:4.13.2'
     testImplementation 'org.json:json:20240303'
+    // capturas de ecrãs sem emulador (revisão visual): Robolectric + testes Compose
+    testImplementation 'org.robolectric:robolectric:4.13'
+    testImplementation 'androidx.compose.ui:ui-test-junit4'
+    testImplementation 'androidx.test.ext:junit:1.2.1'
+    debugImplementation 'androidx.compose.ui:ui-test-manifest'
 }

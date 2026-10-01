@@ -31,11 +31,12 @@ enum class Tema(val id: String, val nome: String) { SISTEMA("sistema", "Sistema"
  * Tudo o que fica no telemóvel (cifrado no Keystore): o token da sessão, o PIN (só o hash), a biometria e o tema.
  * O token nunca sai daqui a não ser para o cabeçalho `Authorization`.
  */
-class SessionStore(context: Context) {
-    private val prefs: SharedPreferences = EncryptedSharedPreferences.create(
+class SessionStore internal constructor(private val prefs: SharedPreferences) {
+    /** O armazenamento de produção: cifrado no Keystore. (O construtor interno existe para as capturas de ecrãs em testes JVM, sem Keystore.) */
+    constructor(context: Context) : this(EncryptedSharedPreferences.create(
         context, "pulse_seguro", MasterKey.Builder(context).setKeyScheme(MasterKey.KeyScheme.AES256_GCM).build(),
         EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV, EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM,
-    )
+    ))
 
     var token: String?
         get() = prefs.getString("token", null)

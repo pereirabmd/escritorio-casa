@@ -63,6 +63,17 @@ class CancelarTests(unittest.TestCase):
         self.assertEqual((post["saleId"], post["tickets"], post["type"], post["username"]), (125951095, ["DOC-1"], "REFUND", "ele@exemplo.pt"))
         self.assertEqual([p[0] for p in cli.pedidos], ["GET", "GET", "GET", "POST", "PUT"])
 
+    def test_aceita_a_lista_de_bilhetes_dentro_de_travelData_como_na_resposta_real(self):
+        # resposta real da CP (01/10/2026): `ticketData` vem dentro de `travelData`, não no topo
+        rotas = dict(ROTAS_CANCELAR)
+        for k, v in rotas.items():
+            if isinstance(v, dict) and "ticketData" in v:
+                rotas[k] = {"operatorData": v["operatorData"], "travelData": {"ticketData": v["ticketData"]}}
+        cli = CPFalsa(rotas)
+        r = consulta_cp.cancelar(cli, 125951095)
+        self.assertEqual(r["estado"], "CONFIRMED")
+        self.assertEqual(next(p for p in cli.pedidos if p[0] == "POST")[2]["tickets"], ["DOC-1"])
+
     def test_nao_cancela_uma_venda_que_nao_e_futura_desta_conta(self):
         cli = CPFalsa(dict(ROTAS_CANCELAR))
         with self.assertRaises(consulta_cp.ConsultaErro) as e:

@@ -409,6 +409,14 @@ class MarcarFavoritoIn(FavoritoRefIn):
     utilizador: int | None = Field(default=None, ge=1)       # marcar para outra pessoa (só o administrador)
 
 
+class TrocaArmarIn(_Params):
+    """Troca um bilhete futuro por outro comboio (mesma data e sentido): quando houver lugar no novo, reserva-o, cancela o antigo e confirma o novo."""
+    venda: Annotated[int, Field(ge=1)]                     # a venda da CP do bilhete a cancelar (de Bilhetes › Na CP)
+    comboio: int = Field(ge=1, le=99999)                   # o comboio que se quer
+    hora: str = Field(pattern=r"^([01]\d|2[0-3]):[0-5]\d$")
+    utilizador: int | None = Field(default=None, ge=1)     # trocar o bilhete de outra pessoa (só o administrador)
+
+
 class PasseIn(_Params):
     dataUltimaCompra: date
     validadeDias: int | None = Field(default=None, ge=1, le=366)
@@ -1122,6 +1130,17 @@ def _marcar_favorito(c: Contexto, p: MarcarFavoritoIn):
     return {"marcadas": marcadas, "jaExistiam": repetidas, "favorito": f}, f"favorito {p.favorito}: {marcadas} marcadas, {repetidas} já existiam"
 
 
+def _troca_armar(c: Contexto, p: TrocaArmarIn):
+    corpo = {"venda": p.venda, "comboio": p.comboio, "hora": p.hora, **({"utilizadorId": p.utilizador} if p.utilizador else {})}
+    _, r = c.client.pedir("POST", "/bilhetes/trocas", c.email, corpo=corpo, timeout=100)       # o `dados-api` confirma na CP que o bilhete se pode cancelar
+    return r, f"troca: venda {p.venda} -> comboio {p.comboio} às {p.hora}"
+
+
+def _troca_desarmar(c: Contexto, p: PedidoRefIn):
+    _, r = c.client.pedir("DELETE", f"/bilhetes/trocas/{p.pedido}", c.email)
+    return r, f"troca {p.pedido} desativada"
+
+
 def _passe(c: Contexto, p: PasseIn):
     corpo = {"dataUltimaCompra": p.dataUltimaCompra.isoformat(), **({"validadeDias": p.validadeDias} if p.validadeDias else {}), **({"utilizadorId": p.utilizador} if p.utilizador else {})}
     _, r = c.client.pedir("PUT", "/bilhetes/passe", c.email, corpo=corpo)
@@ -1353,6 +1372,8 @@ ACOES: dict[str, Acao] = {a.nome: a for a in (
     Acao("bilhetes.favorito_guardar", "bilhetes", "safe_action", "Guarda um comboio (comboio, hora, origem e destino) nos favoritos, com um apelido opcional.", FavoritoGuardarIn, _favorito_guardar),
     Acao("bilhetes.favorito_apagar", "bilhetes", "safe_action", "Tira um comboio dos favoritos.", FavoritoRefIn, _favorito_apagar),
     Acao("bilhetes.marcar_favorito", "bilhetes", "safe_action", "Marca a viagem de um favorito em um ou mais dias (mantém as outras viagens da semana).", MarcarFavoritoIn, _marcar_favorito),
+    Acao("bilhetes.troca_armar", "bilhetes", "sensitive_action", "Ativa a troca de um bilhete futuro por outro comboio: quando houver lugar no novo, reserva-o, cancela o antigo e confirma o novo.", TrocaArmarIn, _troca_armar),
+    Acao("bilhetes.troca_desarmar", "bilhetes", "safe_action", "Desativa uma troca por fazer (o bilhete antigo mantém-se).", PedidoRefIn, _troca_desarmar),
     Acao("bilhetes.passe", "bilhetes", "safe_action", "Regista a data do último carregamento do passe.", PasseIn, _passe),
     Acao("bilhetes.cp_cancelar", "bilhetes", "sensitive_action", "Devolve (cancela) um bilhete futuro na CP, na conta de quem viaja.", CpCancelarIn, _cp_cancelar),
     Acao("bilhetes.pedido_repetir", "bilhetes", "safe_action", "Liga ou desliga a repetição automática de um pedido avulso.", PedidoRepetirIn, _pedido_repetir),

@@ -14,7 +14,7 @@ fun diaMes(iso: String) = "${iso.substring(8, 10)}/${iso.substring(5, 7)}"
 fun intervaloSemana(segunda: String) = "${diaMes(segunda)} a ${diaMes(somarDias(segunda, 6))}"
 
 val ESTADO_VIAGEM = mapOf("comprado" to "Comprado", "por_comprar" to "Por comprar", "inativa" to "Inativa", "em_curso" to "Em viagem", "passada" to "Concluída")
-val ESTADO_PEDIDO = mapOf("PENDENTE" to "Pendente", "A_TENTAR" to "A tentar…", "ESGOTADO" to "Esgotado", "FALHOU" to "Falhou", "AMBIGUO" to "Confirmar na App CP", "CONFIRMADO" to "Comprado")
+val ESTADO_PEDIDO = mapOf("PENDENTE" to "Pendente", "A_TENTAR" to "A tentar…", "ESGOTADO" to "Esgotado", "FALHOU" to "Falhou", "AMBIGUO" to "Confirmar na App CP", "CONFIRMADO" to "Comprado", "EXPIRADO" to "Expirou", "DESARMADO" to "Desativada")
 val RESULTADO_REGISTO = mapOf("CONFIRMED" to "Comprado", "SALE_CREATED" to "Venda criada", "SOLD_OUT" to "Esgotado", "FAILED" to "Falhou", "AMBIGUOUS" to "Estado incerto",
     "OK" to "OK", "FALHA" to "Falha", "EXCECAO" to "Erro inesperado")
 val TIPO_REGISTO = mapOf("COMPRA" to "Compra", "ERRO" to "Erro", "PREFLIGHT" to "Verificação")

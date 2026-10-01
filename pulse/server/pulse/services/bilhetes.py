@@ -34,10 +34,20 @@ def _passe(p: dict, hoje: date) -> dict:
     return {**p, "estado": estado, "percentagem": pct}
 
 
+def _compra_da_viagem(v: dict, compras: dict) -> dict | None:
+    """O bilhete desta viagem. A compra guarda a hora de **embarque** (07:27) e a viagem pode ter a hora a que **abre a venda** (06:45; é a que a
+    verificação da CP sugere, ADR-068): por isso a hora não pode ser exigida. É o mesmo comboio, no mesmo dia e no mesmo percurso."""
+    candidatas = compras.get((v["data"], v["comboio"]), [])
+    exata = next((c for c in candidatas if c["hora"] == v["hora"]), None)
+    if exata:
+        return exata
+    return next((c for c in candidatas if c["origem"].strip().lower() == v["origem"].strip().lower() and c["destino"].strip().lower() == v["destino"].strip().lower()), None)
+
+
 def _com_estado(v: dict, compras: dict, agora: datetime) -> dict:
     ini = _inicio(v)
     fim = ini + timedelta(minutes=DURACAO_ESTIMADA_MIN)
-    c = compras.get((v["data"], v["comboio"], v["hora"]))
+    c = _compra_da_viagem(v, compras)
     if v["ativo"] != "SIM":
         estado = "inativa"
     elif fim < agora:
@@ -60,7 +70,9 @@ def visao(dados: dict, agora: datetime, semana: date | None = None) -> dict:
     """Tudo o que o ecrã precisa, calculado de uma vez. `semana` = a segunda-feira da semana em edição (por omissão, a próxima)."""
     hoje = agora.date()
     agora = agora.replace(tzinfo=None)
-    compras = {(c["data"], c["comboio"], c["hora"]): c for c in dados.get("compras", [])}
+    compras: dict[tuple, list] = {}
+    for c in dados.get("compras", []):
+        compras.setdefault((c["data"], c["comboio"]), []).append(c)
     viagens = [_com_estado(v, compras, agora) for v in dados.get("viagens", [])]
     viagens.sort(key=lambda v: (v["data"], v["hora"], v["id"]))
     proximas = [v for v in viagens if v["estado"] in ("em_curso", "comprado", "por_comprar")]
@@ -73,7 +85,7 @@ def visao(dados: dict, agora: datetime, semana: date | None = None) -> dict:
 
     bilhetes = sorted((_bilhete(c) for c in dados.get("compras", [])), key=lambda b: (b["data"], b["hora"], b["id"]))
     hoje_iso = hoje.isoformat()
-    pedidos = [p for p in dados.get("pedidos", []) if p["estado"] != "CONFIRMADO" and p["data"] >= hoje_iso]
+    pedidos = [p for p in dados.get("pedidos", []) if p["estado"] not in ("CONFIRMADO", "DESARMADO") and p["data"] >= hoje_iso]
     pedidos.sort(key=lambda p: (p["data"], p["hora"], p["id"]))
     pedidos = [{**p, "retry": p["retry"] == "SIM", "forcar": p["forcar"] == "SIM", "ativo": p["ativo"] == "SIM"} for p in pedidos]
 

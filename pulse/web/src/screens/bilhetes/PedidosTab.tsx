@@ -10,9 +10,13 @@ function Linha({ p, f }: { p: PedidoCp; f: Ferramentas }) {
   const n = Number(minutos)
   const minutosOk = /^\d{1,4}$/.test(minutos) && n >= 1 && n <= 1440
   const ambiguo = p.estado === 'AMBIGUO', aTentar = p.estado === 'A_TENTAR'
+  const troca = !!p.trocaVenda
 
   async function forcar() {
     if (await executar(`forcar-${p.id}`, 'bilhetes.pedido_forcar', { pedido: p.id })) avisos.mostrar('Pedido marcado para tentar já. O Pi corre a fila a cada minuto.')
+  }
+  async function desarmar() {
+    if (await executar(`desarmar-${p.id}`, 'bilhetes.troca_desarmar', { pedido: p.id })) avisos.mostrar('Troca desativada: mantém-se o bilhete antigo.')
   }
   async function repetir(retry: boolean) {
     if (retry && !minutosOk) return
@@ -25,13 +29,17 @@ function Linha({ p, f }: { p: PedidoCp; f: Ferramentas }) {
       <div className="row-main">
         <div className="t-body">{diaCurto(p.data)} · {p.hora} <span className={`pill${ambiguo ? ' pill-soon' : p.estado === 'CONFIRMADO' ? ' pill-ok' : ''}`}>{ESTADO_PEDIDO[p.estado] ?? p.estado}</span></div>
         <div className="t-meta">{p.origem} → {p.destino} · comboio {p.comboio}</div>
+        {troca && <div className="t-meta">Troca: cancela o bilhete {p.trocaReferencia || ''} quando houver lugar neste comboio (de {p.intervaloMinutos ?? 15} em {p.intervaloMinutos ?? 15} min, até {p.trocaAntecedenciaMin ?? 30} min antes da partida).</div>}
         {p.mensagem && <div className="t-meta">{p.mensagem}</div>}
         {ambiguo ? <p className="t-meta">Confirma na App CP se a compra chegou a ser feita antes de tentares outra vez.</p> : (
           <div className="quick" role="group" aria-label={`Pedido de ${diaCurto(p.data)} às ${p.hora}`}>
-            <Botao variante="secondary" pequeno carregando={ocupado === `forcar-${p.id}`} disabled={aTentar || ocupado !== null} onClick={() => void forcar()}>{aTentar ? 'A tentar…' : 'Tentar agora'}</Botao>
-            <label className="check-line"><input type="checkbox" checked={p.retry} disabled={ocupado !== null || (!p.retry && !minutosOk)} onChange={(e) => void repetir(e.target.checked)} /> Repetir de</label>
-            <input className="input input-sm peso-input" inputMode="numeric" aria-label="Minutos entre tentativas" value={minutos} disabled={p.retry} onChange={(e) => setMinutos(e.target.value)} aria-invalid={!minutosOk ? true : undefined} />
-            <span className="t-meta">min</span>
+            {p.ativo && <Botao variante="secondary" pequeno carregando={ocupado === `forcar-${p.id}`} disabled={aTentar || ocupado !== null} onClick={() => void forcar()}>{aTentar ? 'A tentar…' : 'Tentar agora'}</Botao>}
+            {troca && p.ativo && <Botao variante="secondary" pequeno carregando={ocupado === `desarmar-${p.id}`} disabled={ocupado !== null} onClick={() => void desarmar()}>Desativar troca</Botao>}
+            {!troca && (<>
+              <label className="check-line"><input type="checkbox" checked={p.retry} disabled={ocupado !== null || (!p.retry && !minutosOk)} onChange={(e) => void repetir(e.target.checked)} /> Repetir de</label>
+              <input className="input input-sm peso-input" inputMode="numeric" aria-label="Minutos entre tentativas" value={minutos} disabled={p.retry} onChange={(e) => setMinutos(e.target.value)} aria-invalid={!minutosOk ? true : undefined} />
+              <span className="t-meta">min</span>
+            </>)}
           </div>
         )}
       </div>

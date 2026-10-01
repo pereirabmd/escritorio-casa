@@ -115,11 +115,11 @@
   <p>Aplicação pessoal que concentra Gmail, Calendário, Tarefas, Bilhetes CP, Peso, RTO, Finanças e Compras num só produto, com APK Android nativo, interface Web e backend num Raspberry Pi. Este documento junta funcionalidades, arquitetura, testes e comandos de operação.</p>
   <div class="chips">
     <span class="chip"><b>8</b> módulos</span>
-    <span class="chip"><b>73</b> ações na camada oficial</span>
-    <span class="chip"><b>80</b> decisões (ADR)</span>
-    <span class="chip"><b>486</b> testes do servidor</span>
-    <span class="chip"><b>278</b> testes da Web</span>
-    <span class="chip">APK <b>0.4.2</b></span>
+    <span class="chip"><b>75</b> ações na camada oficial</span>
+    <span class="chip"><b>83</b> decisões (ADR)</span>
+    <span class="chip"><b>489</b> testes do servidor</span>
+    <span class="chip"><b>280</b> testes da Web</span>
+    <span class="chip">APK <b>0.4.3</b></span>
     <span class="chip">Release <b>beta_20260930_34</b></span>
   </div>
   <div class="nota">Fonte de verdade: o código e <code>pulse/docs/DECISIONS.md</code>. Este ficheiro é um resumo organizado; em caso de dúvida, vale o ADR mais recente.</div>
@@ -184,6 +184,7 @@
       <li>Semana: próximo comboio, validade do Passe Verde, editor com verificação do horário na CP</li>
       <li>Bilhetes, pedidos avulsos (repetição automática), registo com filtros</li>
       <li><b>Favoritos</b> (ADR-078): comboios guardados por conta, com apelido opcional; preenchem o seletor do editor e permitem marcar por voz («marca o comboio da manhã amanhã»)</li>
+      <li><b>Troca</b> (ADR-083): troca um bilhete por outro comboio quando houver lugar — reserva o lugar novo, cancela o antigo e confirma o novo (de 15 em 15 min, até 30 min antes da partida; ativação manual, com rede de segurança)</li>
       <li>O administrador marca viagens para outras pessoas; a compra usa as credenciais de quem viaja (ADR-069)</li>
       <li><b>Na CP</b>: passe, bilhetes futuros e cancelar (ADR-075; o cancelamento só foi testado com CP simulada)</li>
       <li>O Pi compra sozinho e avisa pelo Pulse (FCM); o ntfy está desligado</li></ul></div>
@@ -256,7 +257,7 @@
       <rect class="forte" x="60" y="180" width="780" height="150" rx="12"/>
       <text x="80" y="204" style="font-weight:600">pulse-api · FastAPI · 127.0.0.1:8897 (MemoryMax 200 M)</text>
       <rect class="caixa" x="80" y="216" width="170" height="44" rx="8"/><text x="165" y="243" text-anchor="middle">API /api/v1 (51 rotas)</text>
-      <rect class="caixa" x="262" y="216" width="170" height="44" rx="8"/><text x="347" y="243" text-anchor="middle">Camada de ações (73)</text>
+      <rect class="caixa" x="262" y="216" width="170" height="44" rx="8"/><text x="347" y="243" text-anchor="middle">Camada de ações (75)</text>
       <rect class="caixa" x="444" y="216" width="170" height="44" rx="8"/><text x="529" y="243" text-anchor="middle">Serviços por módulo</text>
       <rect class="caixa" x="626" y="216" width="196" height="44" rx="8"/><text x="724" y="243" text-anchor="middle">Agendador (30 s) + FCM</text>
       <rect class="aviso" x="80" y="272" width="170" height="44" rx="8"/><text x="165" y="299" text-anchor="middle">Assistente de IA</text>
@@ -316,14 +317,14 @@
     <tr><td><code>/ai</code></td><td><code>/status</code>, <code>/command</code> (conversa → propostas), <code>/confirm</code> (executar propostas)</td></tr>
     <tr><td><code>/internal/events</code></td><td>Entrada de avisos de outras apps; só loopback, bloqueado no nginx</td></tr>
   </table></div>
-  <h3>Ações por módulo (73)</h3>
+  <h3>Ações por módulo (75)</h3>
   <div class="tabela"><table>
     <tr><th>Módulo</th><th>N.º</th><th>Exemplos</th></tr>
     <tr><td>tarefas</td><td>18</td><td><code>tarefas.concluir</code>, <code>adiar</code>, <code>criar</code>, <code>piscina_registar</code>, <code>reatribuir</code> (sensível)</td></tr>
     <tr><td>compras</td><td>18</td><td><code>compras.adicionar</code>, <code>comprado</code>, <code>limpar_comprados</code> (sensível), <code>ultima_chamada</code> (sensível)</td></tr>
     <tr><td>financas</td><td>12</td><td><code>financas.pagar</code>, <code>criar</code>, <code>anular_pagamento</code></td></tr>
     <tr><td>rto</td><td>7</td><td><code>rto.marcar_dia</code>, <code>ferias_dia</code>, <code>nota_eliminar</code> (sensível)</td></tr>
-    <tr><td>bilhetes</td><td>8</td><td><code>bilhetes.semana</code>, <code>marcar_favorito</code>, <code>favorito_guardar</code>, <code>cp_cancelar</code> (sensível)</td></tr>
+    <tr><td>bilhetes</td><td>10</td><td><code>bilhetes.semana</code>, <code>marcar_favorito</code>, <code>troca_armar</code> (sensível), <code>troca_desarmar</code>, <code>cp_cancelar</code> (sensível)</td></tr>
     <tr><td>peso</td><td>4</td><td><code>peso.registar</code>, <code>editar</code>, <code>eliminar</code> (sensível)</td></tr>
     <tr><td>calendario · email</td><td>3 + 3</td><td><code>calendario.criar</code>, <code>apagar</code> (sensível), <code>email.arquivar</code></td></tr>
   </table></div>
@@ -350,7 +351,7 @@
   <h2>Android e Web</h2>
   <div class="tabela"><table>
     <tr><th>Tema</th><th>Android</th><th>Web</th></tr>
-    <tr><td>Estado</td><td>APK 0.4.2 (versionCode 21), todos os módulos nativos</td><td>Todos os módulos; servida pelo nginx do Pi</td></tr>
+    <tr><td>Estado</td><td>APK 0.4.3 (versionCode 22), todos os módulos nativos</td><td>Todos os módulos; servida pelo nginx do Pi</td></tr>
     <tr><td>Autenticação</td><td>Token cifrado + PIN + biometria</td><td>Cookie de sessão; sem PIN</td></tr>
     <tr><td>Notificações</td><td>FCM, canais por módulo, botões de ação, toque que abre o sítio certo</td><td>—</td></tr>
     <tr><td>Assistente de voz</td><td>Sim (toque no logo)</td><td>—</td></tr>
@@ -366,8 +367,8 @@
   <p class="lead">Nenhuma funcionalidade está terminada só porque compila. Os testes usam bases temporárias <code>teste-*.db</code> e um <code>dados-api</code> falso; nunca escrevem em produção.</p>
   <div class="tabela"><table>
     <tr><th>Camada</th><th>Ferramenta</th><th>Estado (30/09/2026)</th><th>O que cobre</th></tr>
-    <tr><td>Servidor</td><td>pytest</td><td><b>486</b> a passar (34 ficheiros)</td><td>Unidade, integração, contratos com o <code>dados-api</code>, migrações, autenticação e autorização, idempotência, modo degradado, notificações, ações, assistente (<code>test_ia.py</code>), Última chamada</td></tr>
-    <tr><td>Web</td><td>Vitest + Testing Library; ESLint; <code>tsc</code></td><td><b>278</b> a passar (14 ficheiros)</td><td>Componentes e fluxos por módulo, autenticação, ações do Hoje, estados de erro</td></tr>
+    <tr><td>Servidor</td><td>pytest</td><td><b>489</b> a passar (34 ficheiros)</td><td>Unidade, integração, contratos com o <code>dados-api</code>, migrações, autenticação e autorização, idempotência, modo degradado, notificações, ações, assistente (<code>test_ia.py</code>), Última chamada</td></tr>
+    <tr><td>Web</td><td>Vitest + Testing Library; ESLint; <code>tsc</code></td><td><b>280</b> a passar (14 ficheiros)</td><td>Componentes e fluxos por módulo, autenticação, ações do Hoje, estados de erro</td></tr>
     <tr><td>Android</td><td>JUnit (JVM)</td><td><b>40+</b> testes (7 ficheiros)</td><td>Formatos pt-PT, regras de palavra-passe, leitura do JSON do servidor, PIN, atualização, «confirma/cancela» do assistente</td></tr>
     <tr><td>Interface Android</td><td>—</td><td><span class="tag aviso">só compilação</span></td><td>A UI verifica-se no telemóvel; não há testes de Compose automatizados</td></tr>
   </table></div>
@@ -545,7 +546,7 @@ PULSE_ENV=development PULSE_DB_PATH=/tmp/teste-pulse.db .venv/bin/uvicorn pulse.
 <!-- ===================================================================== -->
 <section id="adrs">
   <h2>Decisões (ADR)</h2>
-  <p class="lead">80 decisões registadas em <code>pulse/docs/DECISIONS.md</code>. Resumo por tema:</p>
+  <p class="lead">83 decisões registadas em <code>pulse/docs/DECISIONS.md</code>. Resumo por tema:</p>
   <div class="tabela"><table>
     <tr><th>Tema</th><th>ADR</th></tr>
     <tr><td>Fundações: plataformas, base própria, escritas, offline, idioma, visual</td><td>001–030</td></tr>
@@ -562,6 +563,9 @@ PULSE_ENV=development PULSE_DB_PATH=/tmp/teste-pulse.db .venv/bin/uvicorn pulse.
     <tr><td>Bilhetes: favoritos e marcação por voz; propostas sem ids</td><td>078</td></tr>
     <tr><td>Custo do assistente (cache do prompt, menos ferramentas)</td><td>079</td></tr>
     <tr><td>Assistente: leitura por voz (TextToSpeech do Google)</td><td>080</td></tr>
+    <tr><td>Revisão visual do APK e capturas de ecrãs sem emulador</td><td>081</td></tr>
+    <tr><td>Viagem com a hora da venda também «tem bilhete»</td><td>082</td></tr>
+    <tr><td>Troca de bilhete por outro comboio (reservar → cancelar → confirmar)</td><td>083</td></tr>
   </table></div>
 </section>
 

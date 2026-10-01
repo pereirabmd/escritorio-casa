@@ -140,7 +140,8 @@ private fun ColumnScope.CalendarioTab(d: JSONObject, acoes: Acoes, atualizar: ()
                         val (fundo, tinta) = corMarca(classe, Pulse.cores)
                         val info = notas.any { n -> intervaloNota(n.txt("dataInicio"), n.txt("dataFim"))?.let { it.first <= data && data <= it.second } == true } || data in feriados
                         Column(Modifier.weight(1f).height(46.dp).clip(RoundedCornerShape(8.dp)).background(fundo)
-                            .border(if (data == hojeIso) 2.dp else if (dia == data) 1.5.dp else 0.dp, if (data == hojeIso) Pulse.cores.primary else Pulse.cores.text2, RoundedCornerShape(8.dp))
+                            .then(if (data == hojeIso) Modifier.border(2.dp, Pulse.cores.primary, RoundedCornerShape(8.dp)) else if (dia == data) Modifier.border(1.5.dp, Pulse.cores.text2, RoundedCornerShape(8.dp))
+                            else if (fundo == Color.Transparent) Modifier.border(1.dp, Pulse.cores.line, RoundedCornerShape(8.dp)) else Modifier)
                             .clickable { tocar(data) }, horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
                             Text(data.takeLast(2).toInt().toString(), style = Pulse.meta, color = if (j >= 5) Pulse.cores.text2 else Pulse.cores.text)
                             Text(texto.ifEmpty { if (info) "·" else " " }, style = Pulse.card, color = tinta)

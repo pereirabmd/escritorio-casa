@@ -26,7 +26,7 @@ private fun corDe(hex: String?, por: Color): Color = if (hex == null) por else t
 @Composable
 private fun Barra(fracao: Float, cor: Color) {
     Box(Modifier.fillMaxWidth().height(6.dp).clip(RoundedCornerShape(50)).background(Pulse.cores.surface2)) {
-        Box(Modifier.fillMaxWidth(fracao.coerceIn(0.02f, 1f)).height(6.dp).clip(RoundedCornerShape(50)).background(cor))
+        if (fracao > 0f) Box(Modifier.fillMaxWidth(fracao.coerceIn(0.02f, 1f)).height(6.dp).clip(RoundedCornerShape(50)).background(cor))      // a zero não se desenha ponto
     }
 }
 
@@ -309,7 +309,7 @@ private fun LinhaLembrete(l: JSONObject, acoes: Acoes, avisos: Avisos, atualizar
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         Column(Modifier.weight(1f)) {
             Texto(l.txtOu("titulo"), Pulse.body, if (ativo) Pulse.cores.text else Pulse.cores.text2)
-            Meta("${fmtDataIso(l.txtOu("data"))} às ${l.txtOu("hora")} · ${if (l.txt("repeticao") == "mensal") "todos os meses" else "uma vez"}${if (ativo) "" else " · pausado"}${l.txtOu("nota").let { if (it.isNotEmpty()) " · $it" else "" }}")
+            Meta("${fmtDataIso(l.txtOu("data"))}${l.txtOu("hora").let { if (it.isNotEmpty()) " às $it" else "" }} · ${if (l.txt("repeticao") == "mensal") "todos os meses" else "uma vez"}${if (ativo) "" else " · pausado"}${l.txtOu("nota").let { if (it.isNotEmpty()) " · $it" else "" }}")
         }
         Column(horizontalAlignment = Alignment.End) {
             LinkBtn(if (ativo) "Pausar" else "Reativar", {

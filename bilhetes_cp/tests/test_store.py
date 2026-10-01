@@ -22,12 +22,13 @@ MIGRACOES = Path(__file__).resolve().parents[2] / "dados" / "migrations_bilhetes
 SCHEMA_001 = MIGRACOES / "001_bilhetes.sql"
 SCHEMA_002 = MIGRACOES / "002_tentativas.sql"
 SCHEMA_003 = MIGRACOES / "003_utilizadores.sql"      # o dono de cada viagem, pedido, compra e registo (fase 1 dos vários utilizadores)
+SCHEMA_005 = MIGRACOES / "005_trocas.sql"            # a troca de bilhetes (ADR-083): colunas extra nos pedidos
 
 
 class _Schema:
     """As migrações da base `bilhetes` por ordem (o teste só precisa de `.read_text()`)."""
     def read_text(self):
-        return SCHEMA_001.read_text() + "\n" + SCHEMA_002.read_text() + "\n" + SCHEMA_003.read_text()
+        return SCHEMA_001.read_text() + "\n" + SCHEMA_002.read_text() + "\n" + SCHEMA_003.read_text() + "\n" + SCHEMA_005.read_text()
 
 
 SCHEMA = _Schema()
@@ -207,3 +208,25 @@ class BackendTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TrocaStoreTest(StoreBase):
+    """O que a troca (ADR-083) precisa da base: ler a compra a cancelar, tirá-la da lista e criar o pedido de recuperação."""
+
+    def test_le_e_apaga_a_compra_pela_referencia(self):
+        self.st.append_ticket("2026-10-02", 520, "Aveiro", "Lisboa Oriente", "07:27", "21", "77", "CP-ANTIGO")
+        a = self.st.read_ticket_por_referencia("CP-ANTIGO")
+        self.assertEqual((a["data"], a["comboio"], a["hora_partida"], a["referencia"]), ("2026-10-02", 520, "07:27", "CP-ANTIGO"))
+        self.assertEqual(self.st.delete_ticket("CP-ANTIGO"), 1)
+        self.assertIsNone(self.st.read_ticket_por_referencia("CP-ANTIGO"))
+        self.assertEqual(self.st.delete_ticket(""), 0)                            # uma referência vazia nunca apaga nada
+
+    def test_pedido_de_recuperacao_e_a_troca_chegam_ao_motor(self):
+        self.st.append_request("2026-10-02", "Lisboa Oriente", "Aveiro", 723, "19:39", retry="SIM", intervalo=5, utilizador_id=1, forcar="SIM")
+        rid = self.st.read_requests()[-1][13]
+        self.st.update_request(rid, troca_venda=125951095, troca_referencia="CP-ANTIGO", troca_antecedencia_min=45)
+        legs, _ = common.parse_request_rows(self.st.read_requests(), date(2026, 9, 24))
+        l = legs[0]
+        self.assertEqual((l.train, l.retry, l.retry_minutes, l.utilizador_id), (723, True, 5.0, 1))
+        self.assertEqual((l.troca_venda, l.troca_ref, l.troca_antecedencia), (125951095, "CP-ANTIGO", 45))
+

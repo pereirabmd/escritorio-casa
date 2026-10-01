@@ -56,6 +56,19 @@ class BilhetesApiTest(ApiBase):
         self.assertEqual(p["compra"], {"carruagem": "5", "lugar": "23", "referencia": "REF-XYZ"})
         self.assertIn("passe", b)
 
+    def test_proximo_encontra_a_compra_mesmo_com_a_hora_da_venda_diferente_da_de_embarque(self):
+        # a viagem tem a hora a que abre a venda (06:45) e a compra guarda a de embarque (07:27)
+        d = (datetime.now().date() + timedelta(days=3)).isoformat()
+        c = self.bd()
+        c.execute("INSERT INTO bilhetes_viagens (data, origem, destino, comboio, hora, ativo) VALUES (?,?,?,?,?,?)", (d, "Aveiro", "Lisboa Oriente", 520, "06:45", "SIM"))
+        c.execute("INSERT INTO bilhetes_compras (data, comboio, origem, destino, hora_partida, carruagem, lugar, referencia) VALUES (?,?,?,?,?,?,?,?)",
+                  (d, 520, "Aveiro", "Lisboa Oriente", "07:27", "21", "77", "REF-HORA"))
+        c.execute("INSERT INTO bilhetes_compras (data, comboio, origem, destino, hora_partida, carruagem, lugar, referencia) VALUES (?,?,?,?,?,?,?,?)",
+                  (d, 520, "Lisboa Oriente", "Aveiro", "09:00", "1", "1", "REF-OUTRO-SENTIDO"))
+        c.close()
+        _, b, _ = self.pedir("GET", "/bilhetes/proximo")
+        self.assertEqual(b["proximo"]["compra"]["referencia"], "REF-HORA")
+
     def test_proximo_mantem_a_viagem_em_curso_ate_ao_fim_estimado(self):
         agora = datetime.now()
         c = self.bd()
@@ -372,6 +385,66 @@ class BilhetesPorPessoaTest(ApiBase):
             self.assertEqual(self.dela("POST", "/bilhetes/cp/cancelar", {"venda": 77, "utilizadorId": 1})[0], 403)
         self.assertEqual(len(chamadas), 1)
         self.assertEqual(chamadas[0][-3:], ["cancelar", "--venda", "77"])
+
+    def _cp_por_comando(self, respostas, guardar=None):
+        """Uma CP falsa que responde conforme o comando (`futuros`, `elegibilidade`, `cancelar`…)."""
+        from unittest import mock
+        def run(args, **kw):
+            comando = next(c for c in ("futuros", "elegibilidade", "cancelar", "passe") if c in args)
+            if guardar is not None:
+                guardar.append(comando)
+            return mock.Mock(stdout=json.dumps(respostas[comando]) + "\n", returncode=0)
+        return mock.patch("apps.bilhetes.subprocess.run", run)
+
+    ANTIGO = {"venda": 77, "referencia": "CP-ANTIGO", "estado": "CONFIRMED", "origem": "Lisboa Oriente", "destino": "Aveiro", "data": "2035-03-06",
+              "hora": "19:39", "comboio": 723, "podeCancelar": True}
+
+    def test_cp_cancelar_tira_a_compra_da_lista(self):
+        c = self.bd()
+        c.execute("INSERT INTO bilhetes_compras (data, comboio, origem, destino, hora_partida, carruagem, lugar, referencia, utilizador_id) VALUES (?,?,?,?,?,?,?,?,1)",
+                  ("2035-03-06", 723, "Lisboa Oriente", "Aveiro", "19:39", "22", "77", "CP-ANTIGO"))
+        c.close()
+        with self._cp_falsa({"ok": True, "venda": 77, "estado": "CONFIRMED", "reembolso": "€ 0,00", "referencia": "CP-ANTIGO"}):
+            self.assertEqual(self.pedir("POST", "/bilhetes/cp/cancelar", {"venda": 77})[0], 200)
+        self.assertEqual(self.pedir("GET", "/bilhetes/dados")[1]["compras"], [])
+
+    def test_troca_cria_um_pedido_de_15_em_15_min_depois_de_confirmar_na_cp_que_o_bilhete_se_pode_cancelar(self):
+        chamadas = []
+        with self._cp_por_comando({"futuros": {"ok": True, "bilhetes": [self.ANTIGO]}, "elegibilidade": {"ok": True, "venda": 77, "cancelavel": True, "referencia": "CP-ANTIGO"}}, chamadas):
+            s, b, _ = self.pedir("POST", "/bilhetes/trocas", {"venda": 77, "comboio": 731, "hora": "17:30"})
+        self.assertEqual(s, 201)
+        self.assertEqual((b["comboio"], b["hora"], b["data"], b["origem"], b["destino"]), (731, "17:30", "2035-03-06", "Lisboa Oriente", "Aveiro"))
+        self.assertEqual((b["retry"], b["intervaloMinutos"], b["trocaVenda"], b["trocaReferencia"], b["trocaAntecedenciaMin"]), ("SIM", 15, 77, "CP-ANTIGO", 30))
+        self.assertEqual(chamadas, ["futuros", "elegibilidade"])                  # só leitura: nada foi cancelado
+        self.assertEqual(self.pedir("GET", "/bilhetes/dados")[1]["pedidos"][0]["trocaVenda"], 77)
+
+    def test_troca_recusada_se_a_cp_nao_deixa_cancelar_ou_ja_ha_troca_ou_pedido_invalido(self):
+        base = {"futuros": {"ok": True, "bilhetes": [self.ANTIGO]}, "elegibilidade": {"ok": True, "venda": 77, "cancelavel": False, "motivo": "A CP já não permite devolver este bilhete."}}
+        with self._cp_por_comando(base):
+            s, b, _ = self.pedir("POST", "/bilhetes/trocas", {"venda": 77, "comboio": 731, "hora": "17:30"})
+        self.assertEqual(s, 409)
+        self.assertEqual(self.pedir("GET", "/bilhetes/dados")[1]["pedidos"], [])           # nada ficou criado
+        ok = {**base, "elegibilidade": {"ok": True, "venda": 77, "cancelavel": True, "referencia": "CP-ANTIGO"}}
+        with self._cp_por_comando(ok):
+            self.assertEqual(self.pedir("POST", "/bilhetes/trocas", {"venda": 77, "comboio": 731, "hora": "17:30"})[0], 201)
+            self.assertEqual(self.pedir("POST", "/bilhetes/trocas", {"venda": 77, "comboio": 731, "hora": "17:30"})[0], 409)   # já ativa
+            self.assertEqual(self.pedir("POST", "/bilhetes/trocas", {"venda": 77, "comboio": 723, "hora": "17:30"})[0], 400)   # o mesmo comboio
+            self.assertEqual(self.pedir("POST", "/bilhetes/trocas", {"venda": 77, "comboio": 731, "hora": "7:30"})[0], 400)
+            self.assertEqual(self.pedir("POST", "/bilhetes/trocas", {"venda": 99, "comboio": 731, "hora": "17:30"})[0], 404)   # não é um bilhete desta conta
+            self.assertEqual(self.pedir("POST", "/bilhetes/trocas", {"venda": 77, "comboio": 731, "hora": "17:30", "x": 1})[0], 400)
+
+    def test_desarmar_a_troca_para_o_pedido_sem_cancelar_nada(self):
+        ok = {"futuros": {"ok": True, "bilhetes": [self.ANTIGO]}, "elegibilidade": {"ok": True, "venda": 77, "cancelavel": True, "referencia": "CP-ANTIGO"}}
+        with self._cp_por_comando(ok):
+            pid = self.pedir("POST", "/bilhetes/trocas", {"venda": 77, "comboio": 731, "hora": "17:30"})[1]["id"]
+        s, b, _ = self.pedir("DELETE", f"/bilhetes/trocas/{pid}")
+        self.assertEqual((s, b["ativo"], b["estado"]), (200, "NAO", "DESARMADO"))
+        normal = self.pedir("GET", "/bilhetes/dados")[1]["pedidos"]
+        self.assertEqual(normal[0]["estado"], "DESARMADO")
+        c = self.bd()
+        c.execute("INSERT INTO bilhetes_pedidos (id, data, origem, destino, comboio, hora, estado, utilizador_id) VALUES (60, ?, 'Aveiro', 'Lisboa Oriente', 520, '07:27', 'PENDENTE', 1)", (dia(0),))
+        c.close()
+        self.assertEqual(self.pedir("DELETE", "/bilhetes/trocas/60")[0], 404)                # um pedido normal não é uma troca
 
     def test_cp_erros_da_consulta_chegam_como_erros_da_api(self):
         with self._cp_falsa({"ok": False, "erro": "nao_cancelavel", "mensagem": "A CP já não permite devolver este bilhete."}):

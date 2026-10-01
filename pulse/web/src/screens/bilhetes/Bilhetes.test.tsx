@@ -289,6 +289,31 @@ describe('Na CP (ADR-075)', () => {
     expect(await screen.findByText('Sem bilhetes futuros na CP.')).toBeInTheDocument()
   })
 
+  test('trocar por outro comboio: explica, pede confirmação e só então ativa a troca (ADR-083)', async () => {
+    const s = abrir('cp', { 'GET /tickets/cp/passe': () => [200, PASSE], 'GET /tickets/cp/futuros': () => [200, FUTUROS], 'POST /actions/bilhetes.troca_armar': () => [200, { resultado: { id: 104 } }] },
+      { ...DADOS, favoritos: [{ id: 8, apelido: 'Tarde', comboio: 731, origem: 'Lisboa Oriente', destino: 'Aveiro', hora: '17:30' }, { id: 9, apelido: 'Manhã', comboio: 520, origem: 'Aveiro', destino: 'Lisboa Oriente', hora: '06:45' }] })
+    await userEvent.click(await screen.findByRole('button', { name: 'Trocar por outro comboio' }))
+    expect(screen.getByText(/cancela este bilhete/)).toBeInTheDocument()
+    const sel = screen.getByLabelText('Favoritos para a troca')
+    expect(within(sel).queryByText(/Manhã/)).not.toBeInTheDocument()                    // só favoritos do mesmo sentido
+    await userEvent.selectOptions(sel, '0')
+    expect(screen.getByLabelText('Comboio novo')).toHaveValue('731')
+    await userEvent.click(screen.getByRole('button', { name: 'Continuar' }))
+    expect(s.pedidos.some((p) => p.caminho === '/actions/bilhetes.troca_armar')).toBe(false)           // ainda não ativou nada
+    expect(screen.getByText(/só é cancelado depois de o lugar no comboio 731 estar reservado/)).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: 'Ativar troca' }))
+    await waitFor(() => expect(corpo(s.pedidos, '/actions/bilhetes.troca_armar')).toEqual({ params: { venda: 77, comboio: 731, hora: '17:30' }, confirmado: true }))
+  })
+
+  test('uma troca ativa aparece nos Pedidos e pode ser desativada', async () => {
+    const troca = { ...DADOS.pedidos[0], id: 104, comboio: 731, hora: '17:30', retry: true, estado: 'PENDENTE', trocaVenda: 77, trocaReferencia: 'CP-X', trocaAntecedenciaMin: 30 }
+    const s = abrir('pedidos', { 'POST /actions/bilhetes.troca_desarmar': () => [200, { resultado: { estado: 'DESARMADO' } }] }, { ...DADOS, pedidos: [troca] })
+    expect(await screen.findByText(/Troca: cancela o bilhete CP-X quando houver lugar/)).toBeInTheDocument()
+    expect(screen.queryByLabelText('Minutos entre tentativas')).not.toBeInTheDocument()               // uma troca tem o seu ritmo (15 min)
+    await userEvent.click(screen.getByRole('button', { name: 'Desativar troca' }))
+    await waitFor(() => expect(corpo(s.pedidos, '/actions/bilhetes.troca_desarmar')).toEqual({ params: { pedido: 104 } }))
+  })
+
   test('um erro da CP aparece com a mensagem e deixa tentar de novo', async () => {
     abrir('cp', { 'GET /tickets/cp/passe': () => [409, { erro: { codigo: 'cp_credenciais', mensagem: 'faltam dados de Davi: NIF' } }], 'GET /tickets/cp/futuros': () => [200, { bilhetes: [] }] })
     expect(await screen.findByText(/faltam dados de Davi/)).toBeInTheDocument()

@@ -121,7 +121,7 @@ private fun ColumnScope.GraficoTab(d: JSONObject) {
     val alvo = d.getJSONObject("config").real("pesoAlvo")
     fun iso(t: Long) = java.time.Instant.ofEpochMilli(t).atZone(java.time.ZoneId.systemDefault()).toLocalDate().toString()
     val resumo = if (pontos.isNotEmpty()) "Evolução do peso: ${pontos.size} registos, de ${fmtPeso(pontos.first().v)} em ${fmtDataIso(iso(pontos.first().t))} a ${fmtPeso(pontos.last().v)} em ${fmtDataIso(iso(pontos.last().t))}." else "Sem registos neste período."
-    Filtros(PERIODOS.map { it.first to it.second.first }, periodo) { periodo = it }
+    Escolha(PERIODOS.map { it.first to it.second.first }, periodo, { periodo = it })          // 6 períodos repartem a largura (como chips cortavam o «Tudo»)
     Bloco(titulo = "Evolução do peso") {
         GraficoLinha(pontos, mediaMovel(pontos), alvo, resumo)
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {

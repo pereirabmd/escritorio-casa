@@ -58,6 +58,29 @@ def is_due(leg, raw_row: list, default_interval_min: float, now_ts: float) -> tu
     return (now_ts - last_ts >= interval_s), False
 
 
+def _ancorar(leg):
+    """A mesma perna com a hora de embarque real (melhor esforço: sem horário oficial, usa a hora do pedido)."""
+    try:
+        import timetable
+        return timetable.apply_anchor(leg)
+    except Exception as e:  # noqa: BLE001 — nunca impede o pedido
+        log.warning("Sem horário oficial para %s: %s", leg.key, type(e).__name__)
+        return leg
+
+
+def _expirar_troca(leg) -> None:
+    """Chegou a hora limite (por omissão 30 min antes da partida) sem lugar no comboio novo: a troca acaba e o bilhete antigo mantém-se."""
+    try:
+        common.get_store().update_request(leg.row, ativo="NAO", estado="EXPIRADO", forcar="NAO",
+                                          mensagem=f"Sem lugar no comboio {leg.train} até {leg.troca_antecedencia} min antes da partida; mantém-se o bilhete antigo.")
+    except Exception as e:  # noqa: BLE001
+        log.error("Não consegui fechar a troca %s: %s", leg.key, type(e).__name__)
+        return
+    common.notify_once(f"troca-expirou-{leg.lock_key}", f"Troca não feita — comboio {leg.train}",
+                       f"Não houve lugar no comboio {leg.train} até {leg.troca_antecedencia} min antes da partida. Mantém-se o bilhete antigo.",
+                       cooldown_s=24 * 3600, logger=log)
+
+
 MAX_LAUNCHES = 5   # relançamentos seguidos que morrem sem gravar nada de novo no lock (ver launch())
 
 
@@ -122,6 +145,12 @@ def run(plan_only: bool = False) -> int:
     now_ts = time.time()
     launched = 0
     for leg in legs:
+        if leg.troca_venda:
+            leg = _ancorar(leg)                                # a hora de embarque real (a do pedido pode ser a da 1.ª estação)
+            if now_ts >= leg.departure.timestamp() - leg.troca_antecedencia * 60:
+                if not plan_only:
+                    _expirar_troca(leg)
+                continue
         if leg.departure.timestamp() <= now_ts:
             continue                                           # o comboio já partiu (3.2.1)
         raw = common.request_row(raw_rows, leg.row)   # por id, nunca por posição

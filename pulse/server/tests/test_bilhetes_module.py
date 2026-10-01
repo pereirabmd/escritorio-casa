@@ -214,3 +214,35 @@ def test_api_cp_futuros_e_passe_passam_pelo_dados_api(cliente):
     assert r.status_code == 409 and "faltam dados" in r.text                                          # a mensagem da CP chega à interface
     cliente.cookies.clear()
     assert cliente.get("/api/v1/tickets/cp/passe").status_code == 401
+
+
+def test_viagem_com_a_hora_da_venda_diferente_da_de_embarque_conta_como_comprada():
+    # a viagem é das 06:45 (abre a venda) e a compra guardou 07:27 (embarque): é o mesmo bilhete (ADR-068)
+    d = {"viagens": [V(111, "2026-10-02", "06:45", 520), V(112, "2026-10-02", "17:30", 731, origem="Lisboa Oriente", destino="Aveiro")],
+         "compras": [{**C(9, "2026-10-02", "07:27", 520), "origem": "Aveiro", "destino": "Lisboa Oriente"},
+                     {**C(10, "2026-10-02", "17:39", 731), "origem": "Aveiro", "destino": "Lisboa Oriente"}], "passe": {}, "pedidos": [], "logs": []}
+    j = bilhetes.visao(d, datetime(2026, 10, 1, 18, 0), None)
+    estados = {v["id"]: v["estado"] for v in j["semana"]["viagens"] + j["proximas"]}
+    assert estados[111] == "comprado"                    # mesmo comboio, dia e percurso, hora diferente
+    assert estados[112] == "por_comprar"                 # o 731 comprado é no sentido contrário: não conta
+
+
+def test_troca_armar_e_desarmar_passam_pelo_dados_api(conn, dados_falso):
+    FalsoDados.respostas["POST /bilhetes/trocas"] = (201, {"id": 104, "comboio": 731, "trocaVenda": 77})
+    FalsoDados.respostas["DELETE /bilhetes/trocas/104"] = (200, {"id": 104, "estado": "DESARMADO"})
+    r = correr(conn, dados_falso, "bilhetes.troca_armar", {"venda": 77, "comboio": 731, "hora": "17:30"}, confirmado=True)
+    assert r["trocaVenda"] == 77
+    assert ("POST", "/bilhetes/trocas", {"venda": 77, "comboio": 731, "hora": "17:30"}, EMAIL) in FalsoDados.escritas
+    assert correr(conn, dados_falso, "bilhetes.troca_desarmar", {"pedido": 104})["estado"] == "DESARMADO"
+    with pytest.raises(ContaErro) as e:                                                       # cancela um bilhete: pede confirmação
+        correr(conn, dados_falso, "bilhetes.troca_armar", {"venda": 77, "comboio": 731, "hora": "17:30"})
+    assert e.value.codigo == "confirmacao_necessaria"
+
+
+def test_pedidos_desarmados_nao_aparecem_mas_o_expirado_sim_com_os_campos_da_troca():
+    d = {"viagens": [], "compras": [], "passe": {}, "logs": [], "pedidos": [
+        {**P(1, "2026-10-06"), "trocaVenda": 77, "trocaReferencia": "CP-X", "trocaAntecedenciaMin": 30},
+        {**P(2, "2026-10-06", estado="DESARMADO"), "trocaVenda": 77},
+        {**P(3, "2026-10-06", estado="EXPIRADO"), "trocaVenda": 78, "mensagem": "Sem lugar até 30 min antes."}]}
+    j = bilhetes.visao(d, datetime(2026, 10, 1, 18, 0), None)
+    assert [(p["id"], p["trocaVenda"]) for p in j["pedidos"]] == [(1, 77), (3, 78)]

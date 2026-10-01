@@ -112,7 +112,9 @@ def cancelar(cli: CPClient, venda: int) -> dict:
     if not isinstance(operacoes, list) or "REFUND" not in operacoes:
         raise ConsultaErro("nao_cancelavel", "A CP já não permite devolver este bilhete.")
     elegiveis = _pedir(cli, "GET", f"/ticketing-api/post-sale/refund/available/tickets/{venda}") or {}
-    documentos = [t["itemData"]["documentNumber"] for t in elegiveis.get("ticketData", [])
+    # a lista vem no topo (HAR de 30/09) ou dentro de `travelData` (resposta real de 01/10/2026, venda 126027565): aceitam-se os dois sítios
+    bilhetes = elegiveis.get("ticketData") or (elegiveis.get("travelData") or {}).get("ticketData") or []
+    documentos = [t["itemData"]["documentNumber"] for t in bilhetes
                   if t.get("itemType") == "TICKET" and (t.get("itemData") or {}).get("documentNumber")]
     if not documentos:
         raise ConsultaErro("nao_cancelavel", "Não há bilhetes a devolver nesta venda.")
@@ -126,7 +128,22 @@ def cancelar(cli: CPClient, venda: int) -> dict:
     estado = ((final or {}).get("status") or {}).get("code", "")
     if estado != "CONFIRMED":
         raise ConsultaErro("erro_cp", f"A devolução ficou no estado {estado or 'desconhecido'}.")
-    return {"venda": venda, "estado": estado, "reembolso": (final or {}).get("totalRefundAmount", "")}
+    return {"venda": venda, "estado": estado, "reembolso": (final or {}).get("totalRefundAmount", ""), "referencia": elegiveis.get("reference", "")}
+
+
+def elegibilidade(cli: CPClient, venda: int) -> dict:
+    """**Só leitura:** a CP deixa devolver este bilhete futuro? Serve para a troca (ADR-083) saber, antes de a ativar, se o cancelamento vai ser possível."""
+    futuros = {int(v["saleID"]): v for v in _futuros_brutos(cli)}
+    if venda not in futuros:
+        raise ConsultaErro("nao_encontrado", "Esse bilhete não é um bilhete futuro desta conta.")
+    operacoes = _pedir(cli, "GET", f"/ticketing-api/sales/{venda}/available-operations")
+    if not isinstance(operacoes, list) or "REFUND" not in operacoes:
+        return {"venda": venda, "cancelavel": False, "motivo": "A CP já não permite devolver este bilhete."}
+    elegiveis = _pedir(cli, "GET", f"/ticketing-api/post-sale/refund/available/tickets/{venda}") or {}
+    bilhetes = elegiveis.get("ticketData") or (elegiveis.get("travelData") or {}).get("ticketData") or []
+    if not any(t.get("itemType") == "TICKET" and (t.get("itemData") or {}).get("documentNumber") for t in bilhetes):
+        return {"venda": venda, "cancelavel": False, "motivo": "Não há bilhetes a devolver nesta venda."}
+    return {"venda": venda, "cancelavel": True, "motivo": "", "referencia": elegiveis.get("reference", ""), "valor": elegiveis.get("totalAmount", "")}
 
 
 # --- Passe Verde --------------------------------------------------------------------------------------------------------------
@@ -172,10 +189,10 @@ def correr(utilizador: int, comando: str, venda: int | None = None) -> dict:
             return {"ok": True, **futuros(cli)}
         if comando == "passe":
             return {"ok": True, **passe(cli)}
-        if comando == "cancelar":
+        if comando in ("cancelar", "elegibilidade"):
             if not venda:
                 raise ConsultaErro("pedido_invalido", "Falta o número da venda.")
-            return {"ok": True, **cancelar(cli, venda)}
+            return {"ok": True, **(cancelar(cli, venda) if comando == "cancelar" else elegibilidade(cli, venda))}
         raise ConsultaErro("pedido_invalido", "Comando desconhecido.")
     except ConsultaErro as e:
         return {"ok": False, "erro": e.codigo, "mensagem": e.mensagem}
@@ -186,7 +203,7 @@ def correr(utilizador: int, comando: str, venda: int | None = None) -> dict:
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--utilizador", type=int, default=1)
-    ap.add_argument("comando", choices=["futuros", "passe", "cancelar"])
+    ap.add_argument("comando", choices=["futuros", "passe", "cancelar", "elegibilidade"])
     ap.add_argument("--venda", type=int)
     a = ap.parse_args(argv)
     r = correr(a.utilizador, a.comando, a.venda)

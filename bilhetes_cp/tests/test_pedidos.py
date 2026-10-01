@@ -183,3 +183,58 @@ class LaunchTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+def trow(venda=125951095, ref="CP-ANTIGO", antecedencia=30, **kw):
+    """Uma linha de Pedidos com as colunas da troca (id, utilizador, troca_venda, troca_referencia, troca_antecedencia_min)."""
+    return prow(**kw) + [9, 1, venda, ref, antecedencia]
+
+
+class TrocaPedidoTests(unittest.TestCase):
+    """Troca (ADR-083): o pedido guarda o bilhete a cancelar e deixa de tentar 30 min antes da partida."""
+
+    def rows(self, *rs):
+        import contextlib
+        self.store.read_requests.return_value = list(rs)
+        return contextlib.nullcontext()
+
+    def setUp(self):
+        for f in common.BASE_DIR.glob("locks/*pedido*"):
+            f.unlink()
+        common._state_file("launched_pedidos.json").unlink(missing_ok=True)
+        self.notes, self.launched = [], []
+        p1 = mock.patch.object(pedidos, "launch", side_effect=lambda leg, out=print: self.launched.append(leg.key) or True)
+        p2 = mock.patch.object(common, "notify_once", side_effect=lambda key, title, msg, **kw: self.notes.append(key) or True)
+        p1.start(); p2.start(); self.addCleanup(p1.stop); self.addCleanup(p2.stop)
+        self.fechadas = []
+        self.store = mock.Mock(); self.store.update_request.side_effect = lambda row, **f: self.fechadas.append((row, f))
+        p = mock.patch.object(common, "get_store", return_value=self.store); p.start(); self.addCleanup(p.stop)
+        a = mock.patch.object(pedidos, "_ancorar", side_effect=lambda leg: leg); a.start(); self.addCleanup(a.stop)
+
+    def test_le_os_campos_da_troca(self):
+        leg = leg_of(trow())
+        self.assertEqual((leg.troca_venda, leg.troca_ref, leg.troca_antecedencia), (125951095, "CP-ANTIGO", 30))
+        normal = leg_of(prow())
+        self.assertEqual((normal.troca_venda, normal.troca_ref), (None, ""))
+
+    def test_troca_e_lancada_antes_da_hora_limite(self):
+        with self.rows(trow()):                                   # daqui a 3 dias
+            pedidos.run()
+        self.assertEqual(len(self.launched), 1)
+
+    def test_troca_expira_30_min_antes_da_partida_e_fica_a_manter_o_antigo(self):
+        agora = common.now_local()
+        daqui_20 = (agora + timedelta(minutes=20)).strftime("%H:%M")
+        with self.rows(trow(data=agora.date(), hora=daqui_20)):
+            pedidos.run()
+        self.assertEqual(self.launched, [])                       # a menos de 30 min: não tenta mais
+        (row, campos), = self.fechadas
+        self.assertEqual((row, campos["ativo"], campos["estado"]), (9, "NAO", "EXPIRADO"))
+        self.assertTrue(any(k.startswith("troca-expirou") for k in self.notes))
+
+    def test_pedido_normal_a_20_min_da_partida_continua_a_ser_lancado(self):
+        agora = common.now_local()
+        with self.rows(prow(data=agora.date(), hora=(agora + timedelta(minutes=20)).strftime("%H:%M"))):
+            pedidos.run()
+        self.assertEqual(len(self.launched), 1)                   # só as trocas têm a folga de 30 min
+        self.assertEqual(self.fechadas, [])

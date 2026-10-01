@@ -18,6 +18,7 @@ Legenda: **Feito** · **Pendente** · **Substituído** · **Descartado**.
 | Registo (compras, erros, verificações) com filtros | Registo | Registo | Feito | |
 | Página de administração de utilizadores (LAN) | Admin | — | **Mantido no Pi** | só abre na rede de casa |
 | Marcar para outras pessoas (compra com as credenciais de quem viaja) | — | Bilhetes (seletor, administrador) | **Feito** | ADR-069, publicado a 30/09/2026; falta preencher os dados da Camila e ensaiar (`ensaio_compra.py --utilizador 2`) |
+| Trocar um bilhete por outro comboio quando houver lugar (reserva → cancela o antigo → confirma; 15 em 15 min, até 30 min antes) | — | Bilhetes › Na CP e Pedidos | **Feito** | ADR-083; Web e Android 0.4.3; a CP deixa reservar mas recusa o desconto enquanto o antigo existe |
 | Passe Verde (validade na CP), bilhetes futuros na CP e cancelar | — | Bilhetes › Na CP | **Feito** | ADR-075, APK 0.3.6; cancelar só testado com CP simulada |
 | Notificações ntfy | Pi | — | **Desligado** | desde 30/09/2026 os avisos dos Bilhetes saem só pelo Pulse (FCM); `NTFY_DESLIGADO=1` no `.env` (ADR-075); apagar a linha volta ao ntfy |
 | Fila offline / puxar para atualizar | Global | — | **Pendente** | Android (fase 5) |

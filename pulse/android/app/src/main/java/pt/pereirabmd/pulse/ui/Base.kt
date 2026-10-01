@@ -107,7 +107,7 @@ class Acoes(private val scope: CoroutineScope, private val depois: (String) -> U
         ocupado = chave; erro = null
         return try {
             val corpo = jo("params" to params).also { if (confirmado) it.put("confirmado", true) }
-            val r = Api.post("/actions/$nome", corpo, if (nome.startsWith("bilhetes.cp_")) Api.LEITURA_CP_MS else 20_000).optJSONObject("resultado") ?: JSONObject()
+            val r = Api.post("/actions/$nome", corpo, if (nome.startsWith("bilhetes.cp_") || nome == "bilhetes.troca_armar") Api.LEITURA_CP_MS else 20_000).optJSONObject("resultado") ?: JSONObject()
             depois(nome); r
         } catch (e: Exception) {
             if (e is kotlinx.coroutines.CancellationException) throw e
@@ -155,14 +155,16 @@ fun ColumnScope.Rolar(modifier: Modifier = Modifier, conteudo: @Composable Colum
 @Composable
 fun Abas(nomes: List<String>, selecionada: Int, aoMudar: (Int) -> Unit) {
     val c = Pulse.cores
-    ScrollableTabRow(selectedTabIndex = selecionada, containerColor = c.bg, contentColor = c.primary, edgePadding = 12.dp,
-        indicator = { pos -> if (selecionada < pos.size) TabRowDefaults.SecondaryIndicator(with(TabRowDefaults) { Modifier.tabIndicatorOffset(pos[selecionada]) }, color = c.primary) },
-        divider = { HorizontalDivider(color = c.line) }) {
+    val separadores: @Composable () -> Unit = {
         nomes.forEachIndexed { i, n ->
-            Tab(selected = i == selecionada, onClick = { aoMudar(i) }, text = { Text(n, style = Pulse.body2.copy(fontWeight = FontWeight.Medium)) },
+            Tab(selected = i == selecionada, onClick = { aoMudar(i) }, text = { Text(n, style = Pulse.body2.copy(fontWeight = FontWeight.Medium), maxLines = 1) },
                 selectedContentColor = c.primary, unselectedContentColor = c.text2)
         }
     }
+    val indicador: @Composable (List<TabPosition>) -> Unit = { pos -> if (selecionada < pos.size) TabRowDefaults.SecondaryIndicator(with(TabRowDefaults) { Modifier.tabIndicatorOffset(pos[selecionada]) }, color = c.primary) }
+    // até 4 separadores curtos cabem no ecrã: repartem a largura (a linha de baixo vai de lado a lado); com mais (ou nomes compridos), rolam
+    if (nomes.size <= 4 && nomes.all { it.length <= 10 }) TabRow(selectedTabIndex = selecionada, containerColor = c.bg, contentColor = c.primary, indicator = indicador, divider = { HorizontalDivider(color = c.line) }, tabs = separadores)
+    else ScrollableTabRow(selectedTabIndex = selecionada, containerColor = c.bg, contentColor = c.primary, edgePadding = 12.dp, indicator = indicador, divider = { HorizontalDivider(color = c.line) }, tabs = separadores)
 }
 
 /** Escolha entre poucas opções (segmentos). */
@@ -184,7 +186,8 @@ fun <T> Escolha(opcoes: List<Pair<T, String>>, valor: T, aoMudar: (T) -> Unit, m
 @Composable
 fun <T> Filtros(opcoes: List<Pair<T, String>>, valor: T, aoMudar: (T) -> Unit) {
     CompositionLocalProvider(LocalMinimumInteractiveComponentEnforcement provides false) {
-    Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+    // sem `fillMaxWidth`: numa linha com outro elemento (legenda, «Hoje») ocupava a largura toda e deixava o vizinho sem espaço (uma letra por linha)
+    Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         opcoes.forEach { (v, nome) ->
             FilterChip(selected = v == valor, onClick = { aoMudar(v) }, label = { Text(nome, style = Pulse.body2) },
                 colors = FilterChipDefaults.filterChipColors(selectedContainerColor = Pulse.cores.primary, selectedLabelColor = Pulse.cores.primaryInk, containerColor = Pulse.cores.surface, labelColor = Pulse.cores.text),
@@ -196,11 +199,18 @@ fun <T> Filtros(opcoes: List<Pair<T, String>>, valor: T, aoMudar: (T) -> Unit) {
 
 // --- Formulários ---------------------------------------------------------------------------------------------------------------------
 
+/** Só os testes de capturas a ligam: as folhas passam a desenhar-se no próprio ecrã. */
+internal var folhasEmLinha = false
+
 /** Folha de baixo para criar/editar. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun Folha(titulo: String, aoFechar: () -> Unit, conteudo: @Composable ColumnScope.() -> Unit) {
     val c = Pulse.cores
+    if (folhasEmLinha) {                 // só nas capturas de ecrãs (testes JVM): o diálogo da folha não entra na imagem
+        Column(Modifier.fillMaxWidth().background(c.surface).padding(horizontal = 16.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) { Texto(titulo, Pulse.section); conteudo() }
+        return
+    }
     ModalBottomSheet(onDismissRequest = aoFechar, containerColor = c.surface, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
         Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp).padding(bottom = 24.dp).navigationBarsPadding().imePadding(),
             verticalArrangement = Arrangement.spacedBy(12.dp)) {

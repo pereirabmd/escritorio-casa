@@ -840,3 +840,87 @@ class ClassifyTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TrocaSheets(FakeSheets):
+    """Como a FakeSheets, com o que a troca precisa da base (ler e tirar o bilhete antigo)."""
+    ANTIGO = {"data": DAY.isoformat(), "comboio": 723, "origem": "Lisboa Oriente", "destino": "Aveiro", "hora_partida": "19:39",
+              "carruagem": "22", "lugar": "77", "referencia": "CP-ANTIGO", "utilizador_id": 1}
+
+    def __init__(self, *a, **k):
+        super().__init__(*a, **k)
+        self.apagados = []
+
+    def read_ticket_por_referencia(self, ref): return dict(self.ANTIGO) if ref == "CP-ANTIGO" else None
+    def delete_ticket(self, ref): self.apagados.append(ref); return 1
+
+
+class TrocaTests(PedidoFlowBase):
+    """Troca (ADR-083): reserva o lugar novo → cancela o bilhete antigo → só então confirma. Nunca fica sem bilhete."""
+    train = 731
+
+    def setUp(self):
+        super().setUp()
+        self.leg = common.Leg(DAY, "pedido7", "lisboa_oriente", "aveiro", 731, "17:30", 7, troca_venda=125951095, troca_ref="CP-ANTIGO")
+        common.lock_path(self.leg.lock_key).unlink(missing_ok=True)
+        self.sheets = TrocaSheets()
+
+    @staticmethod
+    def cp731(**kw):
+        cp = FakeCP(**kw)
+        cp.trip = {"saleableOnline": False, "departureTime": "17:30", "arrivalTime": "20:00", "travelSections": [
+            {"trainNumber": 731, "serviceCode": {"code": "IC", "designation": "Intercidades"},
+             "departureStation": {"code": "94-31039"}, "arrivalStation": {"code": "94-38000"}}]}
+        return cp
+
+    def run_troca(self, cp, cancelar):
+        with mock.patch("consulta_cp.cancelar", side_effect=cancelar) as m:
+            code, st = self.run_pedido(cp)
+        return code, st, m
+
+    def test_cancela_o_antigo_depois_de_reservar_e_antes_de_confirmar(self):
+        ordem = []
+        cp = self.cp731()
+        original_sale = cp.create_sale_request
+        cp.create_sale_request = lambda *a: (ordem.append("reservar"), original_sale(*a))[1]
+        original_items = cp.apply_green_pass
+        cp.apply_green_pass = lambda sid: (ordem.append("desconto"), original_items(sid))[1]
+        code, st, m = self.run_troca(cp, lambda cli, venda: (ordem.append("cancelar"), {"estado": "CONFIRMED", "reembolso": "€ 0,00"})[1])
+        self.assertEqual((code, st["state"]), (0, "CONFIRMED"))
+        self.assertEqual(ordem, ["reservar", "cancelar", "desconto"])           # a CP recusa o desconto enquanto o antigo existe
+        self.assertEqual(m.call_args[0][1], 125951095)
+        self.assertEqual(self.sheets.apagados, ["CP-ANTIGO"])                    # o antigo sai da lista
+        self.assertTrue(any("Troca concluída" in t for t in self.titles()))
+        self.assertEqual(self.sheets.requests, [])                               # nada a recuperar
+
+    def test_se_nao_consegue_cancelar_liberta_a_reserva_e_mantem_o_antigo(self):
+        from consulta_cp import ConsultaErro
+        cp = self.cp731()
+        code, st, _ = self.run_troca(cp, lambda cli, venda: (_ for _ in ()).throw(ConsultaErro("nao_cancelavel", "A CP já não permite devolver este bilhete.")))
+        self.assertEqual((code, st["state"]), (2, "FAILED"))
+        self.assertIn("cancel", cp.calls)                                        # reserva libertada
+        self.assertNotIn("passengers", cp.calls)                                 # nunca chegou a confirmar o novo
+        self.assertEqual((self.sheets.apagados, self.sheets.bilhetes), ([], []))
+        self.assertTrue(any("Troca não feita" in t for t in self.titles()))
+        self.assertEqual(self.sheets.request_updates[-1][1]["ativo"], "NAO")     # deixa de tentar
+
+    def test_sem_lugar_continua_a_tentar_e_nao_cancela_nada(self):
+        cp = self.cp731(sale_script=[resp(409, {}, messages=[{"message": "Comboio esgotado"}])])
+        code, st, m = self.run_troca(cp, lambda cli, venda: {"estado": "CONFIRMED"})
+        self.assertEqual((code, st["state"]), (0, "SOLD_OUT"))
+        m.assert_not_called()                                                    # sem lugar não se cancela o antigo
+
+    def test_se_o_novo_falha_depois_de_cancelar_cria_pedido_para_recomprar_o_antigo(self):
+        cp = self.cp731(steps={"confirm": [CPError("http", "HTTP 500", resp(500, {})), CPError("http", "HTTP 500", resp(500, {}))]})
+        code, st, _ = self.run_troca(cp, lambda cli, venda: {"estado": "CONFIRMED", "reembolso": "€ 0,00"})
+        self.assertEqual(code, 2)
+        (linha, kw), = self.sheets.requests
+        self.assertEqual((linha[3], linha[4], kw.get("retry"), kw.get("intervalo"), kw.get("forcar")), (723, "19:39", "SIM", 5, "SIM"))
+        self.assertTrue(any("URGENTE" in t for t in self.titles()))
+
+    def test_pedido_normal_sem_troca_nunca_cancela(self):
+        self.leg = common.Leg(DAY, "pedido8", "lisboa_oriente", "aveiro", 731, "17:30", 8)
+        common.lock_path(self.leg.lock_key).unlink(missing_ok=True)
+        code, st, m = self.run_troca(self.cp731(), lambda cli, venda: {})
+        self.assertEqual((code, st["state"]), (0, "CONFIRMED"))
+        m.assert_not_called()

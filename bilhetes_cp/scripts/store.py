@@ -30,7 +30,8 @@ import common
 from common import BASE_DIR, TZ, env, sanitize
 
 _REQUEST_FIELDS = {"data", "origem", "destino", "comboio", "hora", "ativo", "retry", "intervalo_minutos",
-                   "forcar", "estado", "ultima_tentativa", "referencia", "mensagem"}
+                   "forcar", "estado", "ultima_tentativa", "referencia", "mensagem",
+                   "troca_venda", "troca_referencia", "troca_antecedencia_min"}
 
 
 def default_db_path() -> Path:
@@ -81,7 +82,8 @@ class SqliteStore:
     def read_requests(self) -> list[list[Any]]:
         with closing(self._connect()) as c:
             rows = c.execute("SELECT data, origem, destino, comboio, hora, ativo, retry, intervalo_minutos, forcar, "
-                             "estado, ultima_tentativa, referencia, mensagem, id, utilizador_id FROM bilhetes_pedidos ORDER BY id").fetchall()
+                             "estado, ultima_tentativa, referencia, mensagem, id, utilizador_id, "
+                             "troca_venda, troca_referencia, troca_antecedencia_min FROM bilhetes_pedidos ORDER BY id").fetchall()
         out = []
         for r in rows:
             cells = list(r)
@@ -133,9 +135,21 @@ class SqliteStore:
                       "carruagem, lugar, referencia, utilizador_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
                       (_txt(data), train, _txt(origem), _txt(destino), _txt(hora), _txt(carruagem), _txt(lugar), _txt(referencia), int(utilizador_id)))
 
+    def read_ticket_por_referencia(self, referencia: str) -> dict | None:
+        """A compra com esta referência da CP (para a troca: guardar o que se vai cancelar)."""
+        with closing(self._connect()) as c:
+            r = c.execute("SELECT data, comboio, origem, destino, hora_partida, carruagem, lugar, referencia, utilizador_id "
+                          "FROM bilhetes_compras WHERE referencia = ? LIMIT 1", (_txt(referencia),)).fetchone()
+        return dict(r) if r else None
+
+    def delete_ticket(self, referencia: str) -> int:
+        """Tira da lista a compra cancelada na CP (a troca ou um «Cancelar bilhete»): sem isto o bilhete continuava a aparecer."""
+        with closing(self._connect()) as c:
+            return c.execute("DELETE FROM bilhetes_compras WHERE referencia = ? AND referencia != ''", (_txt(referencia),)).rowcount
+
     def append_request(self, data: str, origem: str, destino: str, comboio: Any, hora: str,
                        ativo: str = "SIM", retry: str = "NAO", intervalo: Any = "",
-                       estado: str = "PENDENTE") -> None:
+                       estado: str = "PENDENTE", utilizador_id: int = 1, forcar: str = "NAO") -> None:
         try:
             train = int(float(comboio))
         except (TypeError, ValueError):
@@ -146,9 +160,9 @@ class SqliteStore:
             minutos = None
         with closing(self._connect()) as c:
             c.execute("INSERT INTO bilhetes_pedidos (data, origem, destino, comboio, hora, ativo, retry, "
-                      "intervalo_minutos, forcar, estado) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'NAO', ?)",
+                      "intervalo_minutos, forcar, estado, utilizador_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                       (_txt(data), _txt(origem), _txt(destino), train, _txt(hora), _txt(ativo).upper() or "SIM",
-                       _txt(retry).upper() or "NAO", minutos, _txt(estado) or "PENDENTE"))
+                       _txt(retry).upper() or "NAO", minutos, _txt(forcar).upper() or "NAO", _txt(estado) or "PENDENTE", int(utilizador_id)))
 
     def update_request(self, row: int, **fields: Any) -> None:
         """Escreve só os campos dados, no pedido `row` (o `N` de `pedidoN`, isto é, o id)."""
@@ -156,7 +170,7 @@ class SqliteStore:
         for name, value in fields.items():
             if name not in _REQUEST_FIELDS:
                 raise ValueError(f"coluna de Pedidos desconhecida: {name!r}")
-            if name == "intervalo_minutos":
+            if name in ("intervalo_minutos", "troca_venda", "troca_antecedencia_min"):
                 value = int(float(value)) if value not in ("", None) else None
             elif name == "comboio":
                 value = int(float(value)) if value not in ("", None) else None

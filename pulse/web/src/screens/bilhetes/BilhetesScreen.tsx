@@ -68,7 +68,7 @@ export function BilhetesScreen() {
             {aba === 'semana' && <SemanaTab dados={estado.dados} irParaSemana={setSemana} f={f} />}
             {aba === 'bilhetes' && <BilhetesTab dados={estado.dados} />}
             {aba === 'pedidos' && <PedidosTab dados={estado.dados} f={f} />}
-            {aba === 'cp' && <CpTab utilizador={utilizador} nome={estado.dados.utilizador?.nome ?? ''} />}
+            {aba === 'cp' && <CpTab utilizador={utilizador} nome={estado.dados.utilizador?.nome ?? ''} favoritos={estado.dados.favoritos} aoMudar={recarregar} />}
             {aba === 'registo' && <RegistoTab dados={estado.dados} />}
           </div>
         </>

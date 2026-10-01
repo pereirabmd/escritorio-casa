@@ -181,7 +181,8 @@ private fun ColumnScope.CalendarioTab(principal: JSONObject, atualizar: () -> Un
                         val fds = diaDaSemana(LocalDate.parse(d)).let { it == 0 || it == 6 }
                         Column(Modifier.weight(1f).height(48.dp).clip(RoundedCornerShape(8.dp))
                             .background(if (info?.txt("feriado") != null) Pulse.cores.warningBg else if (d == escolhido) Pulse.cores.surface2 else Color.Transparent)
-                            .border(if (d == hoje) 2.dp else if (d == escolhido) 1.dp else 0.dp, if (d == hoje) Pulse.cores.primary else Pulse.cores.text2, RoundedCornerShape(8.dp))
+                            .then(if (d == hoje) Modifier.border(2.dp, Pulse.cores.primary, RoundedCornerShape(8.dp)) else if (d == escolhido) Modifier.border(1.dp, Pulse.cores.text2, RoundedCornerShape(8.dp))
+                                else Modifier.border(1.dp, Pulse.cores.line, RoundedCornerShape(8.dp)))
                             .clickable { escolhido = d }, horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
                             Text(d.takeLast(2).toInt().toString(), style = Pulse.body2, color = if (fora) Pulse.cores.text2.copy(alpha = .5f) else if (fds) Pulse.cores.text2 else Pulse.cores.text)
                             Row(horizontalArrangement = Arrangement.spacedBy(2.dp), modifier = Modifier.height(6.dp)) { cores.forEach { Box(Modifier.size(5.dp).clip(CircleShape).background(Color(corCategoria(it)))) } }

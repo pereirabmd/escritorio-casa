@@ -1005,6 +1005,8 @@ class PedidoAttempt(DonoMixin, SeatMixin):
         self.login_fn, self.cp_factory = login_fn, cp_factory
         self.clock, self.sleep, self.notify = clock, sleep, notify_fn
         self.cp: CPClient | None = None
+        self._antigo_cancelado = False        # troca (ADR-083): o bilhete antigo já foi cancelado?
+        self._troca_antigo: dict | None = None
         self.origin_code = station_code(leg.origin) or ""
         self.dest_code = station_code(leg.destination) or ""
         rota = f"{common.station_label(leg.origin)}→{common.station_label(leg.destination)}"
@@ -1049,6 +1051,8 @@ class PedidoAttempt(DonoMixin, SeatMixin):
             return self._run()
         except Exception as e:  # noqa: BLE001 — rede de segurança: nada falha calado
             log.error("Erro inesperado no pedido: %s\n%s", e, traceback.format_exc())
+            if getattr(self, "_antigo_cancelado", False):
+                self.rede_de_seguranca_troca()               # já se tinha cancelado o antigo: nunca ficar sem bilhete
             notify_once(f"pedido-unexpected-{self.leg.lock_key}-{type(e).__name__}",
                         f"Erro inesperado no pedido — {self.label}", f"{type(e).__name__}: {e}.",
                         cooldown_s=1800, logger=log)
@@ -1086,8 +1090,67 @@ class PedidoAttempt(DonoMixin, SeatMixin):
         outcome, resp = self.fire_sale(sections)
         if outcome != "ok":
             return 0 if outcome == "sold_out" else 2
-        self.improve_seat(resp.body["saleID"])       # lugar ao corredor (a venda já segura o lugar: não é uma corrida)
-        return self.complete_sale(resp.body["saleID"])
+        sale_id = resp.body["saleID"]
+        if self.leg.troca_venda and not self.trocar_bilhete_antigo(sale_id):
+            return 2                                  # a troca falhou antes de cancelar: a reserva foi libertada e o bilhete antigo mantém-se
+        self.improve_seat(sale_id)                   # lugar ao corredor (a venda já segura o lugar: não é uma corrida)
+        resultado = self.complete_sale(sale_id)
+        if self.leg.troca_venda:
+            if resultado == 0:
+                self.notify(f"Troca concluída — {self.label}", f"Comprei o comboio {self.leg.train} e cancelei o bilhete antigo.", tags=["repeat"], logger=log)
+            else:
+                self.rede_de_seguranca_troca()       # o antigo já foi cancelado e o novo não confirmou: volta-se a comprar o antigo
+        return resultado
+
+    # ---- troca (ADR-083) ----------------------------------------------------------------------------------------------------
+
+    def trocar_bilhete_antigo(self, sale_id: int) -> bool:
+        """O lugar novo já está **retido**: cancela o bilhete antigo e só depois se confirma o novo (a CP recusa o desconto enquanto o antigo
+        existe, «SIV:BSC:5151»). Se não conseguir cancelar, liberta a reserva e fica tudo como estava."""
+        leg = self.leg
+        self._troca_antigo = None
+        try:
+            lido = self._sheets().read_ticket_por_referencia(leg.troca_ref) if leg.troca_ref else None
+            self._troca_antigo = lido
+        except Exception as e:  # noqa: BLE001 — o detalhe do antigo só serve à rede de segurança; nunca impede a troca
+            log.warning("Não li o bilhete antigo antes de o cancelar: %s", type(e).__name__)
+        try:
+            import consulta_cp
+            r = consulta_cp.cancelar(self.cp, int(leg.troca_venda))
+        except Exception as e:  # noqa: BLE001 — ConsultaErro, CPError ou outra: nunca se confirma o novo sem o antigo cancelado
+            motivo = getattr(e, "mensagem", None) or f"{type(e).__name__}"
+            try:
+                self.cp.cancel_sale(sale_id)
+            except Exception as e2:  # noqa: BLE001
+                log.error("Não consegui libertar a reserva %s: %s", sale_id, type(e2).__name__)
+            self.terminate("FAILED", f"Troca não feita — {self.label}",
+                           f"Reservei o lugar mas não consegui cancelar o bilhete antigo ({motivo}). Libertei a reserva; ficas com o bilhete antigo.", "ERRO")
+            self._update_request(ativo="NAO")
+            return False
+        self._antigo_cancelado = True
+        self.slog("TROCA", "CANCELADO", ref=str(leg.troca_venda))
+        if leg.troca_ref:
+            try:
+                self.sheet("delete_ticket", leg.troca_ref)
+            except Exception as e:  # noqa: BLE001
+                log.warning("Não tirei o bilhete antigo da lista: %s", type(e).__name__)
+        self.notify(f"Bilhete antigo cancelado — {self.label}",
+                    f"Cancelei o bilhete {leg.troca_ref or leg.troca_venda} (reembolso {r.get('reembolso', '') or '—'}); a confirmar o novo.", tags=["wastebasket"], logger=log)
+        return True
+
+    def rede_de_seguranca_troca(self) -> None:
+        """O antigo foi cancelado e o novo não confirmou: cria já um pedido para voltar a comprar o antigo (tentativas de 5 em 5 min) e avisa com urgência."""
+        a = getattr(self, "_troca_antigo", None)
+        aviso = ("O bilhete antigo foi cancelado e o novo não ficou confirmado. "
+                 + ("Já criei um pedido para voltar a comprar o antigo, de 5 em 5 minutos; confirma na App CP." if a else "Compra um bilhete na App CP."))
+        if a:
+            try:
+                self.sheet("append_request", a["data"], a["origem"], a["destino"], a["comboio"], a["hora_partida"], retry="SIM", intervalo=5,
+                           utilizador_id=a.get("utilizador_id") or 1, forcar="SIM")
+            except Exception as e:  # noqa: BLE001
+                log.error("Não consegui criar o pedido de recuperação: %s", type(e).__name__)
+                aviso = "O bilhete antigo foi cancelado e o novo não ficou confirmado; não consegui criar o pedido de recuperação. COMPRA JÁ um bilhete na App CP."
+        self.notify(f"URGENTE — troca incompleta — {self.label}", aviso, tags=["rotating_light"], logger=log)
 
     def search_trip(self) -> list | None:
         cache_path = common._state_file("trains.json")

@@ -17,7 +17,7 @@ export const ESTADO_VIAGEM: Record<EstadoViagem, { texto: string; classe: string
   em_curso: { texto: 'Em viagem', classe: 'pill-soon' }, passada: { texto: 'Concluída', classe: '' },
 }
 
-export const ESTADO_PEDIDO: Record<string, string> = { PENDENTE: 'Pendente', A_TENTAR: 'A tentar…', ESGOTADO: 'Esgotado', FALHOU: 'Falhou', AMBIGUO: 'Confirmar na App CP', CONFIRMADO: 'Comprado' }
+export const ESTADO_PEDIDO: Record<string, string> = { PENDENTE: 'Pendente', A_TENTAR: 'A tentar…', ESGOTADO: 'Esgotado', FALHOU: 'Falhou', AMBIGUO: 'Confirmar na App CP', CONFIRMADO: 'Comprado', EXPIRADO: 'Expirou', DESARMADO: 'Desativada' }
 export const RESULTADO_REGISTO: Record<string, string> = { CONFIRMED: 'Comprado', SALE_CREATED: 'Venda criada', SOLD_OUT: 'Esgotado', FAILED: 'Falhou', AMBIGUOUS: 'Estado incerto', OK: 'OK', FALHA: 'Falha', EXCECAO: 'Erro inesperado' }
 export const TIPO_REGISTO: Record<string, string> = { COMPRA: 'Compra', ERRO: 'Erro', PREFLIGHT: 'Verificação' }
 

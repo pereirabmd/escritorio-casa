@@ -125,6 +125,8 @@ def resumo(conn, acao: "actions.Acao", params: dict) -> str:
         f = conn.execute("SELECT comboio, hora, origem, destino FROM bilhetes_favoritos WHERE id = ?", (params.get("favorito"),)).fetchone()
         dias = ", ".join(_dia_curto(str(d)) for d in params.get("datas", []))
         return f"Marcar o comboio {f['comboio']} ({f['origem']} → {f['destino']}, {f['hora']}) em {dias}" if f else f"Marcar um favorito em {dias}"
+    if acao.nome == "bilhetes.troca_armar":
+        return f"Trocar o bilhete atual pelo comboio {params.get('comboio')} das {params.get('hora')}: reservo o lugar, cancelo o atual e confirmo o novo (de 15 em 15 min, até 30 min antes da partida)"
     partes = []
     for k, v in params.items():
         if v is None or v == "" or k in ("cid", "utilizador"):

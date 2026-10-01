@@ -129,7 +129,9 @@ def _pedido(r) -> dict:
     return {"id": r["id"], "data": r["data"], "origem": r["origem"], "destino": r["destino"], "comboio": r["comboio"],
             "hora": r["hora"], "ativo": r["ativo"], "retry": r["retry"], "intervaloMinutos": r["intervalo_minutos"],
             "forcar": r["forcar"], "estado": r["estado"], "ultimaTentativa": r["ultima_tentativa"],
-            "referencia": r["referencia"], "mensagem": r["mensagem"]}
+            "referencia": r["referencia"], "mensagem": r["mensagem"],
+            # troca (ADR-083): este pedido troca o bilhete `trocaVenda` (CP) por este comboio, assim que houver lugar
+            "trocaVenda": r["troca_venda"], "trocaReferencia": r["troca_referencia"], "trocaAntecedenciaMin": r["troca_antecedencia_min"]}
 
 
 def dados(ctx):
@@ -176,9 +178,12 @@ def proximo(ctx):
             break
     viagem = None
     if v:
+        # a compra guarda a hora de embarque e a viagem pode ter a hora a que abre a venda: casa por dia, comboio e percurso (a hora igual tem prioridade)
         c = conn.execute("SELECT carruagem, lugar, referencia FROM bilhetes_compras "
-                         "WHERE data = ? AND comboio = ? AND hora_partida = ? AND utilizador_id = ? ORDER BY id DESC LIMIT 1",
-                         (v["data"], v["comboio"], v["hora"], uid)).fetchone()
+                         "WHERE data = ? AND comboio = ? AND utilizador_id = ? "
+                         "AND (hora_partida = ? OR (lower(trim(origem)) = lower(trim(?)) AND lower(trim(destino)) = lower(trim(?)))) "
+                         "ORDER BY (hora_partida = ?) DESC, id DESC LIMIT 1",
+                         (v["data"], v["comboio"], uid, v["hora"], v["origem"], v["destino"], v["hora"])).fetchone()
         viagem = {**_viagem(v), "fimEstimado": fim.strftime("%H:%M"), "emCurso": fim - timedelta(minutes=DURACAO_ESTIMADA_MIN) <= agora,
                   "compra": {"carruagem": c["carruagem"], "lugar": c["lugar"], "referencia": c["referencia"]} if c else None}
     return 200, {"proximo": viagem, "passe": _passe(conn, agora.date(), uid)}
@@ -446,13 +451,78 @@ def cp_cancelar(ctx):
     venda = ctx.body.get("venda")
     if isinstance(venda, bool) or not isinstance(venda, int) or venda <= 0:
         raise ApiError(400, "venda_invalida", "venda inválida")
-    return 200, {"utilizadorId": uid, **_cp(uid, "cancelar", venda)}
+    r = _cp(uid, "cancelar", venda)
+    ref = r.get("referencia") or ""
+    if ref:                                           # o bilhete deixou de existir na CP: tira-o da lista (senão continuava a aparecer como comprado)
+        ctx.db().execute("DELETE FROM bilhetes_compras WHERE referencia = ? AND utilizador_id = ?", (ref, uid))
+    return 200, {"utilizadorId": uid, **r}
+
+
+# --- troca de bilhete (ADR-083) -----------------------------------------------------------------------------------------
+
+TROCA_INTERVALO_MIN = 15
+TROCA_ANTECEDENCIA_MIN = 30
+
+
+def criar_troca(ctx):
+    """Ativa a troca de um bilhete futuro por outro comboio (mesma data e sentido). Cria um pedido com repetição de 15 em 15 min: o Pi
+    reserva o lugar, **cancela o bilhete antigo** e só então confirma o novo; para 30 min antes da partida. Antes de ativar confirma na CP
+    (só leitura) que o bilhete existe e que a CP deixa devolvê-lo."""
+    _so_campos(ctx.body, {"venda", "comboio", "hora", "utilizadorId"})
+    uid = _alvo(ctx, ctx.body.get("utilizadorId"))
+    venda, comboio, hora = ctx.body.get("venda"), ctx.body.get("comboio"), ctx.body.get("hora")
+    if isinstance(venda, bool) or not isinstance(venda, int) or venda <= 0:
+        raise ApiError(400, "venda_invalida", "venda inválida")
+    if isinstance(comboio, bool) or not isinstance(comboio, int) or not 1 <= comboio <= 99999:
+        raise ApiError(400, "comboio_invalido", "comboio inválido")
+    if not isinstance(hora, str) or not re.fullmatch(r"([01]\d|2[0-3]):[0-5]\d", hora):
+        raise ApiError(400, "hora_invalida", "hora inválida (HH:MM)")
+    antigo = next((b for b in _cp(uid, "futuros")["bilhetes"] if b.get("venda") == venda), None)
+    if antigo is None:
+        raise ApiError(404, "nao_encontrado", "esse bilhete não é um bilhete futuro desta conta")
+    if antigo.get("comboio") == comboio:
+        raise ApiError(400, "mesmo_comboio", "o comboio novo é o mesmo do bilhete atual")
+    if not antigo.get("podeCancelar"):
+        raise ApiError(409, "nao_cancelavel", "este bilhete já não pode ser cancelado na CP")
+    eleg = _cp(uid, "elegibilidade", venda)
+    if not eleg.get("cancelavel"):
+        raise ApiError(409, "nao_cancelavel", eleg.get("motivo") or "a CP não deixa devolver este bilhete; não ativei a troca")
+    conn = ctx.db()
+    conn.execute("BEGIN IMMEDIATE")
+    try:
+        if conn.execute("SELECT 1 FROM bilhetes_pedidos WHERE troca_venda = ? AND ativo = 'SIM' AND estado NOT IN ('CONFIRMADO', 'AMBIGUO', 'EXPIRADO')", (venda,)).fetchone():
+            raise ApiError(409, "troca_ja_ativa", "já há uma troca ativa para este bilhete")
+        cur = conn.execute("INSERT INTO bilhetes_pedidos (data, origem, destino, comboio, hora, ativo, retry, intervalo_minutos, forcar, estado, utilizador_id, "
+                           "troca_venda, troca_referencia, troca_antecedencia_min) VALUES (?,?,?,?,?, 'SIM', 'SIM', ?, 'NAO', 'PENDENTE', ?, ?, ?, ?)",
+                           (antigo["data"], antigo["origem"], antigo["destino"], comboio, hora, TROCA_INTERVALO_MIN, uid, venda,
+                            antigo.get("referencia") or eleg.get("referencia") or "", TROCA_ANTECEDENCIA_MIN))
+        conn.execute("COMMIT")
+    except Exception:
+        conn.execute("ROLLBACK")
+        raise
+    return 201, _pedido(conn.execute("SELECT * FROM bilhetes_pedidos WHERE id = ?", (cur.lastrowid,)).fetchone())
+
+
+def desarmar_troca(ctx):
+    """Desliga uma troca ainda por fazer: o pedido deixa de tentar e o bilhete antigo mantém-se (não se cancela nada)."""
+    pid = int(ctx.groups[0])
+    conn = ctx.db()
+    _pedido_acessivel(ctx, pid)
+    r = conn.execute("SELECT troca_venda, estado FROM bilhetes_pedidos WHERE id = ?", (pid,)).fetchone()
+    if not r or not r["troca_venda"]:
+        raise ApiError(404, "nao_encontrado", "troca inexistente")
+    if r["estado"] in PEDIDO_TERMINAL:
+        raise ApiError(409, "troca_concluida", "esta troca já terminou")
+    conn.execute("UPDATE bilhetes_pedidos SET ativo = 'NAO', forcar = 'NAO', estado = 'DESARMADO', mensagem = 'Troca desativada: mantém-se o bilhete antigo.' WHERE id = ?", (pid,))
+    return 200, _pedido(conn.execute("SELECT * FROM bilhetes_pedidos WHERE id = ?", (pid,)).fetchone())
 
 
 ROUTES = [
     ("GET", r"^/bilhetes/cp/futuros$", cp_futuros),
     ("GET", r"^/bilhetes/cp/passe$", cp_passe),
     ("POST", r"^/bilhetes/cp/cancelar$", cp_cancelar),
+    ("POST", r"^/bilhetes/trocas$", criar_troca),
+    ("DELETE", r"^/bilhetes/trocas/(\d{1,12})$", desarmar_troca),
     ("GET", r"^/bilhetes/eu$", eu),
     ("GET", r"^/bilhetes/admin/utilizadores$", admin_utilizadores),
     ("GET", r"^/bilhetes/dados$", dados),

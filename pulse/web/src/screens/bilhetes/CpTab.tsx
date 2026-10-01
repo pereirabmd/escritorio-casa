@@ -1,6 +1,6 @@
-import { useState } from 'react'
+import { useState, type FormEvent } from 'react'
 import { api, mensagemDeErro } from '../../api/client'
-import type { BilheteNaCp, PasseNaCp } from '../../api/types'
+import type { BilheteNaCp, FavoritoBilhetes, PasseNaCp } from '../../api/types'
 import { useAvisos } from '../../components/Avisos'
 import { BrandLoading, Botao, Notice } from '../../components/ui'
 import { diaCurto } from '../../lib/bilhetes'
@@ -9,7 +9,60 @@ import { useAcao } from '../../lib/useAcao'
 import { useAsync } from '../../lib/useAsync'
 
 /** O que a CP diz (ao vivo, demora alguns segundos): a validade do Passe Verde e os bilhetes futuros, com «Cancelar» (ADR-075). */
-export function CpTab({ utilizador, nome }: { utilizador: number | null; nome: string }) {
+/** «Trocar por outro comboio» (ADR-083): quando houver lugar no novo, reserva-o, cancela este bilhete e confirma o novo. */
+function Troca({ b, utilizador, favoritos, aoMudar }: { b: BilheteNaCp; utilizador: number | null; favoritos: FavoritoBilhetes[]; aoMudar: () => void }) {
+  const avisos = useAvisos()
+  const { ocupado, erro, executar, limparErro } = useAcao(aoMudar)
+  const [aberta, setAberta] = useState(false)
+  const [comboio, setComboio] = useState('')
+  const [hora, setHora] = useState('')
+  const [pedirConfirmacao, setPedirConfirmacao] = useState(false)
+  const mesmoSentido = favoritos.filter((f) => f.origem.toLowerCase() === b.origem.toLowerCase() && f.destino.toLowerCase() === b.destino.toLowerCase() && f.comboio !== b.comboio)
+  const valido = /^\d{1,5}$/.test(comboio) && Number(comboio) > 0 && Number(comboio) !== b.comboio && /^([01]\d|2[0-3]):[0-5]\d$/.test(hora)
+
+  async function ativar() {
+    const r = await executar(`troca-${b.venda}`, 'bilhetes.troca_armar', { venda: b.venda, comboio: Number(comboio), hora, ...(utilizador ? { utilizador } : {}) }, true)
+    if (r) {
+      setAberta(false); setPedirConfirmacao(false); setComboio(''); setHora('')
+      avisos.mostrar(`Troca ativada: tento o comboio ${comboio} de 15 em 15 min, até 30 min antes da partida.`)
+    }
+  }
+  if (!aberta) return <div><button type="button" className="link-btn" onClick={() => setAberta(true)}>Trocar por outro comboio</button></div>
+  return (
+    <form className="stack" aria-label={`Trocar o bilhete de ${diaCurto(b.data)}`} onSubmit={(ev: FormEvent) => { ev.preventDefault(); if (valido) setPedirConfirmacao(true) }}>
+      <p className="t-body2">Do mesmo dia e sentido. Quando houver lugar no comboio novo, o Pulse reserva-o, <b>cancela este bilhete</b> e confirma o novo. Tenta de 15 em 15 min, até 30 min antes da partida.</p>
+      {mesmoSentido.length > 0 && (
+        <select className="input input-sm" aria-label="Favoritos para a troca" value="" onChange={(e) => { const f = mesmoSentido[Number(e.target.value)]; if (f) { setComboio(String(f.comboio)); setHora(f.hora); setPedirConfirmacao(false) } }}>
+          <option value="">Favoritos…</option>
+          {mesmoSentido.map((f, n) => <option key={f.id} value={n}>{f.apelido ? `${f.apelido} · ` : ''}{f.comboio} ({f.hora})</option>)}
+        </select>
+      )}
+      <div className="quick">
+        <label className="sr-only" htmlFor={`tc-${b.venda}`}>Comboio novo</label>
+        <input id={`tc-${b.venda}`} className="input input-sm peso-input" inputMode="numeric" placeholder="Comboio" value={comboio} onChange={(e) => { setComboio(e.target.value); setPedirConfirmacao(false) }} />
+        <label className="sr-only" htmlFor={`th-${b.venda}`}>Hora de partida do comboio novo</label>
+        <input id={`th-${b.venda}`} type="time" className="input input-sm" value={hora} onChange={(e) => { setHora(e.target.value); setPedirConfirmacao(false) }} />
+      </div>
+      {erro && <Notice tipo="error">{erro} <button type="button" className="link-btn" onClick={limparErro}>Fechar</button></Notice>}
+      {pedirConfirmacao ? (
+        <div className="stack" role="group" aria-label="Confirmar a troca">
+          <p className="t-body2">Confirmas? O bilhete atual (comboio {b.comboio}, {b.hora}) <b>só é cancelado depois de o lugar no comboio {comboio} estar reservado</b>.</p>
+          <div className="quick">
+            <Botao variante="danger" pequeno carregando={ocupado === `troca-${b.venda}`} disabled={ocupado !== null} onClick={() => void ativar()}>Ativar troca</Botao>
+            <Botao variante="secondary" pequeno disabled={ocupado !== null} onClick={() => setPedirConfirmacao(false)}>Voltar</Botao>
+          </div>
+        </div>
+      ) : (
+        <div className="quick">
+          <Botao type="submit" pequeno disabled={!valido || ocupado !== null}>Continuar</Botao>
+          <Botao variante="secondary" pequeno onClick={() => setAberta(false)}>Fechar</Botao>
+        </div>
+      )}
+    </form>
+  )
+}
+
+export function CpTab({ utilizador, nome, favoritos = [], aoMudar = () => {} }: { utilizador: number | null; nome: string; favoritos?: FavoritoBilhetes[]; aoMudar?: () => void }) {
   const q = utilizador ? `?utilizador=${utilizador}` : ''
   const [passe, recarregarPasse] = useAsync(() => api.get<{ passes: PasseNaCp[] }>(`/tickets/cp/passe${q}`), q)
   const [bilhetes, recarregarBilhetes] = useAsync(() => api.get<{ bilhetes: BilheteNaCp[] }>(`/tickets/cp/futuros${q}`), q)
@@ -73,6 +126,7 @@ export function CpTab({ utilizador, nome }: { utilizador: number | null; nome: s
                   </div>
                 )
                 : <div><button type="button" className="link-btn link-danger" onClick={() => setACancelar(b.venda)}>Cancelar bilhete</button></div>)}
+              {b.podeCancelar && aCancelar !== b.venda && <Troca b={b} utilizador={utilizador} favoritos={favoritos} aoMudar={aoMudar} />}
             </article>
           )))}
       </section>

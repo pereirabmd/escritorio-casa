@@ -137,7 +137,7 @@ fun ColumnScope.PiscinaTab(atualizar: () -> Unit) {
                         Meta(linha)
                         if (k.txtOu("notaLonga").isNotEmpty()) Meta(k.txtOu("notaLonga"))
                     }
-                    Botao(if (log) "Registar agora" else "Marcar feita hoje", {
+                    Botao(if (log) "Registar agora" else "Feita hoje", {
                         acoes.executar(k.txtOu("id"), "tarefas.piscina_registar", jo("item" to k.txtOu("id"))) { r ->
                             val ant = r.obj("anterior")
                             avisos.mostrar("${k.txtOu("nome")} registada.", ant?.let { a ->
