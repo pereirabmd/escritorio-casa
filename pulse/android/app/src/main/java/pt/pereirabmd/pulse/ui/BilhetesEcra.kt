@@ -405,11 +405,12 @@ private fun TrocaBilhete(b: JSONObject, utilizador: Int?, favoritos: List<JSONOb
     var inicioHora by remember { mutableStateOf("") }
     var confirmar by remember { mutableStateOf(false) }
     val mesmoSentido = favoritos.filter { it.txtOu("origem").equals(b.txtOu("origem"), true) && it.txtOu("destino").equals(b.txtOu("destino"), true) && it.inteiro("comboio") != b.inteiroOuNull("comboio") }
+        .sortedWith(compareBy({ it.txtOu("hora") >= b.txtOu("hora") }, { it.txtOu("hora") }))     // primeiro os mais cedo que o bilhete (o plano B típico)
     val inicio = if (inicioData.isNotEmpty()) "${inicioData}T${inicioHora.ifEmpty { "00:00" }}" else ""
     val valido = n in 1..99999 && Regex("^([01]\\d|2[0-3]):[0-5]\\d$").matches(hora)
     if (!aberta) { LinkBtn("Trocar por outro comboio", { aberta = true }); return }
     Texto2("Do mesmo dia e sentido. Quando houver lugar no comboio novo, o Pulse reserva-o, cancela este bilhete e confirma o novo. Tenta de 15 em 15 min, até 30 min antes da partida.")
-    if (mesmoSentido.isNotEmpty()) Seletor("Favoritos para a troca", mesmoSentido.mapIndexed { i, f -> i to ((f.txtOu("apelido").takeIf { it.isNotEmpty() }?.let { "$it · " } ?: "") + "${f.inteiro("comboio")} (${f.txtOu("hora")})") }, null, { i ->
+    if (mesmoSentido.isNotEmpty()) Seletor("Favoritos para a troca", mesmoSentido.mapIndexed { i, f -> i to ((f.txtOu("apelido").takeIf { it.isNotEmpty() }?.let { "$it · " } ?: "") + "${f.inteiro("comboio")} (${f.txtOu("hora")})" + if (f.txtOu("hora") < b.txtOu("hora")) " · mais cedo" else "") }, null, { i ->
         val f = mesmoSentido[i]; comboio = f.inteiro("comboio").toString(); hora = f.txtOu("hora"); confirmar = false
     }, vazio = "Escolher…")
     Campo("Comboio novo", comboio, { comboio = it.filter(Char::isDigit).take(5); confirmar = false }, teclado = androidx.compose.ui.text.input.KeyboardType.Number)

@@ -20,7 +20,7 @@ function Troca({ b, utilizador, favoritos, aoMudar }: { b: BilheteNaCp; utilizad
   const [sim, setSim] = useState<{ a: boolean; texto: string; ok?: boolean } | null>(null)   // «Simular devolução» (só leitura)
   const [inicio, setInicio] = useState('')                       // «AAAA-MM-DDTHH:MM»: só começa a tentar a partir daqui; vazio = já
   const [pedirConfirmacao, setPedirConfirmacao] = useState(false)
-  const mesmoSentido = favoritos.filter((f) => f.origem.toLowerCase() === b.origem.toLowerCase() && f.destino.toLowerCase() === b.destino.toLowerCase() && f.comboio !== b.comboio)
+  const mesmoSentido = favoritos.filter((f) => f.origem.toLowerCase() === b.origem.toLowerCase() && f.destino.toLowerCase() === b.destino.toLowerCase() && f.comboio !== b.comboio).sort((x, y) => (x.hora < b.hora ? 0 : 1) - (y.hora < b.hora ? 0 : 1) || x.hora.localeCompare(y.hora))
   const valido = /^\d{1,5}$/.test(comboio) && Number(comboio) > 0 && /^([01]\d|2[0-3]):[0-5]\d$/.test(hora)
 
   const mesmoComboio = Number(comboio) === b.comboio                // «mudar de lugar» (ADR-087)
@@ -48,7 +48,7 @@ function Troca({ b, utilizador, favoritos, aoMudar }: { b: BilheteNaCp; utilizad
       {mesmoSentido.length > 0 && (
         <select className="input input-sm" aria-label="Favoritos para a troca" value="" onChange={(e) => { const f = mesmoSentido[Number(e.target.value)]; if (f) { setComboio(String(f.comboio)); setHora(f.hora); setPedirConfirmacao(false) } }}>
           <option value="">Favoritos…</option>
-          {mesmoSentido.map((f, n) => <option key={f.id} value={n}>{f.apelido ? `${f.apelido} · ` : ''}{f.comboio} ({f.hora})</option>)}
+          {mesmoSentido.map((f, n) => <option key={f.id} value={n}>{f.apelido ? `${f.apelido} · ` : ''}{f.comboio} ({f.hora}){f.hora < b.hora ? ' · mais cedo' : ''}</option>)}
         </select>
       )}
       <div className="quick">
