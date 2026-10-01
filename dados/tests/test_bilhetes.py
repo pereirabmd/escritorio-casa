@@ -34,6 +34,23 @@ class BilhetesApiTest(ApiBase):
         c.execute("DELETE FROM bilhetes_utilizadores WHERE id > 1"); c.execute("DELETE FROM bilhetes_compras"); c.execute("DELETE FROM bilhetes_logs")
         c.close()
 
+    def test_historico_so_do_administrador_com_o_nome_de_quem_viaja(self):
+        hoje = datetime.now().date()
+        c = self.bd()
+        c.execute("INSERT INTO bilhetes_utilizadores (id, nome, email, ativo) VALUES (2, 'Camila', 'camila@example.com', 1)")
+        c.execute("INSERT INTO bilhetes_viagens (id, data, origem, destino, comboio, hora, ativo, utilizador_id) VALUES (102, ?, 'A', 'B', 731, '17:30', 'SIM', 2)", (hoje.isoformat(),))
+        c.execute("DELETE FROM bilhetes_tentativas")
+        for ts, perna, res in ((f"{hoje}T17:20:00.100+01:00", "v102", "sold_out"), (f"{hoje - timedelta(days=100)}T10:00:00.000+01:00", "v102", "ok")):
+            c.execute("INSERT INTO bilhetes_tentativas (ts, data_viagem, perna, comboio, fase, http, resultado, rtt_ms) VALUES (?,?,?,?,?,?,?,?)",
+                      (ts, hoje.isoformat(), perna, 731, "retencao", 200, res, 90))
+        c.close()
+        s, b, _ = self.pedir("GET", "/bilhetes/historico")
+        self.assertEqual(s, 200)
+        self.assertEqual([(p["perna"], p["pessoa"], p["resultado"], p["fase"], p["rttMs"]) for p in b["pedidos"]], [("v102", "Camila", "sold_out", "retencao", 90)])
+        self.assertEqual(self.pedir("GET", "/bilhetes/historico?dias=91")[0], 400)
+        c = self.bd(); c.execute("UPDATE bilhetes_utilizadores SET admin = 0 WHERE id = 1"); c.close()
+        self.assertEqual(self.pedir("GET", "/bilhetes/historico")[0], 403)
+
     def test_acesso(self):
         self.assertEqual(self.pedir("GET", "/bilhetes/dados", token="t" * 30 + "outro")[0], 403)
         self.assertEqual(self.pedir("GET", "/bilhetes/dados", token=None)[0], 401)

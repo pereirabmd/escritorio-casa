@@ -61,7 +61,7 @@ def test_preparar_mes_e_categorias_e_lembretes(conn, dados_falso):
     correr(conn, dados_falso, "financas.lembrete_editar", {"lembrete": 2, "ativo": False})
     correr(conn, dados_falso, "financas.lembrete_eliminar", {"lembrete": 2}, confirmado=True)
     assert [(m, c, b) for m, c, b, _ in FalsoDados.escritas] == [
-        ("POST", "/financas/meses/2026-10/preparar", None), ("POST", "/financas/categorias", {"nome": "Ginásio"}),
+        ("POST", "/financas/meses/2026-10/preparar", {}), ("POST", "/financas/categorias", {"nome": "Ginásio"}),
         ("PUT", "/financas/categorias/4", {"cor": "#112233"}), ("DELETE", "/financas/categorias/4", None),
         ("POST", "/financas/lembretes", {"titulo": "IRS", "nota": "", "data": "2026-10-20", "hora": "09:00", "repeticao": "mensal"}),
         ("PUT", "/financas/lembretes/2", {"ativo": False}), ("DELETE", "/financas/lembretes/2", None)]

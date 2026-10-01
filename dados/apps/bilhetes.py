@@ -517,6 +517,48 @@ def desarmar_troca(ctx):
     return 200, _pedido(conn.execute("SELECT * FROM bilhetes_pedidos WHERE id = ?", (pid,)).fetchone())
 
 
+MAX_HISTORICO = 5000
+
+
+def historico(ctx):
+    """Histórico (até 90 dias) de TODOS os pedidos feitos à CP nas compras — o que o Pi grava em `bilhetes_tentativas` (hora, fase, resposta,
+    tempo de resposta) — mais os desfechos de cada compra (`bilhetes_logs`). Só leitura e só o administrador (o Bruno): vê as viagens de todos,
+    cada linha com o nome de quem viaja (a `perna` 'v<id>' / 'pedido<id>' diz a que viagem ou pedido pertence)."""
+    conn = ctx.db()
+    if not _e_admin(_utilizador(ctx)):
+        raise ApiError(403, "so_administrador", "só o administrador vê o histórico de pedidos")
+    try:
+        dias = int(ctx.query.get("dias") or 90)
+    except ValueError:
+        raise ApiError(400, "dias_invalido", "dias inválido") from None
+    if not 1 <= dias <= 90:
+        raise ApiError(400, "dias_invalido", "dias tem de estar entre 1 e 90")
+    desde = (datetime.now(ctx.tz) - timedelta(days=dias)).replace(tzinfo=None).isoformat(timespec="seconds")
+    nomes = {r["id"]: r["nome"] for r in conn.execute("SELECT id, nome FROM bilhetes_utilizadores")}
+    dono = {}
+    for r in conn.execute("SELECT id, utilizador_id FROM bilhetes_viagens"):
+        dono[f"v{r['id']}"] = r["utilizador_id"]
+    for r in conn.execute("SELECT id, utilizador_id FROM bilhetes_pedidos"):
+        dono[f"pedido{r['id']}"] = r["utilizador_id"]
+
+    def pessoa(perna):
+        return nomes.get(dono.get(perna), "")
+
+    tent = conn.execute("SELECT ts, data_viagem, perna, comboio, fase, http, resultado, rel_t_ms, rtt_ms, ligacao_nova, codigo, detalhe "
+                        "FROM bilhetes_tentativas WHERE ts >= ? ORDER BY ts DESC, id DESC LIMIT ?", (desde, MAX_HISTORICO + 1)).fetchall()
+    logs = conn.execute("SELECT ts, tipo, data_viagem, perna, comboio, status_http, resultado, referencia, mensagem_erro "
+                        "FROM bilhetes_logs WHERE ts >= ? ORDER BY id DESC LIMIT ?", (desde, MAX_HISTORICO)).fetchall()
+    return 200, {
+        "dias": dias, "truncado": len(tent) > MAX_HISTORICO,
+        "pedidos": [{"ts": r["ts"], "data": r["data_viagem"], "perna": r["perna"], "pessoa": pessoa(r["perna"]), "comboio": r["comboio"],
+                     "fase": r["fase"], "http": r["http"], "resultado": r["resultado"], "relTms": r["rel_t_ms"], "rttMs": r["rtt_ms"],
+                     "ligacaoNova": r["ligacao_nova"], "codigo": r["codigo"], "detalhe": r["detalhe"]} for r in tent[:MAX_HISTORICO]],
+        "desfechos": [{"ts": r["ts"], "tipo": r["tipo"], "data": r["data_viagem"], "perna": r["perna"], "pessoa": pessoa(r["perna"]),
+                       "comboio": r["comboio"], "status": r["status_http"], "resultado": r["resultado"], "referencia": r["referencia"],
+                       "erro": r["mensagem_erro"]} for r in logs],
+    }
+
+
 ROUTES = [
     ("GET", r"^/bilhetes/cp/futuros$", cp_futuros),
     ("GET", r"^/bilhetes/cp/passe$", cp_passe),
@@ -527,6 +569,7 @@ ROUTES = [
     ("GET", r"^/bilhetes/admin/utilizadores$", admin_utilizadores),
     ("GET", r"^/bilhetes/dados$", dados),
     ("GET", r"^/bilhetes/proximo$", proximo),
+    ("GET", r"^/bilhetes/historico$", historico),
     ("PUT", r"^/bilhetes/semana$", gravar_semana),
     ("PUT", r"^/bilhetes/passe$", gravar_passe),
     ("PUT", r"^/bilhetes/pedidos/(\d{1,12})$", gravar_pedido),

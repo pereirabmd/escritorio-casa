@@ -158,7 +158,7 @@ def test_passe_pedidos(conn, dados_falso):
     correr(conn, dados_falso, "bilhetes.pedido_forcar", {"pedido": 4})
     assert [(m, c, b) for m, c, b, _ in FalsoDados.escritas] == [
         ("PUT", "/bilhetes/passe", {"dataUltimaCompra": "2026-09-30"}), ("PUT", "/bilhetes/passe", {"dataUltimaCompra": "2026-09-30", "validadeDias": 30}),
-        ("PUT", "/bilhetes/pedidos/4", {"retry": True, "intervaloMinutos": 20}), ("POST", "/bilhetes/pedidos/4/forcar", None)]
+        ("PUT", "/bilhetes/pedidos/4", {"retry": True, "intervaloMinutos": 20}), ("POST", "/bilhetes/pedidos/4/forcar", {})]   # corpo vazio, mas JSON (o dados-api exige o Content-Type)
     with pytest.raises(ContaErro):
         correr(conn, dados_falso, "bilhetes.pedido_repetir", {"pedido": 4, "retry": True, "intervaloMinutos": 0})
 

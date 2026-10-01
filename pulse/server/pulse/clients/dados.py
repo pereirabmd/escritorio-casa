@@ -32,6 +32,8 @@ class DadosClient:
         if not self.service_key:
             raise ModuloIndisponivel("PULSE_SERVICE_KEY não configurada")
         url = self.base_url + caminho + ("?" + urllib.parse.urlencode(query) if query else "")
+        if corpo is None and metodo in ("POST", "PUT", "PATCH"):
+            corpo = {}                      # o dados-api exige `application/json` em todo o POST/PUT, mesmo sem dados («Tentar agora»)
         dados = json.dumps(corpo).encode() if corpo is not None else None
         headers = {"X-Pulse-Key": self.service_key, "X-Pulse-User": utilizador}
         if dados is not None:

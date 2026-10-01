@@ -139,6 +139,18 @@ class HoldTests(HoldBase):
         self.assertFalse(any(n[0].startswith("Sem lugar retido") for n in self.notes))
         self.assertEqual(len([n for n in self.notes if n[0].startswith("Lugar reservado")]), 1)
 
+    def test_depois_de_3_tentativas_sem_lugar_avisa_uma_so_vez(self):
+        cp = FakeCP(sale_script=[ESGOTADO()] * 200 + [resp(200, {"saleID": 777})])
+        self.run_early(cp)
+        tres = [n for n in self.notes if n[0].startswith("Sem lugar reservado (3 tentativas)")]
+        self.assertEqual(len(tres), 1)                                            # uma só vez, mesmo com dezenas de tentativas
+        self.assertIn("3 tentativas", tres[0][1]); self.assertIn("não há lugares", tres[0][1])
+
+    def test_com_menos_de_3_tentativas_falhadas_nao_ha_aviso_das_tentativas(self):
+        cp = FakeCP(sale_script=[ESGOTADO()] * 2 + [resp(200, {"saleID": 777})])
+        self.run_early(cp)
+        self.assertFalse(any(n[0].startswith("Sem lugar reservado") for n in self.notes))
+
     def test_o_desconto_tenta_com_intervalos_curtos_no_inicio(self):
         cp = FakeCP(steps={"items": [RECUSA()] * 5})
         self.run_early(cp)

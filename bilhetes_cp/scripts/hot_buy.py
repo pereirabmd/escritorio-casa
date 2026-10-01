@@ -707,6 +707,7 @@ class Buyer(DonoMixin, SeatMixin):
         interval = float(cfg("hold_retry_interval_s", 15))
         attempt = 0
         avisou_falta = False
+        avisou_tentativas = False
         ultimo = ""                                   # o motivo mais recente da CP, para o aviso de T-1 min
         while True:
             attempt += 1
@@ -728,6 +729,8 @@ class Buyer(DonoMixin, SeatMixin):
                     return True
                 ultimo = f"{kind}: {detail[:100]}"
                 log.info("Retenção #%d sem venda [%s]: %s | %s", attempt, kind, detail[:120], timing)
+            if not avisou_tentativas and attempt >= int(cfg("hold_notify_after_attempts", 3)):
+                avisou_tentativas = self._avisar_sem_lugar_tentativas(attempt, ultimo)
             if not avisou_falta and self.clock() >= self.fire_ts - 60:
                 avisou_falta = self._avisar_sem_lugar(ultimo)
             if self.clock() + interval >= deadline:
@@ -744,6 +747,15 @@ class Buyer(DonoMixin, SeatMixin):
         self.notify(f"Lugar reservado — {self.label}",
                     f"Retive o lugar antes da abertura.{onde} A compra fecha às {hms(self.fire_ts)}, quando o desconto do passe abrir.",
                     tags=["seat"], logger=log)
+
+    def _avisar_sem_lugar_tentativas(self, tentativas: int, motivo: str) -> bool:
+        """Aviso único: depois de N tentativas de retenção seguidas ainda não há lugar retido (antes de T). Continua a tentar."""
+        causa = "a CP diz que não há lugares" if "sold_out" in motivo else f"a CP respondeu: {motivo or 'sem resposta'}"
+        self.notify(f"Sem lugar reservado ({tentativas} tentativas) — {self.label}",
+                    f"Fiz {tentativas} tentativas de reter lugar antes da abertura ({hms(self.fire_ts)}) e não consegui: {causa}. "
+                    "Continuo a tentar até à abertura; vai vendo alternativas na App CP.",
+                    tags=["warning"], logger=log)
+        return True
 
     def _avisar_sem_lugar(self, motivo: str) -> bool:
         """Aviso a T-1 min: ainda não há lugar retido. Dá tempo para ver alternativas; a app continua a tentar a T. Devolve `True` (avisado)."""
