@@ -27,7 +27,7 @@ Legenda: **Feito** · **Pendente** · **Só Android** / **Só Web** (decidido).
 | Compras › Última chamada (aviso a todos antes de ir às compras; uma por ida) | Feito | Feito | ADR-076 |
 | Bilhetes CP › Histórico (todos os pedidos à CP e desfecho das compras; só administrador) | Feito | Feito | ADR-085; Android 0.4.4 (publicado a 01/10/2026) |
 | Bilhetes CP › Troca: hora do comboio novo da CP e início agendado | Feito | Feito | ADR-086; Android 0.4.5 (publicado a 01/10/2026) |
-| Bilhetes CP › Troca pelo mesmo comboio (bilhete sem desconto → com desconto) e Simular devolução | Feito | Feito | ADR-087/088/089; Android 0.4.8 (por publicar) |
+| Bilhetes CP › Troca pelo mesmo comboio (bilhete sem desconto → com desconto) e Simular devolução | Feito | Feito | ADR-087/088/089; Android 0.4.8 (publicado a 02/10/2026) |
 | Bilhetes CP › Favoritos (seletor, guardar, remover; marcar por voz) | Feito | Feito | ADR-078; Android 0.4.1 |
 | Assistente de voz (toque no logotipo; propostas com confirmação; leitura das respostas por voz) | — | **Só Android** | ADR-077/079/080; exceção à paridade, decidida com o utilizador |
 | Fila offline / cache | — | **Pendente** | fase 5 (Room, WorkManager) |
