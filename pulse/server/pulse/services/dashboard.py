@@ -41,15 +41,21 @@ def rto_semana(c: DadosClient, email: str, hoje: date) -> dict:
 
 
 def peso_hoje(c: DadosClient, email: str, hoje: date) -> dict:
-    def ultimo_desde(desde: str | None):
+    def registos_desde(desde: str | None) -> list:
         _, corpo = c.pedir("GET", "/peso/registos", email, {"desde": desde} if desde else None)
-        regs = (corpo or {}).get("registos", [])
-        return regs[-1] if regs else None
+        return (corpo or {}).get("registos", [])
 
-    ultimo = ultimo_desde((hoje - timedelta(days=90)).isoformat()) or ultimo_desde(None)
+    regs = registos_desde((hoje - timedelta(days=90)).isoformat()) or registos_desde(None)
+    ultimo = regs[-1] if regs else None
+    desde7 = (hoje - timedelta(days=6)).isoformat()
+    por_dia: dict[str, float] = {}
+    for r in regs:                                                   # os registos vêm por ordem: fica o último de cada dia
+        if r["quando"][:10] >= desde7:
+            por_dia[r["quando"][:10]] = r["peso"]
     return {"ultimo": ultimo and {"quando": ultimo["quando"], "peso": ultimo["peso"]},
             "registadoHoje": bool(ultimo and ultimo["quando"][:10] == hoje.isoformat()),
-            "sugestao": ultimo["peso"] if ultimo else None}      # pré-preenche o campo de hoje
+            "sugestao": ultimo["peso"] if ultimo else None,          # pré-preenche o campo de hoje
+            "ultimos7": [{"data": d, "peso": por_dia[d]} for d in sorted(por_dia)]}     # o minigráfico dos últimos 7 dias (hoje incluído)
 
 
 def contas_a_pagar(c: DadosClient, email: str, hoje: date) -> dict:

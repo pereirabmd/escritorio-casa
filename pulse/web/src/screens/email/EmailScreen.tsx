@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { Link } from 'react-router-dom'
+import { useEffect, useState } from 'react'
+import { Link, useSearchParams } from 'react-router-dom'
 import { api, mensagemDeErro } from '../../api/client'
 import type { CaixaGoogle, MensagemDetalhe, MensagemGoogle } from '../../api/types'
 import { useAvisos } from '../../components/Avisos'
@@ -66,11 +66,13 @@ function Detalhe({ m, executar, ocupado, avisos, aoMudar }: { m: MensagemGoogle;
 export function EmailScreen() {
   const [filtro, setFiltro] = useState<Filtro>('importantes')
   const [conta, setConta] = useState<number | null>(null)
-  const [aberta, setAberta] = useState<string | null>(null)
+  const [params] = useSearchParams()
+  const [aberta, setAberta] = useState<string | null>(() => params.get('mensagem'))          // «conta:id»: o toque numa mensagem do Hoje abre-a aqui
   const [estado, recarregar] = useAsync(() => api.get<CaixaGoogle>(`/mail?filtro=${filtro}${conta ? `&conta=${conta}` : ''}`), `${filtro}|${conta}`)
   const { ocupado, erro, executar, limparErro } = useAcao(() => undefined)
   const avisos = useAvisos()
   const chave = (m: MensagemGoogle) => `${m.conta}:${m.id}`
+  useEffect(() => { if (aberta && estado.fase === 'pronto') document.querySelector('li.open')?.scrollIntoView?.({ block: 'center' }) }, [estado.fase]) // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <>

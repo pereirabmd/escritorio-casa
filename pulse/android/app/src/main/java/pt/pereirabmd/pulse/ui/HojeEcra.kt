@@ -6,6 +6,8 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.runtime.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.Alignment
@@ -29,6 +31,10 @@ private val DIA = listOf("S", "T", "Q", "Q", "S", "S", "D")
 
 @Composable
 private fun Abrir(rota: String) { val abrir = LocalAbrir.current; LinkBtn("Abrir", { abrir(rota.trimStart('/')) }) }
+
+/** O toque no cartão: leva ao módulo (`rota`), ou a uma aba/mensagem dele (`email/<conta>:<id>`). */
+@Composable
+private fun tocar(rota: String): () -> Unit { val abrir = LocalAbrir.current; return { abrir(rota.trimStart('/')) } }
 
 /** Um módulo que não está `ok` mostra o motivo no próprio cartão; o resto do Hoje continua a funcionar. */
 @Composable
@@ -67,7 +73,7 @@ private fun Problemas(emails: List<String>) {
 @Composable
 private fun CartaoCalendario(m: Modulo<CalendarioDados>) {
     if (m.estado == "nao_ligado") return LigarGoogle(Icone.CALENDARIO, "Próximos eventos", "Liga uma conta Google para veres aqui os próximos eventos.")
-    Cartao(Icone.CALENDARIO, "Próximos eventos", extra = { Abrir("/calendario") }) {
+    Cartao(Icone.CALENDARIO, "Próximos eventos", aoTocar = tocar("/calendario"), extra = { Abrir("/calendario") }) {
         Estado(m) { d ->
             if (d.eventos.isEmpty()) Texto2("Sem eventos marcados.")
             else d.eventos.forEach { e ->
@@ -84,7 +90,7 @@ private fun CartaoCalendario(m: Modulo<CalendarioDados>) {
 private fun CartaoTarefas(m: Modulo<TarefasDados>, acoes: Acoes, hoje: String, otimista: ((Hoje) -> Hoje) -> Unit, recarregarTudo: () -> Unit) {
     val avisos = LocalAvisos.current
     var adiar by remember { mutableStateOf<Tarefa?>(null) }
-    Cartao(Icone.TAREFAS, "Tarefas de hoje", extra = {
+    Cartao(Icone.TAREFAS, "Tarefas de hoje", aoTocar = tocar("/tarefas"), extra = {
         m.dados?.takeIf { it.totalHoje > 0 }?.let { Meta("${it.feitasHoje} de ${it.totalHoje}") }; Abrir("/tarefas")
     }) {
         Estado(m) { d ->
@@ -129,12 +135,12 @@ private fun CartaoTarefas(m: Modulo<TarefasDados>, acoes: Acoes, hoje: String, o
 
 @Composable
 private fun CartaoEmail(m: Modulo<EmailDados>) {
-    val contexto = androidx.compose.ui.platform.LocalContext.current
+    val abrirMensagem = LocalAbrir.current
     if (m.estado == "nao_ligado") return LigarGoogle(Icone.EMAIL, "Emails importantes", "Liga uma conta Google para veres aqui os emails importantes por ler.")
-    Cartao(Icone.EMAIL, "Emails importantes", extra = { m.dados?.takeIf { it.porLer > 0 }?.let { Meta("${it.porLer} por ler") }; Abrir("/email") }) {
+    Cartao(Icone.EMAIL, "Emails importantes", aoTocar = tocar("/email"), extra = { m.dados?.takeIf { it.porLer > 0 }?.let { Meta("${it.porLer} por ler") }; Abrir("/email") }) {
         Estado(m) { d ->
             if (d.mensagens.isEmpty()) Texto2("Nada importante por ler.")
-            else d.mensagens.forEach { x -> Linha(Modifier.clip(RoundedCornerShape(Pulse.rXs)).clickable(onClickLabel = "Abrir no Gmail") { abrirEndereco(contexto, x.link) }) { Texto(x.de, Pulse.body.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold)); Texto2(x.assunto) } }
+            else d.mensagens.forEach { x -> Linha(Modifier.clip(RoundedCornerShape(Pulse.rXs)).clickable(onClickLabel = "Abrir a mensagem") { abrirMensagem("email/${x.conta}:${x.id}") }) { Texto(x.de, Pulse.body.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold)); Texto2(x.assunto) } }
             if (d.porLer > d.mensagens.size) Mais(d.porLer - d.mensagens.size)
             Problemas(d.comProblemas)
         }
@@ -143,7 +149,7 @@ private fun CartaoEmail(m: Modulo<EmailDados>) {
 
 @Composable
 private fun CartaoBilhetes(m: Modulo<BilhetesDados>) {
-    Cartao(Icone.BILHETE, "Próximo comboio", extra = { Abrir("/bilhetes") }) {
+    Cartao(Icone.BILHETE, "Próximo comboio", aoTocar = tocar("/bilhetes"), extra = { Abrir("/bilhetes") }) {
         Estado(m) { d ->
             val v = d.proximo
             if (v == null) Texto2("Sem viagens agendadas.")
@@ -167,7 +173,7 @@ private fun CartaoRto(m: Modulo<RtoDados>, acoes: Acoes, hoje: String, atualizar
     val c = Pulse.cores; val avisos = LocalAvisos.current; val scope = rememberCoroutineScope()
     var otim by remember(m) { mutableStateOf(emptyMap<String, String>()) }        // a marca aparece logo; o servidor confirma em segundo plano
     var pendentes by remember { mutableIntStateOf(0) }
-    Cartao(Icone.RTO, "RTO desta semana", extra = { m.dados?.let { Meta("${it.escritorio} escritório · ${it.casa} casa") }; Abrir("/rto") }) {
+    Cartao(Icone.RTO, "RTO desta semana", aoTocar = tocar("/rto"), extra = { m.dados?.let { Meta("${it.escritorio} escritório · ${it.casa} casa") }; Abrir("/rto") }) {
         Estado(m) { d ->
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 d.dias.forEach { dia ->
@@ -201,7 +207,7 @@ private fun CartaoPeso(m: Modulo<PesoDados>, acoes: Acoes, sugestao: Double?, ot
     var texto by remember(sugestao) { mutableStateOf(decimalTexto(sugestao)) }
     var cid by remember { mutableStateOf(novoCid()) }
     val valor = lerDecimal(texto)?.takeIf { it in 1.0..1000.0 }
-    Cartao(Icone.PESO, "Peso", extra = { Abrir("/peso") }) {
+    Cartao(Icone.PESO, "Peso", aoTocar = tocar("/peso"), extra = { Abrir("/peso") }) {
         Estado(m) { d ->
             // uma só caixa: editável enquanto falta o registo de hoje; depois passa a mostrar o peso de hoje, sem editar
             if (d.registadoHoje && d.ultimoPeso != null) {
@@ -220,13 +226,37 @@ private fun CartaoPeso(m: Modulo<PesoDados>, acoes: Acoes, sugestao: Double?, ot
                 Meta(if (d.ultimoPeso != null) "Último registo: ${fmtPeso(d.ultimoPeso)} a ${fmtDataIso(d.ultimoQuando.orEmpty())}. Ainda não registaste hoje." else "Ainda sem registos de peso.")
             }
         }
+        m.dados?.let { MinimapaPeso(it.ultimos7) }
+    }
+}
+
+/** Os últimos 7 dias do peso, em pequeno: uma linha e um ponto por dia com registo; os dias sem registo ficam em branco. */
+@Composable
+private fun MinimapaPeso(pontos: List<Pair<String, Double>>) {
+    if (pontos.size < 2) { Meta("Com 2 registos nos últimos 7 dias aparece aqui o gráfico."); return }
+    val c = Pulse.cores
+    val hoje = java.time.LocalDate.now()
+    fun dia(iso: String): Int = runCatching { java.time.temporal.ChronoUnit.DAYS.between(java.time.LocalDate.parse(iso), hoje).toInt() }.getOrDefault(6).coerceIn(0, 6)
+    val primeiro = pontos.first().second; val ultimo = pontos.last().second; val dif = ultimo - primeiro
+    var v0 = pontos.minOf { it.second }; var v1 = pontos.maxOf { it.second }
+    if (v1 - v0 < 0.4) { v0 -= 0.2; v1 += 0.2 }
+    Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
+        androidx.compose.foundation.Canvas(Modifier.weight(1f).height(48.dp).semantics { this.contentDescription = "Peso nos últimos 7 dias: de ${fmtPeso(primeiro)} a ${fmtPeso(ultimo)}, ${pontos.size} registos" }) {
+            val pad = 6.dp.toPx()
+            fun x(iso: String) = pad + ((6 - dia(iso)) / 6f) * (size.width - 2 * pad)
+            fun y(v: Double) = pad + (1 - ((v - v0) / (v1 - v0)).toFloat()) * (size.height - 2 * pad)
+            val path = androidx.compose.ui.graphics.Path().apply { pontos.forEachIndexed { i, p -> if (i == 0) moveTo(x(p.first), y(p.second)) else lineTo(x(p.first), y(p.second)) } }
+            drawPath(path, c.primary, style = androidx.compose.ui.graphics.drawscope.Stroke(width = 2.25.dp.toPx(), cap = androidx.compose.ui.graphics.StrokeCap.Round, join = androidx.compose.ui.graphics.StrokeJoin.Round))
+            pontos.forEach { p -> drawCircle(c.surface, 3.5.dp.toPx(), androidx.compose.ui.geometry.Offset(x(p.first), y(p.second))); drawCircle(c.primary, 3.5.dp.toPx(), androidx.compose.ui.geometry.Offset(x(p.first), y(p.second)), style = androidx.compose.ui.graphics.drawscope.Stroke(1.75.dp.toPx())) }
+        }
+        Meta("7 dias: " + if (dif == 0.0) "igual" else (if (dif > 0) "+" else "−") + "%.1f".format(java.util.Locale("pt", "PT"), kotlin.math.abs(dif)) + " kg")
     }
 }
 
 @Composable
 private fun CartaoCompras(m: Modulo<ComprasDados>, acoes: Acoes) {
     val avisos = LocalAvisos.current
-    Cartao(Icone.COMPRAS, "Lista de compras", extra = { m.dados?.takeIf { it.pendentes > 0 }?.let { Meta("${it.pendentes} por comprar") }; Abrir("/compras") }) {
+    Cartao(Icone.COMPRAS, "Lista de compras", aoTocar = tocar("/compras"), extra = { m.dados?.takeIf { it.pendentes > 0 }?.let { Meta("${it.pendentes} por comprar") }; Abrir("/compras") }) {
         Estado(m) { d ->
             if (d.itens.isEmpty()) Texto2("Nada por comprar.")
             else d.itens.forEach { i ->
@@ -246,7 +276,7 @@ private fun CartaoCompras(m: Modulo<ComprasDados>, acoes: Acoes) {
 @Composable
 private fun CartaoFinancas(m: Modulo<FinancasDados>, acoes: Acoes) {
     val avisos = LocalAvisos.current
-    Cartao(Icone.FINANCAS, "Contas a pagar", extra = { m.dados?.takeIf { it.total > 0 }?.let { Meta("${fmtEuro(it.valorTotal)} em ${it.total}") } }) {
+    Cartao(Icone.FINANCAS, "Contas a pagar", aoTocar = tocar("/financas"), extra = { m.dados?.takeIf { it.total > 0 }?.let { Meta("${fmtEuro(it.valorTotal)} em ${it.total}") }; Abrir("/financas") }) {
         Estado(m) { d ->
             if (d.proximas.isEmpty()) Texto2("Sem contas pendentes nos próximos 30 dias.")
             else d.proximas.forEach { c ->

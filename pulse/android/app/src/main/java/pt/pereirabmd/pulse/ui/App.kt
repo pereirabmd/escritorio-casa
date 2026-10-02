@@ -85,7 +85,7 @@ private fun Principal(sessao: Sessao, f: Fase.Autenticado) {
         destino = when (destino) { Destino.Password, Destino.Pin -> Destino.Definicoes; Destino.Mais -> Destino.Hoje; else -> Destino.Mais }
     }
     val c = Pulse.cores
-    CompositionLocalProvider(LocalAvisos provides avisos, LocalUtilizador provides f.utilizador, LocalAbrir provides { id -> destino = Destino.Modulo(id) }) {
+    CompositionLocalProvider(LocalAvisos provides avisos, LocalUtilizador provides f.utilizador, LocalAbrir provides { rota -> val c = rota.split('/', limit = 2); sessao.abaPedida = c.getOrNull(1); destino = Destino.Modulo(c[0]) }) {
         // com o teclado aberto o conteúdo encolhe (o formulário em foco fica à vista) e a barra de baixo esconde-se
         val tecladoAberto = WindowInsets.isImeVisible
         Scaffold(

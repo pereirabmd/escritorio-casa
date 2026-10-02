@@ -47,7 +47,7 @@ def mensagem_json(m: dict, conta: dict, tz: ZoneInfo) -> dict:
             "de": nome or endereco, "deEmail": endereco, "assunto": _cab(headers, "Subject") or "(sem assunto)", "resumo": html.unescape(m.get("snippet", ""))[:200],
             "data": data, "lida": "UNREAD" not in etiquetas, "estrela": "STARRED" in etiquetas, "importante": "IMPORTANT" in etiquetas,
             "entrada": "INBOX" in etiquetas,
-            "link": f"https://mail.google.com/mail/u/{quote(conta['email'], safe='@')}/#all/{quote(m['id'], safe='')}"}   # abre esta mensagem, na conta certa
+            "link": f"https://mail.google.com/mail/u/{quote(conta['email'], safe='@')}/#all/{quote(m.get('threadId') or m['id'], safe='')}"}   # abre a conversa desta mensagem, na conta certa (o Gmail só abre pelo id da conversa: pelo id da mensagem dava «Erro temporário (404)» nas respostas)
 
 
 def _mensagens_de_uma_conta(api: g.GoogleApi, conta: dict, filtro: str, tz: ZoneInfo, n: int) -> tuple[list[dict], int]:

@@ -285,8 +285,17 @@ describe('Hoje: calendário e email', () => {
     expect(within(c).getByText('Reunião')).toBeInTheDocument(); expect(within(c).getByText('09:00')).toBeInTheDocument(); expect(within(c).getByText('Dia todo')).toBeInTheDocument()
     expect(within(c).getByRole('link', { name: 'Abrir' })).toHaveAttribute('href', `${BASE}/calendario`)
     const e = screen.getByRole('heading', { name: 'Emails importantes' }).closest('section')!
-    expect(within(e).getByRole('link', { name: /Urgente/ })).toHaveAttribute('href', 'https://mail.google.com/mail/u/ele@gmail.com/#all/m1'); expect(within(e).getByText('Urgente')).toBeInTheDocument(); expect(within(e).getByText('5 por ler')).toBeInTheDocument(); expect(within(e).getByText('e mais 4')).toBeInTheDocument()
+    expect(within(e).getByRole('link', { name: /Urgente/ })).toHaveAttribute('href', `${BASE}/email?mensagem=1:m1`); expect(within(e).getByText('Urgente')).toBeInTheDocument(); expect(within(e).getByText('5 por ler')).toBeInTheDocument(); expect(within(e).getByText('e mais 4')).toBeInTheDocument()
     expect(within(e).getByRole('link', { name: 'Abrir' })).toHaveAttribute('href', `${BASE}/email`)
+  })
+
+  test('tocar no cartão (fora das ligações) leva ao módulo; tocar numa mensagem abre-a no módulo Email', async () => {
+    abrirHoje(hoje({ estado: 'ok', dados: { eventos: [ev('a', 'Reunião', {})], total: 1, contas: 1, comProblemas: [] } },
+      { estado: 'ok', dados: { porLer: 1, mensagens: [msg('m1', 'Urgente')], contas: 1, comProblemas: [] } }))
+    const c = (await screen.findByRole('heading', { name: 'Próximos eventos' })).closest('section')!
+    expect(c).toHaveClass('card-nav')
+    await userEvent.click(within(c).getByText('Reunião'))
+    expect(window.location.pathname).toBe(`${BASE}/calendario`)
   })
 
   test('sem eventos nem emails', async () => {

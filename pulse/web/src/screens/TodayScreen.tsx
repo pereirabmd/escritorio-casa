@@ -1,5 +1,5 @@
-import { useRef, useState, type ReactNode } from 'react'
-import { Link } from 'react-router-dom'
+import { useRef, useState, type MouseEvent, type ReactNode } from 'react'
+import { Link, useNavigate } from 'react-router-dom'
 import { api, mensagemDeErro } from '../api/client'
 import type { PiscinaHoje, BilhetesDados, CalendarioHoje, ComprasHoje, EmailHoje, Conta, EstadoModulo, FinancasDados, Hoje, Modulo, PesoDados, RtoDados, TarefaHoje, TarefasDados } from '../api/types'
 import { useUtilizador } from '../auth/AuthContext'
@@ -20,9 +20,15 @@ const SEM = new Set<string>(['sem_acesso', 'desativado'])
 const NOMES: Record<string, string> = { tarefas: 'Tarefas', bilhetes: 'Bilhetes CP', rto: 'RTO', peso: 'Peso', financas: 'Finanças', compras: 'Compras' }
 const DIA = ['S', 'T', 'Q', 'Q', 'S', 'S', 'D']
 
-function Cartao({ icone, titulo, extra, children }: { icone: IconName; titulo: string; extra?: ReactNode; children: ReactNode }) {
+/** Tocar no cartão (fora dos botões, campos e ligações) leva ao módulo (`para`). A ligação «Abrir» continua para quem navega com o teclado. */
+function Cartao({ icone, titulo, extra, children, para }: { icone: IconName; titulo: string; extra?: ReactNode; children: ReactNode; para?: string }) {
+  const navegar = useNavigate()
+  const aoTocar = para ? (e: MouseEvent<HTMLElement>) => {
+    if ((e.target as HTMLElement).closest('a, button, input, select, textarea, label, summary, [role="button"]')) return
+    navegar(para)
+  } : undefined
   return (
-    <section className="card" aria-label={titulo}>
+    <section className={para ? 'card card-nav' : 'card'} aria-label={titulo} onClick={aoTocar}>
       <div className="card-head"><Icon nome={icone} tamanho={22} /><h2 className="t-card grow">{titulo}</h2>{extra}</div>
       {children}
     </section>
@@ -70,7 +76,7 @@ function Tarefas({ m, acoes }: { m: Modulo<TarefasDados>; acoes: Acoes }) {
   }
 
   return (
-    <Cartao icone="tarefas" titulo="Tarefas de hoje" extra={<>{m.dados && m.dados.totalHoje > 0 && <span className="t-meta">{m.dados.feitasHoje} de {m.dados.totalHoje}</span>}<Link to="/tarefas" className="link-btn">Abrir</Link></>}>
+    <Cartao icone="tarefas" titulo="Tarefas de hoje" para="/tarefas" extra={<>{m.dados && m.dados.totalHoje > 0 && <span className="t-meta">{m.dados.feitasHoje} de {m.dados.totalHoje}</span>}<Link to="/tarefas" className="link-btn">Abrir</Link></>}>
       <Estado modulo={m}>{() => {
         const d = m.dados!
         return (
@@ -119,7 +125,7 @@ function Tarefas({ m, acoes }: { m: Modulo<TarefasDados>; acoes: Acoes }) {
 
 function Bilhetes({ m }: { m: Modulo<BilhetesDados> }) {
   return (
-    <Cartao icone="bilhete" titulo="Próximo comboio" extra={<Link to="/bilhetes" className="link-btn">Abrir</Link>}>
+    <Cartao icone="bilhete" titulo="Próximo comboio" para="/bilhetes" extra={<Link to="/bilhetes" className="link-btn">Abrir</Link>}>
       <Estado modulo={m}>{() => {
         const { proximo: v, passe } = m.dados!
         return (
@@ -161,7 +167,7 @@ const Problemas = ({ contas }: { contas: { id: number; email: string }[] }) => (
 function Calendario({ m }: { m: Modulo<CalendarioHoje> }) {
   if (m.estado === 'nao_ligado') return <LigarGoogle icone="calendario" titulo="Próximos eventos" texto="Liga uma conta Google para veres aqui os próximos eventos." />
   return (
-    <Cartao icone="calendario" titulo="Próximos eventos" extra={<Link to="/calendario" className="link-btn">Abrir</Link>}>
+    <Cartao icone="calendario" titulo="Próximos eventos" para="/calendario" extra={<Link to="/calendario" className="link-btn">Abrir</Link>}>
       <Estado modulo={m}>{() => {
         const d = m.dados!
         return (
@@ -187,7 +193,7 @@ function Calendario({ m }: { m: Modulo<CalendarioHoje> }) {
 function Email({ m }: { m: Modulo<EmailHoje> }) {
   if (m.estado === 'nao_ligado') return <LigarGoogle icone="email" titulo="Emails importantes" texto="Liga uma conta Google para veres aqui os emails importantes por ler." />
   return (
-    <Cartao icone="email" titulo="Emails importantes" extra={<>{m.dados && m.dados.porLer > 0 && <span className="t-meta">{m.dados.porLer} por ler</span>}<Link to="/email" className="link-btn">Abrir</Link></>}>
+    <Cartao icone="email" titulo="Emails importantes" para="/email" extra={<>{m.dados && m.dados.porLer > 0 && <span className="t-meta">{m.dados.porLer} por ler</span>}<Link to="/email" className="link-btn">Abrir</Link></>}>
       <Estado modulo={m}>{() => {
         const d = m.dados!
         return (
@@ -196,9 +202,9 @@ function Email({ m }: { m: Modulo<EmailHoje> }) {
               <ul className="rows">
                 {d.mensagens.map((x) => (
                   <li key={`${x.conta}-${x.id}`}>
-                    <a className="row-main mail-link" href={x.link} target="_blank" rel="noopener noreferrer" aria-label={`Abrir no Gmail: ${x.assunto}, de ${x.de}`}>
+                    <Link className="row-main mail-link" to={`/email?mensagem=${x.conta}:${x.id}`} aria-label={`Abrir a mensagem: ${x.assunto}, de ${x.de}`}>
                       <div className="t-body mail-nova">{x.de}</div><div className="t-body2">{x.assunto}</div>
-                    </a>
+                    </Link>
                   </li>
                 ))}
               </ul>
@@ -223,7 +229,7 @@ function Compras({ m, acoes }: { m: Modulo<ComprasHoje>; acoes: Acoes }) {
     }
   }
   return (
-    <Cartao icone="compras" titulo="Lista de compras" extra={<>{m.dados && m.dados.pendentes > 0 && <span className="t-meta">{m.dados.pendentes} por comprar</span>}<Link to="/compras" className="link-btn">Abrir</Link></>}>
+    <Cartao icone="compras" titulo="Lista de compras" para="/compras" extra={<>{m.dados && m.dados.pendentes > 0 && <span className="t-meta">{m.dados.pendentes} por comprar</span>}<Link to="/compras" className="link-btn">Abrir</Link></>}>
       <Estado modulo={m}>{() => {
         const d = m.dados!
         return d.itens.length === 0 ? <p className="t-body2">Nada por comprar. <Link to="/compras?aba=catalogo" className="link-btn">Escolher produtos</Link></p> : (
@@ -276,7 +282,7 @@ function Rto({ m, acoes }: { m: Modulo<RtoDados>; acoes: Acoes }) {
   }
 
   return (
-    <Cartao icone="rto" titulo="RTO desta semana" extra={<>{m.dados && <span className="t-meta">{m.dados.contagem.T} escritório · {m.dados.contagem.C} casa</span>}<Link to="/rto" className="link-btn">Abrir</Link></>}>
+    <Cartao icone="rto" titulo="RTO desta semana" para="/rto" extra={<>{m.dados && <span className="t-meta">{m.dados.contagem.T} escritório · {m.dados.contagem.C} casa</span>}<Link to="/rto" className="link-btn">Abrir</Link></>}>
       <Estado modulo={m}>{() => (
         <>
           <div className="week" role="group" aria-label="Dias da semana">
@@ -294,6 +300,29 @@ function Rto({ m, acoes }: { m: Modulo<RtoDados>; acoes: Acoes }) {
         </>
       )}</Estado>
     </Cartao>
+  )
+}
+
+/** Os últimos 7 dias do peso, em pequeno (SVG sem bibliotecas): uma linha e um ponto por dia com registo; os dias sem registo ficam em branco. */
+function MinimapaPeso({ pontos, hoje }: { pontos: { data: string; peso: number }[]; hoje: string }) {
+  if (pontos.length < 2) return <p className="t-meta">Com 2 registos nos últimos 7 dias aparece aqui o gráfico.</p>
+  const W = 220, H = 48, P = 6
+  const dia = (iso: string) => Math.round((Date.parse(`${hoje}T00:00:00Z`) - Date.parse(`${iso}T00:00:00Z`)) / 86400000)       // 0 = hoje … 6
+  let v0 = Math.min(...pontos.map((p) => p.peso)), v1 = Math.max(...pontos.map((p) => p.peso))
+  if (v1 - v0 < 0.4) { v0 -= 0.2; v1 += 0.2 }
+  const x = (iso: string) => P + ((6 - dia(iso)) / 6) * (W - 2 * P)
+  const y = (v: number) => P + (1 - (v - v0) / (v1 - v0)) * (H - 2 * P)
+  const linha = pontos.map((p, i) => `${i ? 'L' : 'M'}${x(p.data).toFixed(1)} ${y(p.peso).toFixed(1)}`).join(' ')
+  const primeiro = pontos[0], ultimo = pontos[pontos.length - 1]
+  const dif = ultimo.peso - primeiro.peso
+  return (
+    <div className="mini-peso">
+      <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label={`Peso nos últimos 7 dias: de ${fmtPeso(primeiro.peso)} a ${fmtPeso(ultimo.peso)}, ${pontos.length} registos`} preserveAspectRatio="none">
+        <path className="chart-line" d={linha} fill="none" vectorEffect="non-scaling-stroke" />
+        {pontos.map((p) => <circle key={p.data} className="chart-dot" cx={x(p.data)} cy={y(p.peso)} r={3} />)}
+      </svg>
+      <span className="t-meta">7 dias: {dif === 0 ? 'igual' : `${dif > 0 ? '+' : '−'}${Math.abs(dif).toFixed(1).replace('.', ',')} kg`}</span>
+    </div>
   )
 }
 
@@ -315,7 +344,7 @@ function Peso({ m, acoes }: { m: Modulo<PesoDados>; acoes: Acoes }) {
   }
 
   return (
-    <Cartao icone="peso" titulo="Peso" extra={<Link to="/peso" className="link-btn">Abrir</Link>}>
+    <Cartao icone="peso" titulo="Peso" para="/peso" extra={<Link to="/peso" className="link-btn">Abrir</Link>}>
       <Estado modulo={m}>{() => {
         const d = m.dados!
         // uma só caixa: editável enquanto falta o registo de hoje; depois passa a mostrar o peso de hoje, sem editar
@@ -336,6 +365,7 @@ function Peso({ m, acoes }: { m: Modulo<PesoDados>; acoes: Acoes }) {
           </>
         )
       }}</Estado>
+      {m.dados && <MinimapaPeso pontos={m.dados.ultimos7 ?? []} hoje={acoes.hoje} />}
     </Cartao>
   )
 }
@@ -351,7 +381,7 @@ function Financas({ m, acoes }: { m: Modulo<FinancasDados>; acoes: Acoes }) {
   }
 
   return (
-    <Cartao icone="financas" titulo="Contas a pagar" extra={m.dados && m.dados.total > 0 && <span className="t-meta">{fmtEuro(m.dados.valorTotal)} em {m.dados.total}</span>}>
+    <Cartao icone="financas" titulo="Contas a pagar" para="/financas" extra={<>{m.dados && m.dados.total > 0 && <span className="t-meta">{fmtEuro(m.dados.valorTotal)} em {m.dados.total}</span>}<Link to="/financas" className="link-btn">Abrir</Link></>}>
       <Estado modulo={m}>{() => {
         const d = m.dados!
         return d.proximas.length === 0 ? <p className="t-body2">Sem contas pendentes nos próximos 30 dias.</p> : (

@@ -226,7 +226,9 @@ private fun FolhaEvento(editar: JSONObject?, agenda: JSONObject, diaEscolhido: S
 // --- Email -----------------------------------------------------------------------------------------------------------------------
 
 @Composable
-fun EmailEcra(aoVoltar: () -> Unit) {
+fun EmailEcra(aoVoltar: () -> Unit, mensagemPedida: String? = null, aoUsarPedido: () -> Unit = {}) {
+    var porAbrir by remember { mutableStateOf(mensagemPedida) }       // «conta:id»: o toque numa mensagem do Hoje abre-a aqui
+    LaunchedEffect(Unit) { aoUsarPedido() }
     var filtro by remember { mutableStateOf("importantes") }
     var conta by remember { mutableStateOf<Int?>(null) }
     var aberta by remember { mutableStateOf<JSONObject?>(null) }
@@ -237,6 +239,9 @@ fun EmailEcra(aoVoltar: () -> Unit) {
             Rolar {
                 if (!d.bool("ligado")) { SemContas(d.bool("configurado"), "Liga uma conta Google com o Gmail para veres aqui as tuas mensagens."); return@Rolar }
                 val contas = d.objs("contas"); val msgs = d.objs("mensagens")
+                LaunchedEffect(msgs) {
+                    porAbrir?.let { p -> msgs.firstOrNull { "${it.optInt("conta")}:${it.txtOu("id")}" == p }?.let { aberta = it }; porAbrir = null }
+                }
                 Filtros(listOf("importantes" to "Importantes", "entrada" to "Caixa de entrada", "por_ler" to "Por ler"), filtro) { filtro = it }
                 if (contas.size > 1 || conta != null) Filtros(listOf<Pair<Int?, String>>(null to "Todas") + contas.map { it.getInt("id") as Int? to it.txtOu("email") }, conta) { conta = it }
                 AvisosContas(contas)

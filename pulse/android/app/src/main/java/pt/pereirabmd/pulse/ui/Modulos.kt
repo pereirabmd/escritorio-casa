@@ -13,7 +13,7 @@ fun EcraDoModulo(id: String, sessao: Sessao, aoVoltar: () -> Unit) {
         "bilhetes" -> BilhetesEcra(aoVoltar, sessao.abaPedida) { sessao.abaPedida = null }
         "tarefas" -> TarefasEcra(aoVoltar, sessao.abaPedida) { sessao.abaPedida = null }
         "calendario" -> CalendarioGoogleEcra(aoVoltar)
-        "email" -> EmailEcra(aoVoltar)
+        "email" -> EmailEcra(aoVoltar, sessao.abaPedida) { sessao.abaPedida = null }
         "google" -> GoogleContasEcra(sessao, aoVoltar)
         else -> EcraModulo(id, aoVoltar) { Rolar { Texto2("Em construção.") } }
     }

@@ -32,14 +32,14 @@ data class Passe(val dataExpira: String?, val diasRestantes: Int?)
 data class BilhetesDados(val proximo: Viagem?, val passe: Passe?)
 data class DiaRto(val data: String, val diaSemana: Int, val marca: String, val hoje: Boolean)
 data class RtoDados(val dias: List<DiaRto>, val escritorio: Int, val casa: Int)
-data class PesoDados(val ultimoQuando: String?, val ultimoPeso: Double?, val registadoHoje: Boolean, val sugestao: Double?)
+data class PesoDados(val ultimoQuando: String?, val ultimoPeso: Double?, val registadoHoje: Boolean, val sugestao: Double?, val ultimos7: List<Pair<String, Double>> = emptyList())
 data class ContaFin(val id: Int, val descricao: String, val valor: Double, val categoria: String, val diasAte: Int, val vencida: Boolean)
 data class FinancasDados(val proximas: List<ContaFin>, val vencidas: Int, val total: Int, val valorTotal: Double)
 data class ItemCompras(val item: Int, val nome: String, val quantidade: Int?, val nota: String)
 data class ComprasDados(val pendentes: Int, val itens: List<ItemCompras>)
 data class Evento(val titulo: String, val diaInteiro: Boolean, val inicio: String, val local: String, val data: String = "")
 data class CalendarioDados(val eventos: List<Evento>, val total: Int, val comProblemas: List<String>)
-data class Mensagem(val de: String, val assunto: String, val link: String = "")
+data class Mensagem(val de: String, val assunto: String, val link: String = "", val conta: Int = 0, val id: String = "")
 data class EmailDados(val porLer: Int, val mensagens: List<Mensagem>, val comProblemas: List<String>)
 
 data class Hoje(
@@ -99,7 +99,7 @@ fun parseHoje(j: JSONObject): Hoje {
             RtoDados(d.lista("dias") { DiaRto(it.txtOu("data"), it.inteiro("diaSemana", 1), it.txtOu("marca"), it.bool("hoje")) },
                 d.obj("contagem")?.inteiro("T") ?: 0, d.obj("contagem")?.inteiro("C") ?: 0)
         },
-        peso = modulo(m.obj("peso")) { d -> PesoDados(d.obj("ultimo")?.txt("quando"), d.obj("ultimo")?.real("peso"), d.bool("registadoHoje"), d.real("sugestao")) },
+        peso = modulo(m.obj("peso")) { d -> PesoDados(d.obj("ultimo")?.txt("quando"), d.obj("ultimo")?.real("peso"), d.bool("registadoHoje"), d.real("sugestao"), d.lista("ultimos7") { it.txtOu("data") to (it.real("peso") ?: 0.0) }) },
         financas = modulo(m.obj("financas")) { d ->
             FinancasDados(d.lista("proximas") { ContaFin(it.inteiro("id"), it.txtOu("descricao"), it.real("valor") ?: 0.0, it.txtOu("categoria"), it.inteiro("diasAte"), it.bool("vencida")) },
                 d.inteiro("vencidas"), d.inteiro("total"), d.real("valorTotal") ?: 0.0)
@@ -111,7 +111,7 @@ fun parseHoje(j: JSONObject): Hoje {
             CalendarioDados(d.lista("eventos") { Evento(it.txtOu("titulo"), it.bool("diaInteiro"), it.txtOu("inicio"), it.txtOu("local"), it.txtOu("data")) }, d.inteiro("total"), problemas(d))
         },
         email = modulo(m.obj("email")) { d ->
-            EmailDados(d.inteiro("porLer"), d.lista("mensagens") { Mensagem(it.txtOu("de"), it.txtOu("assunto"), it.txtOu("link")) }, problemas(d))
+            EmailDados(d.inteiro("porLer"), d.lista("mensagens") { Mensagem(it.txtOu("de"), it.txtOu("assunto"), it.txtOu("link"), it.optInt("conta"), it.txtOu("id")) }, problemas(d))
         },
     )
 }

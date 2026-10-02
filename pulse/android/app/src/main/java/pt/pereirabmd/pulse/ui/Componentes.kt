@@ -129,9 +129,11 @@ fun Campo(rotulo: String, valor: String, aoMudar: (String) -> Unit, modifier: Mo
 
 /** Cartão com cabeçalho (ícone, título, extra) como no Hoje da Web. Sem cartões dentro de cartões (CLAUDE.md). */
 @Composable
-fun Cartao(icone: Icone, titulo: String, modifier: Modifier = Modifier, extra: @Composable RowScope.() -> Unit = {}, conteudo: @Composable ColumnScope.() -> Unit) {
+fun Cartao(icone: Icone, titulo: String, modifier: Modifier = Modifier, aoTocar: (() -> Unit)? = null, extra: @Composable RowScope.() -> Unit = {}, conteudo: @Composable ColumnScope.() -> Unit) {
     val c = Pulse.cores
-    Column(modifier.fillMaxWidth().clip(RoundedCornerShape(Pulse.rL)).background(c.surface).border(1.dp, c.line, RoundedCornerShape(Pulse.rL)).padding(14.dp),
+    // aoTocar: tocar no cartão (fora dos botões e linhas com toque próprio) leva ao módulo
+    Column(modifier.fillMaxWidth().clip(RoundedCornerShape(Pulse.rL)).background(c.surface).border(1.dp, c.line, RoundedCornerShape(Pulse.rL))
+        .then(if (aoTocar != null) Modifier.clickable(onClickLabel = "Abrir $titulo") { aoTocar() } else Modifier).padding(14.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             Icon(icone, c.primary, 22.dp)

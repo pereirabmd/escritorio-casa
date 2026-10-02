@@ -71,16 +71,25 @@ def test_rto_semana_atual(dados_falso):
 def test_peso_sugere_o_ultimo_e_sabe_se_ja_registou_hoje(dados_falso):
     preparar()
     d = dashboard.hoje(cliente(dados_falso), EMAIL, AGORA)["modulos"]["peso"]["dados"]
-    assert d == {"ultimo": {"quando": "2026-09-30 07:30:00", "peso": 80.6}, "registadoHoje": True, "sugestao": 80.6}
+    assert d["ultimo"] == {"quando": "2026-09-30 07:30:00", "peso": 80.6} and d["registadoHoje"] is True and d["sugestao"] == 80.6
     preparar({"/peso/registos": (200, {"registos": [{"quando": "2026-09-20 08:00:00", "peso": 81.2}]})})
     d = dashboard.hoje(cliente(dados_falso), EMAIL, AGORA)["modulos"]["peso"]["dados"]
     assert (d["registadoHoje"], d["sugestao"]) == (False, 81.2)
 
 
+def test_peso_devolve_os_ultimos_7_dias_com_o_ultimo_registo_de_cada_dia(dados_falso):
+    regs = [{"quando": "2026-09-20 08:00:00", "peso": 82.0},                                  # fora da janela (hoje = 30/09: 24/09 a 30/09)
+            {"quando": "2026-09-24 08:00:00", "peso": 81.5}, {"quando": "2026-09-27 07:00:00", "peso": 81.0},
+            {"quando": "2026-09-27 21:00:00", "peso": 80.8}, {"quando": "2026-09-30 07:30:00", "peso": 80.6}]
+    preparar({"/peso/registos": (200, {"registos": regs})})
+    d = dashboard.hoje(cliente(dados_falso), EMAIL, AGORA)["modulos"]["peso"]["dados"]
+    assert d["ultimos7"] == [{"data": "2026-09-24", "peso": 81.5}, {"data": "2026-09-27", "peso": 80.8}, {"data": "2026-09-30", "peso": 80.6}]
+
+
 def test_peso_sem_registos_recentes_procura_o_historico_todo(dados_falso):
     preparar({"/peso/registos": (200, {"registos": []})})
     d = dashboard.hoje(cliente(dados_falso), EMAIL, AGORA)["modulos"]["peso"]["dados"]
-    assert d == {"ultimo": None, "registadoHoje": False, "sugestao": None}
+    assert d == {"ultimo": None, "registadoHoje": False, "sugestao": None, "ultimos7": []}
     pesos = [p[0] for p in FalsoDados.pedidos if p[0].startswith("/peso")]
     assert pesos == ["/peso/registos?desde=2026-07-02", "/peso/registos"]
 

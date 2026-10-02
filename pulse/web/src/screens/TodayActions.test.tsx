@@ -103,6 +103,15 @@ describe('piscina e saída do Bruno no cartão das tarefas', () => {
 })
 
 describe('peso', () => {
+  test('mostra o minigráfico dos últimos 7 dias além da caixa e do botão', async () => {
+    const hoje = { ...HOJE, modulos: { ...HOJE.modulos, peso: { estado: 'ok', dados: { ultimo: { quando: '2026-09-29 07:30:00', peso: 104.8 }, registadoHoje: false, sugestao: 104.8,
+      ultimos7: [{ data: '2026-09-25', peso: 105.6 }, { data: '2026-09-27', peso: 105.1 }, { data: '2026-09-29', peso: 104.8 }] } } } }
+    abrir({}, hoje)
+    expect(await screen.findByRole('img', { name: /Peso nos últimos 7 dias: de 105,6 kg a 104,8 kg, 3 registos/ })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Registar' })).toBeInTheDocument()                 // a caixa e o botão mantêm-se
+    expect(screen.getByText(/7 dias: −0,8 kg/)).toBeInTheDocument()
+  })
+
   test('o campo vem pré-preenchido com o último peso e regista com cid', async () => {
     const hoje = { ...HOJE, modulos: { ...HOJE.modulos, peso: { estado: 'ok', dados: { ultimo: { quando: '2026-09-29 07:30:00', peso: 104.8 }, registadoHoje: false, sugestao: 104.8 } } } }
     const { pedidos } = abrir({ 'POST /actions/peso.registar': () => OK }, hoje)

@@ -117,7 +117,7 @@ class CapturaEcras : CapturaBase() {
     @Test fun compras() = ecra("compras", listOf("Catálogo")) { ComprasEcra {} }
     @Test fun tarefas() = ecra("tarefas", listOf("Calendário", "Tarefas", "Horário", "Piscina", "Config")) { TarefasEcra({}, null) {} }
     @Test fun calendario() = ecra("calendario") { CalendarioGoogleEcra {} }
-    @Test fun email() = ecra("email") { EmailEcra {} }
+    @Test fun email() = ecra("email") { EmailEcra(aoVoltar = {}) }
     @Test fun mais() = ecra("mais") { EcraMais({}, {}) }
     @Test fun assistente() = ecra("assistente", antes = {
         regra.onNode(hasSetTextAction()).performTextInput("adiciona pão e cebolas à lista de compras")

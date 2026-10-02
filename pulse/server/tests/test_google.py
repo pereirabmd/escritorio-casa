@@ -358,6 +358,15 @@ def test_caixa_normaliza_cabecalhos_codificados_ordem_e_estado(conn, api, fake):
         correio.caixa(api, [], "tudo", TZ)
 
 
+def test_link_do_gmail_usa_o_id_da_conversa_e_cai_no_da_mensagem_se_faltar(conn, api, fake):
+    ligar(conn, api, UID[BRUNO], "ele@gmail.com")
+    sem_thread = msg("m9", "Sem conversa"); sem_thread.pop("threadId")
+    caixa_falsa(fake, [msg("m1", "Resposta numa conversa"), sem_thread])
+    r = correio.caixa(api, contas_google.com_servico(conn, UID[BRUNO], "gmail"), "entrada", TZ)
+    links = {m["id"]: m["link"] for m in r["mensagens"]}
+    assert links["m1"].endswith("/#all/tm1") and links["m9"].endswith("/#all/m9")
+
+
 def test_caixa_junta_contas_e_falhas_de_mensagens_soltas_nao_estragam(conn, api, fake):
     ligar(conn, api, UID[BRUNO], "ele@gmail.com")
     ligar(conn, api, UID[BRUNO], "morta@gmail.com", refresh="morto")
@@ -365,7 +374,7 @@ def test_caixa_junta_contas_e_falhas_de_mensagens_soltas_nao_estragam(conn, api,
     fake.rotas[("GET", f"{g.GMAIL}/messages")] = lambda q, b: (200, {"messages": [{"id": "m1"}, {"id": "desaparecida"}], "resultSizeEstimate": 2})
     r = correio.caixa(api, contas_google.com_servico(conn, UID[BRUNO], "gmail"), "entrada", TZ)
     assert [m["id"] for m in r["mensagens"]] == ["m1"]
-    assert r["mensagens"][0]["link"] == "https://mail.google.com/mail/u/ele@gmail.com/#all/m1"         # abre a mensagem certa, na conta certa
+    assert r["mensagens"][0]["link"] == "https://mail.google.com/mail/u/ele@gmail.com/#all/tm1"        # abre a conversa certa (o Gmail só abre pelo id da conversa), na conta certa
     assert {c["email"]: c["estado"] for c in r["contas"]} == {"ele@gmail.com": "ok", "morta@gmail.com": "reautorizar"}
 
 

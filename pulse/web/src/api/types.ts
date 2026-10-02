@@ -14,7 +14,7 @@ export interface Viagem { id: number; data: string; origem: string; destino: str
 export interface BilhetesDados { proximo: Viagem | null; passe: { dataExpira: string | null; diasRestantes: number | null } | null }
 export interface DiaRto { data: string; diaSemana: number; marca: 'T' | 'C' | ''; hoje: boolean }
 export interface RtoDados { semana: { inicio: string; fim: string }; dias: DiaRto[]; contagem: { T: number; C: number } }
-export interface PesoDados { ultimo: { quando: string; peso: number } | null; registadoHoje: boolean; sugestao: number | null }
+export interface PesoDados { ultimo: { quando: string; peso: number } | null; registadoHoje: boolean; sugestao: number | null; ultimos7?: { data: string; peso: number }[] }
 export interface Conta { id: number; descricao: string; valor: number; categoria: string; dataVencimento: string; diasAte: number; vencida: boolean }
 export interface FinancasDados { proximas: Conta[]; vencidas: number; total: number; valorTotal: number }
 
