@@ -193,3 +193,20 @@ class AnchorTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class RespostaVaziaDaCpTests(unittest.TestCase):
+    """02/10/2026 20:21: o timetable devolveu HTTP 200 sem corpo e o journeys devolveu None: `pick_trip(None)` rebentava com AttributeError e o
+    ciclo do scheduler caía («Erro no scheduler»). A conferência do horário é só um aviso: sem informação nunca deve falhar."""
+
+    def setUp(self):
+        common._state_file("timetable_checks.json").unlink(missing_ok=True)
+
+    def test_sem_resposta_da_pesquisa_de_viagens_e_sem_informacao_e_nao_um_comboio_inexistente(self):
+        def fetch(train, d): raise RuntimeError("HTTP 200 no timetable")
+        with self.assertRaises(RuntimeError):                                     # propaga: «sem informação», nunca «o comboio não consta»
+            timetable.check_leg(leg(), fetch, lambda l: None)
+
+    def test_check_leg_cached_nunca_levanta_com_resposta_vazia(self):
+        def fetch(train, d): raise RuntimeError("HTTP 200 no timetable")
+        self.assertEqual(timetable.check_leg_cached(leg(), fetch, lambda l: None), (None, False))

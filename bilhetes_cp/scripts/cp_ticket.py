@@ -589,6 +589,8 @@ def pick_trip(journeys: dict, target_time: str | None = None,
     `require_saleable=False` serve a véspera/pre-flight: antes de abrir a janela
     de venda o comboio ainda não é vendável online, mas já existe e tem serviceCode.
     """
+    if not isinstance(journeys, dict):                    # a CP respondeu vazio/lixo: «sem informação», não um erro do programa
+        raise RuntimeError("Resposta inválida da pesquisa de viagens")
     trips = journeys.get("outwardTrip", []) or []
     if require_saleable:
         trips = [t for t in trips if t.get("saleableOnline")]

@@ -154,6 +154,9 @@ def run(plan_only: bool = False) -> int:
     launched = 0
     for leg in legs:
         if leg.troca_venda:
+            raw_t = common.request_row(raw_rows, leg.row)
+            if raw_t is not None and str(list(raw_t)[9] if len(raw_t) > 9 else "").strip().upper() in common.REQUEST_TERMINAL:
+                continue                                       # a troca já terminou (ex.: CONFIRMADO): nunca a «expirar» nem avisar «Troca não feita» (falso alarme de 02/10 às 06:57)
             leg = _ancorar(leg)                                # a hora de embarque real (a do pedido pode ser a da 1.ª estação)
             if now_ts >= leg.departure.timestamp() - leg.troca_antecedencia * 60:
                 if not plan_only:

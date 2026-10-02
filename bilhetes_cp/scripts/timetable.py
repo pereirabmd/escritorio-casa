@@ -60,6 +60,8 @@ def check_via_journeys(leg: Leg, journeys: Callable[[Leg], dict] = fetch_journey
     do dia entre as duas estações. Se o comboio não consta, é problema."""
     label = f"comboio {leg.train} em {leg.date:%d/%m}"
     data = journeys(leg)          # se a rede falhar, propaga: "sem informação", nunca "não existe"
+    if not isinstance(data, dict):
+        raise RuntimeError("sem resposta da pesquisa de viagens")      # resposta vazia: «sem informação», nunca «o comboio não consta»
     try:
         trip = pick_trip(data, train_number=leg.train, require_saleable=False)
     except RuntimeError:
@@ -178,7 +180,7 @@ def check_leg_cached(leg: Leg, fetch: Callable[[int, date], dict | None] = fetch
         return hit["problem"], False
     try:
         problem = check_leg(leg, fetch, journeys)
-    except (CPError, RuntimeError, ValueError, TypeError) as e:
+    except Exception as e:  # noqa: BLE001 — a conferência do horário é só um aviso: nunca pode derrubar o ciclo do scheduler (20:21 de 02/10: AttributeError)
         log.warning("Sem informação do horário oficial para %s: %s", leg.key, type(e).__name__)
         return None, False
     cache = {k: v for k, v in cache.items() if now - v["ts"] < 2 * CACHE_TTL_S}

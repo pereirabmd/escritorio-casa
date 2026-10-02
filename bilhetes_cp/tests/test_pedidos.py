@@ -236,6 +236,14 @@ class TrocaPedidoTests(unittest.TestCase):
             pedidos.run()
         self.assertEqual(len(self.launched), 2)                   # um início ilegível nunca bloqueia a troca
 
+    def test_troca_ja_confirmada_nunca_expira_nem_avisa_troca_nao_feita(self):
+        agora = common.now_local()
+        perto = (agora + timedelta(minutes=20)).strftime("%H:%M")           # a menos de 30 min da partida: uma troca por fazer expiraria
+        with self.rows(trow(data=agora.date(), hora=perto, estado="CONFIRMADO")):
+            pedidos.run()
+        self.assertEqual((self.launched, self.fechadas), ([], []))            # não lança, não fecha como EXPIRADO
+        self.assertFalse(any(k.startswith("troca-expirou") for k in self.notes))
+
     def test_troca_expira_30_min_antes_da_partida_e_fica_a_manter_o_antigo(self):
         agora = common.now_local()
         daqui_20 = (agora + timedelta(minutes=20)).strftime("%H:%M")
