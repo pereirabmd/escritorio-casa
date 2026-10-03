@@ -18,6 +18,9 @@ private fun decimal(v: Double, casas: Int, agrupar: Boolean): String {
 
 fun fmtDec(v: Double, casas: Int): String = decimal(v, casas, false)
 fun fmtEuro(v: Double): String = decimal(v, 2, true) + NBSP + "€"
+/** Temperatura em graus inteiros, «17°» (ou «–» sem valor). */
+fun graus(v: Double?): String = if (v == null) "–" else "${Math.round(v)}°"
+
 fun fmtPeso(v: Double): String = decimal(v, 1, false) + NBSP + "kg"
 
 /** 2026-09-28 -> 28/09/2026 */

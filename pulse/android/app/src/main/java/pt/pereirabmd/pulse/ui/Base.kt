@@ -379,6 +379,9 @@ fun <T> ColumnScope.Ao(c: Carga<T>, texto: String = "A carregar…", conteudo: @
 
 /** Navega para um módulo (`tarefas`, `peso`…) ou ecrã (`google`) a partir de qualquer cartão. */
 val LocalAbrir = staticCompositionLocalOf<(String) -> Unit> { {} }
+/** A localização aproximada do aparelho (ou `null`: o servidor usa Aveiro) e o pedido da permissão (ADR-092). */
+val LocalPosicao = compositionLocalOf<Pair<Double, Double>?> { null }
+val LocalPedirLocalizacao = staticCompositionLocalOf<() -> Unit> { {} }
 
 /** Chips de escolha múltipla (dias da semana, rotação de pessoas…). */
 @OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class, ExperimentalMaterial3Api::class)

@@ -17,6 +17,7 @@ import { PesoScreen } from './screens/peso/PesoScreen'
 import { RtoScreen } from './screens/rto/RtoScreen'
 import { TarefasScreen } from './screens/tarefas/TarefasScreen'
 import { SettingsScreen } from './screens/SettingsScreen'
+import { TempoScreen } from './screens/TempoScreen'
 import { TodayScreen } from './screens/TodayScreen'
 
 /** Decide o que se mostra: arranque, início de sessão, mudança obrigatória de palavra-passe ou a aplicação. */
@@ -41,6 +42,7 @@ function Porta() {
         <Route element={<Shell />}>
           <Route path="/hoje" element={<TodayScreen />} />
           <Route path="/mais" element={<MoreScreen />} />
+          <Route path="/tempo" element={<TempoScreen />} />
           <Route path="/peso" element={<ModuloAtivo id="peso" nome="Peso"><PesoScreen /></ModuloAtivo>} />
           <Route path="/rto" element={<ModuloAtivo id="rto" nome="RTO"><RtoScreen /></ModuloAtivo>} />
           <Route path="/tarefas" element={<ModuloAtivo id="tarefas" nome="Tarefas"><TarefasScreen /></ModuloAtivo>} />

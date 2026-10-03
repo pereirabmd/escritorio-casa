@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Toque longo no ícone da app (ADR-092). Os 4 primeiros são os que o Android mostra; o das Tarefas só aparece em launchers que mostrem mais. Cada atalho abre um `pulse://…` que o MainActivity trata. -->
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+    <shortcut android:shortcutId="voz" android:enabled="true" android:icon="@drawable/ic_atalho_voz" android:shortcutShortLabel="@string/atalho_voz" android:shortcutLongLabel="@string/atalho_voz_longo">
+        <intent android:action="android.intent.action.VIEW" android:data="pulse://assistente" android:targetPackage="pt.pereirabmd.pulse" android:targetClass="pt.pereirabmd.pulse.MainActivity" />
+    </shortcut>
+    <shortcut android:shortcutId="peso" android:enabled="true" android:icon="@drawable/ic_atalho_peso" android:shortcutShortLabel="@string/atalho_peso" android:shortcutLongLabel="@string/atalho_peso_longo">
+        <intent android:action="android.intent.action.VIEW" android:data="pulse://peso" android:targetPackage="pt.pereirabmd.pulse" android:targetClass="pt.pereirabmd.pulse.MainActivity" />
+    </shortcut>
+    <shortcut android:shortcutId="bilhetes" android:enabled="true" android:icon="@drawable/ic_atalho_bilhetes" android:shortcutShortLabel="@string/atalho_bilhetes" android:shortcutLongLabel="@string/atalho_bilhetes_longo">
+        <intent android:action="android.intent.action.VIEW" android:data="pulse://bilhetes/semana" android:targetPackage="pt.pereirabmd.pulse" android:targetClass="pt.pereirabmd.pulse.MainActivity" />
+    </shortcut>
+    <shortcut android:shortcutId="rto" android:enabled="true" android:icon="@drawable/ic_atalho_rto" android:shortcutShortLabel="@string/atalho_rto" android:shortcutLongLabel="@string/atalho_rto_longo">
+        <intent android:action="android.intent.action.VIEW" android:data="pulse://rto/registar" android:targetPackage="pt.pereirabmd.pulse" android:targetClass="pt.pereirabmd.pulse.MainActivity" />
+    </shortcut>
+    <shortcut android:shortcutId="tarefas" android:enabled="true" android:icon="@drawable/ic_atalho_tarefas" android:shortcutShortLabel="@string/atalho_tarefas" android:shortcutLongLabel="@string/atalho_tarefas_longo">
+        <intent android:action="android.intent.action.VIEW" android:data="pulse://tarefas" android:targetPackage="pt.pereirabmd.pulse" android:targetClass="pt.pereirabmd.pulse.MainActivity" />
+    </shortcut>
+</shortcuts>

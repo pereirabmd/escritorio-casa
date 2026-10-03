@@ -7,6 +7,8 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.ui.platform.LocalContext
 import pt.pereirabmd.pulse.data.Notificacoes
+import pt.pereirabmd.pulse.data.Localizacao
+import android.provider.Settings
 import kotlinx.coroutines.launch
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -53,13 +55,14 @@ private sealed interface Destino {
     data class Modulo(val id: String) : Destino
 }
 
-private val MODULOS_ABRIVEIS = setOf("tarefas", "bilhetes", "financas", "peso", "rto", "compras", "calendario", "email")
+private val MODULOS_ABRIVEIS = setOf("tarefas", "bilhetes", "financas", "peso", "rto", "compras", "calendario", "email", "tempo")
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun Principal(sessao: Sessao, f: Fase.Autenticado) {
     var destino by remember { mutableStateOf<Destino>(Destino.Hoje) }
     var assistente by remember { mutableStateOf(false) }
+    var registoRto by remember { mutableStateOf(false) }       // o diálogo «Registar RTO de hoje» (atalho do toque longo)
     var recarga by remember { mutableIntStateOf(0) }          // sobe depois de o assistente alterar dados: o ecrã aberto volta a pedi-los
     val scope = rememberCoroutineScope()
     val contexto = LocalContext.current
@@ -70,6 +73,20 @@ private fun Principal(sessao: Sessao, f: Fase.Autenticado) {
         if (Notificacoes.permitidas(contexto)) Notificacoes.registar(contexto)
         else if (Build.VERSION.SDK_INT >= 33 && !sessao.store.notificacoesPedidas) { sessao.store.notificacoesPedidas = true; pedirPermissao.launch(Manifest.permission.POST_NOTIFICATIONS) }
     }
+    // tempo (ADR-092): a localização aproximada do aparelho; pede-se a permissão uma só vez no arranque e depois pelo ecrã Tempo
+    var posicao by remember { mutableStateOf(Localizacao.guardada(sessao.store)) }
+    val pedirLocalizacao = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { ok ->
+        if (ok) scope.launch { Localizacao.obter(contexto)?.let { posicao = it; Localizacao.guardar(sessao.store, it) } }
+        else if (!androidx.core.app.ActivityCompat.shouldShowRequestPermissionRationale(contexto as android.app.Activity, Manifest.permission.ACCESS_COARSE_LOCATION)
+            && sessao.store.localizacaoPedida) {
+            // recusada «para sempre»: só nas definições do sistema
+            contexto.startActivity(android.content.Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, android.net.Uri.parse("package:${contexto.packageName}")).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK))
+        }
+    }
+    LaunchedEffect(Unit) {
+        if (Localizacao.permitida(contexto)) Localizacao.obter(contexto)?.let { posicao = it; Localizacao.guardar(sessao.store, it) }
+        else if (!sessao.store.localizacaoPedida) { sessao.store.localizacaoPedida = true; pedirLocalizacao.launch(Manifest.permission.ACCESS_COARSE_LOCATION) }
+    }
     val snackbar = remember { SnackbarHostState() }
     val avisos = remember { Avisos(snackbar, scope) }
     // o regresso da Google leva ao ecrã das contas (mesmo depois de a app ter sido bloqueada enquanto se dava a permissão)
@@ -77,15 +94,18 @@ private fun Principal(sessao: Sessao, f: Fase.Autenticado) {
     // o toque numa notificação leva ao módulo (e à aba) certos
     LaunchedEffect(sessao.pedidoAbrir) {
         val link = sessao.pedidoAbrir ?: return@LaunchedEffect
-        val caminho = link.removePrefix("pulse://").split('/')
-        if (caminho[0] in MODULOS_ABRIVEIS) { sessao.abaPedida = caminho.getOrNull(1); destino = Destino.Modulo(caminho[0]) }
+        val caminho = link.removePrefix("pulse://").substringBefore('?').split('/')
+        if (caminho[0] == "hoje") destino = Destino.Hoje
+        else if (caminho[0] == "assistente") assistente = true                                     // atalho «Assistente»: abre a ouvir
+        else if (caminho[0] == "rto" && caminho.getOrNull(1) == "registar") registoRto = true  // atalho «Registar RTO»: pergunta Casa ou Escritório e regista hoje
+        else if (caminho[0] in MODULOS_ABRIVEIS) { sessao.abaPedida = caminho.getOrNull(1); destino = Destino.Modulo(caminho[0]) }
         sessao.pedidoAbrir = null
     }
     BackHandler(destino != Destino.Hoje) {
-        destino = when (destino) { Destino.Password, Destino.Pin -> Destino.Definicoes; Destino.Mais -> Destino.Hoje; else -> Destino.Mais }
+        destino = when (destino) { Destino.Password, Destino.Pin -> Destino.Definicoes; Destino.Mais -> Destino.Hoje; Destino.Modulo("tempo") -> Destino.Hoje; else -> Destino.Mais }
     }
     val c = Pulse.cores
-    CompositionLocalProvider(LocalAvisos provides avisos, LocalUtilizador provides f.utilizador, LocalAbrir provides { rota -> val c = rota.split('/', limit = 2); sessao.abaPedida = c.getOrNull(1); destino = Destino.Modulo(c[0]) }) {
+    CompositionLocalProvider(LocalAvisos provides avisos, LocalUtilizador provides f.utilizador, LocalPosicao provides posicao, LocalPedirLocalizacao provides { pedirLocalizacao.launch(Manifest.permission.ACCESS_COARSE_LOCATION) }, LocalAbrir provides { rota -> val c = rota.split('/', limit = 2); sessao.abaPedida = c.getOrNull(1); destino = Destino.Modulo(c[0]) }) {
         // com o teclado aberto o conteúdo encolhe (o formulário em foco fica à vista) e a barra de baixo esconde-se
         val tecladoAberto = WindowInsets.isImeVisible
         Scaffold(
@@ -132,6 +152,7 @@ private fun Principal(sessao: Sessao, f: Fase.Autenticado) {
                     is Destino.Modulo -> EcraDoModulo(d.id, sessao) { destino = Destino.Mais }
                 } }
                 if (assistente) AssistenteFolha({ assistente = false }, { recarga++ })
+                if (registoRto) RegistoRtoHoje({ registoRto = false }) { recarga++ }
             }
         }
     }

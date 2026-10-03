@@ -51,6 +51,15 @@ enum class Icone(internal val formas: List<Forma>) {
     CHAVE(listOf(c(8f, 15f, 3.5f), p("m10.5 12.5 8-8M15.5 7.5l2.5 2.5M13 10l2 2"))),
     DISPOSITIVO(listOf(r(7f, 3.5f, 10f, 17f, 2.5f), p("M11 17.5h2"))),
     LIGACAO(listOf(p("M4 9a12 12 0 0 1 16 0M7 12.5a8 8 0 0 1 10 0M10 16a4 4 0 0 1 4 0M12 19.5v.1"))),
+    TEMPO_SOL(listOf(c(12f, 12f, 3.8f), p("M12 3.5v2M12 18.5v2M3.5 12h2M18.5 12h2M6 6l1.4 1.4M16.6 16.6 18 18M18 6l-1.4 1.4M7.4 16.6 6 18"))),
+    TEMPO_LUA(listOf(p("M19 14.5A7.5 7.5 0 0 1 9.5 5a7.5 7.5 0 1 0 9.5 9.5z"))),
+    TEMPO_POUCO_NUBLADO(listOf(c(9f, 8.5f, 2.8f), p("M9 3.2v1M3.7 8.5h1M5.2 4.7l.7.7M12.8 4.7l-.7.7"), p("M9.5 19.5a3.4 3.4 0 0 1-.4-6.7 4.7 4.7 0 0 1 8.9 1 2.9 2.9 0 0 1-.4 5.7z"))),
+    TEMPO_NUBLADO(listOf(p("M7 19a4.3 4.3 0 0 1-.6-8.5 6 6 0 0 1 11.3 1.2A3.7 3.7 0 0 1 17 19z"))),
+    TEMPO_NEVOEIRO(listOf(p("M4 9h16M6 13h12M4 17h16"))),
+    TEMPO_CHUVA(listOf(p("M7.5 15.5a3.8 3.8 0 0 1-.5-7.5 5.3 5.3 0 0 1 10 1.1 3.2 3.2 0 0 1-.5 6.4z"), p("m8.5 18.5-1 2M12.5 18.5l-1 2M16.5 18.5l-1 2"))),
+    TEMPO_AGUACEIROS(listOf(p("M7.5 15.5a3.8 3.8 0 0 1-.5-7.5 5.3 5.3 0 0 1 10 1.1 3.2 3.2 0 0 1-.5 6.4z"), p("m9 18.5-.8 1.6M13 18.5l-.8 1.6M17 18.5l-.8 1.6"))),
+    TEMPO_NEVE(listOf(p("M7.5 15.5a3.8 3.8 0 0 1-.5-7.5 5.3 5.3 0 0 1 10 1.1 3.2 3.2 0 0 1-.5 6.4z"), p("M8 18.5v.1M12 19.5v.1M16 18.5v.1M10 21v.1M14 21v.1"))),
+    TEMPO_TROVOADA(listOf(p("M7.5 15.5a3.8 3.8 0 0 1-.5-7.5 5.3 5.3 0 0 1 10 1.1 3.2 3.2 0 0 1-.5 6.4z"), p("m12.5 15-2.5 3.5h3.5L11.5 22")))
 }
 
 @Composable
@@ -68,4 +77,11 @@ fun Icon(icone: Icone, cor: Color = Pulse.cores.text, tamanho: Dp = 24.dp, modif
             }
         }
     }
+}
+
+/** O ícone do tempo para o `icone` que o servidor devolve (sol, lua, pouco_nublado, nublado, nevoeiro, chuva, aguaceiros, neve, trovoada). */
+fun iconeTempo(nome: String): Icone = when (nome) {
+    "sol" -> Icone.TEMPO_SOL; "lua" -> Icone.TEMPO_LUA; "pouco_nublado" -> Icone.TEMPO_POUCO_NUBLADO; "nevoeiro" -> Icone.TEMPO_NEVOEIRO
+    "chuva" -> Icone.TEMPO_CHUVA; "aguaceiros" -> Icone.TEMPO_AGUACEIROS; "neve" -> Icone.TEMPO_NEVE; "trovoada" -> Icone.TEMPO_TROVOADA
+    else -> Icone.TEMPO_NUBLADO
 }

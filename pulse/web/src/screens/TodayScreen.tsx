@@ -11,6 +11,10 @@ import { useAvisos } from '../components/Avisos'
 import { diaBloqueado, proximaMarca } from '../lib/rto'
 import { lerPeso, novoCid, useAcao } from '../lib/useAcao'
 import { moduloDaAcao, useHoje } from '../lib/useHoje'
+import { useLocalizacao } from '../lib/localizacao'
+import { graus, iconeTempo, type Previsao } from '../lib/tempo'
+import { useAsync } from '../lib/useAsync'
+import { caminhoTempo } from './TempoScreen'
 
 type Executar = (chave: string, nome: string, params: Record<string, unknown>, confirmado?: boolean) => Promise<Record<string, unknown> | null>
 interface Acoes { executar: Executar; ocupado: string | null; hoje: string; recarregar: () => void; atualizar: (modulos: string[]) => void; otimista: (alterar: (h: Hoje) => Hoje) => void }
@@ -326,6 +330,21 @@ function MinimapaPeso({ pontos, hoje }: { pontos: { data: string; peso: number }
   )
 }
 
+/** O tempo de hoje, em pequeno, à direita da saudação; tocar abre o ecrã Tempo (ADR-092). Se a previsão falhar o cartão simplesmente não aparece. */
+function CartaoTempo() {
+  const { pos } = useLocalizacao()
+  const [estado] = useAsync(() => api.get<Previsao>(caminhoTempo(pos)), pos ? `${pos.lat},${pos.lon}` : 'omissao')
+  if (estado.fase !== 'pronto') return null
+  const p = estado.dados
+  return (
+    <Link to="/tempo" className="tempo-chip" aria-label={`Tempo: ${p.agora.descricao}, ${graus(p.agora.temp)}, máxima ${graus(p.hoje?.max)}, mínima ${graus(p.hoje?.min)}${p.hoje?.chuva ? `, chuva ${p.hoje.chuva}%` : ''}. Abrir a previsão`}>
+      <Icon nome={iconeTempo(p.agora.icone)} tamanho={28} />
+      <span className="tempo-temp">{graus(p.agora.temp)}</span>
+      <span className="t-meta">{graus(p.hoje?.max)} / {graus(p.hoje?.min)}{p.hoje?.chuva ? ` · ${p.hoje.chuva}%` : ''}</span>
+    </Link>
+  )
+}
+
 function Peso({ m, acoes }: { m: Modulo<PesoDados>; acoes: Acoes }) {
   const avisos = useAvisos()
   const { executar, ocupado } = acoes
@@ -437,10 +456,13 @@ export function TodayScreen() {
 
   return (
     <>
-      <header className="hero">
-        <p className="t-body2">{fmtDataLonga(agora)}</p>
-        <h1 className="t-page">{saudacao(agora)}{nome ? `, ${nome}` : ''}</h1>
-        {estado.fase === 'pronto' && <p className="t-body2">{resumo(estado.dados)}</p>}
+      <header className="hero hero-tempo">
+        <div className="hero-texto">
+          <p className="t-body2">{fmtDataLonga(agora)}</p>
+          <h1 className="t-page">{saudacao(agora)}{nome ? `, ${nome}` : ''}</h1>
+          {estado.fase === 'pronto' && <p className="t-body2">{resumo(estado.dados)}</p>}
+        </div>
+        <CartaoTempo />
       </header>
 
       {estado.fase === 'a-carregar' && (

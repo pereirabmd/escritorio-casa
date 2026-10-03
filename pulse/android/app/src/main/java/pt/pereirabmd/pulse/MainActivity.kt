@@ -33,6 +33,8 @@ class MainActivity : FragmentActivity() {
         intent?.getStringExtra(Notificacoes.EXTRA_LINK)?.takeIf { it.isNotEmpty() }?.let { sessao?.abrirLink(it); intent.removeExtra(Notificacoes.EXTRA_LINK) }
         val uri = intent?.data ?: return
         if (uri.scheme == "pulse" && uri.host == "google") sessao?.regressoGoogle(uri.getQueryParameter("resultado") == "ok", uri.getQueryParameter("motivo").orEmpty())
+        // os atalhos do toque longo (pulse://assistente, pulse://peso, pulse://rto/registar…) e os widgets abrem o sítio certo, depois do desbloqueio
+        else if (uri.scheme == "pulse") { sessao?.abrirLink(uri.toString()); intent.data = null }
     }
 
     override fun onStop() { super.onStop(); sessao?.aoIrParaSegundoPlano() }

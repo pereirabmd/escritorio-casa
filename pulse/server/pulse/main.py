@@ -14,10 +14,11 @@ from fastapi.responses import JSONResponse
 
 from pulse import VERSION, config, db, logging_setup, notifications
 from pulse.services import compras, cp_horarios, ia
+from pulse.services import tempo as tempo_servico
 from pulse.accounts import ContaErro
 from datetime import datetime
 
-from pulse.api.v1 import actions, admin, ai as ai_rotas, auth, dashboard, calendar, finance, google as google_rotas, health, mail, modules, notifications as notificacoes, rto, shopping, tasks, tickets, weight
+from pulse.api.v1 import actions, admin, ai as ai_rotas, auth, dashboard, calendar, finance, google as google_rotas, health, mail, modules, notifications as notificacoes, rto, shopping, tasks, tickets, weight, weather as weather_rotas
 from pulse.google_api import GoogleApi, GoogleConfig, criar_cofre
 from pulse.notifications import FcmCanal
 from pulse.ratelimit import RateLimiter
@@ -93,7 +94,7 @@ class PedidosLentos:
 
 
 def create_app(settings: config.Settings | None = None, dados: DadosClient | None = None, avisos: TarefasApiClient | None = None, canais: list | None = None,
-               google: GoogleApi | None = None, ia_agente: ia.Agente | None = None) -> FastAPI:
+               google: GoogleApi | None = None, ia_agente: ia.Agente | None = None, tempo: tempo_servico.Tempo | None = None) -> FastAPI:
     settings = settings or config.load()
     logging_setup.configurar(settings.log_dir)
 
@@ -129,6 +130,7 @@ def create_app(settings: config.Settings | None = None, dados: DadosClient | Non
     app.state.dados = dados or DadosClient(settings.dados_url, settings.service_key)
     app.state.avisos = avisos or TarefasApiClient(settings.tarefas_url, settings.service_key)   # recálculo imediato dos avisos das tarefas
     app.state.cp = cp_horarios.CpHorarios(settings.cp_connect_id, settings.cp_connect_secret, settings.cp_api_key_travel, settings.cp_estacoes)     # horários da CP (só consulta)
+    app.state.tempo = tempo or tempo_servico.Tempo()                                           # previsão do tempo (Open-Meteo, sem chave)
     app.state.google = google if google is not None else _google(settings)                    # Gmail/Calendar: None = não configurado
     app.state.canais = canais if canais is not None else _canais(settings)      # canais de entrega das notificações (FCM, se configurado)
     app.state.ia = ia.Agente(settings.ai_key, settings.ai_model) if ia_agente is None else ia_agente     # assistente de IA (desligado sem chave)
@@ -154,6 +156,7 @@ def create_app(settings: config.Settings | None = None, dados: DadosClient | Non
     app.include_router(google_rotas.router, prefix="/api/v1")
     app.include_router(calendar.router, prefix="/api/v1")
     app.include_router(mail.router, prefix="/api/v1")
+    app.include_router(weather_rotas.router, prefix="/api/v1")
     app.include_router(notificacoes.router, prefix="/api/v1")
     app.include_router(notificacoes.internal, prefix="/api/v1")
 

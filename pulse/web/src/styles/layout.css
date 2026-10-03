@@ -32,6 +32,17 @@
 
 /* --- Hoje --- */
 .hero { display: grid; gap: var(--s2); }
+.hero-tempo { grid-template-columns: 1fr auto; align-items: start; column-gap: var(--s3); }
+.hero-tempo .hero-texto { display: grid; gap: var(--s2); min-width: 0; }
+.tempo-chip { display: grid; justify-items: center; gap: 2px; padding: var(--s3); border: 1px solid var(--line); border-radius: var(--r-l); background: var(--surface); color: var(--text); text-decoration: none; min-width: 84px; }
+.tempo-chip svg { color: var(--primary); }
+.tempo-chip:hover, .tempo-chip:focus-visible { border-color: var(--primary); }
+.tempo-temp { font-size: 1.25rem; font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1.1; }
+.tempo-agora { display: flex; align-items: center; gap: var(--s4); }
+.tempo-agora svg { color: var(--primary); flex: none; }
+.tempo-horas { display: flex; gap: var(--s4); overflow-x: auto; padding: 0; margin: 0; list-style: none; }
+.tempo-horas li { display: grid; justify-items: center; gap: 4px; min-width: 44px; }
+.tempo-horas svg { color: var(--primary); }
 .hero .t-body2 { max-width: 60ch; }
 .grid { display: grid; gap: var(--s4); grid-template-columns: 1fr; }
 @media (min-width: 700px) { .grid { grid-template-columns: repeat(2, 1fr); } }

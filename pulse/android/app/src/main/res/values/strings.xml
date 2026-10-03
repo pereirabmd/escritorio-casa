@@ -1,3 +1,17 @@
 <resources>
     <string name="app_name">Pulse</string>
+    <string name="atalho_voz">Assistente</string>
+    <string name="atalho_voz_longo">Falar com o assistente</string>
+    <string name="atalho_peso">Peso</string>
+    <string name="atalho_peso_longo">Registar o peso</string>
+    <string name="atalho_bilhetes">Bilhetes</string>
+    <string name="atalho_bilhetes_longo">Próximo comboio e bilhetes</string>
+    <string name="atalho_rto">Registar RTO</string>
+    <string name="atalho_rto_longo">Registar o RTO de hoje</string>
+    <string name="atalho_tarefas">Tarefas</string>
+    <string name="atalho_tarefas_longo">Tarefas de hoje</string>
+    <string name="widget_hoje_nome">Pulse · Hoje</string>
+    <string name="widget_hoje_desc">O teu dia: tempo, próximo comboio, tarefas, RTO e peso.</string>
+    <string name="widget_comboio_nome">Pulse · Próximo comboio</string>
+    <string name="widget_comboio_desc">O próximo comboio, com a carruagem e o lugar.</string>
 </resources>

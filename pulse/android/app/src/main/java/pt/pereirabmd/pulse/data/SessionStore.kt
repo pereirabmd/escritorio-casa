@@ -61,6 +61,17 @@ class SessionStore internal constructor(private val prefs: SharedPreferences) {
     var dispositivoId: Int
         get() = prefs.getInt("dispositivo_id", 0)
         set(v) = prefs.edit().putInt("dispositivo_id", v).apply()
+    /** A última localização conhecida (arredondada, «lat,lon»), para o cartão do tempo aparecer logo; e se já pedimos a permissão (pede-se uma só vez no arranque). */
+    var ultimaPosicao: String?
+        get() = prefs.getString("ultima_posicao", null)
+        set(v) = prefs.edit().apply { if (v == null) remove("ultima_posicao") else putString("ultima_posicao", v) }.apply()
+    var localizacaoPedida: Boolean
+        get() = prefs.getBoolean("localizacao_pedida", false)
+        set(v) = prefs.edit().putBoolean("localizacao_pedida", v).apply()
+    /** O último Hoje e o último tempo, para os widgets mostrarem algo (marcado «desatualizado») quando não há rede (ADR-092). */
+    var widgetCache: String?
+        get() = prefs.getString("widget_cache", null)
+        set(v) = prefs.edit().apply { if (v == null) remove("widget_cache") else putString("widget_cache", v) }.apply()
     var notificacoesPedidas: Boolean
         get() = prefs.getBoolean("notificacoes_pedidas", false)
         set(v) = prefs.edit().putBoolean("notificacoes_pedidas", v).apply()

@@ -2,4 +2,11 @@
     <color name="ic_background">#00000000</color>
     <color name="notif_cor">#1E5B67</color>
     <color name="window_bg">#F7FAFC</color>
+    <!-- widgets (ADR-092): os mesmos tokens do Design System Pulse (Theme.kt), claro e escuro -->
+    <color name="widget_surface">#FFFFFFFF</color>
+    <color name="widget_surface2">#FFEEF4F6</color>
+    <color name="widget_text">#FF16222A</color>
+    <color name="widget_text2">#FF56666F</color>
+    <color name="widget_primary">#FF1E5B67</color>
+    <color name="widget_line">#1C16222A</color>
 </resources>

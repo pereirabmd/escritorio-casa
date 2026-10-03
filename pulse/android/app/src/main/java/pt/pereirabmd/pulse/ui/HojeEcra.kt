@@ -5,6 +5,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.runtime.*
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -31,6 +32,26 @@ private val DIA = listOf("S", "T", "Q", "Q", "S", "S", "D")
 
 @Composable
 private fun Abrir(rota: String) { val abrir = LocalAbrir.current; LinkBtn("Abrir", { abrir(rota.trimStart('/')) }) }
+
+/** O tempo de hoje, em pequeno, à direita da saudação; tocar abre o ecrã Tempo (ADR-092). Se a previsão falhar o cartão simplesmente não aparece. */
+@Composable
+private fun CartaoTempo() {
+    val pos = LocalPosicao.current
+    val abrir = LocalAbrir.current
+    val c = carga("tempo|$pos") { Api.get(Localizacao.caminho(pos)) }
+    val p = (c.estado as? Estado.Pronto)?.dados ?: return
+    val cores = Pulse.cores
+    val hoje = p.obj("hoje"); val agora = p.obj("agora")
+    val max = hoje?.real("max"); val min = hoje?.real("min"); val chuva = hoje?.inteiroOuNull("chuva") ?: 0
+    val descr = "Tempo: ${agora?.txtOu("descricao").orEmpty()}, ${graus(agora?.real("temp"))}, máxima ${graus(max)}, mínima ${graus(min)}" + (if (chuva > 0) ", chuva $chuva%" else "") + ". Abrir a previsão"
+    Column(Modifier.clip(RoundedCornerShape(Pulse.rL)).background(cores.surface).border(1.dp, cores.line, RoundedCornerShape(Pulse.rL))
+        .clickable(onClickLabel = "Abrir a previsão do tempo") { abrir("tempo") }.padding(10.dp).widthIn(min = 84.dp).semantics { contentDescription = descr },
+        horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        Icon(iconeTempo(agora?.txtOu("icone").orEmpty()), cores.primary, 28.dp)
+        Texto(graus(agora?.real("temp")), Pulse.card)
+        Meta("${graus(max)} / ${graus(min)}" + if (chuva > 0) " · $chuva%" else "")
+    }
+}
 
 /** O toque no cartão: leva ao módulo (`rota`), ou a uma aba/mensagem dele (`email/<conta>:<id>`). */
 @Composable
@@ -311,6 +332,7 @@ internal object UltimoHoje {
 @Composable
 fun EcraHoje(sessao: Sessao, utilizador: Utilizador, cabecalho: @Composable () -> Unit) {
     // ao voltar ao Hoje (do «Mais», por exemplo) mostra-se logo o último e atualiza-se em segundo plano, em vez de recomeçar do zero (o Google demora ~3 s)
+    val contextoWidget = LocalContext.current.applicationContext
     var estado by remember { mutableStateOf<EstadoHoje>(UltimoHoje.de(utilizador.id)?.let { EstadoHoje.Pronto(it) } ?: EstadoHoje.ACarregar) }
     LaunchedEffect(estado) { (estado as? EstadoHoje.Pronto)?.let { UltimoHoje.guardar(utilizador.id, it.hoje) } }
     var versao by remember { mutableIntStateOf(0) }
@@ -328,7 +350,10 @@ fun EcraHoje(sessao: Sessao, utilizador: Utilizador, cabecalho: @Composable () -
     val acoes = rememberAcoes { nome -> atualizar(setOf(nome.substringBefore('.'))) }
     LaunchedEffect(versao) {
         if (estado is EstadoHoje.Erro) estado = EstadoHoje.ACarregar
-        estado = try { EstadoHoje.Pronto(parseHoje(Api.get("/dashboard/today"))) } catch (e: Exception) {
+        estado = try {
+            val json = Api.get("/dashboard/today")
+            EstadoHoje.Pronto(parseHoje(json)).also { runCatching { pt.pereirabmd.pulse.widgets.Widgets.aoCarregarHoje(contextoWidget, json, null) } }      // os widgets mostram o mesmo Hoje, sem novo pedido
+        } catch (e: Exception) {
             if (e is kotlinx.coroutines.CancellationException) throw e
             if (estado is EstadoHoje.Pronto) estado else EstadoHoje.Erro(mensagemDeErro(e))          // com o último Hoje à vista, uma falha não o apaga
         }
@@ -337,10 +362,13 @@ fun EcraHoje(sessao: Sessao, utilizador: Utilizador, cabecalho: @Composable () -
     val nome = utilizador.nome.trim().substringBefore(' ')
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         item {
-            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Texto2(fmtDataLonga(agora))
-                Texto(saudacao(agora.get(Calendar.HOUR_OF_DAY)) + if (nome.isNotEmpty()) ", $nome" else "", Pulse.page)
-                (estado as? EstadoHoje.Pronto)?.let { Texto2(resumo(it.hoje)) }
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.Top) {
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Texto2(fmtDataLonga(agora))
+                    Texto(saudacao(agora.get(Calendar.HOUR_OF_DAY)) + if (nome.isNotEmpty()) ", $nome" else "", Pulse.page)
+                    (estado as? EstadoHoje.Pronto)?.let { Texto2(resumo(it.hoje)) }
+                }
+                CartaoTempo()
             }
         }
         item { cabecalho() }
