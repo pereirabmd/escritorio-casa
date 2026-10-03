@@ -51,6 +51,26 @@
             <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
             <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_hoje_info" />
         </receiver>
+        <receiver android:name=".widgets.WidgetTarefas" android:exported="true" android:label="@string/widget_tarefas_nome">
+            <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_tarefas_info" />
+        </receiver>
+        <receiver android:name=".widgets.WidgetCompras" android:exported="true" android:label="@string/widget_compras_nome">
+            <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_compras_info" />
+        </receiver>
+        <receiver android:name=".widgets.WidgetPeso" android:exported="true" android:label="@string/widget_peso_nome">
+            <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_peso_info" />
+        </receiver>
+        <receiver android:name=".widgets.WidgetVoz" android:exported="true" android:label="@string/widget_voz_nome">
+            <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_voz_info" />
+        </receiver>
+        <receiver android:name=".widgets.WidgetAcaoReceiver" android:exported="false" />
+        <service android:name=".widgets.ListaTarefasService" android:permission="android.permission.BIND_REMOTEVIEWS" android:exported="false" />
+        <service android:name=".widgets.ListaComprasService" android:permission="android.permission.BIND_REMOTEVIEWS" android:exported="false" />
+        <activity android:name=".widgets.PesoRapidoActivity" android:exported="false" android:theme="@style/Theme.Pulse.Dialogo" android:excludeFromRecents="true" android:taskAffinity="" />
         <receiver android:name=".widgets.WidgetComboio" android:exported="true" android:label="@string/widget_comboio_nome">
             <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
             <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_comboio_info" />

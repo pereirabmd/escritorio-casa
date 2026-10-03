@@ -31,6 +31,7 @@ Legenda: **Feito** · **Pendente** · **Só Android** / **Só Web** (decidido).
 | Hoje › tempo (cartão e ecrã Tempo; localização do aparelho) | Feito | Feito | ADR-092; Android 0.5.0 (publicado a 03/10/2026) |
 | Android › atalhos do toque longo no ícone | — | **Feito** | ADR-092 |
 | Android › widgets «Hoje» e «Próximo comboio» | — | **Feito** | ADR-092; substituem o `resumo_widget` quando houver paridade |
+| Android › widgets «Tarefas», «Compras» (com visto), «Peso» e «Assistente» | — | **Feito** | ADR-093; Android 0.5.1 |
 | Hoje › cartões abrem o módulo; email abre no Pulse; minigráfico do peso | Feito | Feito | ADR-090; Android 0.4.9 (publicado a 02/10/2026) |
 | Bilhetes CP › Favoritos (seletor, guardar, remover; marcar por voz) | Feito | Feito | ADR-078; Android 0.4.1 |
 | Assistente de voz (toque no logotipo; propostas com confirmação; leitura das respostas por voz) | — | **Só Android** | ADR-077/079/080; exceção à paridade, decidida com o utilizador |

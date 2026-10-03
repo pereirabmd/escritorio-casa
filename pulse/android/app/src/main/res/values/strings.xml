@@ -14,4 +14,12 @@
     <string name="widget_hoje_desc">O teu dia: tempo, próximo comboio, tarefas, RTO e peso.</string>
     <string name="widget_comboio_nome">Pulse · Próximo comboio</string>
     <string name="widget_comboio_desc">O próximo comboio, com a carruagem e o lugar.</string>
+    <string name="widget_tarefas_nome">Pulse · Tarefas</string>
+    <string name="widget_tarefas_desc">As tarefas de hoje, com visto para marcar como feitas.</string>
+    <string name="widget_compras_nome">Pulse · Compras</string>
+    <string name="widget_compras_desc">A lista de compras, com visto para marcar como comprado.</string>
+    <string name="widget_peso_nome">Pulse · Peso</string>
+    <string name="widget_peso_desc">O último peso, o gráfico dos 7 dias e o botão para registar.</string>
+    <string name="widget_voz_nome">Pulse · Assistente</string>
+    <string name="widget_voz_desc">Um toque para falar com o assistente.</string>
 </resources>
