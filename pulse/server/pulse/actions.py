@@ -1373,7 +1373,7 @@ ACOES: dict[str, Acao] = {a.nome: a for a in (
     Acao("bilhetes.favorito_guardar", "bilhetes", "safe_action", "Guarda um comboio (comboio, hora, origem e destino) nos favoritos, com um apelido opcional.", FavoritoGuardarIn, _favorito_guardar),
     Acao("bilhetes.favorito_apagar", "bilhetes", "safe_action", "Tira um comboio dos favoritos.", FavoritoRefIn, _favorito_apagar),
     Acao("bilhetes.marcar_favorito", "bilhetes", "safe_action", "Marca a viagem de um favorito em um ou mais dias (mantém as outras viagens da semana).", MarcarFavoritoIn, _marcar_favorito),
-    Acao("bilhetes.troca_armar", "bilhetes", "sensitive_action", "Ativa a troca de um bilhete futuro por outro comboio: quando houver lugar no novo, reserva-o, cancela o antigo e confirma o novo.", TrocaArmarIn, _troca_armar),
+    Acao("bilhetes.troca_armar", "bilhetes", "sensitive_action", "Ativa a troca de um bilhete futuro. Outro comboio: quando houver lugar no novo, reserva-o, devolve o antigo e confirma o novo. Mesmo comboio (trocar um bilhete sem desconto por um com desconto): devolve já o antigo e compra logo a seguir o lugar libertado, com o risco de outra pessoa o apanhar. `hora` é a da 1.ª estação; `inicio` (AAAA-MM-DDTHH:MM) opcional agenda quando começar.", TrocaArmarIn, _troca_armar),
     Acao("bilhetes.troca_desarmar", "bilhetes", "safe_action", "Desativa uma troca por fazer (o bilhete antigo mantém-se).", PedidoRefIn, _troca_desarmar),
     Acao("bilhetes.passe", "bilhetes", "safe_action", "Regista a data do último carregamento do passe.", PasseIn, _passe),
     Acao("bilhetes.cp_cancelar", "bilhetes", "sensitive_action", "Devolve (cancela) um bilhete futuro na CP, na conta de quem viaja.", CpCancelarIn, _cp_cancelar),

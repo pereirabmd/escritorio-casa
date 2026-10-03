@@ -35,6 +35,7 @@ import pt.pereirabmd.pulse.util.paraLeitura
  */
 @Composable
 fun AssistenteFolha(aoFechar: () -> Unit, aoAlterado: () -> Unit) {
+    val posicao = LocalPosicao.current
     val ctx = LocalContext.current
     val scope = rememberCoroutineScope()
     val conversa = remember { mutableStateListOf<Pair<String, String>>() }        // (papel, texto): «utilizador» | «assistente»
@@ -105,7 +106,7 @@ fun AssistenteFolha(aoFechar: () -> Unit, aoAlterado: () -> Unit) {
         scope.launch {
             try {
                 val msgs = JSONArray(conversa.map { jo("papel" to it.first, "texto" to it.second) })
-                val r = Api.post("/ai/command", jo("mensagens" to msgs), 60_000)
+                val r = Api.post("/ai/command", jo("mensagens" to msgs).also { c -> posicao?.let { c.put("posicao", jo("lat" to it.first, "lon" to it.second)) } }, 60_000)      // a posição só serve para o tempo
                 val resposta = r.txtOu("texto")
                 conversa.add("assistente" to resposta)
                 propostas = r.objs("propostas")

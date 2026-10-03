@@ -19,9 +19,16 @@ class Mensagem(BaseModel):
     texto: Annotated[str, Field(min_length=1, max_length=ia.MAX_TEXTO)]
 
 
+class Posicao(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    lat: Annotated[float, Field(ge=-90, le=90)]
+    lon: Annotated[float, Field(ge=-180, le=180)]
+
+
 class ComandoIn(BaseModel):
     model_config = ConfigDict(extra="forbid")
     mensagens: Annotated[list[Mensagem], Field(min_length=1, max_length=ia.MAX_MENSAGENS)]
+    posicao: Posicao | None = None            # onde está o aparelho (só serve para o tempo; nunca se guarda)
 
 
 class Proposta(BaseModel):
@@ -43,7 +50,7 @@ def estado(request: Request, _: Sessao = Depends(sessao_ativa)):
 @router.post("/command")
 def comando(d: ComandoIn, request: Request, s: Sessao = Depends(sessao_ativa), conn=Depends(get_conn)):
     app = request.app.state
-    return app.ia.conversar(conn, app, s.user, [m.model_dump() for m in d.mensagens], app.agora())
+    return app.ia.conversar(conn, app, s.user, [m.model_dump() for m in d.mensagens], app.agora(), d.posicao.model_dump() if d.posicao else None)
 
 
 @router.post("/confirm")
